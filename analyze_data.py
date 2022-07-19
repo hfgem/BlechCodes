@@ -14,10 +14,11 @@ import functions.data_processing as dp
 import functions.ICA_data_split as ica
 import tkinter as tk
 import tkinter.filedialog as fd
+import functions.hdf5_handling as h5
 
 
 #Ask if data has already been stored as hdf5
-h_exists = dp.hdf5_exists()
+h_exists = h5.hdf5_exists()
 
 if h_exists == 0:
 	#Pull data names
@@ -26,7 +27,7 @@ if h_exists == 0:
 
 	# Import data by type
 	print("Pulling data into HDF5 file format.")
-	hf5_dir = dp.file_import(datadir, dat_files_list, electrodes_list, emg_ind, dig_in_list, dig_in_names)
+	hf5_dir = h5.file_import(datadir, dat_files_list, electrodes_list, emg_ind, dig_in_list, dig_in_names)
 
 	del h_exists
 else:
