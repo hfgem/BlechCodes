@@ -387,7 +387,6 @@ def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
 	else:
 		hf5_new.create_earray('/','sampling_rate',atom,(0,))
 		hf5_new.root.sampling_rate.append([sampling_rate])
-	e_data = hf5_new.root.electrode_array.data[0,:,:]
 	print("Saving Dig Ins to New HF5")
 	np_dig_ins = np.array(dig_in_data)
 	hf5_new.create_group('/','dig_ins')
@@ -395,23 +394,27 @@ def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
 	np_dig_ins = np.expand_dims(np_dig_ins,0)
 	data_digs.append(np_dig_ins)
 	del np_dig_ins, data_digs, dig_in_data
-	dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
        #Close HDF5 file
 	hf5.close()
+	hf5_new.close()
 	print("Getting Experiment Components")
 	segment_names, segment_times = get_experiment_components(new_hf5_dir)
+	hf5_new = tables.open_file(new_hf5_dir, 'r+', title = new_hf5_dir[-1])
 	hf5_new.create_group('/','experiment_components')
 	hf5_new.create_earray('/experiment_components','segment_times',atom,(0,))
 	exec("hf5_new.root.experiment_components.segment_times.append(segment_times[:])")
 	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
 	hf5_new.create_earray('/experiment_components','segment_names',atom,(0,))
 	exec("hf5_new.root.experiment_components.segment_names.append(np.array(segment_names))")
-	
+	e_data = hf5_new.root.electrode_array.data[0,:,:]
+	dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
 	hf5_new.close()
 	del hf5, units, sub_amount
 	
 	return e_data, unit_nums, dig_ins
 		
+def bandpass_filter():
+	"""Filter the data to only 300-3000 Hz for spikes. Frequencies below are LFPs"""
 		
 		
 		

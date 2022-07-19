@@ -65,18 +65,50 @@ def electrode_data_import(hf5_dir):
 		print('Saving Downsampled Electrode Data to New HF5')
 		e_data, unit_nums, dig_ins = dp.save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data)
 	
+		#Perform ICA analysis
+	
 	return e_data, unit_nums, dig_ins
 	
 
-def ICA_analysis(e_data):
+def ICA_analysis(e_data, new_hf5_dir):
 	"""This function performs ICA component separation on the electrode recording
 	data"""
+	
+	#Open HF5
+	hf5_new = tables.open_file(new_hf5_dir, 'r+', title = new_hf5_dir[-1])
+	
+	#First pull only the portion of the data desired for ICA using
+	#hf5_new.root.experiment_components.segment_times and .segment_names
+	
+	segment_names = hf5_new.root.experiment_components.segment_names[:]
+	segment_times = hf5_new.root.experiment_components.segment_times[:]
+	
+	hf5_new.close() #Don't forget to close the HF5 file!
+	
+	#Ask for user input on which segment to use for ICA
+	print("Using the entire dataset for ICA is computationally costly.")
+	print("As such, this program was designed to run only on a segment.")
+	[print(segment_names[i].decode('UTF-8') + " index = " + str(i)) for i in range(len(segment_names))]
+	print(segment_names)
+	print(np.arange(len(segment_names)))
+	print("Above are the segment names and their corresponding indices.")
+	seg_loop = 1
+	while seg_loop == 1:
+		seg_ind = input("Please enter the index of the segment you'll use for ICA: ")
+		try:
+			seg_ind = int(seg_ind)
+			seg_loop = 0
+		except:
+			print("ERROR: Please enter a valid index.")
+			
+	data_segment = e_data[:,segment_times[seg_ind]:segment_times[seg_ind+1]]
+	
+	del e_data
 	
 	transformer = FastICA(n_components=None,
 					   algorithm='parallel',max_iter=200,
 					   tol=0.0001, w_init=None, random_state=None)
-	X_transformed = transformer.fit_transform(e_data)
-	del e_data
+	X_transformed = transformer.fit_transform(data_segment)
 	
 	return X_transformed
 
