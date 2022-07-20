@@ -60,16 +60,19 @@ def ICA_analysis(e_data, new_hf5_dir):
 	filtered_data = dp.bandpass_filter(data_segment, low_fq, high_fq,
 									sampling_rate, order=5)
 	
+	print("Signal Averaging to Improve Signal-Noise Ratio")
+	cleaned_data = dp.signal_averaging(data_segment)
+	
 	print("Performing ICA")
 	transformer = FastICA(n_components=None,
 					   algorithm='parallel',max_iter=200,
 					   tol=0.0001, w_init=None, random_state=None)
-	ICA_weights = transformer.fit_transform(filtered_data)
+	ICA_weights = transformer.fit_transform(cleaned_data)
 	
 	print("Plotting ICA Results")
 	plot_ICA_results(filtered_data,ICA_weights,sampling_rate,new_hf5_dir)
 	
-	return ICA_weights
+	return ICA_weights, seg_ind
 
 def component_properties(components):
 	"""This function attempts to characterize the pulled out components into spikes
@@ -125,14 +128,20 @@ def performICA(hf5_dir):
 	print("Downsampled Data Import Phase")
 	e_data, unit_nums, dig_ins, new_hf5_dir = h5.downsampled_electrode_data_import(hf5_dir)
 	print("Performing Fast ICA")
-	ICA_weights = ICA_analysis(e_data, new_hf5_dir)
+	ICA_weights, seg_ind = ICA_analysis(e_data, new_hf5_dir)
 	del e_data, unit_nums
 	print("Saving to HF5")
-	hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+	ica_data_dir = ('/').join(hf5_dir.split('/')[:-1]) + '/ica_results/'
+	if os.path.isdir(ica_data_dir) == False:
+		os.mkdir(ica_data_dir)
+	ica_hf5_name = hf5_dir.split('/')[-1].split('.')[0] + '_ica.h5'
+	ica_hf5_dir = ica_data_dir + ica_hf5_name
+	hf5 = tables.open_file(ica_hf5_dir, 'w', title = ica_hf5_dir[-1])
 	atom = tables.IntAtom()
-	hf5.create_group('/','ica')
-	hf5.create_earray('/ica','components',atom,(0,))
-	exec("hf5.root.ica.components.append(components[:])")
+	hf5.create_earray('/','ica_weights',atom,(0,))
+	exec("hf5.root.ica_weights.append(ICA_weights[:])")
+	hf5.create_earray('/','data_segment',atom,(0,))
+	exec("hf5.root.ica_weights.append([seg_ind])")
 	
 	#component_names = component_properties(components)
 
