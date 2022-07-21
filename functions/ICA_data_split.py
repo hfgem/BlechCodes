@@ -14,6 +14,7 @@ import numpy as np
 from sklearn.decomposition import FastICA
 import functions.data_processing as dp
 import functions.hdf5_handling as h5
+import functions.data_cleaning as dc
 from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 	
@@ -38,8 +39,6 @@ def ICA_analysis(e_data, new_hf5_dir):
 	print("Using the entire dataset for ICA is computationally costly.")
 	print("As such, this program was designed to run only on a segment.")
 	[print(segment_names[i].decode('UTF-8') + " index = " + str(i)) for i in range(len(segment_names))]
-	print(segment_names)
-	print(np.arange(len(segment_names)))
 	print("Above are the segment names and their corresponding indices.")
 	seg_loop = 1
 	while seg_loop == 1:
@@ -57,11 +56,11 @@ def ICA_analysis(e_data, new_hf5_dir):
 	print("Bandpass Filtering Data")
 	low_fq = 300
 	high_fq = 3000
-	filtered_data = dp.bandpass_filter(data_segment, low_fq, high_fq,
+	filtered_data = dc.bandpass_filter(data_segment, low_fq, high_fq,
 									sampling_rate, order=5)
 	
 	print("Signal Averaging to Improve Signal-Noise Ratio")
-	cleaned_data = dp.signal_averaging(data_segment)
+	cleaned_data = dc.signal_averaging(data_segment)
 	
 	print("Performing ICA")
 	transformer = FastICA(n_components=None,
@@ -131,17 +130,7 @@ def performICA(hf5_dir):
 	ICA_weights, seg_ind = ICA_analysis(e_data, new_hf5_dir)
 	del e_data, unit_nums
 	print("Saving to HF5")
-	ica_data_dir = ('/').join(hf5_dir.split('/')[:-1]) + '/ica_results/'
-	if os.path.isdir(ica_data_dir) == False:
-		os.mkdir(ica_data_dir)
-	ica_hf5_name = hf5_dir.split('/')[-1].split('.')[0] + '_ica.h5'
-	ica_hf5_dir = ica_data_dir + ica_hf5_name
-	hf5 = tables.open_file(ica_hf5_dir, 'w', title = ica_hf5_dir[-1])
-	atom = tables.IntAtom()
-	hf5.create_earray('/','ica_weights',atom,(0,))
-	exec("hf5.root.ica_weights.append(ICA_weights[:])")
-	hf5.create_earray('/','data_segment',atom,(0,))
-	exec("hf5.root.ica_weights.append([seg_ind])")
+	ICA_h5_dir = h5.save_ICA_data(hf5_dir,ICA_weights,seg_ind)
 	
 	#component_names = component_properties(components)
 

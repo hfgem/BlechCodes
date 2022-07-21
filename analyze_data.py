@@ -39,12 +39,11 @@ else:
 	hdf5_name = str(os.path.dirname(datadir)).split('/')
 	hf5_dir = datadir + '/' + hdf5_name[-1]+'.h5'
 	# create button to implement destroy()
-	tk.Button(root, text="Quit", command=root.destroy).pack()
-	root.mainloop() #The Tkinter window will now show a button "Quit" to close the window.
+	#tk.Button(root, text="Quit", command=root.destroy).pack()
+	#root.mainloop() #The Tkinter window will now show a button "Quit" to close the window.
 	#^ This only works when run from terminal. In Spyder a window will stay open - don't close it, just press Quit!!
 	del hdf5_name, datadir, currdir, root, h_exists
 	
 #%% Perform ICA on electrode data to separate out spikes and other components
 #print("Performing ICA")
-e_data, unit_nums, dig_ins = ica.electrode_data_import(hf5_dir)
-#components, component_names = ica.performICA(hf5_dir)
+ICA_weights = ica.performICA(hf5_dir)

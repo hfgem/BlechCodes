@@ -124,14 +124,14 @@ def downsampled_electrode_data_import(hf5_dir):
 	
 	#Has the electrode data already been stored in the hdf5 file?
 	print("Checking for downsampled data.")
-	try:
+	if os.path.exists(new_hf5_dir):
 		hf5_new = tables.open_file(new_hf5_dir, 'r', title = hf5_dir[-1])
 		print("Data was previously stored in HDF5 file and is being imported. \n \n")
 		e_data = hf5_new.root.electrode_array.data[0,:,:]
 		dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
 		unit_nums = hf5_new.root.electrode_array.unit_nums[:]
 		hf5_new.close()
-	except:
+	else:
 		print("Data was not previously stored in hf5. \n")
 		#Ask about subsampling data
 		sampling_rate = np.fromfile(folder_dir + 'info.rhd', dtype = np.dtype('float32'))
@@ -162,9 +162,82 @@ def downsampled_electrode_data_import(hf5_dir):
 		e_data, dig_in_data = dp.data_to_list(sub_amount,sampling_rate,hf5_dir)
 			
         #Save data to hdf5
-		print('Saving Downsampled Electrode Data to New HF5')
-		e_data, unit_nums, dig_ins = dp.save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data)
+		e_data, unit_nums, dig_ins = save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data)
 	
 		#Perform ICA analysis
 	
 	return e_data, unit_nums, dig_ins, new_hf5_dir
+
+def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
+	"""This function creates a new .h5 file to store only downsampled data arrays"""
+	print("Saving Electrode Data to New HF5")
+	atom = tables.FloatAtom()
+	new_hf5_dir = hf5_dir.split('.h5')[0] + '_downsampled.h5'
+	hf5 = tables.open_file(hf5_dir, 'r', title = hf5_dir[-1])
+	hf5_new = tables.open_file(new_hf5_dir, 'w', title = new_hf5_dir[-1])
+	units = hf5.list_nodes('/raw')
+	unit_nums = np.array([str(unit).split('_')[-1] for unit in units])
+	unit_nums = np.array([int(unit.split(' (')[0]) for unit in unit_nums])
+	hf5_new.create_group('/','electrode_array')
+	np_e_data = np.array(e_data)
+	data = hf5_new.create_earray('/electrode_array','data',atom,(0,)+np.shape(np_e_data))
+	np_e_data = np.expand_dims(np_e_data,0)
+	data.append(np_e_data)
+	del np_e_data, e_data
+	atom = tables.IntAtom()
+	hf5_new.create_earray('/electrode_array','unit_nums',atom,(0,))
+	exec("hf5_new.root.electrode_array.unit_nums.append(unit_nums[:])")
+	if sub_amount > 0:
+		new_rate = [round(sampling_rate*sub_amount)]
+		hf5_new.create_earray('/','sampling_rate',atom,(0,))
+		hf5_new.root.sampling_rate.append(new_rate)
+	else:
+		hf5_new.create_earray('/','sampling_rate',atom,(0,))
+		hf5_new.root.sampling_rate.append([sampling_rate])
+	print("Saving Dig Ins to New HF5")
+	np_dig_ins = np.array(dig_in_data)
+	atom = tables.FloatAtom()
+	hf5_new.create_group('/','dig_ins')
+	data_digs = hf5_new.create_earray('/dig_ins','dig_ins',atom,(0,)+np.shape(np_dig_ins))
+	np_dig_ins = np.expand_dims(np_dig_ins,0)
+	data_digs.append(np_dig_ins)
+	del np_dig_ins, data_digs, dig_in_data
+       #Close HDF5 file
+	hf5.close()
+	hf5_new.close()
+	print("Getting Experiment Components")
+	segment_names, segment_times = get_experiment_components(new_hf5_dir)
+	hf5_new = tables.open_file(new_hf5_dir, 'r+', title = new_hf5_dir[-1])
+	hf5_new.create_group('/','experiment_components')
+	atom = tables.IntAtom()
+	hf5_new.create_earray('/experiment_components','segment_times',atom,(0,))
+	exec("hf5_new.root.experiment_components.segment_times.append(segment_times[:])")
+	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
+	hf5_new.create_earray('/experiment_components','segment_names',atom,(0,))
+	exec("hf5_new.root.experiment_components.segment_names.append(np.array(segment_names))")
+	e_data = hf5_new.root.electrode_array.data[0,:,:]
+	dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
+	hf5_new.close()
+	del hf5, units, sub_amount
+	
+	return e_data, unit_nums, dig_ins
+
+def save_ICA_data(hf5_dir,ICA_weights,seg_ind):
+	"""Function to save ICA data to its own HDF5 file."""
+	
+	ica_data_dir = ('/').join(hf5_dir.split('/')[:-1]) + '/ica_results/'
+	if os.path.isdir(ica_data_dir) == False:
+		os.mkdir(ica_data_dir)
+	ica_hf5_name = hf5_dir.split('/')[-1].split('.')[0] + '_ica.h5'
+	ica_hf5_dir = ica_data_dir + ica_hf5_name
+	hf5 = tables.open_file(ica_hf5_dir, 'w', title = ica_hf5_dir[-1])
+	atom = tables.IntAtom()
+	ICA_array = hf5.create_earray('/','ica_weights',atom,(0,) + np.shape(ICA_weights))
+	ICA_data_expanded = np.expand_dims(ICA_weights[:],0)
+	exec("hf5.root.ica_weights.append(ICA_data_expanded)")
+	hf5.create_earray('/','data_segment',atom,(0,))
+	exec("hf5.root.data_segment.append([seg_ind])")
+	hf5.close()
+	
+	return ica_hf5_dir
+	

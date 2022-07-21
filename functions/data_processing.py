@@ -13,8 +13,6 @@ import os, tables, tqdm
 import numpy as np
 import tkinter as tk
 import tkinter.filedialog as fd
-from scipy.signal import butter, lfilter 
-from sklearn.cluster import KMeans
 	
 #Functions
 
@@ -248,7 +246,7 @@ def get_experiment_components(new_hf5_dir):
 		int_len_loop = 1
 		while int_len_loop == 1:
 			try:
-				int_len = int(input("How long was the " + segment_names[i] + " interval? (in rounded minutes) "))
+				int_len = int(input("How long was the " + segment_names[i] + " interval? (in rounded minutes) \n"))
 				int_len_loop = 0
 			except:
 				print("Error: Value must be an integer. Try again.")
@@ -258,109 +256,3 @@ def get_experiment_components(new_hf5_dir):
 	hf5_new.close()
 		
 	return segment_names, segment_times
-		
-def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
-	"""This function creates a new .h5 file to store only downsampled data arrays"""
-	print("Saving Electrode Data to New HF5")
-	atom = tables.IntAtom()
-	new_hf5_dir = hf5_dir.split('.h5')[0] + '_downsampled.h5'
-	hf5 = tables.open_file(hf5_dir, 'r', title = hf5_dir[-1])
-	hf5_new = tables.open_file(new_hf5_dir, 'w', title = new_hf5_dir[-1])
-	units = hf5.list_nodes('/raw')
-	unit_nums = np.array([str(unit).split('_')[-1] for unit in units])
-	unit_nums = np.array([int(unit.split(' (')[0]) for unit in unit_nums])
-	hf5_new.create_group('/','electrode_array')
-	np_e_data = np.array(e_data)
-	data = hf5_new.create_earray('/electrode_array','data',atom,(0,)+np.shape(np_e_data))
-	np_e_data = np.expand_dims(np_e_data,0)
-	data.append(np_e_data)
-	del np_e_data, e_data
-	hf5_new.create_earray('/electrode_array','unit_nums',atom,(0,))
-	exec("hf5_new.root.electrode_array.unit_nums.append(unit_nums[:])")
-	if sub_amount > 0:
-		new_rate = [round(sampling_rate*sub_amount)]
-		hf5_new.create_earray('/','sampling_rate',atom,(0,))
-		hf5_new.root.sampling_rate.append(new_rate)
-	else:
-		hf5_new.create_earray('/','sampling_rate',atom,(0,))
-		hf5_new.root.sampling_rate.append([sampling_rate])
-	print("Saving Dig Ins to New HF5")
-	np_dig_ins = np.array(dig_in_data)
-	hf5_new.create_group('/','dig_ins')
-	data_digs = hf5_new.create_earray('/dig_ins','dig_ins',atom,(0,)+np.shape(np_dig_ins))
-	np_dig_ins = np.expand_dims(np_dig_ins,0)
-	data_digs.append(np_dig_ins)
-	del np_dig_ins, data_digs, dig_in_data
-       #Close HDF5 file
-	hf5.close()
-	hf5_new.close()
-	print("Getting Experiment Components")
-	segment_names, segment_times = get_experiment_components(new_hf5_dir)
-	hf5_new = tables.open_file(new_hf5_dir, 'r+', title = new_hf5_dir[-1])
-	hf5_new.create_group('/','experiment_components')
-	hf5_new.create_earray('/experiment_components','segment_times',atom,(0,))
-	exec("hf5_new.root.experiment_components.segment_times.append(segment_times[:])")
-	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
-	hf5_new.create_earray('/experiment_components','segment_names',atom,(0,))
-	exec("hf5_new.root.experiment_components.segment_names.append(np.array(segment_names))")
-	e_data = hf5_new.root.electrode_array.data[0,:,:]
-	dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
-	hf5_new.close()
-	del hf5, units, sub_amount
-	
-	return e_data, unit_nums, dig_ins		
-
-
-def butter_bandpass(lowcut, highcut, fs, order=5):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = butter(order, [low, high], btype='band')
-    return b, a
-
-
-def bandpass_filter(data_segment, lowcut, highcut, fs, order=5):
-	"""Function to bandpass filter. Calls butter_bandpass function.
-	Copied from https://scipy-cookbook.readthedocs.io/items/ButterworthBandpass.html
-	Scipy documentation for bandpass filter
-	data_segment = data to be filtered
-	lowcut = low frequency
-	highcut = high frequency
-	fs = sampling rate of data"""
-	b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-	y = lfilter(b, a, data_segment)
-	return y
-
-def signal_averaging(data):
-	"""Function to increase the signal-to-noise ratio by removing common signals
-	across electrodes"""
-	
-	mean_odd = np.mean(data[np.arange(1,len(data),2),:],0)
-	mean_even = np.mean(data[np.arange(0,len(data),2),:],0)
-	
-	overall_mean = np.mean([[mean_odd],[mean_even]],0)
-	
-	cleaned_data = data - overall_mean
-	
-	return cleaned_data
-
-def data_clustering(data):
-	"""Function to cluster the cleaned signals into groups for further cleaning"""
-	print("Performing K-Means clustering of data.")
-	cluster_nums = np.arange(2,round(len(data)/5))
-	mean_centroid_dist = np.zeros(len(cluster_nums)) #Store average centroid distances
-	cluster_inertia = np.zeros(len(cluster_nums))
-	
-	#Calculate average centroid distances for different numbers of clusters
-	for i in cluster_nums:
-		kmeans = KMeans(n_clusters=i, random_state=0).fit(data)
-		centers = kmeans.cluster_centers_
-		center_dists = np.zeros(i-1)
-		for j in range(i-1):
-			center_dists[j] = np.sqrt((centers[j+1][0] - centers[j][0])**2 + (centers[j+1][1] - centers[j][1])**2)
-		mean_centroid_dist[i-2] = np.mean(center_dists)
-		cluster_inertia[i-2] = kmeans.inertia_
-	
-	#Look for the elbow in the data to determine the maximum number of clusters that's realistic
-	
-	
