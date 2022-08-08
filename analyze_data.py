@@ -12,6 +12,7 @@ import sys, os
 sys.path.append('/Users/hannahgermaine/Documents/GitHub/BlechCodes/')
 import functions.data_processing as dp
 import functions.ICA_data_split as ica
+import functions.spike_sort as sort
 import tkinter as tk
 import tkinter.filedialog as fd
 import functions.hdf5_handling as h5
@@ -46,4 +47,7 @@ else:
 	
 #%% Perform ICA on electrode data to separate out spikes and other components
 #print("Performing ICA")
-ICA_weights = ica.performICA(hf5_dir)
+ICA_h5_dir = ica.performICA(hf5_dir)
+
+#%% Spike sort ICA data
+sorted_dir = sort.run_spike_sort(ICA_h5_dir)

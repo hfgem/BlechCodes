@@ -206,7 +206,7 @@ def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
 	hf5.close()
 	hf5_new.close()
 	print("Getting Experiment Components")
-	segment_names, segment_times = get_experiment_components(new_hf5_dir)
+	segment_names, segment_times = dp.get_experiment_components(new_hf5_dir)
 	hf5_new = tables.open_file(new_hf5_dir, 'r+', title = new_hf5_dir[-1])
 	hf5_new.create_group('/','experiment_components')
 	atom = tables.IntAtom()
@@ -222,22 +222,13 @@ def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
 	
 	return e_data, unit_nums, dig_ins
 
-def save_ICA_data(hf5_dir,ICA_weights,seg_ind):
-	"""Function to save ICA data to its own HDF5 file."""
-	
+def check_ICA_data(hf5_dir):
 	ica_data_dir = ('/').join(hf5_dir.split('/')[:-1]) + '/ica_results/'
-	if os.path.isdir(ica_data_dir) == False:
-		os.mkdir(ica_data_dir)
 	ica_hf5_name = hf5_dir.split('/')[-1].split('.')[0] + '_ica.h5'
 	ica_hf5_dir = ica_data_dir + ica_hf5_name
-	hf5 = tables.open_file(ica_hf5_dir, 'w', title = ica_hf5_dir[-1])
-	atom = tables.IntAtom()
-	ICA_array = hf5.create_earray('/','ica_weights',atom,(0,) + np.shape(ICA_weights))
-	ICA_data_expanded = np.expand_dims(ICA_weights[:],0)
-	exec("hf5.root.ica_weights.append(ICA_data_expanded)")
-	hf5.create_earray('/','data_segment',atom,(0,))
-	exec("hf5.root.data_segment.append([seg_ind])")
-	hf5.close()
-	
-	return ica_hf5_dir
+	if os.path.exists(ica_data_dir):
+		exists = 1
+	else:
+		exists = 0
+	return exists, ica_data_dir
 	
