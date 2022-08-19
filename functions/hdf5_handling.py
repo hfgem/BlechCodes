@@ -130,6 +130,8 @@ def downsampled_electrode_data_import(hf5_dir):
 		e_data = hf5_new.root.electrode_array.data[0,:,:]
 		dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
 		unit_nums = hf5_new.root.electrode_array.unit_nums[:]
+		segment_names = hf5_new.root.experiment_components.segment_names[:]
+		segment_times = hf5_new.root.experiment_components.segment_times[:]
 		hf5_new.close()
 	else:
 		print("Data was not previously stored in hf5. \n")
@@ -162,11 +164,11 @@ def downsampled_electrode_data_import(hf5_dir):
 		e_data, dig_in_data = dp.data_to_list(sub_amount,sampling_rate,hf5_dir)
 			
         #Save data to hdf5
-		e_data, unit_nums, dig_ins = save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data)
+		e_data, unit_nums, dig_ins, segment_names, segment_times = save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data)
 	
 		#Perform ICA analysis
 	
-	return e_data, unit_nums, dig_ins, new_hf5_dir
+	return e_data, unit_nums, dig_ins, segment_names, segment_times, new_hf5_dir
 
 def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
 	"""This function creates a new .h5 file to store only downsampled data arrays"""
@@ -220,7 +222,7 @@ def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
 	hf5_new.close()
 	del hf5, units, sub_amount
 	
-	return e_data, unit_nums, dig_ins
+	return e_data, unit_nums, dig_ins, segment_names, segment_times
 
 def check_ICA_data(hf5_dir):
 	ica_data_dir = ('/').join(hf5_dir.split('/')[:-1]) + '/ica_results/'

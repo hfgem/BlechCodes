@@ -13,6 +13,7 @@ sys.path.append('/Users/hannahgermaine/Documents/GitHub/BlechCodes/')
 import functions.data_processing as dp
 import functions.ICA_data_split as ica
 import functions.spike_sort as sort
+import functions.data_cleaning as dc
 import tkinter as tk
 import tkinter.filedialog as fd
 import functions.hdf5_handling as h5
@@ -45,9 +46,13 @@ else:
 	#^ This only works when run from terminal. In Spyder a window will stay open - don't close it, just press Quit!!
 	del hdf5_name, datadir, currdir, root, h_exists
 	
-#%% Perform ICA on electrode data to separate out spikes and other components
-#print("Performing ICA")
-ICA_h5_dir = ica.performICA(hf5_dir)
+# Clean the dataset
+clean_data_dir = dc.data_cleanup(hf5_dir)
 
 #%% Spike sort ICA data
-sorted_dir = sort.run_spike_sort(ICA_h5_dir)
+sorted_dir = sort.run_spike_sort(clean_data_dir) #Runs on regular cleaned data, not ICA data
+	
+#%% Perform ICA on electrode data to separate out spikes and other components
+#NEEDS WORK.
+#print("Performing ICA")
+#ICA_h5_dir = ica.performICA(clean_data_dir)
