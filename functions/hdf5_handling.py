@@ -166,8 +166,6 @@ def downsampled_electrode_data_import(hf5_dir):
         #Save data to hdf5
 		e_data, unit_nums, dig_ins, segment_names, segment_times = save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data)
 	
-		#Perform ICA analysis
-	
 	return e_data, unit_nums, dig_ins, segment_names, segment_times, new_hf5_dir
 
 def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
@@ -228,7 +226,7 @@ def check_ICA_data(hf5_dir):
 	ica_data_dir = ('/').join(hf5_dir.split('/')[:-1]) + '/ica_results/'
 	ica_hf5_name = hf5_dir.split('/')[-1].split('.')[0] + '_ica.h5'
 	ica_hf5_dir = ica_data_dir + ica_hf5_name
-	if os.path.exists(ica_data_dir):
+	if os.path.exists(ica_hf5_dir):
 		exists = 1
 	else:
 		exists = 0

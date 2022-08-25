@@ -26,6 +26,8 @@ def data_sample(hf5_dir, clean_data_dir, new_hf5_dir):
 	##NEED TO GET SEGMENT NAMES AND INDICES 
 	hf5_clean = tables.open_file(clean_data_dir, 'r+', title = new_hf5_dir[-1])
 	sampling_rate = hf5_clean.root.sampling_rate[0]
+	segment_times = hf5_clean.root.segment_names[:]
+	segment_names = hf5_clean.root.segment_names[:]
 	clean_data = hf5_clean.root.clean_data[0]
 	hf5_clean.close()
 	
@@ -43,8 +45,11 @@ def data_sample(hf5_dir, clean_data_dir, new_hf5_dir):
 			seg_loop = 0
 		except:
 			print("ERROR: Please enter a valid index.")
-	cleaned_data = avg_data[:,segment_times[seg_ind]:segment_times[seg_ind+1]]
-		
+	cleaned_data = clean_data[:,segment_times[seg_ind]:segment_times[seg_ind+1]]
+	del clean_data, seg_loop
+	
+	
+	
 	print("Saving cleaned dataset")
 	if os.path.isdir(ICA_h5_dir) == False:
 		os.mkdir(ICA_h5_dir)
@@ -121,7 +126,7 @@ def ICA_analysis(clean_data, clean_data_dir, ica_hf5_file_dir):
 		comp_elec_matchings.extend(ind_max)
 		
 	print("Saving ICA results")
-	ica_hf5 = tables.open_file(ica_hf5_file_dir, 'r+', title = new_hf5_dir[-1])
+	ica_hf5 = tables.open_file(ica_hf5_file_dir, 'r+', title = ica_hf5_file_dir[-1])
 	atom = tables.FloatAtom()
 	ICA_array = ica_hf5.create_earray('/','ica_weights',atom,(0,) + np.shape(ICA_weights))
 	ICA_weights_expanded = np.expand_dims(ICA_weights[:],0)
@@ -136,16 +141,16 @@ def ICA_analysis(clean_data, clean_data_dir, ica_hf5_file_dir):
 	ica_hf5.close()
 		
 	print("Plotting ICA Results")
-	plot_ICA_results(clean_data,ICA_weights,comp_elec_matchings,sampling_rate,new_hf5_dir)
+	plot_ICA_results(clean_data,ICA_weights,comp_elec_matchings,sampling_rate,ica_hf5_file_dir)
 	
 	return ICA_weights, comp_elec_matchings, sampling_rate
 
-def plot_ICA_results(filtered_data,ICA_weights,comp_elec_matchings,sampling_rate,new_hf5_dir):
+def plot_ICA_results(filtered_data,ICA_weights,comp_elec_matchings,sampling_rate,ica_hf5_file_dir):
 	"""This function takes the data segment used for ICA and plots the original 
 	segment data as well as the components pulled out by ICA"""
 	
 	#Create Folder for Image Storage
-	split_dir = new_hf5_dir.split('/')
+	split_dir = ica_hf5_file_dir.split('/')
 	im_folder_dir = '/'.join(split_dir[:-1]) + '/ICA_images/'
 	if os.path.isdir(im_folder_dir) == False:
 		os.mkdir(im_folder_dir)

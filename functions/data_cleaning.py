@@ -51,57 +51,6 @@ def signal_whitening(data):
 	
 	return data_white
 
-def average_filtering(data,sampling_rate):
-	"""Function to scrub mean-subtracted data to potential spike times for 
-	further cleaning. Peaks outside 2 absolute deviations and 1 ms to the left,
-	and 1.5 ms to the right around them are kept, while the rest are scrubbed. 
-	Peaks must be at least 2 ms apart."""
-	print("This is going to take a while!")
-	num_neur, num_time = np.shape(data)
-	#min_dist_btwn_peaks = np.round(sampling_rate*(2/1000))
-	#NOTE: Testing not separating peaks at this point, but doing so in spike sorting.
-	#For this test, lines 76 and 78 below were removed, as was the section 80-84.
-	num_pts_left = np.round(sampling_rate*(1/1000))
-	num_pts_right = np.round(sampling_rate*(1.5/1000))
-	total_pts = num_pts_left + num_pts_right
-	#Grab mean and std
-	std_dev = np.std(data,1)
-	print("Scrubbing data within 2 average deviations")
-	mean_avg_data = []
-	peak_ind = []
-	for i in tqdm.tqdm(range(num_neur)):
-		data_copy = data[i,:]
-		#Start with positive peaks
-		positive_peaks_data = find_peaks(data_copy,height=2*std_dev[i])[0]#,
-						  #distance=min_dist_btwn_peaks)[0]
-		negative_peaks_data = find_peaks(-1*data_copy,height=2*std_dev[i])[0]#,
-						  #distance=min_dist_btwn_peaks)[0]
-		#Remove any positive peaks that are too close to negative peaks
-# 		all_peaks = np.unique(np.concatenate((positive_peaks_data,negative_peaks_data)))
-# 		all_peaks_diff = all_peaks[1:-1] - all_peaks[0:-2]
-# 		too_close_peaks = np.where(all_peaks_diff < sampling_rate/1000)[0]
-# 		too_close_ind = np.unique(np.concatenate((too_close_peaks,too_close_peaks+1)))
-# 		positive_peaks_data = np.setdiff1d(positive_peaks_data,too_close_ind)
-		peak_indices = list(np.append(positive_peaks_data,negative_peaks_data))
-		keep_ind = []
-		for j in peak_indices:
-			p_i_l = max(j - num_pts_left,0)
-			p_i_r = min(j + num_pts_right,num_time)
-			points = list(np.arange(p_i_l,p_i_r))
-			if len(points) < total_pts:
-				missing_len = int(total_pts - len(points))
-				list(points).extend([0 for i in range(0,missing_len)])
-				del missing_len
-			keep_ind.extend(points)
-		keep_ind = np.unique(keep_ind)
-		diff_ind = np.setdiff1d(np.arange(0,num_time),keep_ind)
-		data_copy[diff_ind] = 0
-		mean_avg_data.append(data_copy)
-		peak_ind.append(peak_indices)
-	mean_avg_data = np.array(mean_avg_data)
-	
-	return mean_avg_data, peak_ind
-
 def data_to_mv(data):
 	"""Data is originally in microVolts, so here we convert to milliVolts"""
 	mv_data = data*10**-3
@@ -144,7 +93,7 @@ def data_cleanup(hf5_dir):
 		
 		hf5_new.close()
 		
-		#Begin storing data in parallel to getting storable data
+		#Begin storing data
 		#Create new file for cleaned dataset
 		if os.path.isfile(clean_data_dir) == True:
 			os.remove(clean_data_dir)
@@ -174,18 +123,9 @@ def data_cleanup(hf5_dir):
 		del mv_data
 			
 		print("Signal Averaging to Improve Signal-Noise Ratio")
-		cleaned_data = signal_averaging(filtered_data)
+		avg_data = signal_averaging(filtered_data)
 		
 		del filtered_data
-		
-		#Commented out for data comparison
-		avg_data = cleaned_data
-# 		print("Performing signal filtering.")
-# 		avg_data, peak_ind = average_filtering(cleaned_data,sampling_rate)
-		
-		#Not in use - fails to run on full dataset!
-		#print("Performing median average filtering")
-		#avg_data, peak_ind = dc.median_average_filtering(cleaned_data,sampling_rate)
 		
 		print("Saving cleaned data.")
 		clean_hf5 = tables.open_file(clean_data_dir, 'r+', title = clean_data_dir[-1])
