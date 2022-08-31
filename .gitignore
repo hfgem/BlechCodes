@@ -1,3 +1,4 @@
 
 *.pyc
 functions/ipython.html
+functions/template_percentile_tests.py

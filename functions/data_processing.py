@@ -35,7 +35,7 @@ def file_names():
 	#Pull EMG indices if used
 	emg_loop = 1
 	while emg_loop == 1:
-		emg_used = input("Were EMG used? y / n: ")	
+		emg_used = input("\n INPUT REQUESTED: Were EMG used? y / n: ")	
 		if emg_used != 'n' and emg_used != 'y':
 			print('Error, incorrect response, try again')
 			emg_loop = 1
@@ -54,7 +54,7 @@ def dig_ins(dat_files_list):
 	if len(dig_ins) > 0:
 		dig_in_names = list()
 		for i in range(len(dig_ins)):
-			dig_in_names.append(input("Enter single-word name for dig-in " + str(i) + ": "))
+			dig_in_names.append(input("\n INPUT REQUESTED: Enter single-word name for dig-in " + str(i) + ": "))
 	return dig_ins, dig_in_names
 			
 def getEMG():
@@ -63,11 +63,11 @@ def getEMG():
 	emg_ind = list()
 	while emg_in_loop == 1:
 		try:
-			emg_in = int(input("Enter first input index of EMG: "))
+			emg_in = int(input("\n INPUT REQUESTED: Enter first input index of EMG: "))
 			emg_ind.append(emg_in)
 			more_emg_loop = 1
 			while more_emg_loop == 1:
-				more_emg = input("Are there more EMG inputs? y / n: ")
+				more_emg = input("\n INPUT REQUESTED: Are there more EMG inputs? y / n: ")
 				if more_emg == 'n':
 					emg_in_loop = 0
 					more_emg_loop = 0
@@ -189,9 +189,9 @@ def get_experiment_components(new_hf5_dir):
 	num_segments = 0
 	while segments_loop == 1:
 		try:
-			print("Please think about your experiment in terms of segments.")
+			print("\n INPUT REQUESTED: Please think about your experiment in terms of segments.")
 			print("For example, a pre-tastant delivery interval, a taste delivery interval, etc...")
-			num_segments = int(input("How many segments comprise your experiment? Enter an integer. "))
+			num_segments = int(input("How many segments comprise your experiment? Enter an integer: "))
 			segments_loop = 0
 		except:
 			print("Incorrect entry, please enter integer.")
@@ -201,7 +201,7 @@ def get_experiment_components(new_hf5_dir):
 		segments_loop = 1
 		while segments_loop == 1:
 			try:
-				seg_name = input("What is the name of segment number " + str(i+1) + "? ")
+				seg_name = input("\n INPUT REQUESTED: What is the name of segment number " + str(i+1) + "? ")
 				segment_names.append(seg_name)
 				segments_loop = 0
 			except:
@@ -230,7 +230,7 @@ def get_experiment_components(new_hf5_dir):
 	while taste_loop == 1:
 		try:
 			print(str(segment_names))
-			taste_ind = int(input("Which segment number is the taste delivery interval? (Zero-indexed) "))
+			taste_ind = int(input("\n INPUT REQUESTED: Which segment number is the taste delivery interval? (Zero-indexed) "))
 			segment_times[taste_ind] = dig_in_ind_range[0]
 			segment_times[taste_ind + 1] = dig_in_ind_range[1]
 			taste_loop = 0
@@ -246,7 +246,7 @@ def get_experiment_components(new_hf5_dir):
 		int_len_loop = 1
 		while int_len_loop == 1:
 			try:
-				int_len = int(input("How long was the " + segment_names[i] + " interval? (in rounded minutes) \n"))
+				int_len = int(input("\n INPUT REQUESTED: How long was the " + segment_names[i] + " interval? (in rounded minutes) \n"))
 				int_len_loop = 0
 			except:
 				print("Error: Value must be an integer. Try again.")

@@ -8,7 +8,8 @@ Data manipulation with bandpass filtering, etc... to pull out cleaner spikes
 import numpy as np
 from scipy.signal import butter, lfilter, find_peaks 
 from sklearn.cluster import KMeans
-import tqdm
+import tqdm, os, tables
+import functions.hdf5_handling as h5
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs
@@ -50,53 +51,98 @@ def signal_whitening(data):
 	
 	return data_white
 
-def median_average_filtering(data,sampling_rate):
-	"""Function to perform median average filtering (MAD) on data in order to 
-	scrub it to potential spike times for further cleaning. Peaks outside 2 
-	absolute deviations and 1 ms to the left, and 1.5 ms to the right around  
-	them are kept, while the rest are scrubbed. Peaks must be at least 2 ms 
-	apart."""
-	print("Buckle up, this takes a while.")
-	num_neur, num_time = np.shape(data)
-	min_dist_btwn_peaks = np.round(sampling_rate*(2/1000))
-	num_pts_left = np.round(sampling_rate*(1/1000))
-	num_pts_right = np.round(sampling_rate*(1.5/1000))
-	total_pts = num_pts_left + num_pts_right
-	median_per_electrode = np.median(data,1)
-	median_sub_data = np.subtract(data,np.expand_dims(median_per_electrode,1))
-	dev_from_med = np.median(median_sub_data,1)
-	print("Scrubbing data within 2 median average deviations")
-	med_avg_data = []
-	peak_ind = []
-	for i in tqdm.tqdm(range(num_neur)):
-		data_copy = median_sub_data[i,:]
-		#Start with positive peaks
-		positive_peaks_data = find_peaks(data_copy,height=2*dev_from_med[i],
-						  distance=min_dist_btwn_peaks)
-		negative_peaks_data = find_peaks(-1*data_copy,height=2*dev_from_med[i],
-						  distance=min_dist_btwn_peaks)
-		peak_indices = list(np.append(positive_peaks_data[0],negative_peaks_data[0]))
-		keep_ind = []
-		for j in peak_indices:
-			p_i_l = max(j - num_pts_left,0)
-			p_i_r = min(j + num_pts_right,num_time)
-			points = list(np.arange(p_i_l,p_i_r))
-			if len(points) < total_pts:
-				missing_len = int(total_pts - len(points))
-				list(points).extend([0 for i in range(0,missing_len)])
-				del missing_len
-			keep_ind.extend(points)
-		keep_ind = np.unique(keep_ind)
-		diff_ind = np.setdiff1d(np.arange(0,num_time),keep_ind)
-		data_copy[diff_ind] = 0
-		med_avg_data.append(data_copy)
-		peak_ind.append(peak_indices)
-	med_avg_data = np.array(med_avg_data)
-	
-	return med_avg_data, peak_ind
-
 def data_to_mv(data):
 	"""Data is originally in microVolts, so here we convert to milliVolts"""
-	mv_data = data*10**3
+	mv_data = data*10**-3
 	return mv_data
 	
+def data_cleanup(hf5_dir):
+	"""This function cleans a dataset using downsampling, bandpass filtering, 
+	and signal averaging"""
+
+	cont_prompt_2 = 'y' #Continuation prompt initialization
+	
+	#Save directory
+	folder_dir = hf5_dir.split('/')[:-1]
+	folder_dir = '/'.join(folder_dir) + '/'
+	clean_data_dir = hf5_dir.split('.h5')[0] + '_cleaned.h5'
+	
+	#First check for cleaned data
+	re_clean = 'n'
+	clean_exists = 0
+	if os.path.isfile(clean_data_dir) == True:
+		print("Cleaned Data Already Exists.")
+		clean_exists = 1
+		re_clean = input("\n INPUT REQUESTED: Would you like to re-clean the dataset [y/n]? ")
+		if re_clean == 'y':
+			print("Beginning re-cleaning dataset.")
+		print("\n")
+	#Clean or re-clean as per case
+	if clean_exists == 0 or re_clean == 1:
+		
+		#First perform downsampling / import downsampled data
+		print("Downsampled Data Import Phase")
+		e_data, unit_nums, dig_ins, segment_names, segment_times, new_hf5_dir = h5.downsampled_electrode_data_import(hf5_dir)
+		#Currently not using dig_ins and unit_nums, so removing
+		del unit_nums, dig_ins
+		
+		#Open HF5
+		hf5_new = tables.open_file(new_hf5_dir, 'r+', title = new_hf5_dir[-1])
+		
+		sampling_rate = hf5_new.root.sampling_rate[0]
+		
+		hf5_new.close()
+		
+		#Begin storing data
+		#Create new file for cleaned dataset
+		if os.path.isfile(clean_data_dir) == True:
+			os.remove(clean_data_dir)
+		clean_hf5 = tables.open_file(clean_data_dir, 'w', title = clean_data_dir[-1])
+		atom = tables.FloatAtom()
+		sr_array = clean_hf5.create_earray('/','sampling_rate',atom,(0,))
+		sr_array.append([sampling_rate])
+		atom = tables.IntAtom()
+		st_array = clean_hf5.create_earray('/','segment_times',atom,(0,))
+		st_array.append(segment_times)
+		atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
+		sn_array = clean_hf5.create_earray('/','segment_names',atom,(0,))
+		sn_array.append(segment_names)
+		clean_hf5.close()
+		
+		print("Converting Data to mV Scale")
+		mv_data = data_to_mv(e_data)
+		
+		del e_data
+		
+		print("Bandpass Filtering Data")
+		low_fq = 300
+		high_fq = 3000
+		filtered_data = bandpass_filter(mv_data, low_fq, high_fq,
+										sampling_rate, order=5)
+		
+		del mv_data
+			
+		print("Signal Averaging to Improve Signal-Noise Ratio")
+		avg_data = signal_averaging(filtered_data)
+		
+		del filtered_data
+		
+		print("Saving cleaned data.")
+		clean_hf5 = tables.open_file(clean_data_dir, 'r+', title = clean_data_dir[-1])
+		atom = tables.FloatAtom()
+		data_array = clean_hf5.create_earray('/','clean_data',atom,(0,) + np.shape(avg_data))
+		avg_data_expanded = np.expand_dims(avg_data[:],0)
+		clean_hf5.root.clean_data.append(avg_data_expanded)
+		clean_hf5.close()
+		
+		print("\n NOTICE: Checkpoint 2 Complete: You can quit the program here, if you like, and come back another time.")
+		cont_loop = 1
+		if cont_loop == 1:
+			cont_prompt_2 = input("\n INPUT REQUESTED: Would you like to continue [y/n]? ")
+			if cont_prompt_2 != 'y' and cont_prompt_2 != 'n':
+				print("Error. Incorrect input.")
+			else:
+				cont_loop = 0
+		
+	return clean_data_dir, cont_prompt_2
+

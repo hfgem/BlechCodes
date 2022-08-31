@@ -15,115 +15,87 @@ from sklearn.decomposition import FastICA
 import functions.hdf5_handling as h5
 import functions.data_cleaning as dc
 import matplotlib.pyplot as plt
+import functions.ICA_hannah_method as ica
 	
 
-def data_cleanup(e_data, new_hf5_dir, ICA_h5_dir, ica_hf5_file_dir):
+def data_sample(hf5_dir, clean_data_dir, new_hf5_dir):
 	"""This function cleans a dataset using downsampling, bandpass filtering, 
 	and signal averaging"""
 	
-	#First check for cleaned data
-	re_clean = 0
-	clean_exists = 0
+	#Get segments and sampling rate
+	##NEED TO GET SEGMENT NAMES AND INDICES 
+	hf5_clean = tables.open_file(clean_data_dir, 'r+', title = new_hf5_dir[-1])
+	sampling_rate = hf5_clean.root.sampling_rate[0]
+	segment_times = hf5_clean.root.segment_names[:]
+	segment_names = hf5_clean.root.segment_names[:]
+	clean_data = hf5_clean.root.clean_data[0]
+	hf5_clean.close()
+	
+	#Cleaned segment
+	#Ask for user input on which segment to use for ICA
+	print("Using the entire dataset for ICA is computationally costly.")
+	print("As such, this program was designed to run only on a segment.")
+	[print(segment_names[i].decode('UTF-8') + " index = " + str(i)) for i in range(len(segment_names))]
+	print("Above are the segment names and their corresponding indices.")
+	seg_loop = 1
+	while seg_loop == 1:
+		seg_ind = input("Please enter the index of the segment you'll use for ICA: ")
+		try:
+			seg_ind = int(seg_ind)
+			seg_loop = 0
+		except:
+			print("ERROR: Please enter a valid index.")
+	cleaned_data = clean_data[:,segment_times[seg_ind]:segment_times[seg_ind+1]]
+	del clean_data, seg_loop
+	
+	
+	
+	print("Saving cleaned dataset")
+	if os.path.isdir(ICA_h5_dir) == False:
+		os.mkdir(ICA_h5_dir)
+	#Create new file for cleaned dataset
 	if os.path.isfile(ica_hf5_file_dir) == True:
-		print("Cleaned Data Already Exists.")
-		clean_exists = 1
-		print("If you would like to re-clean the dataset, enter 1.")
-		print("If you would like to keep the already-cleaned dataset, enter 0.")
-		re_clean = int(input("Clean [1] or Keep [0]? "))
-		if re_clean == 0:
-			ica_hf5 = tables.open_file(ica_hf5_file_dir, 'r+', title = new_hf5_dir[-1])
-			med_avg_data = ica_hf5.root.cleaned_data[0][:]
-			ica_hf5.close()
+		os.remove(ica_hf5_file_dir)
+	ica_hf5 = tables.open_file(ica_hf5_file_dir, 'w', title = new_hf5_dir[-1])
+	atom = tables.IntAtom()
+	ica_hf5.create_earray('/','data_segment',atom,(0,))
+	ica_hf5.root.data_segment.append([seg_ind])
+	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
+	segment_names_array = ica_hf5.create_earray('/','segment_names',atom,(0,))
+	ica_hf5.root.segment_names.append(segment_names)
+	#segment_names = [segment_names[i].decode('UTF-8') for i in range(len(segment_names))] to get back text
+	atom = tables.FloatAtom()
+	segment_times_array = ica_hf5.create_earray('/','segment_times',atom,(0,) + np.shape(segment_times))
+	segment_times_expanded = np.expand_dims(segment_times[:],0)
+	ica_hf5.root.segment_times.append(segment_times_expanded)
+	cleaned_data_array = ica_hf5.create_earray('/','cleaned_data',atom,(0,) + np.shape(avg_data))
+	cleaned_data_expanded = np.expand_dims(avg_data[:],0)
+	ica_hf5.root.cleaned_data.append(cleaned_data_expanded)
+	cleaned_data_segment_array = ica_hf5.create_earray('/','cleaned_data_segment',atom,(0,) + np.shape(cleaned_data))
+	cleaned_data_segment_expanded = np.expand_dims(cleaned_data[:],0)
+	ica_hf5.root.cleaned_data.append(cleaned_data_segment_expanded)
+	atom = tables.IntAtom()
+	ica_hf5.create_group('/','cleaned_data_peaks')
+	for i in range(len(peak_ind)):
+		array_name = 'peaks_'+str(i)
+		data_peak_array = ica_hf5.create_earray('/cleaned_data_peaks',array_name,atom,(0,) + np.shape(peak_ind[i]))
+		data_peaks_expanded = np.expand_dims(peak_ind[i],0)
+		exec("ica_hf5.root.cleaned_data_peaks."+array_name+".append(data_peaks_expanded)")
+	ica_hf5.close()
 	
-	if clean_exists == 0 or re_clean == 1:
-		#Open HF5
-		hf5_new = tables.open_file(new_hf5_dir, 'r+', title = new_hf5_dir[-1])
-		
-		#First pull only the portion of the data desired for ICA using
-		#hf5_new.root.experiment_components.segment_times and .segment_names
-		segment_names = hf5_new.root.experiment_components.segment_names[:]
-		segment_times = hf5_new.root.experiment_components.segment_times[:]
-		sampling_rate = hf5_new.root.sampling_rate[0]
-		
-		hf5_new.close()
-		
-		#Ask for user input on which segment to use for ICA
-		print("Using the entire dataset for ICA is computationally costly.")
-		print("As such, this program was designed to run only on a segment.")
-		[print(segment_names[i].decode('UTF-8') + " index = " + str(i)) for i in range(len(segment_names))]
-		print("Above are the segment names and their corresponding indices.")
-		seg_loop = 1
-		while seg_loop == 1:
-			seg_ind = input("Please enter the index of the segment you'll use for ICA: ")
-			try:
-				seg_ind = int(seg_ind)
-				seg_loop = 0
-			except:
-				print("ERROR: Please enter a valid index.")
-				
-		data_segment = e_data[:,segment_times[seg_ind]:segment_times[seg_ind+1]]
-		
-		del e_data
-		
-		print("Converting Data to mV Scale")
-		mv_data = dc.data_to_mv(data_segment)
-		
-		del data_segment
-		
-		print("Bandpass Filtering Data")
-		low_fq = 300
-		high_fq = 3000
-		filtered_data = dc.bandpass_filter(mv_data, low_fq, high_fq,
-										sampling_rate, order=5)
-		
-		del mv_data
-			
-		print("Signal Averaging to Improve Signal-Noise Ratio")
-		cleaned_data = dc.signal_averaging(filtered_data)
-		
-		del filtered_data
-		
-		print("Performing median average filtering")
-		med_avg_data, peak_ind = dc.median_average_filtering(cleaned_data,sampling_rate)
-		
-		del cleaned_data
-		
-		print("Saving cleaned dataset")
-		if os.path.isdir(ICA_h5_dir) == False:
-			os.mkdir(ICA_h5_dir)
-		#Create new file for cleaned dataset
-		if os.path.isfile(ica_hf5_file_dir) == True:
-			os.remove(ica_hf5_file_dir)
-		ica_hf5 = tables.open_file(ica_hf5_file_dir, 'w', title = new_hf5_dir[-1])
-		atom = tables.IntAtom()
-		ica_hf5.create_earray('/','data_segment',atom,(0,))
-		ica_hf5.root.data_segment.append([seg_ind])
-		atom = tables.FloatAtom()
-		cleaned_data_array = ica_hf5.create_earray('/','cleaned_data',atom,(0,) + np.shape(med_avg_data))
-		cleaned_data_expanded = np.expand_dims(med_avg_data[:],0)
-		ica_hf5.root.cleaned_data.append(cleaned_data_expanded)
-		atom = tables.IntAtom()
-		ica_hf5.create_group('/','cleaned_data_peaks')
-		for i in range(len(peak_ind)):
-			array_name = 'peaks_'+str(i)
-			data_peak_array = ica_hf5.create_earray('/cleaned_data_peaks',array_name,atom,(0,) + np.shape(peak_ind[i]))
-			data_peaks_expanded = np.expand_dims(peak_ind[i],0)
-			exec("ica_hf5.root.cleaned_data_peaks."+array_name+".append(data_peaks_expanded)")
-		ica_hf5.close()
-	
-	return med_avg_data
+	return cleaned_data, segment_times
 
-def ICA_analysis(clean_data, new_hf5_dir, ica_hf5_file_dir):
+def ICA_analysis(clean_data, clean_data_dir, ica_hf5_file_dir):
 	"""This function performs ICA component separation on the electrode recording
 	data"""
 	
 	#Get sampling rate from HF5
-	hf5_new = tables.open_file(new_hf5_dir, 'r+', title = new_hf5_dir[-1])
+	hf5_clean = tables.open_file(clean_data_dir, 'r+', title = clean_data_dir[-1])
 	
-	sampling_rate = hf5_new.root.sampling_rate[0]
-	num_neur = np.shape(hf5_new.root.electrode_array.data)[1]
+	sampling_rate = hf5_clean.root.sampling_rate[0]
+	num_neur = np.shape(hf5_clean.root.clean_data)[1]
 	
-	hf5_new.close()
+	hf5_clean.close()
 	
 	#print("Signal Whitening for ICA")
 	#CANNOT PERFORM CURRENTLY - DATA TOO BIG. ADDED TO FIX QUEUE.
@@ -133,11 +105,19 @@ def ICA_analysis(clean_data, new_hf5_dir, ica_hf5_file_dir):
 		w_init_naive[i,i] = 1
 	w_init_naive = np.divide(w_init_naive,np.sum(w_init_naive,0))
 		
-	transformer = FastICA(n_components=None,
-					   algorithm='deflation', whiten='unit-variance', 
-					   max_iter=200, tol=0.05, w_init=w_init_naive, 
-					   random_state=None)
-	ICA_weights = transformer.fit_transform(clean_data)
+#	#Python ICA package version
+# 	transformer = FastICA(n_components=None,
+# 					   algorithm='deflation', whiten='unit-variance', 
+# 					   max_iter=200, tol=0.01, w_init=w_init_naive, 
+# 					   random_state=None)
+# 	ICA_weights = transformer.fit_transform(clean_data)
+	
+	#Manual ICA implementation by Hannah Germaine
+	n_c = num_neur #Number of components to pull
+	iter_n = 500 #Number of iterations for ICA
+	alpha = 0.05 #Strength of weight change per trial (must be < 1)
+	conv_cutoff = 1e-4 #Cutoff for the cost function to estimate convergence
+	ICA_weights, kurt, iter_ns = ica.GS_ICA(clean_data, n_c, iter_n, alpha, conv_cutoff)
 	num_neur,num_time = np.shape(clean_data)
 	comp_elec_matchings = []
 	for i in range(num_neur):
@@ -146,28 +126,31 @@ def ICA_analysis(clean_data, new_hf5_dir, ica_hf5_file_dir):
 		comp_elec_matchings.extend(ind_max)
 		
 	print("Saving ICA results")
-	ica_hf5 = tables.open_file(ica_hf5_file_dir, 'r+', title = new_hf5_dir[-1])
+	ica_hf5 = tables.open_file(ica_hf5_file_dir, 'r+', title = ica_hf5_file_dir[-1])
 	atom = tables.FloatAtom()
 	ICA_array = ica_hf5.create_earray('/','ica_weights',atom,(0,) + np.shape(ICA_weights))
 	ICA_weights_expanded = np.expand_dims(ICA_weights[:],0)
 	ica_hf5.root.ica_weights.append(ICA_weights_expanded)
+	ica_hf5.create_earray('/','ica_kurtosis',atom,(0,))
+	ica_hf5.root.ica_kurtosis.append(kurt)
 	atom = tables.IntAtom()
 	ICA_sampling_rate = ica_hf5.create_earray('/','sampling_rate',atom,(0,))
 	ica_hf5.root.sampling_rate.append([sampling_rate])
 	ICA_matchings = ica_hf5.create_earray('/','comp_elec_matchings',atom,(0,))
+	ica_hf5.root.comp_elec_matchings.append(comp_elec_matchings)
 	ica_hf5.close()
 		
 	print("Plotting ICA Results")
-	plot_ICA_results(clean_data,ICA_weights,comp_elec_matchings,sampling_rate,new_hf5_dir)
+	plot_ICA_results(clean_data,ICA_weights,comp_elec_matchings,sampling_rate,ica_hf5_file_dir)
 	
 	return ICA_weights, comp_elec_matchings, sampling_rate
 
-def plot_ICA_results(filtered_data,ICA_weights,comp_elec_matchings,sampling_rate,new_hf5_dir):
+def plot_ICA_results(filtered_data,ICA_weights,comp_elec_matchings,sampling_rate,ica_hf5_file_dir):
 	"""This function takes the data segment used for ICA and plots the original 
 	segment data as well as the components pulled out by ICA"""
 	
 	#Create Folder for Image Storage
-	split_dir = new_hf5_dir.split('/')
+	split_dir = ica_hf5_file_dir.split('/')
 	im_folder_dir = '/'.join(split_dir[:-1]) + '/ICA_images/'
 	if os.path.isdir(im_folder_dir) == False:
 		os.mkdir(im_folder_dir)
@@ -202,12 +185,12 @@ def plot_ICA_results(filtered_data,ICA_weights,comp_elec_matchings,sampling_rate
 	plt.savefig(im_folder_dir + 'components.png', dpi=100)
 	plt.show()	
 
-def performICA(hf5_dir):
+def performICA(clean_data_dir):
 	"""This function calls all necessary functions to perform ICA on
 	electrode data"""
 	
 	print("Checking for existing ICA data")
-	exists, ICA_h5_dir = h5.check_ICA_data(hf5_dir)
+	exists, ICA_h5_dir = h5.check_ICA_data(clean_data_dir)
 	ica_hf5_name = ICA_h5_dir.split('/')[-3].split('.')[0].split('_')[0] + '_ica.h5'
 	ica_hf5_file_dir = ICA_h5_dir + ica_hf5_name
 	
@@ -219,12 +202,13 @@ def performICA(hf5_dir):
 	
 	if re_do == 1 or exists == 0:
 		print("Data does not yet exist. Running through ICA protocol.")
-		print("Downsampled Data Import Phase")
-		e_data, unit_nums, dig_ins, new_hf5_dir = h5.downsampled_electrode_data_import(hf5_dir)
-		print("\n Data Cleanup Phase")
-		clean_data = data_cleanup(e_data, new_hf5_dir, ICA_h5_dir, ica_hf5_file_dir)
+		print('\n Grabbing Clean Data')
+		clean_hf5 = tables.open_file(clean_data_dir, 'w', title = clean_data_dir[-1])
+		clean_data = clean_hf5.root.clean_data[0]
+		clean_hf5.close()
+		
 		print("Performing Fast ICA \n")
-		ICA_weights, comp_elec_matchings, sampling_rate = ICA_analysis(clean_data, new_hf5_dir, ica_hf5_file_dir)
+		ICA_weights, comp_elec_matchings, sampling_rate = ICA_analysis(clean_data, clean_data_dir, ica_hf5_file_dir)
 		#del e_data, unit_nums	
 
 	return ica_hf5_file_dir

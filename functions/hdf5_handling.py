@@ -15,7 +15,7 @@ def hdf5_exists():
 	h_loop = 1
 	h_exists = 0
 	while h_loop == 1:
-		h_q = input("Does an HDF5 file already exist? y / n: ")	
+		h_q = input("\n INPUT REQUESTED: Does an HDF5 file already exist? y / n: ")	
 		if h_q != 'n' and h_q != 'y':
 			print('Error, incorrect response, try again')
 			h_loop = 1
@@ -130,6 +130,8 @@ def downsampled_electrode_data_import(hf5_dir):
 		e_data = hf5_new.root.electrode_array.data[0,:,:]
 		dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
 		unit_nums = hf5_new.root.electrode_array.unit_nums[:]
+		segment_names = hf5_new.root.experiment_components.segment_names[:]
+		segment_times = hf5_new.root.experiment_components.segment_times[:]
 		hf5_new.close()
 	else:
 		print("Data was not previously stored in hf5. \n")
@@ -140,7 +142,7 @@ def downsampled_electrode_data_import(hf5_dir):
 		sub_amount = 0
 		while sub_loop == 1:
 			print("The current sampling rate is " + str(sampling_rate) + ".")
-			sub_q = input("Would you like to downsample? y / n: ")	
+			sub_q = input("\n INPUT REQUESTED: Would you like to downsample? y / n: ")	
 			if sub_q != 'n' and sub_q != 'y':
 				print('Error, incorrect response, try again')
 				sub_loop = 1
@@ -149,7 +151,7 @@ def downsampled_electrode_data_import(hf5_dir):
 		if sub_q == 'y':
 			sub_loop = 1
 			while sub_loop == 1:
-				sub_amount = input("Please enter a float describing the amount to downsample (ex. 0.5): ")
+				sub_amount = input("\n INPUT REQUESTED: Please enter a float describing the amount to downsample (ex. 0.5): ")
 				try:
 					sub_amount = float(sub_amount)
 					sub_loop = 0
@@ -162,11 +164,9 @@ def downsampled_electrode_data_import(hf5_dir):
 		e_data, dig_in_data = dp.data_to_list(sub_amount,sampling_rate,hf5_dir)
 			
         #Save data to hdf5
-		e_data, unit_nums, dig_ins = save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data)
+		e_data, unit_nums, dig_ins, segment_names, segment_times = save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data)
 	
-		#Perform ICA analysis
-	
-	return e_data, unit_nums, dig_ins, new_hf5_dir
+	return e_data, unit_nums, dig_ins, segment_names, segment_times, new_hf5_dir
 
 def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
 	"""This function creates a new .h5 file to store only downsampled data arrays"""
@@ -220,13 +220,13 @@ def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
 	hf5_new.close()
 	del hf5, units, sub_amount
 	
-	return e_data, unit_nums, dig_ins
+	return e_data, unit_nums, dig_ins, segment_names, segment_times
 
 def check_ICA_data(hf5_dir):
 	ica_data_dir = ('/').join(hf5_dir.split('/')[:-1]) + '/ica_results/'
 	ica_hf5_name = hf5_dir.split('/')[-1].split('.')[0] + '_ica.h5'
 	ica_hf5_dir = ica_data_dir + ica_hf5_name
-	if os.path.exists(ica_data_dir):
+	if os.path.exists(ica_hf5_dir):
 		exists = 1
 	else:
 		exists = 0
