@@ -15,7 +15,7 @@ def hdf5_exists():
 	h_loop = 1
 	h_exists = 0
 	while h_loop == 1:
-		h_q = input("Does an HDF5 file already exist? y / n: ")	
+		h_q = input("\n INPUT REQUESTED: Does an HDF5 file already exist? y / n: ")	
 		if h_q != 'n' and h_q != 'y':
 			print('Error, incorrect response, try again')
 			h_loop = 1
@@ -142,7 +142,7 @@ def downsampled_electrode_data_import(hf5_dir):
 		sub_amount = 0
 		while sub_loop == 1:
 			print("The current sampling rate is " + str(sampling_rate) + ".")
-			sub_q = input("Would you like to downsample? y / n: ")	
+			sub_q = input("\n INPUT REQUESTED: Would you like to downsample? y / n: ")	
 			if sub_q != 'n' and sub_q != 'y':
 				print('Error, incorrect response, try again')
 				sub_loop = 1
@@ -151,7 +151,7 @@ def downsampled_electrode_data_import(hf5_dir):
 		if sub_q == 'y':
 			sub_loop = 1
 			while sub_loop == 1:
-				sub_amount = input("Please enter a float describing the amount to downsample (ex. 0.5): ")
+				sub_amount = input("\n INPUT REQUESTED: Please enter a float describing the amount to downsample (ex. 0.5): ")
 				try:
 					sub_amount = float(sub_amount)
 					sub_loop = 0

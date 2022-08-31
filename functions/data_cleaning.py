@@ -59,6 +59,8 @@ def data_to_mv(data):
 def data_cleanup(hf5_dir):
 	"""This function cleans a dataset using downsampling, bandpass filtering, 
 	and signal averaging"""
+
+	cont_prompt_2 = 'y' #Continuation prompt initialization
 	
 	#Save directory
 	folder_dir = hf5_dir.split('/')[:-1]
@@ -66,17 +68,15 @@ def data_cleanup(hf5_dir):
 	clean_data_dir = hf5_dir.split('.h5')[0] + '_cleaned.h5'
 	
 	#First check for cleaned data
-	re_clean = 0
+	re_clean = 'n'
 	clean_exists = 0
 	if os.path.isfile(clean_data_dir) == True:
 		print("Cleaned Data Already Exists.")
 		clean_exists = 1
-		print("If you would like to re-clean the dataset, enter 1.")
-		print("If you would like to keep the already-cleaned dataset, enter 0.")
-		re_clean = int(input("Clean [1] or Keep [0]? "))
-		if re_clean == 0:
-			print("Clean Data Directory Saved.")
-	
+		re_clean = input("\n INPUT REQUESTED: Would you like to re-clean the dataset [y/n]? ")
+		if re_clean == 'y':
+			print("Beginning re-cleaning dataset.")
+		print("\n")
 	#Clean or re-clean as per case
 	if clean_exists == 0 or re_clean == 1:
 		
@@ -135,5 +135,14 @@ def data_cleanup(hf5_dir):
 		clean_hf5.root.clean_data.append(avg_data_expanded)
 		clean_hf5.close()
 		
-	return clean_data_dir
+		print("\n NOTICE: Checkpoint 2 Complete: You can quit the program here, if you like, and come back another time.")
+		cont_loop = 1
+		if cont_loop == 1:
+			cont_prompt_2 = input("\n INPUT REQUESTED: Would you like to continue [y/n]? ")
+			if cont_prompt_2 != 'y' and cont_prompt_2 != 'n':
+				print("Error. Incorrect input.")
+			else:
+				cont_loop = 0
+		
+	return clean_data_dir, cont_prompt_2
 
