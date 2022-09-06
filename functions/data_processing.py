@@ -29,7 +29,14 @@ def file_names():
 	#Import .dat files one-by-one and store as array
 	file_list = os.listdir(datadir)
 	#Pull data files only
-	dat_files_list = [name for name in file_list if name.split('.')[1] == 'dat']
+	dat_files_list = [] 
+	for name in file_list:
+		try:
+			name_val = name.split('.')[1]
+			if name_val == 'dat':
+				dat_files_list.append(name)
+		except:
+			print("Skipped non-.dat file")
 	#Pull electrodes only
 	electrodes_list = electrodes(dat_files_list)
 	#Pull EMG indices if used
@@ -43,6 +50,8 @@ def file_names():
 			emg_loop = 0
 	if emg_used == 'y':
 		emg_ind = getEMG()
+	else:
+		emg_ind = []
 	#Pull tastant delivery inputs
 	dig_in_list, dig_in_names = dig_ins(dat_files_list)
 	
