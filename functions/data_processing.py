@@ -101,7 +101,7 @@ def data_to_list(sub_amount,sampling_rate,hf5_dir):
 	Need to pass the directory to the file and then perform operations..."""
 	
 	print("Opening HDF5 file.")
-	hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+	hf5 = tables.open_file(hf5_dir, 'r', title = hf5_dir[-1])
 	
 	#Grab electrode info
 	print("Grabbing electrode information.")
@@ -109,6 +109,7 @@ def data_to_list(sub_amount,sampling_rate,hf5_dir):
 	unit_nums = np.array([str(unit).split('_')[-1] for unit in units])
 	unit_nums = np.array([int(unit.split(' (')[0]) for unit in unit_nums])
 	dig_ins = hf5.list_nodes('/digital_in')
+	dig_in_names = [(dig_ins[d_i].name).split('_')[-1] for d_i in range(len(dig_ins))]
 	print('Total Number of Units = ' + str(len(unit_nums)))
 	
 	if sub_amount > 0:
@@ -132,7 +133,7 @@ def data_to_list(sub_amount,sampling_rate,hf5_dir):
 		e_data = [import_units(hf5_dir,unit) for hf5_dir, unit in tqdm.tqdm(arg_instances)]
 		arg_instances = [[hf5_dir, dig_in] for dig_in in range(len(dig_ins))]
 		dig_in_data = [import_dig_ins(hf5_dir,dig_in) for hf5_dir, dig_in in tqdm.tqdm(arg_instances)]
-	return e_data, dig_in_data
+	return e_data, dig_in_data, dig_in_names
 
 def downsample_unit(hf5_dir,unit,num_avg,time_points):
 	"""This function downsamples data that is being imported from a .h5 file"""
@@ -153,7 +154,7 @@ def downsample_dig_ins(hf5_dir,dig_in,num_avg,time_points):
 	for i in range(round(num_avg)):
 		dig_in_data = np.add(dig_in_data,dig_ins[dig_in][i::num_avg])
 	hf5.close()
-	dig_in_data = np.divide(dig_in_data,num_avg)
+	dig_in_data = np.divide(dig_in_data,num_avg) #Needs updating to simply be binary
 	return dig_in_data
 
 def import_units(hf5_dir,unit):

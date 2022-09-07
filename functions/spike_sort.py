@@ -21,7 +21,7 @@ def run_spike_sort(data_dir):
 	from the dataset"""
 	
 	#Import data
-	hf5 = tables.open_file(data_dir, 'r+', title = data_dir[-1])
+	hf5 = tables.open_file(data_dir, 'r', title = data_dir[-1])
 	data = hf5.root.clean_data[0,:,:]
 	sampling_rate = hf5.root.sampling_rate[0]
 	segment_times = hf5.root.segment_times[:]
@@ -31,14 +31,16 @@ def run_spike_sort(data_dir):
 	del hf5
 	downsamp_dir = ('_').join(data_dir.split('_')[:-1])+'_downsampled.h5'
 	#Import downsampled dig-in data
-	hf5 = tables.open_file(downsamp_dir, 'r+', title = downsamp_dir[-1])
+	hf5 = tables.open_file(downsamp_dir, 'r', title = downsamp_dir[-1])
 	dig_ins = hf5.root.dig_ins.dig_ins[0]
+	dig_in_names = [hf5.root.dig_ins.dig_in_names[i].decode('UTF-8') for i in range(len(hf5.root.dig_ins.dig_in_names))]
 	hf5.close()
 	
 	dir_save = ('/').join(data_dir.split('/')[:-1]) + '/sort_results/'
 	
 	sort_hf5_dir, separated_spikes = spike_sort(data,sampling_rate,dir_save,
-											 segment_times,segment_names,dig_ins)
+											 segment_times,segment_names,dig_ins,
+											 dig_in_names)
 	
 
 def potential_spike_times(data,sampling_rate,dir_save):
@@ -74,15 +76,13 @@ def potential_spike_times(data,sampling_rate,dir_save):
 		with open(init_times_csv, newline='') as f:
 			reader = csv.reader(f)
 			peak_ind_csv = list(reader)
-		peak_ind = []
-		for i_c in range(len(peak_ind_csv)):
-			str_list = peak_ind_csv[i_c]
-			int_list = [int(str_list[i]) for i in range(len(str_list))]
-			peak_ind.append(int_list)
+		str_list = peak_ind_csv[0]
+		peak_ind = [int(str_list[i]) for i in range(len(str_list))]
 	
 	return peak_ind
 
-def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,dig_ins):
+def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
+			   dig_ins,dig_in_names):
 	"""This function performs clustering spike sorting to separate out spikes
 	from the dataset
 	INPUTS:
@@ -92,7 +92,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,dig_ins):
 		-segment_times = times of different segments in the data
 		-segment_names = names of the different segments
 		-dig_ins = array of num_dig x num_time with 1s wherever a tastant 
-					was being delivered"""
+					was being delivered
+		-dig_in_names = array of names of each dig in used"""
 	
 	#Grab relevant parameters
 	num_neur, num_time = np.shape(data)
@@ -104,14 +105,22 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,dig_ins):
 	viol_1 = sampling_rate*(1/1000)
 	viol_2 = sampling_rate*(2/1000)
 	
-	#Grab dig in times
-	all_dig_ins = np.sum(dig_ins,0)
-	dig_times = list(np.where(all_dig_ins > 0)[0])
-	dig_diff = list(np.where(np.array(dig_times)[1:-1]-np.array(dig_times)[0:-2]>1)[0])
+	#Grab dig in times for each tastant separately
+	dig_times = [list(np.where(dig_ins[i] > 0)[0]) for i in range(len(dig_in_names))]
+	dig_diff = [list(np.where(np.diff(dig_times[i])>1)[0] + 1) for i in range(len(dig_in_names))]
 	dig_in_times = []
-	dig_in_times.extend([0])
-	dig_in_times.extend(dig_diff)
-	dig_in_times = list(np.array(dig_times)[dig_in_times])
+	for i in range(len(dig_in_names)):
+		dig_in_vals = [0]
+		dig_in_vals.extend(dig_diff[i])
+		dig_in_ind = list(np.array(dig_times[i])[dig_in_vals])
+		dig_in_times.append(dig_in_ind)
+# 	all_dig_ins = np.sum(dig_ins,0)
+# 	dig_times = list(np.where(all_dig_ins > 0)[0])
+# 	dig_diff = list(np.where(np.array(dig_times)[1:-1]-np.array(dig_times)[0:-2]>1)[0])
+# 	dig_in_times = []
+# 	dig_in_times.extend([0])
+# 	dig_in_times.extend(dig_diff)
+# 	dig_in_times = list(np.array(dig_times)[dig_in_times])
 	
 	#Create directory for sorted data
 	if os.path.isdir(dir_save) == False:
@@ -200,7 +209,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,dig_ins):
 			sort_ind = spike_clust(all_spikes, all_peaks, 
 										 clust_num, i, dir_save, axis_labels, 
 										 viol_1, viol_2, 'noise_removal', segment_times,
-										 segment_names, dig_in_times, sampling_rate, re_sort='y')
+										 segment_names, dig_in_times, dig_in_names,
+										 sampling_rate, re_sort='y')
 			sorted_peak_ind = [list(np.array(all_peaks)[sort_ind[i]]) for i in range(len(sort_ind))]
 			good_spikes = []
 			good_ind = []
@@ -220,7 +230,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,dig_ins):
 			sort_ind_2 = spike_clust(good_spikes, good_ind, 
 										 clust_num_fin, i, dir_save, axis_labels, 
 										 viol_1, viol_2, 'final', segment_times,
-										 segment_names, dig_in_times, sampling_rate)
+										 segment_names, dig_in_times, dig_in_names,
+										 sampling_rate)
 			
 			#Save sorted spike indices and profiles
 			final_spikes = []
@@ -274,7 +285,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,dig_ins):
 
 def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels, 
 				viol_1, viol_2, type_spike, segment_times, segment_names, 
-				dig_in_times,sampling_rate,re_sort='y'):
+				dig_in_times,dig_in_names,sampling_rate,re_sort='y'):
 	"""This function performs clustering on spikes pulled from each component.
 	Inputs:
 		spikes = list of spike samples num_spikes x length_spike
@@ -288,7 +299,8 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		type_spike = type of peak (pos or neg)
 		segment_times = time of different experiment segments
 		segment_names = names of different segments
-		dig_in_times = times of tastant delivery
+		dig_in_times = array times of tastant delivery - each tastant separately
+		dig_in_names = names of different tastants
 		sampling_rate = number of samples per second
 		re_sort = whether to re-sort if data has been previously sorted.
 	Outputs:
@@ -315,6 +327,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		viol_2_cutoff = 2 #Maximum allowed violation percentage for 2 ms
 		viol_1_cutoff = 1 #Maximum allowed violation percentage for 1 ms
 		num_vis = 500 #Number of waveforms to visualize for example plot
+		all_dig_in_times = np.unique(np.array(dig_in_times).flatten())
 		
 		#Perform kmeans clustering
 		print("\t Performing K-Means clustering of data.")
@@ -327,6 +340,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		print('\t Now testing/plotting clusters.')
 		violations = []
 		any_good = 0
+		possible_colors = ['b','g','r','c','m','k','y'] #Colors for plotting different tastant deliveries
 		for li in range(clust_num):
 			ind_labelled = np.where(labels == li)[0]
 			spikes_labelled = np.array(spikes)[ind_labelled]
@@ -338,6 +352,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			viol_1_percent = round(viol_1_times/len(peak_diff)*100,2)
 			viol_2_percent = round(viol_2_times/len(peak_diff)*100,2)
 			violations.append([viol_1_percent,viol_2_percent])
+			avg_fr = len(peak_ind)/(segment_times[-1])*sampling_rate #in Hz
 			#TEMPORARY CODE CHANGES BELOW
 			#Just to see what clusters look like, commenting violation cutoffs for now
 			if viol_2_percent < 100: #viol_2_cutoff:
@@ -352,49 +367,50 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					#Select sub-population of spikes to plot as an example
 					plot_num_vis = min(num_vis,len(spikes_labelled)-1)
 					plot_ind = np.random.randint(0,len(peak_ind),size=(plot_num_vis,)) #Pick 500 random waveforms to plot
-					#Pull PSTH data
-					PSTH_left = -1*round((1/1000)*sampling_rate*1000)
+					
+					#Pull PSTH data by tastant
+					PSTH_left = -1*round((1/1000)*sampling_rate*500)
 					PSTH_right = round((1/1000)*sampling_rate*2000)
 					PSTH_width = PSTH_right - PSTH_left
-					spike_raster = np.zeros((len(dig_in_times),PSTH_width))
-					for di in range(len(dig_in_times)):
-						#Grab spike indices in the PSTH interval around each 
-						#dig-in and store in binary matrix spike_raster
-						d_time = dig_in_times[di]
-						spike_inds_left = np.where(peak_ind - d_time > PSTH_left)[0]
-						spike_inds_right = np.where(peak_ind - d_time < PSTH_right)[0]
-						overlap_inds = np.intersect1d(spike_inds_left,spike_inds_right)
-						spike_inds_overlap = peak_ind[overlap_inds] - d_time + PSTH_left
-						spike_raster[di][spike_inds_overlap] = 1
-					#The following bin size and step size come from Sadacca et al. 2016 
-					bin_ms = 250 #Number of ms for binning the spike counts
-					bin_step_size_ms = 10 #Number of ms for sliding the bin over
-					bin_step_size = round((bin_step_size_ms/1000)*sampling_rate)
-					bin_size = round(sampling_rate*bin_ms/1000)
-					PSTH_x_labels = np.arange(-1000,2000,bin_step_size)
-					PSTH_mat = np.zeros((len(dig_in_times),len(PSTH_x_labels)))
-					for b_i in range(len(PSTH_x_labels)):
-						PSTH_mat[:,b_i] = np.sum(spike_raster[:,b_i*bin_step_size:(b_i*bin_step_size)+bin_size],1)
-					PSTH_avg = (np.mean(PSTH_mat,0)/bin_ms)*1000 #Converted to Hz
-					PSTH_std = (np.std(PSTH_mat,0)/bin_ms)*1000 #Converted to Hz
+					PSTH_avg_taste = []
+					for t_i in range(len(dig_in_times)): #By tastant
+						spike_raster = np.zeros((len(dig_in_times[t_i]),PSTH_width))
+						for d_i in range(len(dig_in_times[t_i])): #By delivery
+							d_time = dig_in_times[t_i][d_i] #Time of delivery
+							spike_inds_left = np.where(peak_ind - d_time > PSTH_left)[0]
+							spike_inds_right = np.where(peak_ind - d_time < PSTH_right)[0]
+							overlap_inds = np.intersect1d(spike_inds_left,spike_inds_right)
+							spike_inds_overlap = peak_ind[overlap_inds] - d_time + PSTH_left
+							spike_raster[d_i][spike_inds_overlap] = 1
+						#The following bin size and step size come from Sadacca et al. 2016 
+						bin_ms = 250 #Number of ms for binning the spike counts
+						bin_step_size_ms = 10 #Number of ms for sliding the bin over
+						bin_step_size = round((bin_step_size_ms/1000)*sampling_rate)
+						bin_size = round(sampling_rate*bin_ms/1000)
+						PSTH_x_labels = np.arange(-1000,2000,bin_step_size)
+						PSTH_mat = np.zeros((len(dig_in_times[t_i]),len(PSTH_x_labels)))
+						for b_i in range(len(PSTH_x_labels)):
+							PSTH_mat[:,b_i] = np.sum(spike_raster[:,b_i*bin_step_size:(b_i*bin_step_size)+bin_size],1)
+						PSTH_avg = (np.mean(PSTH_mat,0)/bin_ms)*1000 #Converted to Hz
+						PSTH_avg_taste.append(PSTH_avg)
 					#CREATE FIGURE
 					fig = plt.figure(figsize=(30,20))
-					#Plot spike overlay
-					plt.subplot(3,2,1)
-					for si in plot_ind:
-						try:
-							plt.plot(axis_labels,spikes_labelled[si],'-b',alpha=0.2)
-						except:
-							print("\t \t Error: Skipped plotting a waveform.")
-					plt.ylabel('mV')
-					plt.title('Cluster ' + str(li) + ' x' + str(plot_num_vis) + ' Waveforms')
 					#Plot average waveform
-					plt.subplot(3,2,2)
+					plt.subplot(3,2,1)
 					spike_bit = spikes_labelled[np.random.randint(0,len(spikes_labelled),size=(10000,))]
 					mean_bit = np.mean(spike_bit,axis=0)
 					std_bit = np.std(spike_bit,axis=0)
 					plt.errorbar(axis_labels,mean_bit,yerr=std_bit,xerr=None)
 					plt.title('Cluster ' + str(li) + ' Average Waveform + Std Range')
+					#Plot spike overlay
+					plt.subplot(3,2,2)
+					for si in plot_ind:
+						try:
+							plt.plot(axis_labels,spikes_labelled[si],'-b',alpha=0.1)
+						except:
+							print("\t \t Error: Skipped plotting a waveform.")
+					plt.ylabel('mV')
+					plt.title('Cluster ' + str(li) + ' x' + str(plot_num_vis) + ' Waveforms')
 					#Find ISI distribution and plot
 					plt.subplot(3,2,3)
 					plt.hist(peak_diff[np.where(peak_diff < sampling_rate)[0]],bins=min(100,round(len(peak_diff)/10)))
@@ -402,30 +418,34 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					#Histogram of time of spike occurrence
 					plt.subplot(3,2,4)
 					plt.hist(peak_ind,bins=min(100,round(len(peak_ind)/10)))
-					[plt.axvline(segment_times[i],label=segment_names[i],alpha=0.2) for i in range(len(segment_names))]
-					[plt.axvline(dig_in_times[i],c='g',alpha=0.2) for i in range(len(dig_in_times))]
+					[plt.axvline(segment_times[i],label=segment_names[i],alpha=0.2,c=possible_colors[i]) for i in range(len(segment_names))]
 					plt.legend()
 					plt.title('Cluster ' + str(li) + ' Spike Time Histogram')
 					#Histogram of time of spike occurrence zoomed to taste delivery
 					plt.subplot(3,2,5)
-					plt.hist(peak_ind,bins=2*len(dig_in_times))
-					[plt.axvline(dig_in_times[i],c='g',alpha=0.2) for i in range(len(dig_in_times))]
-					plt.xlim((min(dig_in_times) - sampling_rate,max(dig_in_times) + sampling_rate))
+					plt.hist(peak_ind,bins=2*len(all_dig_in_times))
+					for d_i in range(len(dig_in_names)):
+						[plt.axvline(dig_in_times[d_i][i],c=possible_colors[d_i],alpha=0.2, label=dig_in_names[d_i]) for i in range(len(dig_in_times[d_i]))]
+					plt.xlim((min(all_dig_in_times)- sampling_rate,max(all_dig_in_times) + sampling_rate))
+					plt.legend()
 					plt.title('Cluster ' + str(li) + ' Spike Time Histogram - Taste Interval')
 					#PSTH figure
 					plt.subplot(3,2,6)
 # 					for p_i in range(len(dig_in_times)): #Plot individual instances
 # 						plt.plot(PSTH_x_labels,PSTH_mat[p_i,:],alpha=0.1)
-					plt.errorbar(PSTH_x_labels,PSTH_avg,yerr=PSTH_std,xerr=None)
+					for d_i in range(len(dig_in_times)):
+						plt.plot(PSTH_x_labels,PSTH_avg_taste[d_i],c=possible_colors[d_i],label=dig_in_names[d_i])
+					plt.legend()
 					plt.axvline(0,c='k')
 					plt.xlabel('Milliseconds from delivery')
 					plt.ylabel('Average firing rate (Hz)')
-					plt.title('Cluster ' + str(li) + ' Average PSTH (' + str(bin_ms) + ' ms bins)')
+					plt.title('Cluster ' + str(li) + ' Average PSTH')
 					#Title and save figure
 					line_1 = 'Number of Waveforms = ' + str(len(spikes_labelled))
-					line_2 = ' 1 ms violation percent = ' + str(viol_1_percent)
-					line_3 = ' 2 ms violation percent = ' + str(viol_2_percent)
-					plt.suptitle(line_1 + '\n' + line_2 + '\n' + line_3 ,fontsize=24)
+					line_2 = '1 ms violation percent = ' + str(viol_1_percent)
+					line_3 = '2 ms violation percent = ' + str(viol_2_percent)
+					line_4 = 'Average firing rate = ' + str(avg_fr)
+					plt.suptitle(line_1 + '\n' + line_2 + ' ; ' + line_3 + '\n' + line_4,fontsize=24)
 					fig.savefig(sort_neur_type_dir + 'waveforms_' + str(li) + '.png', dpi=100)
 					plt.close(fig)
 		neuron_spike_ind = []

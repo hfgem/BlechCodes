@@ -6,9 +6,8 @@ Data manipulation with bandpass filtering, etc... to pull out cleaner spikes
 @author: hannahgermaine
 """
 import numpy as np
-from scipy.signal import butter, lfilter, find_peaks 
-from sklearn.cluster import KMeans
-import tqdm, os, tables
+from scipy.signal import butter, lfilter
+import os, tables
 import functions.hdf5_handling as h5
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
@@ -78,7 +77,7 @@ def data_cleanup(hf5_dir):
 			print("Beginning re-cleaning dataset.")
 		print("\n")
 	#Clean or re-clean as per case
-	if clean_exists == 0 or re_clean == 1:
+	if clean_exists == 0 or re_clean == 'y':
 		
 		#First perform downsampling / import downsampled data
 		print("Downsampled Data Import Phase")

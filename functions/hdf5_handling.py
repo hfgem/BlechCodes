@@ -39,7 +39,7 @@ def file_import(datadir, dat_files_list, electrodes_list, emg_ind, dig_in_list, 
 	#dig_in_names contains the names of the tastants associated with each digital input file
 	
 	# Grab directory name to create the hdf5 file
-	hdf5_name = str(os.path.dirname(datadir)).split('/')
+	hdf5_name = str(os.path.dirname(datadir + '/')).split('/')
 	hf5_dir = datadir + '/' + hdf5_name[-1]+'.h5'
 	hf5 = tables.open_file(hf5_dir, 'w', title = hdf5_name[-1])
 	hf5.create_group('/', 'raw')
@@ -161,14 +161,14 @@ def downsampled_electrode_data_import(hf5_dir):
 			del sub_loop
 		
 		#Perform downsampling / regular data import
-		e_data, dig_in_data = dp.data_to_list(sub_amount,sampling_rate,hf5_dir)
+		e_data, dig_in_data, dig_in_names = dp.data_to_list(sub_amount,sampling_rate,hf5_dir)
 			
         #Save data to hdf5
-		e_data, unit_nums, dig_ins, segment_names, segment_times = save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data)
+		e_data, unit_nums, dig_ins, segment_names, segment_times = save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data,dig_in_names)
 	
 	return e_data, unit_nums, dig_ins, segment_names, segment_times, new_hf5_dir
 
-def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
+def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data,dig_in_names):
 	"""This function creates a new .h5 file to store only downsampled data arrays"""
 	print("Saving Electrode Data to New HF5")
 	atom = tables.FloatAtom()
@@ -201,7 +201,10 @@ def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data):
 	data_digs = hf5_new.create_earray('/dig_ins','dig_ins',atom,(0,)+np.shape(np_dig_ins))
 	np_dig_ins = np.expand_dims(np_dig_ins,0)
 	data_digs.append(np_dig_ins)
-	del np_dig_ins, data_digs, dig_in_data
+	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
+	dig_names = hf5_new.create_earray('/dig_ins','dig_in_names',atom,(0,))
+	dig_names.append(np.array(dig_in_names))
+	del np_dig_ins, data_digs, dig_in_data, dig_names
        #Close HDF5 file
 	hf5.close()
 	hf5_new.close()
