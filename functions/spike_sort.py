@@ -9,11 +9,12 @@ This set of functions pulls spikes out of cleaned and ICA sorted data.
 
 import numpy as np
 import scipy.stats as ss
-from scipy.signal import find_peaks, correlate, convolve2d
+from scipy.signal import find_peaks
 from sklearn.cluster import KMeans
-import tables, tqdm, os, random, csv, time, sys
+import tables, tqdm, os, csv, time, sys, itertools
 import matplotlib.pyplot as plt
 from numba import jit
+import functions.hdf5_handling as h5
 
 
 def run_spike_sort(data_dir):
@@ -23,6 +24,7 @@ def run_spike_sort(data_dir):
 	#Import data
 	hf5 = tables.open_file(data_dir, 'r', title = data_dir[-1])
 	data = hf5.root.clean_data[0,:,:]
+	num_units, num_time = np.shape(data)
 	sampling_rate = hf5.root.sampling_rate[0]
 	segment_times = hf5.root.segment_times[:]
 	segment_names = [hf5.root.segment_names[i].decode('UTF-8') for i in range(len(hf5.root.segment_names))]
@@ -38,9 +40,43 @@ def run_spike_sort(data_dir):
 	
 	dir_save = ('/').join(data_dir.split('/')[:-1]) + '/sort_results/'
 	
-	sort_hf5_dir, separated_spikes = spike_sort(data,sampling_rate,dir_save,
-											 segment_times,segment_names,dig_ins,
+	#Perform sorting
+	sort_hf5_dir = spike_sort(data,sampling_rate,dir_save,segment_times,
+											 segment_names,dig_ins,
 											 dig_in_names)
+	del data
+	
+	#Perform compilation of all sorted spikes into a binary matrix
+	separated_spikes_bin, sort_stats = import_sorted(num_units,dir_save,sort_hf5_dir)
+	spike_raster = np.array(separated_spikes_bin)
+	del separated_spikes_bin
+	
+	#Perform collision tests of imported data and remove until no collisions reported
+	print("Now performing collision tests until no significant collisions are reported.")
+	collision_loop = 1
+	while collision_loop == 1:
+		remove_ind = test_collisions(spike_raster,dir_save)
+		if len(remove_ind) > 0:
+			#First clean the raster
+			keep_ind = np.setdiff1d(np.arange(num_units),remove_ind)
+			new_spikes_bin = np.zeros((len(keep_ind),num_time))
+			for i in range(len(keep_ind)):
+				new_spikes_bin[i,:] = spike_raster[keep_ind[i],:]
+			spike_raster = np.zeros(np.shape(new_spikes_bin))
+			spike_raster += new_spikes_bin
+			#Second clean the sort statistics
+			remove_ind.sort(reverse=True)
+			for r_i in remove_ind:
+				try:
+					del sort_stats[r_i]
+				except:
+					print("Removal of index skipped - index out of range.")
+		else:
+			collision_loop = 0
+	
+	#Save spikes to an HDF5 file
+	final_h5_dir = ('_').join(data_dir.split('_')[:-1])+'_sorted_results.h5'
+	h5.save_sorted_spikes(final_h5_dir,spike_raster,sort_stats)
 	
 
 def potential_spike_times(data,sampling_rate,dir_save):
@@ -114,19 +150,20 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 		dig_in_vals.extend(dig_diff[i])
 		dig_in_ind = list(np.array(dig_times[i])[dig_in_vals])
 		dig_in_times.append(dig_in_ind)
-# 	all_dig_ins = np.sum(dig_ins,0)
-# 	dig_times = list(np.where(all_dig_ins > 0)[0])
-# 	dig_diff = list(np.where(np.array(dig_times)[1:-1]-np.array(dig_times)[0:-2]>1)[0])
-# 	dig_in_times = []
-# 	dig_in_times.extend([0])
-# 	dig_in_times.extend(dig_diff)
-# 	dig_in_times = list(np.array(dig_times)[dig_in_times])
 	
 	#Create directory for sorted data
 	if os.path.isdir(dir_save) == False:
 		os.mkdir(dir_save)
-	sort_hf5_name = dir_save.split('/')[-1].split('.')[0].split('_')[0] + '_sort.h5'
+	#Create .h5 file for storage of results
+	sort_hf5_name = dir_save.split('/')[-3].split('.')[0].split('_')[0] + '_sort.h5'
 	sort_hf5_dir = dir_save + sort_hf5_name
+	if os.path.isfile(sort_hf5_dir) == False:
+		sort_hf5 = tables.open_file(sort_hf5_dir, 'w', title = sort_hf5_dir[-1])
+		sort_hf5.create_group('/','sorted_spikes')
+		sort_hf5.create_group('/','sorted_spikes_bin')
+		sort_hf5.close()
+	#Create .csv file name for storage of completed units
+	sorted_units_csv = dir_save + 'sorted_units.csv'
 	
 	#Get the number of clusters to use in spike sorting
 	print("Beginning Spike Sorting")
@@ -161,21 +198,30 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 		#First check for final sort and ask if want to keep
 		keep_final = 0
 		unit_dir = dir_save + 'unit_' + str(i) + '/'
-		final_sort_neur_dir = unit_dir + 'final/'
-		neuron_spikes_csv = final_sort_neur_dir + 'neuron_spikes.csv'
-		neuron_spikes_bin_csv = final_sort_neur_dir + 'neuron_spikes_bin.csv'
-		if os.path.isfile(neuron_spikes_csv):
-			print("\t INPUT REQUESTED: Sorting previously performed.")
-			sort_loop = 1
-			while sort_loop == 1:
-				resort_channel = input("\t Would you like to re-sort [y/n]? ")
-				if resort_channel != 'y' and resort_channel != 'n':
-					print("\t Incorrect entry.")
-				elif resort_channel == 'n':
-					keep_final = 1
-					sort_loop = 0
-				elif resort_channel == 'y':
-					sort_loop = 0
+		continue_no_resort = 0
+		
+		if os.path.isfile(sorted_units_csv) == True:
+			with open(sorted_units_csv, 'r') as f:
+				reader = csv.reader(f)
+				sorted_units_list = list(reader)
+				sorted_units_ind = [int(sorted_units_list[i][0]) for i in range(len(sorted_units_list))]
+			try:
+				in_list = sorted_units_ind.index(i)
+			except:
+				in_list = -1
+			if in_list >= 0:
+				print("\t Channel previously sorted.")
+				sort_loop = 1
+				while sort_loop == 1:
+					resort_channel = input("\t INPUT REQUESTED: Would you like to re-sort [y/n]? ")
+					if resort_channel != 'y' and resort_channel != 'n':
+						print("\t Incorrect entry.")
+					elif resort_channel == 'n':
+						keep_final = 1
+						sort_loop = 0
+						continue_no_resort = 1
+					elif resort_channel == 'y':
+						sort_loop = 0
 		tic = time.time()
 		if keep_final == 0:
 			#If no final sort or don't want to keep, then run through protocol
@@ -253,34 +299,47 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 						points = np.arange(p_i_l,p_i_r)
 						neuron_spikes[n_i,points] = final_spikes[n_i][pi]
 						neuron_spikes_bin[n_i,p_i] = 1
-				#Save results to csv
-				print("\t Saving final results to CSV.")
-				with open(neuron_spikes_csv, 'w') as f:
-					# using csv.writer method from CSV package
-					write = csv.writer(f)
-					write.writerows(neuron_spikes)
-				with open(neuron_spikes_bin_csv, 'w') as f:
-					# using csv.writer method from CSV package
-					write = csv.writer(f)
-					write.writerows(neuron_spikes_bin)
+				#Save results
+				print("\t Saving final results to .h5 file.")
+				sort_hf5 = tables.open_file(sort_hf5_dir, 'r+', title = sort_hf5_dir[-1])
+				atom = tables.FloatAtom()
+				u_int = str(i)
+				sort_hf5.create_earray('/sorted_spikes',f'unit_{u_int}',atom,(0,)+np.shape(neuron_spikes))
+				spikes_expanded = np.expand_dims(neuron_spikes,0)
+				exec('sort_hf5.root.sorted_spikes.unit_'+str(i)+'.append(spikes_expanded)')
+				atom = tables.IntAtom()
+				sort_hf5.create_earray('/sorted_spikes_bin',f'unit_{u_int}',atom,(0,)+np.shape(neuron_spikes_bin))
+				spikes_expanded = np.expand_dims(neuron_spikes_bin,0)
+				exec('sort_hf5.root.sorted_spikes_bin.unit_'+str(i)+'.append(spikes_expanded)')
+				sort_hf5.close()
+				#Save unit index to sort csv
+				if os.path.isfile(sorted_units_csv) == False:
+					with open(sorted_units_csv, 'w') as f:
+						write = csv.writer(f)
+						write.writerows([[i]])
+				else:
+					with open(sorted_units_csv, 'a') as f:
+						write = csv.writer(f)
+						write.writerows([[i]])
 			else:
 				print("\t No neurons found.")
 				
 		toc = time.time()
 		print(" Time to sort channel " + str(i) + " = " + str(round((toc - tic)/60)) + " minutes")	
-			
-		print("\n CHECKPOINT REACHED: You don't have to sort all neurons right now.")
-		cont_loop = 1
-		while cont_loop == 1:
-			cont_units = input("INPUT REQUESTED: Would you like to continue sorting [y/n]? ")
-			if cont_units != 'y' and cont_units != 'n':
-				print("Incorrect input.")
-			elif cont_units == 'n':
-				cont_loop = 0
-				sys.exit()
-			elif cont_units == 'y':
-				cont_loop = 0
-	
+		if i < num_neur - 1:
+			if continue_no_resort == 0:
+				print("\n CHECKPOINT REACHED: You don't have to sort all neurons right now.")
+				cont_loop = 1
+				while cont_loop == 1:
+					cont_units = input("INPUT REQUESTED: Would you like to continue sorting [y/n]? ")
+					if cont_units != 'y' and cont_units != 'n':
+						print("Incorrect input.")
+					elif cont_units == 'n':
+						cont_loop = 0
+						sys.exit()
+					elif cont_units == 'y':
+						cont_loop = 0
+						
 	return sort_hf5_dir
 
 def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels, 
@@ -313,6 +372,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 	sort_neur_type_dir = sort_neur_dir + type_spike + '/'
 	if os.path.isdir(sort_neur_type_dir) == False:
 		os.mkdir(sort_neur_type_dir)
+	sort_neur_stats_csv = sort_neur_type_dir + 'sort_stats.csv'
 	sort_neur_type_csv = sort_neur_type_dir + 'neuron_spike_ind.csv'
 	if os.path.isfile(sort_neur_type_csv) == False:
 		re_sort = 'y'
@@ -328,6 +388,8 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		viol_1_cutoff = 1 #Maximum allowed violation percentage for 1 ms
 		num_vis = 500 #Number of waveforms to visualize for example plot
 		all_dig_in_times = np.unique(np.array(dig_in_times).flatten())
+		PSTH_left_ms = 500
+		PSTH_right_ms = 2000
 		
 		#Perform kmeans clustering
 		print("\t Performing K-Means clustering of data.")
@@ -341,6 +403,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		violations = []
 		any_good = 0
 		possible_colors = ['b','g','r','c','m','k','y'] #Colors for plotting different tastant deliveries
+		clust_stats = np.zeros((clust_num,5))
 		for li in range(clust_num):
 			ind_labelled = np.where(labels == li)[0]
 			spikes_labelled = np.array(spikes)[ind_labelled]
@@ -352,7 +415,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			viol_1_percent = round(viol_1_times/len(peak_diff)*100,2)
 			viol_2_percent = round(viol_2_times/len(peak_diff)*100,2)
 			violations.append([viol_1_percent,viol_2_percent])
-			avg_fr = len(peak_ind)/(segment_times[-1])*sampling_rate #in Hz
+			avg_fr = round(len(peak_ind)/(segment_times[-1])*sampling_rate,2) #in Hz
 			#TEMPORARY CODE CHANGES BELOW
 			#Just to see what clusters look like, commenting violation cutoffs for now
 			if viol_2_percent < 100: #viol_2_cutoff:
@@ -369,8 +432,8 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					plot_ind = np.random.randint(0,len(peak_ind),size=(plot_num_vis,)) #Pick 500 random waveforms to plot
 					
 					#Pull PSTH data by tastant
-					PSTH_left = -1*round((1/1000)*sampling_rate*500)
-					PSTH_right = round((1/1000)*sampling_rate*2000)
+					PSTH_left = -1*round((1/1000)*sampling_rate*PSTH_left_ms)
+					PSTH_right = round((1/1000)*sampling_rate*PSTH_right_ms)
 					PSTH_width = PSTH_right - PSTH_left
 					PSTH_avg_taste = []
 					for t_i in range(len(dig_in_times)): #By tastant
@@ -384,10 +447,10 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 							spike_raster[d_i][spike_inds_overlap] = 1
 						#The following bin size and step size come from Sadacca et al. 2016 
 						bin_ms = 250 #Number of ms for binning the spike counts
+						bin_size = round((bin_ms/1000)*sampling_rate)
 						bin_step_size_ms = 10 #Number of ms for sliding the bin over
 						bin_step_size = round((bin_step_size_ms/1000)*sampling_rate)
-						bin_size = round(sampling_rate*bin_ms/1000)
-						PSTH_x_labels = np.arange(-1000,2000,bin_step_size)
+						PSTH_x_labels = np.arange(-PSTH_left_ms,PSTH_right_ms,bin_step_size_ms)
 						PSTH_mat = np.zeros((len(dig_in_times[t_i]),len(PSTH_x_labels)))
 						for b_i in range(len(PSTH_x_labels)):
 							PSTH_mat[:,b_i] = np.sum(spike_raster[:,b_i*bin_step_size:(b_i*bin_step_size)+bin_size],1)
@@ -427,7 +490,6 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					for d_i in range(len(dig_in_names)):
 						[plt.axvline(dig_in_times[d_i][i],c=possible_colors[d_i],alpha=0.2, label=dig_in_names[d_i]) for i in range(len(dig_in_times[d_i]))]
 					plt.xlim((min(all_dig_in_times)- sampling_rate,max(all_dig_in_times) + sampling_rate))
-					plt.legend()
 					plt.title('Cluster ' + str(li) + ' Spike Time Histogram - Taste Interval')
 					#PSTH figure
 					plt.subplot(3,2,6)
@@ -448,6 +510,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					plt.suptitle(line_1 + '\n' + line_2 + ' ; ' + line_3 + '\n' + line_4,fontsize=24)
 					fig.savefig(sort_neur_type_dir + 'waveforms_' + str(li) + '.png', dpi=100)
 					plt.close(fig)
+					clust_stats[li,0:4] = np.array([len(spikes_labelled),viol_1_percent,viol_2_percent,avg_fr])
 		neuron_spike_ind = []
 		if any_good > 0:
 			print("\n \t INPUT REQUESTED: Please navigate to the directory " + sort_neur_type_dir)
@@ -465,22 +528,26 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		
 			try:
 				ind_good = [int(ind_good[i]) for i in range(len(ind_good))]
+				clust_stats[np.array(ind_good),4] = 1
 				comb_loop = 1
 				while comb_loop == 1:
-					combine_spikes = input("\t Do all of these spikes come from the same neuron (y/n)? ")
-					if combine_spikes != 'y' and combine_spikes != 'n':
-						print("\t Error, please enter a valid value.")
+					if len(ind_good) > 1:
+						combine_spikes = input("\t Do all of these spikes come from the same neuron (y/n)? ")
+						if combine_spikes != 'y' and combine_spikes != 'n':
+							print("\t Error, please enter a valid value.")
+						else:
+							comb_loop = 0
 					else:
+						combine_spikes = 'y'
 						comb_loop = 0
 				for ig in ind_good:
-					peak_ind = np.where(labels == ig)[0]
+					peak_ind = list(np.where(labels == ig)[0])
 					if combine_spikes == 'y':
-						if len(ind_good) == 1:
-							neuron_spike_ind.extend([peak_ind])
-						else:
-							neuron_spike_ind.extend(peak_ind)
+						neuron_spike_ind.extend(peak_ind)
 					else:
 						neuron_spike_ind.append(peak_ind)
+				if combine_spikes == 'y':
+					neuron_spike_ind = [neuron_spike_ind]
 			except:
 				print("\t No spikes selected.")
 		else:
@@ -490,6 +557,11 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			# using csv.writer method from CSV package
 			write = csv.writer(f)
 			write.writerows(neuron_spike_ind)
+		#Save stats to CSV
+		with open(sort_neur_stats_csv, 'w') as f:
+			write = csv.writer(f,delimiter=',')
+			write.writerows([['Number of Spikes','1 ms Violations','2 ms Violations','Average Firing Rate','Good']])
+			write.writerows(clust_stats)
 	else:
 		print("\t Importing previously sorted data.")
 		with open(sort_neur_type_csv, newline='') as f:
@@ -599,43 +671,108 @@ def generate_templates(sampling_rate,num_pts_left,num_pts_right):
 	
 	return templates
 
-def import_sorted(num_neur,dir_save):
-	"""This function imports the already sorted data into arrays"""
-	separated_spikes = []
+def import_sorted(num_units,dir_save,sort_hf5_dir):
+	"""This function imports the already sorted data into arrays + the sorting
+	statistics"""
+	
+	sort_hf5 = tables.open_file(sort_hf5_dir, 'r', title = sort_hf5_dir[-1])
 	separated_spikes_bin = []
-	print("\t Importing previously sorted data.")
-	for i in range(num_neur):
+	sort_stats = []
+	print("\t Importing sorted data.")
+	for i in tqdm.tqdm(range(num_units)):
+		exec('neuron_spikes_bin = sort_hf5.root.sorted_spikes_bin.unit_'+str(i)+'[0]')
+		exec('[separated_spikes_bin.append(list(neuron_spikes_bin[j])) for j in range(len(neuron_spikes_bin))]')
+	sort_hf5.close()
+	
+	for i in tqdm.tqdm(range(num_units)):
 		final_sort_neur_dir = dir_save + 'unit_' + str(i) + '/final/'
-		neuron_spikes_csv = final_sort_neur_dir + 'neuron_spikes.csv'
-		neuron_spikes_bin_csv = final_sort_neur_dir + 'neuron_spikes_bin.csv'
-		with open(neuron_spikes_csv, newline='') as f:
+		sort_stats_csv = final_sort_neur_dir + 'sort_stats.csv'
+		#Import sort statistics
+		with open(sort_stats_csv,newline='') as f:
 			reader = csv.reader(f)
-			neuron_spikes_list = list(reader)
-		neuron_spikes = []
-		for i_c in range(len(neuron_spikes_list)):
-			str_list = neuron_spikes_list[i_c]
-			float_list = [float(str_list[i]) for i in range(len(str_list))]
-			neuron_spikes.append(float_list)
-		with open(neuron_spikes_bin_csv, newline='') as f:
-			reader = csv.reader(f)
-			neuron_spikes_bin_list = list(reader)
-		neuron_spikes_bin = []
-		for i_c in range(len(neuron_spikes_bin_list)):
-			str_list = neuron_spikes_bin_list[i_c]
-			int_list = [round(float(str_list[i])) for i in range(len(str_list))]
-			neuron_spikes_bin.append(int_list)
+			sort_stats_list = list(reader)
+		for i_s in range(len(sort_stats_list) - 1):
+			stat_row = sort_stats_list[i_s + 1]
+			stat_row_float = [i]
+			stat_row_float.extend([float(stat_row[i]) for i in range(len(stat_row) - 1)])
+			if stat_row_float[-1] == 1:
+				sort_stats.append(stat_row)
+	sort_stats = np.array(sort_stats)
 	
-		#Store in larger matrix
-		separated_spikes.extend(list(neuron_spikes))
-		separated_spikes_bin.extend(list(neuron_spikes_bin))
+	return separated_spikes_bin, sort_stats
 
-	return separated_spikes, separated_spikes_bin
-
-def test_collisions():
+def test_collisions(spike_raster,dir_save):
 	"""This function tests the final selected neurons for collisions across 
-	all units"""
+	all units. It performs pairwise tests and looks for spike times within 3 
+	time bins, totalling the number of overlaps / average number of spikes 
+	between the two neurons. If the percentage is over 50, the pair is flagged 
+	and the user can determine which to remove based on the statistics.
+	INPUTS:
+		- spike_raster = matrix with num_neur rows, and num_time columns
+	"""
+	num_neur, num_time = np.shape(spike_raster)
+	all_pairs = list(itertools.combinations(np.arange(0,num_neur),2))
+	blur_ind = 3
+	collision_cutoff = 50 #Percent cutoff for collisions
+	colorCodes = np.array([[0,1,0],[0,0,1]]) #Colors for plotting collision rasters
 	
+	collision_folder = dir_save + 'collisions/'
+	if os.path.isdir(collision_folder) == False:
+		os.mkdir(collision_folder)
 	
+	print("\t Testing all units pairwise.")
+	collisions_detected = 0
+	for i in tqdm.tqdm(range(len(all_pairs))):
+		ind_1 = all_pairs[i][0]
+		ind_2 = all_pairs[i][1]
+		spikes_1 = spike_raster[ind_1,:]
+		spikes_2 = spike_raster[ind_2,:]
+		#Blur spike times to blur_ind bins in either direction
+		spikes_1_blur = np.zeros(np.shape(spikes_1))
+		spikes_1_blur += spikes_1
+		spikes_2_blur = np.zeros(np.shape(spikes_2))
+		spikes_2_blur += spikes_2
+		num_spikes_1 = np.sum(spikes_1)
+		num_spikes_2 = np.sum(spikes_2)
+		avg_num_spikes = round((num_spikes_1 + num_spikes_2)/2)
+		for i in range(blur_ind):
+			spikes_1_blur[0:-1*(i+1)] += spikes_1[i+1:]
+			spikes_1_blur[i+1:] += spikes_1[0:-1*(i+1)]
+			spikes_2_blur[0:-1*(i+1)] += spikes_2[i+1:]
+			spikes_2_blur[i+1:] += spikes_2[0:-1*(i+1)]
+		#Multiply the vectors together to find overlaps
+		collisions = np.multiply(spikes_1_blur,spikes_2_blur)
+		collisions_count = len(np.where(np.diff(collisions) > 1)[0]) + 1
+		collision_percent = round(100*collisions_count/avg_num_spikes)
+		if collision_percent >= collision_cutoff:
+			collisions_detected += 1
+			spikes_combined = []
+			spikes_combined.append(np.where(spikes_1 > 0)[0])
+			spikes_combined.append(np.where(spikes_2 > 0)[0])
+			spikes_1_count = np.sum(spikes_1)
+			spikes_2_count = np.sum(spikes_2)
+			#Create a figure of the spike rasters together and save
+			fig = plt.figure(figsize=(20,20))
+			plt.eventplot(spikes_combined,colors=colorCodes)
+			line_1 = 'Unit ' + str(ind_1) + ' vs. Unit ' + str(ind_2)
+			line_2 = 'Collision Percent = ' + str(collision_percent)
+			line_3 = 'U' + str(ind_1) + ' counts = ' + str(spikes_1_count)
+			line_4 = 'U' + str(ind_2) + ' counts = ' + str(spikes_2_count)
+			plt.ylabel('Neuron')
+			plt.xlabel('Spike')
+			plt.suptitle(line_1 + '\n' + line_2 + '\n' + line_3 + '\n' + line_4,fontsize=20)
+			plt.savefig(collision_folder + 'unit_' + str(ind_1) + '_v_unit_' + str(ind_2) + '.png',dpi=100)
+			plt.close(fig)
+	
+	if collisions_detected > 0:
+		print('\n INPUT REQUESTED: Collision plots have been made and stored in ' + collision_folder)
+		remove_ind = input('Please provide the indices you would like to remove (comma-separated ex. 0,1,2): ').split(',')
+		remove_ind = [int(remove_ind[i]) for i in range(len(remove_ind))]
+	else:
+		remove_ind = []
+
+	return remove_ind
+
 def re_cluster():
 	"""This function allows for re-clustering of previously clustered data by 
 	importing the final-clustering .csv results ('neuron_spikes.csv' and 

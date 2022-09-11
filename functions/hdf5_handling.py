@@ -235,3 +235,15 @@ def check_ICA_data(hf5_dir):
 		exists = 0
 	return exists, ica_data_dir
 	
+def save_sorted_spikes(final_h5_dir,spike_raster,sort_stats):
+	"""This function saves the sorted results to an HDF5 file"""
+	final_hf5 = tables.open_file(final_h5_dir, 'w', title = final_h5_dir[-1])
+	atom = tables.IntAtom()
+	final_hf5.create_earray('/','spike_raster',atom,(0,)+np.shape(spike_raster))
+	spike_expand = np.expand_dims(spike_raster,0)
+	final_hf5.root.spike_raster.append(spike_expand)
+	atom = tables.FloatAtom()
+	final_hf5.create_earray('/','sort_stats',atom,(0,)+np.shape(sort_stats))
+	sort_stats_expand = np.expand_dims(sort_stats,0)
+	final_hf5.root.sort_stats.append(sort_stats_expand)
+	final_hf5.close()
