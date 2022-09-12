@@ -302,6 +302,16 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 				#Save results
 				print("\t Saving final results to .h5 file.")
 				sort_hf5 = tables.open_file(sort_hf5_dir, 'r+', title = sort_hf5_dir[-1])
+				existing_nodes = [int(i.name.split('_')[-1]) for i in sort_hf5.list_nodes('/sorted_spikes',classname='Array')]
+				try:
+					existing_nodes.index(i)
+					already_stored = 1
+				except:
+					already_stored = 0
+				if already_stored == 1:
+					#Remove the existing node to be able to save anew
+					exec('sort_hf5.sorted_spikes.unit_'+str(i)+'._f_remove()')
+					exec('sort_hf5.sorted_spikes_bin.unit_'+str(i)+'._f_remove()')
 				atom = tables.FloatAtom()
 				u_int = str(i)
 				sort_hf5.create_earray('/sorted_spikes',f'unit_{u_int}',atom,(0,)+np.shape(neuron_spikes))
