@@ -719,7 +719,6 @@ def import_sorted(num_units,dir_save,sort_hf5_dir):
 	
 	sort_hf5 = tables.open_file(sort_hf5_dir, 'r', title = sort_hf5_dir[-1])
 	separated_spikes_bin = []
-	sort_stats = []
 	print("\t Importing sorted data.")
 	for i in tqdm.tqdm(range(num_units)):
 		neuron_spikes = sort_hf5.get_node('/sorted_spikes_bin/unit_'+str(i))
@@ -730,6 +729,7 @@ def import_sorted(num_units,dir_save,sort_hf5_dir):
 		del neuron_spikes_bin
 	sort_hf5.close()
 	
+	sort_stats = []
 	for i in tqdm.tqdm(range(num_units)):
 		final_sort_neur_dir = dir_save + 'unit_' + str(i) + '/final/'
 		sort_stats_csv = final_sort_neur_dir + 'sort_stats.csv'
@@ -739,10 +739,10 @@ def import_sorted(num_units,dir_save,sort_hf5_dir):
 			sort_stats_list = list(reader)
 		for i_s in range(len(sort_stats_list) - 1):
 			stat_row = sort_stats_list[i_s + 1]
-			stat_row_float = [i]
+			stat_row_float = [i,i_s+1]
 			stat_row_float.extend([float(stat_row[i]) for i in range(len(stat_row) - 1)])
-			if stat_row_float[-1] == 1:
-				sort_stats.append(stat_row)
+			if float(stat_row[-1]) == 1:
+				sort_stats.append(stat_row_float)
 	sort_stats = np.array(sort_stats)
 	
 	return separated_spikes_bin, sort_stats
