@@ -59,35 +59,40 @@ def run_spike_sort(data_dir):
 	
 	#Perform compilation of all sorted spikes into a binary matrix
 	separated_spikes_bin, sort_stats = import_sorted(num_units,dir_save,sort_hf5_dir)
-	spike_raster = np.array(separated_spikes_bin)
-	del separated_spikes_bin
 	
 	#Perform collision tests of imported data and remove until no collisions reported
 	print("Now performing collision tests until no significant collisions are reported.")
 	collision_loop = 1
 	while collision_loop == 1:
-		remove_ind = test_collisions(spike_raster,dir_save)
+		remove_ind = test_collisions(separated_spikes_bin,dir_save)
 		if len(remove_ind) > 0:
-			#First clean the raster
-			keep_ind = np.setdiff1d(np.arange(num_units),remove_ind)
-			new_spikes_bin = np.zeros((len(keep_ind),num_time))
-			for i in range(len(keep_ind)):
-				new_spikes_bin[i,:] = spike_raster[keep_ind[i],:]
-			spike_raster = np.zeros(np.shape(new_spikes_bin))
-			spike_raster += new_spikes_bin
-			#Second clean the sort statistics
 			remove_ind.sort(reverse=True)
 			for r_i in remove_ind:
 				try:
+					#First clean the spikes list
+					del separated_spikes_bin[r_i]
+				except:
+					print("Removal of index skipped - index out of range.")
+				try:
+					#Second clean the sort statistics
 					del sort_stats[r_i]
 				except:
 					print("Removal of index skipped - index out of range.")
 		else:
 			collision_loop = 0
+			
+	#Resave binary spikes as a numpy array
+	print("Reshaping data for storage.")
+	num_final_neur = len(separated_spikes_bin)
+	num_time = len(separated_spikes_bin[0])
+	spike_raster = np.zeros((num_final_neur,num_time))
+	for n_i in tqdm.tqdm(range(num_final_neur)):
+		spike_raster[n_i,:] = separated_spikes_bin[n_i]
 	
 	#Save spikes to an HDF5 file
 	final_h5_dir = ('_').join(data_dir.split('_')[:-1])+'_sorted_results.h5'
-	h5.save_sorted_spikes(final_h5_dir,spike_raster,sort_stats)
+	h5.save_sorted_spikes(final_h5_dir,spike_raster,sort_stats,sampling_rate,
+					   segment_times,segment_names,dig_ins,dig_in_names)
 	
 
 def potential_spike_times(data,sampling_rate,dir_save):
@@ -721,7 +726,7 @@ def import_sorted(num_units,dir_save,sort_hf5_dir):
 		neuron_spikes_bin = neuron_spikes[0]
 		del neuron_spikes
 		for j in range(len(neuron_spikes_bin)):
-			separated_spikes_bin.append(list(neuron_spikes_bin[j])) 
+			separated_spikes_bin.append(neuron_spikes_bin[j])
 		del neuron_spikes_bin
 	sort_hf5.close()
 	
@@ -749,9 +754,11 @@ def test_collisions(spike_raster,dir_save):
 	between the two neurons. If the percentage is over 50, the pair is flagged 
 	and the user can determine which to remove based on the statistics.
 	INPUTS:
-		- spike_raster = matrix with num_neur rows, and num_time columns
+		- spike_raster = list of numpy arrays, where each array is the binary 
+						spiking of a neuron
+		- dir_save = directory to store collision results
 	"""
-	num_neur, num_time = np.shape(spike_raster)
+	num_neur = len(spike_raster)
 	all_pairs = list(itertools.combinations(np.arange(0,num_neur),2))
 	blur_ind = 3
 	collision_cutoff = 50 #Percent cutoff for collisions
@@ -766,8 +773,8 @@ def test_collisions(spike_raster,dir_save):
 	for i in tqdm.tqdm(range(len(all_pairs))):
 		ind_1 = all_pairs[i][0]
 		ind_2 = all_pairs[i][1]
-		spikes_1 = spike_raster[ind_1,:]
-		spikes_2 = spike_raster[ind_2,:]
+		spikes_1 = spike_raster[ind_1]
+		spikes_2 = spike_raster[ind_2]
 		#Blur spike times to blur_ind bins in either direction
 		spikes_1_blur = np.zeros(np.shape(spikes_1))
 		spikes_1_blur += spikes_1

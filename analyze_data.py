@@ -46,7 +46,7 @@ else:
 	print("\n INPUT REQUESTED: Select directory with .h5 file.")
 	root = tk.Tk()
 	currdir = os.getcwd()
-	datadir = fd.askdirectory(parent=root, initialdir=currdir, title='Pleasne select the folder where data is stored.')
+	datadir = fd.askdirectory(parent=root, initialdir=currdir, title='Please select the folder where data is stored.')
 	hdf5_name = str(os.path.dirname(datadir + '/')).split('/')
 	hf5_dir = datadir + '/' + hdf5_name[-1]+'.h5'
 	# create button to implement destroy()

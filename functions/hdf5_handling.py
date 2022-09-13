@@ -235,7 +235,8 @@ def check_ICA_data(hf5_dir):
 		exists = 0
 	return exists, ica_data_dir
 	
-def save_sorted_spikes(final_h5_dir,spike_raster,sort_stats):
+def save_sorted_spikes(final_h5_dir,spike_raster,sort_stats,sampling_rate,
+				   segment_times,segment_names,dig_ins,dig_in_names):
 	"""This function saves the sorted results to an HDF5 file"""
 	final_hf5 = tables.open_file(final_h5_dir, 'w', title = final_h5_dir[-1])
 	atom = tables.IntAtom()
@@ -246,4 +247,21 @@ def save_sorted_spikes(final_h5_dir,spike_raster,sort_stats):
 	final_hf5.create_earray('/','sort_stats',atom,(0,)+np.shape(sort_stats))
 	sort_stats_expand = np.expand_dims(sort_stats,0)
 	final_hf5.root.sort_stats.append(sort_stats_expand)
+	atom = tables.IntAtom()
+	final_hf5.create_earray('/','sampling_rate',atom,(0,))
+	final_hf5.root.sampling_rate.append([sampling_rate])
+	final_hf5.create_earray('/','segment_times',atom,(0,))
+	final_hf5.root.segment_times.append(segment_times[:])
+	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
+	final_hf5.create_earray('/','segment_names',atom,(0,))
+	exec("final_hf5.root.segment_names.append(np.array(segment_names))")
+	atom = tables.FloatAtom()
+	np_dig_ins = np.array(dig_ins)
+	final_hf5.create_group('/','dig_ins')
+	data_digs = final_hf5.create_earray('/dig_ins','dig_ins',atom,(0,)+np.shape(np_dig_ins))
+	np_dig_ins = np.expand_dims(np_dig_ins,0)
+	data_digs.append(np_dig_ins)
+	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
+	dig_names = final_hf5.create_earray('/dig_ins','dig_in_names',atom,(0,))
+	dig_names.append(np.array(dig_in_names))
 	final_hf5.close()
