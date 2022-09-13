@@ -38,12 +38,23 @@ def run_spike_sort(data_dir):
 	dig_in_names = [hf5.root.dig_ins.dig_in_names[i].decode('UTF-8') for i in range(len(hf5.root.dig_ins.dig_in_names))]
 	hf5.close()
 	
+	#Create directory for sorted data
 	dir_save = ('/').join(data_dir.split('/')[:-1]) + '/sort_results/'
+	if os.path.isdir(dir_save) == False:
+		os.mkdir(dir_save)
+	#Create .h5 file for storage of results
+	sort_hf5_name = dir_save.split('/')[-3].split('.')[0].split('_')[0] + '_sort.h5'
+	sort_hf5_dir = dir_save + sort_hf5_name
+	if os.path.isfile(sort_hf5_dir) == False:
+		sort_hf5 = tables.open_file(sort_hf5_dir, 'w', title = sort_hf5_dir[-1])
+		sort_hf5.create_group('/','sorted_spikes')
+		sort_hf5.create_group('/','sorted_spikes_bin')
+		sort_hf5.close()
 	
 	#Perform sorting
-	sort_hf5_dir = spike_sort(data,sampling_rate,dir_save,segment_times,
+	spike_sort(data,sampling_rate,dir_save,segment_times,
 											 segment_names,dig_ins,
-											 dig_in_names)
+											 dig_in_names,sort_hf5_dir)
 	del data
 	
 	#Perform compilation of all sorted spikes into a binary matrix
@@ -118,7 +129,7 @@ def potential_spike_times(data,sampling_rate,dir_save):
 	return peak_ind
 
 def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
-			   dig_ins,dig_in_names):
+			   dig_ins,dig_in_names,sort_hf5_dir):
 	"""This function performs clustering spike sorting to separate out spikes
 	from the dataset
 	INPUTS:
@@ -129,7 +140,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 		-segment_names = names of the different segments
 		-dig_ins = array of num_dig x num_time with 1s wherever a tastant 
 					was being delivered
-		-dig_in_names = array of names of each dig in used"""
+		-dig_in_names = array of names of each dig in used"""	
 	
 	#Grab relevant parameters
 	num_neur, num_time = np.shape(data)
@@ -151,206 +162,222 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 		dig_in_ind = list(np.array(dig_times[i])[dig_in_vals])
 		dig_in_times.append(dig_in_ind)
 	
-	#Create directory for sorted data
-	if os.path.isdir(dir_save) == False:
-		os.mkdir(dir_save)
-	#Create .h5 file for storage of results
-	sort_hf5_name = dir_save.split('/')[-3].split('.')[0].split('_')[0] + '_sort.h5'
-	sort_hf5_dir = dir_save + sort_hf5_name
-	if os.path.isfile(sort_hf5_dir) == False:
-		sort_hf5 = tables.open_file(sort_hf5_dir, 'w', title = sort_hf5_dir[-1])
-		sort_hf5.create_group('/','sorted_spikes')
-		sort_hf5.create_group('/','sorted_spikes_bin')
-		sort_hf5.close()
 	#Create .csv file name for storage of completed units
 	sorted_units_csv = dir_save + 'sorted_units.csv'
 	
-	#Get the number of clusters to use in spike sorting
-	print("Beginning Spike Sorting")
-	clust_num = 0
-	clust_loop = 1
-	while clust_loop == 1:
-		print("\n INPUT REQUESTED: Think of the number of clusters you'd like to use for initial sorting (removal of noise).")
-		cluster_num = input("Please enter the number you'd like to use (> 1): ")
-		try:
-			clust_num = int(cluster_num)
-			clust_loop = 0
-		except:
-			print("ERROR: Please enter a valid integer.")
-	del cluster_num, clust_loop
 	
-	clust_num_fin = 0
-	clust_loop = 1
-	while clust_loop == 1:
-		print("\n INPUT REQUESTED: Think of the number of clusters you'd like to use for final sorting (after template-matching).")
-		cluster_num_fin = input("Please enter the number you'd like to use (> 1): ")
-		try:
-			clust_num_fin = int(cluster_num_fin)
-			clust_loop = 0
-		except:
-			print("ERROR: Please enter a valid integer.")
-	del cluster_num_fin, clust_loop
+	#First check if all units had previously been sorted
+	prev_sorted = 0
+	if os.path.isfile(sorted_units_csv) == True:
+		with open(sorted_units_csv, 'r') as f:
+			reader = csv.reader(f)
+			sorted_units_list = list(reader)
+			sorted_units_ind = [int(sorted_units_list[i][0]) for i in range(len(sorted_units_list))]
+		sorted_units_unique = np.unique(sorted_units_ind)
+		diff_units = np.setdiff1d(np.arange(num_neur),sorted_units_unique)
+		if len(diff_units) == 0:
+			prev_sorted = 1
+	keep_final = 0
+	if prev_sorted == 1:
+		sort_loop = 1
+		while sort_loop == 1:
+			print('This data has been completely sorted before.')
+			resort_channel = input("INPUT REQUESTED: Would you like to re-sort [y/n]? ")
+			if resort_channel != 'y' and resort_channel != 'n':
+				print("\t Incorrect entry.")
+			elif resort_channel == 'n':
+				keep_final = 1
+				sort_loop = 0
+			elif resort_channel == 'y':
+				sort_loop = 0
 	
 	#Pull spikes from data	
-	print("\n Now beginning spike sorting.")
-	for i in tqdm.tqdm(range(num_neur)):
-		print("\n Sorting channel #" + str(i))
-		#First check for final sort and ask if want to keep
-		keep_final = 0
-		unit_dir = dir_save + 'unit_' + str(i) + '/'
-		continue_no_resort = 0
+	if keep_final == 0:
 		
-		if os.path.isfile(sorted_units_csv) == True:
-			with open(sorted_units_csv, 'r') as f:
-				reader = csv.reader(f)
-				sorted_units_list = list(reader)
-				sorted_units_ind = [int(sorted_units_list[i][0]) for i in range(len(sorted_units_list))]
+		#Get the number of clusters to use in spike sorting
+		print("Beginning Spike Sorting")
+		clust_num = 0
+		clust_loop = 1
+		while clust_loop == 1:
+			print("\n INPUT REQUESTED: Think of the number of clusters you'd like to use for initial sorting (removal of noise).")
+			cluster_num = input("Please enter the number you'd like to use (> 1): ")
 			try:
-				in_list = sorted_units_ind.index(i)
+				clust_num = int(cluster_num)
+				clust_loop = 0
 			except:
-				in_list = -1
-			if in_list >= 0:
-				print("\t Channel previously sorted.")
-				sort_loop = 1
-				while sort_loop == 1:
-					resort_channel = input("\t INPUT REQUESTED: Would you like to re-sort [y/n]? ")
-					if resort_channel != 'y' and resort_channel != 'n':
-						print("\t Incorrect entry.")
-					elif resort_channel == 'n':
-						keep_final = 1
-						sort_loop = 0
-						continue_no_resort = 1
-					elif resort_channel == 'y':
-						sort_loop = 0
-		tic = time.time()
-		if keep_final == 0:
-			#If no final sort or don't want to keep, then run through protocol
-			data_copy = np.array(data[i,:])
-			#Grab peaks
-			peak_ind = potential_spike_times(data_copy,sampling_rate,unit_dir)
-			#Pull spike profiles
-			print("\t Pulling Spike Profiles.")
-			left_peak_ind = np.array(peak_ind) - num_pts_left
-			right_peak_ind = np.array(peak_ind) + num_pts_right
-			left_peak_comp = np.zeros((len(left_peak_ind),2))
-			right_peak_comp = np.zeros((len(left_peak_ind),2))
-			left_peak_comp[:,0] = left_peak_ind
-			right_peak_comp[:,0] = right_peak_ind
-			right_peak_comp[:,1] = num_time
-			p_i_l = np.max(left_peak_comp,axis=1).astype(int)
-			p_i_r = np.min(right_peak_comp,axis=1).astype(int)
-			del left_peak_ind, right_peak_ind, left_peak_comp, right_peak_comp
-			data_chunk_lengths = p_i_r - p_i_l
-			too_short = np.where(data_chunk_lengths < num_pts_left + num_pts_right)[0]
-			keep_ind = np.setdiff1d(np.arange(len(p_i_l)),too_short)
-			all_spikes = np.zeros((len(keep_ind),num_pts_left+num_pts_right))
-			for k_i in tqdm.tqdm(range(len(keep_ind))):
-				ind = keep_ind[k_i]
-				all_spikes[k_i,:] = data_copy[p_i_l[ind]:p_i_r[ind]]
-			all_spikes = list(all_spikes)
-			all_peaks = list(np.array(peak_ind)[keep_ind]) #Peak indices in original recording length
-			del p_i_l, p_i_r, data_chunk_lengths, too_short, keep_ind
-			#Cluster all spikes first to get rid of noise
-			print("\t Performing Clustering to Remove Noise (First Pass)")
-			sort_ind = spike_clust(all_spikes, all_peaks, 
-										 clust_num, i, dir_save, axis_labels, 
-										 viol_1, viol_2, 'noise_removal', segment_times,
-										 segment_names, dig_in_times, dig_in_names,
-										 sampling_rate, re_sort='y')
-			sorted_peak_ind = [list(np.array(all_peaks)[sort_ind[i]]) for i in range(len(sort_ind))]
-			good_spikes = []
-			good_ind = []
-			print("\t Performing Template Matching to Further Clean")
-			#FUTURE IMPROVEMENT NOTE: Add csv storage of indices for further speediness if re-processing in future
-			for g_i in range(len(sort_ind)):
-				print("\t Template Matching Sorted Group " + str(g_i))
-				s_i = sorted_peak_ind[g_i] #Original indices
-				s_s_i = sort_ind[g_i] #Sorted set indices
-				sort_spikes = np.array(all_spikes)[s_s_i]
-				g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,num_pts_left,num_pts_right,10)
-				good_spikes.extend(g_spikes) #Store the good spike profiles
-				good_ind.extend(list(np.array(s_i)[g_ind])) #Store the original indices
-			del g_i, s_i
-			print("\t Performing Clustering of Remaining Waveforms (Second Pass)")
+				print("ERROR: Please enter a valid integer.")
+		del cluster_num, clust_loop
+		
+		clust_num_fin = 0
+		clust_loop = 1
+		while clust_loop == 1:
+			print("\n INPUT REQUESTED: Think of the number of clusters you'd like to use for final sorting (after template-matching).")
+			cluster_num_fin = input("Please enter the number you'd like to use (> 1): ")
+			try:
+				clust_num_fin = int(cluster_num_fin)
+				clust_loop = 0
+			except:
+				print("ERROR: Please enter a valid integer.")
+		del cluster_num_fin, clust_loop
+		
+		print("\n Now beginning spike sorting.")
+		for i in tqdm.tqdm(range(num_neur)):
+			print("\n Sorting channel #" + str(i))
+			#First check for final sort and ask if want to keep
+			keep_final = 0
+			unit_dir = dir_save + 'unit_' + str(i) + '/'
+			continue_no_resort = 0
 			
-			sort_ind_2 = spike_clust(good_spikes, good_ind, 
-										 clust_num_fin, i, dir_save, axis_labels, 
-										 viol_1, viol_2, 'final', segment_times,
-										 segment_names, dig_in_times, dig_in_names,
-										 sampling_rate)
-			
-			#Save sorted spike indices and profiles
-			final_spikes = []
-			final_ind = []
-			for g_i in range(len(sort_ind_2)):
-				s_i = sort_ind_2[g_i]
-				spikes_i = [list(good_spikes[s_i_i]) for s_i_i in s_i]
-				final_spikes.append(spikes_i)
-				final_ind.append(list(np.array(good_ind)[s_i]))
-			num_neur_sort = len(final_ind)
-			neuron_spikes = np.zeros((num_neur_sort,num_time))
-			if num_neur_sort > 0:
-				neuron_spikes_bin = np.zeros((num_neur_sort,num_time))
-				for n_i in range(num_neur_sort):
-					for pi in range(len(final_ind[n_i])):
-						p_i = final_ind[n_i][pi]
-						p_i_l = p_i - num_pts_left
-						p_i_r = p_i + num_pts_right
-						points = np.arange(p_i_l,p_i_r)
-						neuron_spikes[n_i,points] = final_spikes[n_i][pi]
-						neuron_spikes_bin[n_i,p_i] = 1
-				#Save results
-				print("\t Saving final results to .h5 file.")
-				sort_hf5 = tables.open_file(sort_hf5_dir, 'r+', title = sort_hf5_dir[-1])
-				existing_nodes = [int(i.name.split('_')[-1]) for i in sort_hf5.list_nodes('/sorted_spikes',classname='Array')]
+			if os.path.isfile(sorted_units_csv) == True:
+				with open(sorted_units_csv, 'r') as f:
+					reader = csv.reader(f)
+					sorted_units_list = list(reader)
+					sorted_units_ind = [int(sorted_units_list[i][0]) for i in range(len(sorted_units_list))]
 				try:
-					existing_nodes.index(i)
-					already_stored = 1
+					in_list = sorted_units_ind.index(i)
 				except:
-					already_stored = 0
-				if already_stored == 1:
-					#Remove the existing node to be able to save anew
-					exec('sort_hf5.sorted_spikes.unit_'+str(i)+'._f_remove()')
-					exec('sort_hf5.sorted_spikes_bin.unit_'+str(i)+'._f_remove()')
-				atom = tables.FloatAtom()
-				u_int = str(i)
-				sort_hf5.create_earray('/sorted_spikes',f'unit_{u_int}',atom,(0,)+np.shape(neuron_spikes))
-				spikes_expanded = np.expand_dims(neuron_spikes,0)
-				exec('sort_hf5.root.sorted_spikes.unit_'+str(i)+'.append(spikes_expanded)')
-				atom = tables.IntAtom()
-				sort_hf5.create_earray('/sorted_spikes_bin',f'unit_{u_int}',atom,(0,)+np.shape(neuron_spikes_bin))
-				spikes_expanded = np.expand_dims(neuron_spikes_bin,0)
-				exec('sort_hf5.root.sorted_spikes_bin.unit_'+str(i)+'.append(spikes_expanded)')
-				sort_hf5.close()
-				#Save unit index to sort csv
-				if os.path.isfile(sorted_units_csv) == False:
-					with open(sorted_units_csv, 'w') as f:
-						write = csv.writer(f)
-						write.writerows([[i]])
-				else:
-					with open(sorted_units_csv, 'a') as f:
-						write = csv.writer(f)
-						write.writerows([[i]])
-			else:
-				print("\t No neurons found.")
+					in_list = -1
+				if in_list >= 0:
+					print("\t Channel previously sorted.")
+					sort_loop = 1
+					while sort_loop == 1:
+						resort_channel = input("\t INPUT REQUESTED: Would you like to re-sort [y/n]? ")
+						if resort_channel != 'y' and resort_channel != 'n':
+							print("\t Incorrect entry.")
+						elif resort_channel == 'n':
+							keep_final = 1
+							sort_loop = 0
+							continue_no_resort = 1
+						elif resort_channel == 'y':
+							sort_loop = 0
+			tic = time.time()
+			if keep_final == 0:
+				#If no final sort or don't want to keep, then run through protocol
+				data_copy = np.array(data[i,:])
+				#Grab peaks
+				peak_ind = potential_spike_times(data_copy,sampling_rate,unit_dir)
+				#Pull spike profiles
+				print("\t Pulling Spike Profiles.")
+				left_peak_ind = np.array(peak_ind) - num_pts_left
+				right_peak_ind = np.array(peak_ind) + num_pts_right
+				left_peak_comp = np.zeros((len(left_peak_ind),2))
+				right_peak_comp = np.zeros((len(left_peak_ind),2))
+				left_peak_comp[:,0] = left_peak_ind
+				right_peak_comp[:,0] = right_peak_ind
+				right_peak_comp[:,1] = num_time
+				p_i_l = np.max(left_peak_comp,axis=1).astype(int)
+				p_i_r = np.min(right_peak_comp,axis=1).astype(int)
+				del left_peak_ind, right_peak_ind, left_peak_comp, right_peak_comp
+				data_chunk_lengths = p_i_r - p_i_l
+				too_short = np.where(data_chunk_lengths < num_pts_left + num_pts_right)[0]
+				keep_ind = np.setdiff1d(np.arange(len(p_i_l)),too_short)
+				all_spikes = np.zeros((len(keep_ind),num_pts_left+num_pts_right))
+				for k_i in tqdm.tqdm(range(len(keep_ind))):
+					ind = keep_ind[k_i]
+					all_spikes[k_i,:] = data_copy[p_i_l[ind]:p_i_r[ind]]
+				all_spikes = list(all_spikes)
+				all_peaks = list(np.array(peak_ind)[keep_ind]) #Peak indices in original recording length
+				del p_i_l, p_i_r, data_chunk_lengths, too_short, keep_ind
+				#Cluster all spikes first to get rid of noise
+				print("\t Performing Clustering to Remove Noise (First Pass)")
+				sort_ind = spike_clust(all_spikes, all_peaks, 
+											 clust_num, i, dir_save, axis_labels, 
+											 viol_1, viol_2, 'noise_removal', segment_times,
+											 segment_names, dig_in_times, dig_in_names,
+											 sampling_rate, re_sort='y')
+				sorted_peak_ind = [list(np.array(all_peaks)[sort_ind[i]]) for i in range(len(sort_ind))]
+				good_spikes = []
+				good_ind = []
+				print("\t Performing Template Matching to Further Clean")
+				#FUTURE IMPROVEMENT NOTE: Add csv storage of indices for further speediness if re-processing in future
+				for g_i in range(len(sort_ind)):
+					print("\t Template Matching Sorted Group " + str(g_i))
+					s_i = sorted_peak_ind[g_i] #Original indices
+					s_s_i = sort_ind[g_i] #Sorted set indices
+					sort_spikes = np.array(all_spikes)[s_s_i]
+					g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,num_pts_left,num_pts_right,10)
+					good_spikes.extend(g_spikes) #Store the good spike profiles
+					good_ind.extend(list(np.array(s_i)[g_ind])) #Store the original indices
+				del g_i, s_i
+				print("\t Performing Clustering of Remaining Waveforms (Second Pass)")
 				
-		toc = time.time()
-		print(" Time to sort channel " + str(i) + " = " + str(round((toc - tic)/60)) + " minutes")	
-		if i < num_neur - 1:
-			if continue_no_resort == 0:
-				print("\n CHECKPOINT REACHED: You don't have to sort all neurons right now.")
-				cont_loop = 1
-				while cont_loop == 1:
-					cont_units = input("INPUT REQUESTED: Would you like to continue sorting [y/n]? ")
-					if cont_units != 'y' and cont_units != 'n':
-						print("Incorrect input.")
-					elif cont_units == 'n':
-						cont_loop = 0
-						sys.exit()
-					elif cont_units == 'y':
-						cont_loop = 0
-						
-	return sort_hf5_dir
+				sort_ind_2 = spike_clust(good_spikes, good_ind, 
+											 clust_num_fin, i, dir_save, axis_labels, 
+											 viol_1, viol_2, 'final', segment_times,
+											 segment_names, dig_in_times, dig_in_names,
+											 sampling_rate)
+				
+				#Save sorted spike indices and profiles
+				final_spikes = []
+				final_ind = []
+				for g_i in range(len(sort_ind_2)):
+					s_i = sort_ind_2[g_i]
+					spikes_i = [list(good_spikes[s_i_i]) for s_i_i in s_i]
+					final_spikes.append(spikes_i)
+					final_ind.append(list(np.array(good_ind)[s_i]))
+				num_neur_sort = len(final_ind)
+				neuron_spikes = np.zeros((num_neur_sort,num_time))
+				if num_neur_sort > 0:
+					neuron_spikes_bin = np.zeros((num_neur_sort,num_time))
+					for n_i in range(num_neur_sort):
+						for pi in range(len(final_ind[n_i])):
+							p_i = final_ind[n_i][pi]
+							p_i_l = p_i - num_pts_left
+							p_i_r = p_i + num_pts_right
+							points = np.arange(p_i_l,p_i_r)
+							neuron_spikes[n_i,points] = final_spikes[n_i][pi]
+							neuron_spikes_bin[n_i,p_i] = 1
+					#Save results
+					print("\t Saving final results to .h5 file.")
+					sort_hf5 = tables.open_file(sort_hf5_dir, 'r+', title = sort_hf5_dir[-1])
+					existing_nodes = [int(i.name.split('_')[-1]) for i in sort_hf5.list_nodes('/sorted_spikes',classname='Array')]
+					try:
+						existing_nodes.index(i)
+						already_stored = 1
+					except:
+						already_stored = 0
+					if already_stored == 1:
+						#Remove the existing node to be able to save anew
+						exec('sort_hf5.root.sorted_spikes.unit_'+str(i)+'._f_remove()')
+						exec('sort_hf5.root.sorted_spikes_bin.unit_'+str(i)+'._f_remove()')
+					atom = tables.FloatAtom()
+					u_int = str(i)
+					sort_hf5.create_earray('/sorted_spikes',f'unit_{u_int}',atom,(0,)+np.shape(neuron_spikes))
+					spikes_expanded = np.expand_dims(neuron_spikes,0)
+					exec('sort_hf5.root.sorted_spikes.unit_'+str(i)+'.append(spikes_expanded)')
+					atom = tables.IntAtom()
+					sort_hf5.create_earray('/sorted_spikes_bin',f'unit_{u_int}',atom,(0,)+np.shape(neuron_spikes_bin))
+					spikes_expanded = np.expand_dims(neuron_spikes_bin,0)
+					exec('sort_hf5.root.sorted_spikes_bin.unit_'+str(i)+'.append(spikes_expanded)')
+					sort_hf5.close()
+					#Save unit index to sort csv
+					if os.path.isfile(sorted_units_csv) == False:
+						with open(sorted_units_csv, 'w') as f:
+							write = csv.writer(f)
+							write.writerows([[i]])
+					else:
+						with open(sorted_units_csv, 'a') as f:
+							write = csv.writer(f)
+							write.writerows([[i]])
+				else:
+					print("\t No neurons found.")
+					
+			toc = time.time()
+			print(" Time to sort channel " + str(i) + " = " + str(round((toc - tic)/60)) + " minutes")	
+			if i < num_neur - 1:
+				if continue_no_resort == 0:
+					print("\n CHECKPOINT REACHED: You don't have to sort all neurons right now.")
+					cont_loop = 1
+					while cont_loop == 1:
+						cont_units = input("INPUT REQUESTED: Would you like to continue sorting [y/n]? ")
+						if cont_units != 'y' and cont_units != 'n':
+							print("Incorrect input.")
+						elif cont_units == 'n':
+							cont_loop = 0
+							sys.exit()
+						elif cont_units == 'y':
+							cont_loop = 0
+		
 
 def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels, 
 				viol_1, viol_2, type_spike, segment_times, segment_names, 
@@ -690,8 +717,12 @@ def import_sorted(num_units,dir_save,sort_hf5_dir):
 	sort_stats = []
 	print("\t Importing sorted data.")
 	for i in tqdm.tqdm(range(num_units)):
-		exec('neuron_spikes_bin = sort_hf5.root.sorted_spikes_bin.unit_'+str(i)+'[0]')
-		exec('[separated_spikes_bin.append(list(neuron_spikes_bin[j])) for j in range(len(neuron_spikes_bin))]')
+		neuron_spikes = sort_hf5.get_node('/sorted_spikes_bin/unit_'+str(i))
+		neuron_spikes_bin = neuron_spikes[0]
+		del neuron_spikes
+		for j in range(len(neuron_spikes_bin)):
+			separated_spikes_bin.append(list(neuron_spikes_bin[j])) 
+		del neuron_spikes_bin
 	sort_hf5.close()
 	
 	for i in tqdm.tqdm(range(num_units)):
