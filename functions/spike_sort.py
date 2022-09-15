@@ -11,6 +11,9 @@ import numpy as np
 import scipy.stats as ss
 from scipy.signal import find_peaks
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.mixture import GaussianMixture
+from sklearn.preprocessing import MinMaxScaler
 import tables, tqdm, os, csv, time, sys, itertools
 import matplotlib.pyplot as plt
 from numba import jit
@@ -94,6 +97,7 @@ def run_spike_sort(data_dir):
 	h5.save_sorted_spikes(final_h5_dir,spike_raster,sort_stats,sampling_rate,
 					   segment_times,segment_names,dig_ins,dig_in_names)
 	
+	print('\n DONE SPIKE SORTING!')
 
 def potential_spike_times(data,sampling_rate,dir_save):
 	"""Function to grab potential spike times for further analysis. Peaks 
@@ -156,6 +160,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	#total_pts = num_pts_left + num_pts_right
 	viol_1 = sampling_rate*(1/1000)
 	viol_2 = sampling_rate*(2/1000)
+	threshold_percentile = 25
 	
 	#Grab dig in times for each tastant separately
 	dig_times = [list(np.where(dig_ins[i] > 0)[0]) for i in range(len(dig_in_names))]
@@ -169,7 +174,6 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	
 	#Create .csv file name for storage of completed units
 	sorted_units_csv = dir_save + 'sorted_units.csv'
-	
 	
 	#First check if all units had previously been sorted
 	prev_sorted = 0
@@ -300,7 +304,9 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					s_i = sorted_peak_ind[g_i] #Original indices
 					s_s_i = sort_ind[g_i] #Sorted set indices
 					sort_spikes = np.array(all_spikes)[s_s_i]
-					g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,num_pts_left,num_pts_right,10)
+					g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,
+										   num_pts_left,num_pts_right,
+										   threshold_percentile,unit_dir,g_i)
 					good_spikes.extend(g_spikes) #Store the good spike profiles
 					good_ind.extend(list(np.array(s_i)[g_ind])) #Store the original indices
 				del g_i, s_i
@@ -432,15 +438,33 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		all_dig_in_times = np.unique(np.array(dig_in_times).flatten())
 		PSTH_left_ms = 500
 		PSTH_right_ms = 2000
+		center = np.where(axis_labels == 0)[0]
 		
-		#Perform kmeans clustering
-		print("\t Performing K-Means clustering of data.")
+# 		#Project data to lower dimensions
+# 		print("\t Projecting data to lower dimensions")
+# 		pca = PCA(n_components = 7)
+# 		spikes_pca = pca.fit_transform(spikes)
+# 		#Grab spike amplitude and energy of spike to add to spikes_pca
+# 		amp_vals = np.array([np.abs(spikes[i][center]) for i in range(len(spikes))])
+# 		spikes_pca2 = np.concatenate((spikes_pca,amp_vals),axis=1)
+# 		#energy_vals = np.expand_dims(np.sum(np.square(spikes),1),1)
+# 		#spikes_pca2 = np.concatenate((spikes_pca,amp_vals,energy_vals),axis = 1)
+# 		scaler = MinMaxScaler()
+#		spikes_pca3 = scaler.fit_transform(spikes_pca2)
+		
+		#Perform kmeans clustering on downsampled data
+		print("\t Performing clustering of data.")
 		rand_ind = np.random.randint(len(spikes),size=(100000,))
+# 		rand_spikes = list(spikes_pca3[rand_ind,:])
 		rand_spikes = list(np.array(spikes)[rand_ind])
 		print('\t Performing fitting.')
 		kmeans = KMeans(n_clusters=clust_num, random_state=0).fit(rand_spikes)
+# 		gm = GaussianMixture(n_components=clust_num).fit(rand_spikes)
 		print('\t Performing label prediction.')
+# 		labels = kmeans.predict(spikes_pca2)
 		labels = kmeans.predict(spikes)
+# 		labels = gm.predict(spikes_pca3)
+# 		labels = gm.predict(spikes)
 		print('\t Now testing/plotting clusters.')
 		violations = []
 		any_good = 0
@@ -571,17 +595,18 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			try:
 				ind_good = [int(ind_good[i]) for i in range(len(ind_good))]
 				clust_stats[np.array(ind_good),4] = 1
-				comb_loop = 1
-				while comb_loop == 1:
-					if len(ind_good) > 1:
-						combine_spikes = input("\t Do all of these spikes come from the same neuron (y/n)? ")
-						if combine_spikes != 'y' and combine_spikes != 'n':
-							print("\t Error, please enter a valid value.")
-						else:
-							comb_loop = 0
-					else:
-						combine_spikes = 'y'
-						comb_loop = 0
+				combine_spikes = 'n'
+# 				comb_loop = 1
+# 				while comb_loop == 1:
+# 					if len(ind_good) > 1:
+# 						combine_spikes = input("\t Do all of these spikes come from the same neuron (y/n)? ")
+# 						if combine_spikes != 'y' and combine_spikes != 'n':
+# 							print("\t Error, please enter a valid value.")
+# 						else:
+# 							comb_loop = 0
+# 					else:
+# 						combine_spikes = 'y'
+# 						comb_loop = 0
 				for ig in ind_good:
 					peak_ind = list(np.where(labels == ig)[0])
 					if combine_spikes == 'y':
@@ -618,7 +643,8 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 	return neuron_spike_ind
 
 @jit(forceobj=True)
-def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,cut_percentile):
+def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
+						cut_percentile,dir_save,clust_ind):
 	"""This function performs template-matching to pull out potential spikes.
 	INPUTS:
 		- all_spikes
@@ -626,10 +652,16 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,cut_
 		- num_pts_left
 		- num_pts_right
 		- cut_percentile
+		- dir_save - directory of unit's storage data
+		- clust_ind
 	OUTPUTS:
 		- potential_spikes
 		- good_ind
 	"""
+	template_dir = dir_save + 'template_matching/'
+	if os.path.isdir(template_dir) == False:
+		os.mkdir(template_dir)
+	
 	#Grab templates
 	print("\t Preparing Data for Template Matching")
 	peak_val = np.abs(all_spikes[:,num_pts_left])
@@ -640,17 +672,27 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,cut_
 	num_types = np.shape(spike_templates)[0]
 	good_ind = []
 	print("\t Performing Template Comparison.")
+	#Plot a histogram of the scores and save to the tampleate_matching dir
+	fig = plt.figure(figsize=(20,20))
 	for i in range(num_types):
 		#Template correlation
 		spike_mat = np.multiply(np.ones(np.shape(norm_spikes)),spike_templates[i,:])
 		dist = np.sqrt(np.sum(np.square(np.subtract(norm_spikes,spike_mat)),1))
 		num_peaks = [len(find_peaks(norm_spikes[s],0.5)[0]) + len(find_peaks(-1*norm_spikes[s],0.5)[0]) for s in range(len(norm_spikes))]
 		score = dist*num_peaks
+		plt.subplot(2,num_types,i + 1)
+		plt.hist(score,100)
+		plt.xlabel('Score = distance*peak_count')
+		plt.ylabel('Number of occurrences')
+		plt.title('Scores in comparison to template #' + str(i))
+		plt.subplot(2,num_types,i + 1 + num_types)
+		plt.plot(spike_templates[i,:])
+		plt.title('Template #' + str(i))
 		percentile = np.percentile(score,cut_percentile)
-# 		score_chop = dist[np.where(score < percentile)[0]]
-# 		percentile = np.percentile(score_chop,10)
 		good_i = np.where(score < percentile)[0]
 		good_ind.extend(list(good_i))
+	fig.savefig(template_dir + 'template_matching_results_cluster' + str(clust_ind) + '.png',dpi=100)
+	plt.close(fig)
 	good_ind = list(np.unique(good_ind))
 	potential_spikes = [all_spikes[g_i] for g_i in good_ind]
 	
