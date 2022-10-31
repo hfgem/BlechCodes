@@ -14,8 +14,10 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import MinMaxScaler
+from scipy.fftpack import rfft, fftfreq
 import tables, tqdm, os, csv, time, sys, itertools
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from numba import jit
 import functions.hdf5_handling as h5
 
@@ -50,8 +52,7 @@ def run_spike_sort(data_dir):
 	sort_hf5_dir = dir_save + sort_hf5_name
 	if os.path.isfile(sort_hf5_dir) == False:
 		sort_hf5 = tables.open_file(sort_hf5_dir, 'w', title = sort_hf5_dir[-1])
-		sort_hf5.create_group('/','sorted_spikes')
-		sort_hf5.create_group('/','sorted_spikes_bin')
+		sort_hf5.create_group('/','sorted_units')
 		sort_hf5.close()
 	
 	#Perform sorting
@@ -289,59 +290,55 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 				del p_i_l, p_i_r, data_chunk_lengths, too_short, keep_ind
 				#Cluster all spikes first to get rid of noise
 				print("\t Performing Clustering to Remove Noise (First Pass)")
-				sort_ind = spike_clust(all_spikes, all_peaks, 
+				sorted_peak_ind, waveform_ind = spike_clust(all_spikes, all_peaks, 
 											 clust_num, i, dir_save, axis_labels, 
 											 viol_1, viol_2, 'noise_removal', segment_times,
 											 segment_names, dig_in_times, dig_in_names,
 											 sampling_rate, re_sort='y')
-				sorted_peak_ind = [list(np.array(all_peaks)[sort_ind[i]]) for i in range(len(sort_ind))]
 				good_spikes = []
-				good_ind = []
+				good_ind = [] #List of lists with good indices in groupings
+				good_all_spikes_ind = [] #indices aligned with "all_spikes"
 				print("\t Performing Template Matching to Further Clean")
 				#FUTURE IMPROVEMENT NOTE: Add csv storage of indices for further speediness if re-processing in future
-				for g_i in range(len(sort_ind)):
+				for g_i in range(len(sorted_peak_ind)):
 					print("\t Template Matching Sorted Group " + str(g_i))
 					s_i = sorted_peak_ind[g_i] #Original indices
-					s_s_i = sort_ind[g_i] #Sorted set indices
-					sort_spikes = np.array(all_spikes)[s_s_i]
+					p_i = waveform_ind[g_i]
+					sort_spikes = np.array(all_spikes)[p_i]
 					g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,
 										   num_pts_left,num_pts_right,
 										   threshold_percentile,unit_dir,g_i)
-					good_spikes.extend(g_spikes) #Store the good spike profiles
-					good_ind.extend(list(np.array(s_i)[g_ind])) #Store the original indices
+					good_spikes.append(g_spikes) #Store the good spike profiles
+					good_ind.append(list(np.array(s_i)[g_ind])) #Store the original indices
+					good_all_spikes_ind.append(list(np.array(p_i)[g_ind]))
 				del g_i, s_i
 				print("\t Performing Clustering of Remaining Waveforms (Second Pass)")
-				
-				sort_ind_2 = spike_clust(good_spikes, good_ind, 
+				sorted_spike_inds = [] #grouped indices of spike clusters
+				sorted_wav_inds = [] #grouped indices of spike waveforms from "all_spikes"
+				for g_i in range(len(good_ind)): #Run through each set of potential clusters and perform cleanup clustering
+					print("\t Sorting Template Matched Group " + str(g_i))
+					sort_ind_2, waveform_ind_2 = spike_clust(good_spikes[g_i], good_ind[g_i], 
 											 clust_num_fin, i, dir_save, axis_labels, 
-											 viol_1, viol_2, 'final', segment_times,
+											 viol_1, viol_2, 'final_' + str(g_i), segment_times,
 											 segment_names, dig_in_times, dig_in_names,
 											 sampling_rate)
+					good_as_ind = good_all_spikes_ind[g_i]
+					sorted_spike_inds.extend(sort_ind_2)
+					for w_i in range(len(waveform_ind_2)):
+						sorted_wav_inds.append(list(np.array(good_as_ind)[waveform_ind_2[w_i]]))
 				
 				#Save sorted spike indices and profiles
-				final_spikes = []
-				final_ind = []
-				for g_i in range(len(sort_ind_2)):
-					s_i = sort_ind_2[g_i]
-					spikes_i = [list(good_spikes[s_i_i]) for s_i_i in s_i]
-					final_spikes.append(spikes_i)
-					final_ind.append(list(np.array(good_ind)[s_i]))
-				num_neur_sort = len(final_ind)
-				neuron_spikes = np.zeros((num_neur_sort,num_time))
+				num_neur_sort = len(sorted_spike_inds)
+				sorted_spike_wavs = []
+				for g_i in range(num_neur_sort):
+					s_i = sorted_wav_inds[g_i]
+					spikes_i = [list(all_spikes[s_ii]) for s_ii in s_i]
+					sorted_spike_wavs.append(list(spikes_i))
 				if num_neur_sort > 0:
-					neuron_spikes_bin = np.zeros((num_neur_sort,num_time))
-					for n_i in range(num_neur_sort):
-						for pi in range(len(final_ind[n_i])):
-							p_i = final_ind[n_i][pi]
-							p_i_l = p_i - num_pts_left
-							p_i_r = p_i + num_pts_right
-							points = np.arange(p_i_l,p_i_r)
-							neuron_spikes[n_i,points] = final_spikes[n_i][pi]
-							neuron_spikes_bin[n_i,p_i] = 1
 					#Save results
 					print("\t Saving final results to .h5 file.")
 					sort_hf5 = tables.open_file(sort_hf5_dir, 'r+', title = sort_hf5_dir[-1])
-					existing_nodes = [int(i.name.split('_')[-1]) for i in sort_hf5.list_nodes('/sorted_spikes',classname='Array')]
+					existing_nodes = [int(i.__str__().split('_')[-1].split(' ')[0]) for i in sort_hf5.list_nodes('/sorted_units',classname='Group')]
 					try:
 						existing_nodes.index(i)
 						already_stored = 1
@@ -349,17 +346,19 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 						already_stored = 0
 					if already_stored == 1:
 						#Remove the existing node to be able to save anew
-						exec('sort_hf5.root.sorted_spikes.unit_'+str(i)+'._f_remove()')
-						exec('sort_hf5.root.sorted_spikes_bin.unit_'+str(i)+'._f_remove()')
+						exec('sort_hf5.root.sorted_units.unit_'+str(i)+'._f_remove(recursive=True,force=True)')
 					atom = tables.FloatAtom()
 					u_int = str(i)
-					sort_hf5.create_earray('/sorted_spikes',f'unit_{u_int}',atom,(0,)+np.shape(neuron_spikes))
-					spikes_expanded = np.expand_dims(neuron_spikes,0)
-					exec('sort_hf5.root.sorted_spikes.unit_'+str(i)+'.append(spikes_expanded)')
-					atom = tables.IntAtom()
-					sort_hf5.create_earray('/sorted_spikes_bin',f'unit_{u_int}',atom,(0,)+np.shape(neuron_spikes_bin))
-					spikes_expanded = np.expand_dims(neuron_spikes_bin,0)
-					exec('sort_hf5.root.sorted_spikes_bin.unit_'+str(i)+'.append(spikes_expanded)')
+					sort_hf5.create_group('/sorted_units', f'unit_{u_int}')
+					sort_hf5.create_group(f'/sorted_units/unit_{u_int}','waveforms')
+					sort_hf5.create_group(f'/sorted_units/unit_{u_int}','times')
+					for s_w in range(len(sorted_spike_wavs)):				
+						sort_hf5.create_earray(f'/sorted_units/unit_{u_int}/waveforms','neuron_' + str(s_w),atom,(0,)+np.shape(sorted_spike_wavs[s_w]))
+						sort_hf5.create_earray(f'/sorted_units/unit_{u_int}/times','neuron_' + str(s_w),atom,(0,)+np.shape(sorted_spike_inds[s_w]))
+						spike_wavs_expanded = np.expand_dims(sorted_spike_wavs[s_w],0)
+						exec('sort_hf5.root.sorted_units.unit_'+str(i)+'.waveforms.neuron_'+str(s_w)+'.append(spike_wavs_expanded)')
+						spike_inds_expanded = np.expand_dims(sorted_spike_inds[s_w],0)
+						exec('sort_hf5.root.sorted_units.unit_'+str(i)+'.times.neuron_'+str(s_w)+'.append(spike_inds_expanded)')
 					sort_hf5.close()
 					#Save unit index to sort csv
 					if os.path.isfile(sorted_units_csv) == False:
@@ -411,7 +410,9 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		sampling_rate = number of samples per second
 		re_sort = whether to re-sort if data has been previously sorted.
 	Outputs:
-		neuron_spike_ind = indices of spikes selected as true."""
+		neuron_spike_ind = indices of spikes selected as true - the indices
+						reflect the parsed data indices.
+		waveform_ind = indices of waveforms, aka index in the list 'spikes'"""
 	
 	#Create storage folder
 	sort_neur_dir = sort_data_dir + 'unit_' + str(i) + '/'
@@ -421,8 +422,9 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 	if os.path.isdir(sort_neur_type_dir) == False:
 		os.mkdir(sort_neur_type_dir)
 	sort_neur_stats_csv = sort_neur_type_dir + 'sort_stats.csv'
-	sort_neur_type_csv = sort_neur_type_dir + 'neuron_spike_ind.csv'
-	if os.path.isfile(sort_neur_type_csv) == False:
+	sort_neur_ind_csv = sort_neur_type_dir + 'neuron_spike_ind.csv'
+	sort_neur_wav_csv = sort_neur_type_dir + 'neuron_spike_wav.csv'
+	if os.path.isfile(sort_neur_ind_csv) == False:
 		re_sort = 'y'
 	else:
 		if re_sort != 'n':
@@ -440,36 +442,63 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		PSTH_right_ms = 2000
 		center = np.where(axis_labels == 0)[0]
 		
-# 		#Project data to lower dimensions
-# 		print("\t Projecting data to lower dimensions")
-# 		pca = PCA(n_components = 7)
-# 		spikes_pca = pca.fit_transform(spikes)
-# 		#Grab spike amplitude and energy of spike to add to spikes_pca
-# 		amp_vals = np.array([np.abs(spikes[i][center]) for i in range(len(spikes))])
-# 		spikes_pca2 = np.concatenate((spikes_pca,amp_vals),axis=1)
-# 		#energy_vals = np.expand_dims(np.sum(np.square(spikes),1),1)
-# 		#spikes_pca2 = np.concatenate((spikes_pca,amp_vals,energy_vals),axis = 1)
-# 		scaler = MinMaxScaler()
-#		spikes_pca3 = scaler.fit_transform(spikes_pca2)
+ 		#Project data to lower dimensions
+		print("\t Projecting data to lower dimensions")
+		pca = PCA(n_components = 3)
+		spikes_pca = pca.fit_transform(spikes)
+		#Grab spike amplitude and energy of spike to add to spikes_pca
+		amp_vals = np.array([np.abs(spikes[i][center]) for i in range(len(spikes))])
+		energy_vals = np.expand_dims(np.sum(np.square(spikes),1),1)
 		
 		#Perform kmeans clustering on downsampled data
 		print("\t Performing clustering of data.")
 		rand_ind = np.random.randint(len(spikes),size=(100000,))
-# 		rand_spikes = list(spikes_pca3[rand_ind,:])
 		rand_spikes = list(np.array(spikes)[rand_ind])
 		print('\t Performing fitting.')
 		kmeans = KMeans(n_clusters=clust_num, random_state=0).fit(rand_spikes)
 # 		gm = GaussianMixture(n_components=clust_num).fit(rand_spikes)
 		print('\t Performing label prediction.')
-# 		labels = kmeans.predict(spikes_pca2)
 		labels = kmeans.predict(spikes)
-# 		labels = gm.predict(spikes_pca3)
+		centers = kmeans.cluster_centers_
+		center_pca = pca.fit_transform(centers)
+		#std_centers = []
+		#for li in range(clust_num):
+		#	ind_labelled = np.where(labels == li)[0]
+		#	labelled_spikes_array = np.array(spikes)[ind_labelled]
+		#	dist = np.sqrt(np.sum((labelled_spikes_array - np.multiply(np.ones(np.shape(labelled_spikes_array)),centers[li]))**2,1))
+		#	std_centers.append(np.std(dist))
 # 		labels = gm.predict(spikes)
 		print('\t Now testing/plotting clusters.')
 		violations = []
 		any_good = 0
-		possible_colors = ['b','g','r','c','m','k','y'] #Colors for plotting different tastant deliveries
+		possible_colors = ['b','g','r','c','m','k','y','brown','pink','olive','gray'] #Colors for plotting different tastant deliveries
 		clust_stats = np.zeros((clust_num,5))
+		#Create cluster projection plot
+		clust_fig = plt.figure(figsize=(15,15))
+		ax = clust_fig.add_subplot(111, projection='3d')
+		ax2 = clust_fig.add_subplot(333)
+		ax3 = clust_fig.add_subplot(331)
+		ax4 = clust_fig.add_subplot(339, projection='3d')
+		for li in range(clust_num):
+			ind_labelled = np.where(labels == li)[0]
+			pca_labelled = spikes_pca[ind_labelled]
+			pca_labelled_2 = spikes_pca[np.where(labels == clust_num - li)[0]]
+			#3D plot
+			ax.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
+				  c=possible_colors[li],label='cluster '+str(li))
+			#2D plot top
+			ax2.scatter(pca_labelled[:,0],pca_labelled[:,1],
+			   c=possible_colors[li],label='cluster '+str(li),alpha=0.2)
+			#2D plot bottom
+			ax3.scatter(pca_labelled_2[:,0],pca_labelled_2[:,1],
+			   c=possible_colors[clust_num - li],label='cluster '+str(clust_num - li),alpha=0.2)
+			#Centroid 3D plot
+			ax4.scatter(center_pca[li,0],center_pca[li,1],center_pca[li,2],
+			   c = possible_colors[li])
+		ax.legend(loc='lower left')
+		clust_fig.savefig(sort_neur_type_dir + 'cluster_projections.png', dpi=100)
+		plt.close(clust_fig)
+		#Create waveform/histogram/PSTH plots
 		for li in range(clust_num):
 			ind_labelled = np.where(labels == li)[0]
 			spikes_labelled = np.array(spikes)[ind_labelled]
@@ -551,12 +580,25 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					plt.legend()
 					plt.title('Cluster ' + str(li) + ' Spike Time Histogram')
 					#Histogram of time of spike occurrence zoomed to taste delivery
-					plt.subplot(3,2,5)
-					plt.hist(peak_ind,bins=2*len(all_dig_in_times))
-					for d_i in range(len(dig_in_names)):
-						[plt.axvline(dig_in_times[d_i][i],c=possible_colors[d_i],alpha=0.2, label=dig_in_names[d_i]) for i in range(len(dig_in_times[d_i]))]
-					plt.xlim((min(all_dig_in_times)- sampling_rate,max(all_dig_in_times) + sampling_rate))
-					plt.title('Cluster ' + str(li) + ' Spike Time Histogram - Taste Interval')
+					#plt.subplot(3,2,5)
+					#plt.hist(peak_ind,bins=2*len(all_dig_in_times))
+					#for d_i in range(len(dig_in_names)):
+					#	[plt.axvline(dig_in_times[d_i][i],c=possible_colors[d_i],alpha=0.2, label=dig_in_names[d_i]) for i in range(len(dig_in_times[d_i]))]
+					#plt.xlim((min(all_dig_in_times)- sampling_rate,max(all_dig_in_times) + sampling_rate))
+					#plt.title('Cluster ' + str(li) + ' Spike Time Histogram - Taste Interval')
+					#Fourier Transform of Average Waveform For Cluster
+					fourier = rfft(mean_bit)
+					freqs = fftfreq(len(mean_bit), d=1/sampling_rate)
+					fourier_peaks = find_peaks(fourier)[0]
+					peak_freqs = freqs[fourier_peaks]
+					peak_freqs = peak_freqs[peak_freqs>0]
+					plt.plot(freqs,fourier)
+					for p_f in range(len(peak_freqs)):
+						plt.axvline(peak_freqs[p_f],color=possible_colors[p_f],label=str(round(peak_freqs[p_f],2)))
+					plt.xlim((0,max(freqs)))
+					plt.legend()
+					plt.xlabel('Frequency (Hz)')
+					plt.title('Fourier Transform of Mean Waveform')
 					#PSTH figure
 					plt.subplot(3,2,6)
 # 					for p_i in range(len(dig_in_times)): #Plot individual instances
@@ -578,6 +620,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					plt.close(fig)
 					clust_stats[li,0:4] = np.array([len(spikes_labelled),viol_1_percent,viol_2_percent,avg_fr])
 		neuron_spike_ind = []
+		neuron_waveform_ind = []
 		if any_good > 0:
 			print("\n \t INPUT REQUESTED: Please navigate to the directory " + sort_neur_type_dir)
 			print("\t Inspect the output visuals of spike clusters, and decide which you'd like to keep.")
@@ -591,39 +634,83 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			if keep_any == 'y':	
 				print("\n \t INPUT REQUESTED: Please enter a comma-separated list of indices you'd like to keep (ex. 0,4,6)")
 				ind_good = input("\t Keep-indices: ").split(',')
-		
+####THERE IS AN ERROR IN THIS TRY STATEMENT THAT NEEDS TO BE FIXED####
 			try:
 				ind_good = [int(ind_good[i]) for i in range(len(ind_good))]
 				clust_stats[np.array(ind_good),4] = 1
 				combine_spikes = 'n'
-# 				comb_loop = 1
-# 				while comb_loop == 1:
-# 					if len(ind_good) > 1:
-# 						combine_spikes = input("\t Do all of these spikes come from the same neuron (y/n)? ")
-# 						if combine_spikes != 'y' and combine_spikes != 'n':
-# 							print("\t Error, please enter a valid value.")
-# 						else:
-# 							comb_loop = 0
-# 					else:
-# 						combine_spikes = 'y'
-# 						comb_loop = 0
-				for ig in ind_good:
-					peak_ind = list(np.where(labels == ig)[0])
-					if combine_spikes == 'y':
-						neuron_spike_ind.extend(peak_ind)
+				comb_loop = 1
+				while comb_loop == 1:
+					if len(ind_good) > 1:
+						combine_spikes = input("\t Do any of these spikes come from the same neuron (y/n)? ")
+						if combine_spikes != 'y' and combine_spikes != 'n':
+							print("\t Error, please enter a valid value.")
+						else:
+							#Find if there are any that need to be combined into 1
+							comb_loop = 0
+							which_comb_loop = 1
+							which_comb = []
+							if combine_spikes == 'y':
+								 while which_comb_loop == 1:
+									 which_together = input("\t Which indices belong together [comma separated list]? ").split(',')
+									 try:
+										  together_ind = [int(which_together[i]) for i in range(len(which_together))]
+										  which_comb.append(together_ind)
+										  cont_loop_2 = 1
+										  while cont_loop_2 == 1:
+											  continue_statement = input("\t Are there more indices which belong together (y/n)? ")
+											  if continue_statement != 'y' and continue_statement != 'n':
+												  print("\t Error, try again.")
+											  elif continue_statement == 'y':
+												  cont_loop_2 = 0
+											  else:
+												  cont_loop_2 = 0
+												  which_comb_loop = 0
+									 except:
+										 print("Error, try again.")
+								 all_to_combine = []
+								 for c_i in range(len(which_comb)):
+									 all_to_combine.extend(which_comb[c_i])
+								 all_to_combine = np.array(all_to_combine)
+								 not_to_combine = np.setdiff1d(np.array(ind_good),all_to_combine)
+								 ind_good = []
+								 if len(not_to_combine) > 0:
+									  ind_good.append(list(not_to_combine))
+								 for w_i in range(len(which_comb)):
+									 ind_good.append(which_comb[w_i])
 					else:
+ 						combine_spikes = 'y'
+ 						comb_loop = 0
+				for ig in ind_good:
+					if np.size(ig) > 1:
+						peak_ind = []
+						wav_ind = []
+						for ind_g in ig:
+							wav_ind.extend(list(np.where(labels == ind_g)[0]))
+							peak_ind.extend(list(np.array(peak_indices)[np.where(labels == ind_g)[0]]))
 						neuron_spike_ind.append(peak_ind)
-				if combine_spikes == 'y':
-					neuron_spike_ind = [neuron_spike_ind]
+						neuron_waveform_ind.append(wav_ind)
+					else:
+						wav_ind = []
+						wav_ind.extend(list(np.where(labels == ig)[0]))
+						neuron_waveform_ind.append(wav_ind)
+						peak_ind = []
+						peak_ind.extend(list(np.array(peak_indices)[np.where(labels == ig)[0]]))
+						neuron_spike_ind.append(peak_ind)
 			except:
 				print("\t No spikes selected.")
 		else:
 			print("\t No good clusters.")
-		#Save to CSV
-		with open(sort_neur_type_csv, 'w') as f:
+		#Save to CSV spike indices
+		with open(sort_neur_ind_csv, 'w') as f:
 			# using csv.writer method from CSV package
 			write = csv.writer(f)
 			write.writerows(neuron_spike_ind)
+		#Save to CSV waveform indices (index within group)
+		with open(sort_neur_wav_csv, 'w') as f:
+			# using csv.writer method from CSV package
+			write = csv.writer(f)
+			write.writerows(neuron_waveform_ind)
 		#Save stats to CSV
 		with open(sort_neur_stats_csv, 'w') as f:
 			write = csv.writer(f,delimiter=',')
@@ -631,7 +718,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			write.writerows(clust_stats)
 	else:
 		print("\t Importing previously sorted data.")
-		with open(sort_neur_type_csv, newline='') as f:
+		with open(sort_neur_ind_csv, newline='') as f:
 			reader = csv.reader(f)
 			neuron_spike_ind_csv = list(reader)
 		neuron_spike_ind = []
@@ -639,12 +726,20 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			str_list = neuron_spike_ind_csv[i_c]
 			int_list = [int(str_list[i]) for i in range(len(str_list))]
 			neuron_spike_ind.append(int_list)
+		with open(sort_neur_wav_csv, newline='') as f:
+			reader = csv.reader(f)
+			neuron_spike_wav_csv = list(reader)
+		neuron_waveform_ind = []
+		for i_c in range(len(neuron_spike_wav_csv)):
+			str_list = neuron_spike_wav_csv[i_c]
+			int_list = [int(str_list[i]) for i in range(len(str_list))]
+			neuron_waveform_ind.append(int_list)
 			
-	return neuron_spike_ind
+	return neuron_spike_ind, neuron_waveform_ind
 
 @jit(forceobj=True)
 def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
-						cut_percentile,dir_save,clust_ind):
+						cut_percentile,unit_dir,clust_ind):
 	"""This function performs template-matching to pull out potential spikes.
 	INPUTS:
 		- all_spikes
@@ -652,13 +747,13 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 		- num_pts_left
 		- num_pts_right
 		- cut_percentile
-		- dir_save - directory of unit's storage data
+		- unit_dir - directory of unit's storage data
 		- clust_ind
 	OUTPUTS:
 		- potential_spikes
 		- good_ind
 	"""
-	template_dir = dir_save + 'template_matching/'
+	template_dir = unit_dir + 'template_matching/'
 	if os.path.isdir(template_dir) == False:
 		os.mkdir(template_dir)
 	
@@ -680,16 +775,22 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 		dist = np.sqrt(np.sum(np.square(np.subtract(norm_spikes,spike_mat)),1))
 		num_peaks = [len(find_peaks(norm_spikes[s],0.5)[0]) + len(find_peaks(-1*norm_spikes[s],0.5)[0]) for s in range(len(norm_spikes))]
 		score = dist*num_peaks
+		percentile = np.percentile(score,cut_percentile)
+		#Plot the score results and determined cutoff together
 		plt.subplot(2,num_types,i + 1)
-		plt.hist(score,100)
+		hist_counts = plt.hist(score,100)
+		hist_peaks = find_peaks(hist_counts[0])
+		cutoff_val = min(hist_counts[1][hist_peaks[0][0]+1],percentile)
+		plt.axvline(cutoff_val,color='r',linestyle='dashed')
+		plt.axvline(percentile,color='g',linestyle='dashed')
 		plt.xlabel('Score = distance*peak_count')
 		plt.ylabel('Number of occurrences')
 		plt.title('Scores in comparison to template #' + str(i))
 		plt.subplot(2,num_types,i + 1 + num_types)
 		plt.plot(spike_templates[i,:])
 		plt.title('Template #' + str(i))
-		percentile = np.percentile(score,cut_percentile)
-		good_i = np.where(score < percentile)[0]
+		#good_i = np.where(score < percentile)[0]
+		good_i = np.where(score < cutoff_val)[0]
 		good_ind.extend(list(good_i))
 	fig.savefig(template_dir + 'template_matching_results_cluster' + str(clust_ind) + '.png',dpi=100)
 	plt.close(fig)
