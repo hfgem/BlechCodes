@@ -319,7 +319,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					print("\t Sorting Template Matched Group " + str(g_i))
 					sort_ind_2, waveform_ind_2 = spike_clust(good_spikes[g_i], good_ind[g_i], 
 											 clust_num_fin, i, dir_save, axis_labels, 
-											 viol_1, viol_2, 'final_' + str(g_i), segment_times,
+											 viol_1, viol_2, 'final/unit_' + str(g_i), segment_times,
 											 segment_names, dig_in_times, dig_in_names,
 											 sampling_rate)
 					good_as_ind = good_all_spikes_ind[g_i]
@@ -554,14 +554,14 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					#CREATE FIGURE
 					fig = plt.figure(figsize=(30,20))
 					#Plot average waveform
-					plt.subplot(3,2,1)
+					plt.subplot(3,3,1)
 					spike_bit = spikes_labelled[np.random.randint(0,len(spikes_labelled),size=(10000,))]
 					mean_bit = np.mean(spike_bit,axis=0)
 					std_bit = np.std(spike_bit,axis=0)
 					plt.errorbar(axis_labels,mean_bit,yerr=std_bit,xerr=None)
 					plt.title('Cluster ' + str(li) + ' Average Waveform + Std Range')
 					#Plot spike overlay
-					plt.subplot(3,2,2)
+					plt.subplot(3,3,2)
 					for si in plot_ind:
 						try:
 							plt.plot(axis_labels,spikes_labelled[si],'-b',alpha=0.1)
@@ -570,23 +570,24 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					plt.ylabel('mV')
 					plt.title('Cluster ' + str(li) + ' x' + str(plot_num_vis) + ' Waveforms')
 					#Find ISI distribution and plot
-					plt.subplot(3,2,3)
+					plt.subplot(3,3,3)
 					plt.hist(peak_diff[np.where(peak_diff < sampling_rate)[0]],bins=min(100,round(len(peak_diff)/10)))
 					plt.title('Cluster ' + str(li) + ' ISI Distribution')
 					#Histogram of time of spike occurrence
-					plt.subplot(3,2,4)
+					plt.subplot(3,3,4)
 					plt.hist(peak_ind,bins=min(100,round(len(peak_ind)/10)))
 					[plt.axvline(segment_times[i],label=segment_names[i],alpha=0.2,c=possible_colors[i]) for i in range(len(segment_names))]
 					plt.legend()
 					plt.title('Cluster ' + str(li) + ' Spike Time Histogram')
 					#Histogram of time of spike occurrence zoomed to taste delivery
-					#plt.subplot(3,2,5)
-					#plt.hist(peak_ind,bins=2*len(all_dig_in_times))
-					#for d_i in range(len(dig_in_names)):
-					#	[plt.axvline(dig_in_times[d_i][i],c=possible_colors[d_i],alpha=0.2, label=dig_in_names[d_i]) for i in range(len(dig_in_times[d_i]))]
-					#plt.xlim((min(all_dig_in_times)- sampling_rate,max(all_dig_in_times) + sampling_rate))
-					#plt.title('Cluster ' + str(li) + ' Spike Time Histogram - Taste Interval')
+					plt.subplot(3,3,5)
+					plt.hist(peak_ind,bins=2*len(all_dig_in_times))
+					for d_i in range(len(dig_in_names)):
+						[plt.axvline(dig_in_times[d_i][i],c=possible_colors[d_i],alpha=0.2, label=dig_in_names[d_i]) for i in range(len(dig_in_times[d_i]))]
+					plt.xlim((min(all_dig_in_times)- sampling_rate,max(all_dig_in_times) + sampling_rate))
+					plt.title('Cluster ' + str(li) + ' Spike Time Histogram - Taste Interval')
 					#Fourier Transform of Average Waveform For Cluster
+					plt.subplot(3,3,6)
 					fourier = rfft(mean_bit)
 					freqs = fftfreq(len(mean_bit), d=1/sampling_rate)
 					fourier_peaks = find_peaks(fourier)[0]
@@ -600,7 +601,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					plt.xlabel('Frequency (Hz)')
 					plt.title('Fourier Transform of Mean Waveform')
 					#PSTH figure
-					plt.subplot(3,2,6)
+					plt.subplot(3,3,7)
 # 					for p_i in range(len(dig_in_times)): #Plot individual instances
 # 						plt.plot(PSTH_x_labels,PSTH_mat[p_i,:],alpha=0.1)
 					for d_i in range(len(dig_in_times)):
@@ -759,9 +760,13 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 	
 	#Grab templates
 	print("\t Preparing Data for Template Matching")
+#####CHANGES IN PROGRESS - NEED TO FIGURE OUT WAVEFORM REMOVAL CORRECTLY#####
+	num_spikes = len(all_spikes)
 	peak_val = np.abs(all_spikes[:,num_pts_left])
 	peak_val = np.expand_dims(peak_val,1)
 	norm_spikes = np.divide(all_spikes,peak_val) #Normalize the data
+	num_peaks = [len(find_peaks(norm_spikes[s],0.5)[0]) + len(find_peaks(-1*norm_spikes[s],0.5)[0]) for s in range(num_spikes)]
+	remaining_ind = list(np.arange(num_spikes))
 	#Grab templates of spikes
 	spike_templates = generate_templates(sampling_rate,num_pts_left,num_pts_right)
 	num_types = np.shape(spike_templates)[0]
@@ -770,28 +775,54 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 	#Plot a histogram of the scores and save to the tampleate_matching dir
 	fig = plt.figure(figsize=(20,20))
 	for i in range(num_types):
-		#Template correlation
-		spike_mat = np.multiply(np.ones(np.shape(norm_spikes)),spike_templates[i,:])
-		dist = np.sqrt(np.sum(np.square(np.subtract(norm_spikes,spike_mat)),1))
-		num_peaks = [len(find_peaks(norm_spikes[s],0.5)[0]) + len(find_peaks(-1*norm_spikes[s],0.5)[0]) for s in range(len(norm_spikes))]
-		score = dist*num_peaks
+		#Template distance scores
+		spike_mat = np.multiply(np.ones(np.shape(norm_spikes[remaining_ind,:])),spike_templates[i,:])
+		dist = np.sqrt(np.sum(np.square(np.subtract(norm_spikes[remaining_ind,:],spike_mat)),1))
+		num_peaks_i = num_peaks[remaining_ind]
+		score = dist*num_peaks_i
 		percentile = np.percentile(score,cut_percentile)
-		#Plot the score results and determined cutoff together
+		#Calculate the first peak location and generate a new mean template
+		hist_counts = np.histogram(score,100)
+		hist_peaks = find_peaks(hist_counts[0])
+		first_peak_value = hist_counts[1][hist_peaks[0][0]]
+		try:
+			second_peak_value = hist_counts[1][hist_peaks[0][1]]
+		except:
+			second_peak_value = percentile
+		halfway_value = (first_peak_value + second_peak_value)/2
+		#plt.axvline(first_peak_value,color='r')
+		#plt.axvline(second_peak_value,color='r')
+		#plt.axvline(halfway_value,color='b')
+		new_template_waveform_ind = remaining_ind[list(np.where(score < halfway_value)[0])]
+		new_template = np.mean(norm_spikes[new_template_waveform_ind,:],axis=0)
+		#Calculate new template distance scores
+		spike_mat_2 = np.multiply(np.ones(np.shape(norm_spikes[remaining_ind,:])),new_template)
+		dist_2 = np.sqrt(np.sum(np.square(np.subtract(norm_spikes[remaining_ind,:],spike_mat_2)),1))
+		score_2 = dist_2*num_peaks_i
+		percentile = np.percentile(score_2,cut_percentile)
+		#Calculate again peak values
 		plt.subplot(2,num_types,i + 1)
 		hist_counts = plt.hist(score,100)
 		hist_peaks = find_peaks(hist_counts[0])
-		cutoff_val = min(hist_counts[1][hist_peaks[0][0]+1],percentile)
+		first_peak_value = hist_counts[1][hist_peaks[0][0]+1]
+		try:
+			second_peak_value = hist_counts[1][hist_peaks[0][1]+1]
+		except:
+			second_peak_value = percentile
+		cutoff_val = min(first_peak_value,second_peak_value)
+		#Plot the score results and determined cutoff together
 		plt.axvline(cutoff_val,color='r',linestyle='dashed')
 		plt.axvline(percentile,color='g',linestyle='dashed')
 		plt.xlabel('Score = distance*peak_count')
 		plt.ylabel('Number of occurrences')
 		plt.title('Scores in comparison to template #' + str(i))
 		plt.subplot(2,num_types,i + 1 + num_types)
-		plt.plot(spike_templates[i,:])
+		plt.plot(new_template)
 		plt.title('Template #' + str(i))
 		#good_i = np.where(score < percentile)[0]
-		good_i = np.where(score < cutoff_val)[0]
-		good_ind.extend(list(good_i))
+		good_i = remaining_ind[list(np.where(score < cutoff_val)[0])]
+		good_ind.append(good_i)
+		remaining_ind = np.setdiff1d(remaining_ind,good_i)
 	fig.savefig(template_dir + 'template_matching_results_cluster' + str(clust_ind) + '.png',dpi=100)
 	plt.close(fig)
 	good_ind = list(np.unique(good_ind))
@@ -824,17 +855,16 @@ def generate_templates(sampling_rate,num_pts_left,num_pts_right):
 	templates = np.zeros((3,len(x_points)))
 	
 	fast_spike_width = sampling_rate*(1/1000)
-	sd = fast_spike_width/12
+	sd = fast_spike_width/20
 	
 	pos_spike = ss.norm.pdf(x_points, 0, sd)
 	max_pos_spike = max(abs(pos_spike))
-	pos_spike = pos_spike/max_pos_spike + 0.01*np.random.randn(len(pos_spike))
+	pos_spike = pos_spike/max_pos_spike
 	fast_spike = -1*pos_spike
-	reg_spike_bit = ss.gamma.pdf(np.arange(fast_spike_width),5)
+	reg_spike_bit = ss.gamma.pdf(np.arange(fast_spike_width-1),5)
 	peak_reg = find_peaks(reg_spike_bit)[0][0]
-	reg_spike = np.concatenate((0.01*np.random.randn(num_pts_left-peak_reg),-1*reg_spike_bit),axis=0)
-	len_diff = len(x_points) - len(reg_spike)
-	reg_spike = np.concatenate((reg_spike,0.01*np.random.randn(len_diff)))
+	reg_spike = np.concatenate((np.zeros(num_pts_left-peak_reg),-1*reg_spike_bit),axis=0)
+	reg_spike = np.concatenate((reg_spike,np.zeros(len(pos_spike) - len(reg_spike))),axis=0)
 	max_reg_spike = max(abs(reg_spike))
 	reg_spike = reg_spike/max_reg_spike
 	
