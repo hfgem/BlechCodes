@@ -12,7 +12,6 @@ import scipy.stats as ss
 from scipy.signal import find_peaks
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import MinMaxScaler
 from scipy.fftpack import rfft, fftfreq
 import tables, tqdm, os, csv, time, sys, itertools
@@ -20,6 +19,9 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from numba import jit
 import functions.hdf5_handling as h5
+import math
+from scipy.optimize import curve_fit
+from sklearn.svm import SVC
 
 
 def run_spike_sort(data_dir):
@@ -308,9 +310,11 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,
 										   num_pts_left,num_pts_right,
 										   threshold_percentile,unit_dir,g_i)
-					good_spikes.append(g_spikes) #Store the good spike profiles
-					good_ind.append(list(np.array(s_i)[g_ind])) #Store the original indices
-					good_all_spikes_ind.append(list(np.array(p_i)[g_ind]))
+					good_spikes.extend(g_spikes) #Store the good spike profiles
+					s_ind = [list(np.array(s_i)[g_ind[i]]) for i in range(len(g_ind))]
+					p_ind = [list(np.array(p_i)[g_ind[i]]) for i in range(len(g_ind))]
+					good_ind.extend(s_ind) #Store the original indices
+					good_all_spikes_ind.extend(p_ind)
 				del g_i, s_i
 				print("\t Performing Clustering of Remaining Waveforms (Second Pass)")
 				sorted_spike_inds = [] #grouped indices of spike clusters
@@ -418,6 +422,13 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 	sort_neur_dir = sort_data_dir + 'unit_' + str(i) + '/'
 	if os.path.isdir(sort_neur_dir) == False:
 		os.mkdir(sort_neur_dir)
+	try:
+		type_spike.split('/')[1]
+		sort_neur_type_dir = sort_neur_dir + type_spike.split('/')[0] + '/'
+		if os.path.isdir(sort_neur_type_dir) == False:
+			os.mkdir(sort_neur_type_dir)
+	except:
+		dir_exists = 1
 	sort_neur_type_dir = sort_neur_dir + type_spike + '/'
 	if os.path.isdir(sort_neur_type_dir) == False:
 		os.mkdir(sort_neur_type_dir)
@@ -738,7 +749,6 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			
 	return neuron_spike_ind, neuron_waveform_ind
 
-@jit(forceobj=True)
 def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 						cut_percentile,unit_dir,clust_ind):
 	"""This function performs template-matching to pull out potential spikes.
@@ -760,12 +770,11 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 	
 	#Grab templates
 	print("\t Preparing Data for Template Matching")
-#####CHANGES IN PROGRESS - NEED TO FIGURE OUT WAVEFORM REMOVAL CORRECTLY#####
 	num_spikes = len(all_spikes)
 	peak_val = np.abs(all_spikes[:,num_pts_left])
 	peak_val = np.expand_dims(peak_val,1)
 	norm_spikes = np.divide(all_spikes,peak_val) #Normalize the data
-	num_peaks = [len(find_peaks(norm_spikes[s],0.5)[0]) + len(find_peaks(-1*norm_spikes[s],0.5)[0]) for s in range(num_spikes)]
+	num_peaks = np.array([len(find_peaks(norm_spikes[s],0.5)[0]) + len(find_peaks(-1*norm_spikes[s],0.5)[0]) for s in range(num_spikes)])
 	remaining_ind = list(np.arange(num_spikes))
 	#Grab templates of spikes
 	spike_templates = generate_templates(sampling_rate,num_pts_left,num_pts_right)
@@ -790,29 +799,18 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 		except:
 			second_peak_value = percentile
 		halfway_value = (first_peak_value + second_peak_value)/2
-		#plt.axvline(first_peak_value,color='r')
-		#plt.axvline(second_peak_value,color='r')
-		#plt.axvline(halfway_value,color='b')
-		new_template_waveform_ind = remaining_ind[list(np.where(score < halfway_value)[0])]
+		new_template_waveform_ind = list(np.array(remaining_ind)[list(np.where(score < halfway_value)[0])])
 		new_template = np.mean(norm_spikes[new_template_waveform_ind,:],axis=0)
 		#Calculate new template distance scores
 		spike_mat_2 = np.multiply(np.ones(np.shape(norm_spikes[remaining_ind,:])),new_template)
 		dist_2 = np.sqrt(np.sum(np.square(np.subtract(norm_spikes[remaining_ind,:],spike_mat_2)),1))
 		score_2 = dist_2*num_peaks_i
 		percentile = np.percentile(score_2,cut_percentile)
-		#Calculate again peak values
+		#Create subplot to plot histogram and percentile cutoff
 		plt.subplot(2,num_types,i + 1)
-		hist_counts = plt.hist(score,100)
-		hist_peaks = find_peaks(hist_counts[0])
-		first_peak_value = hist_counts[1][hist_peaks[0][0]+1]
-		try:
-			second_peak_value = hist_counts[1][hist_peaks[0][1]+1]
-		except:
-			second_peak_value = percentile
-		cutoff_val = min(first_peak_value,second_peak_value)
-		#Plot the score results and determined cutoff together
-		plt.axvline(cutoff_val,color='r',linestyle='dashed')
-		plt.axvline(percentile,color='g',linestyle='dashed')
+		plt.hist(score_2,150,label='Mean Template Similarity Scores')
+		plt.axvline(percentile,color = 'r', linestyle = '--', label=str(cut_percentile)+'th percentile')
+		plt.legend()
 		plt.xlabel('Score = distance*peak_count')
 		plt.ylabel('Number of occurrences')
 		plt.title('Scores in comparison to template #' + str(i))
@@ -820,12 +818,11 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 		plt.plot(new_template)
 		plt.title('Template #' + str(i))
 		#good_i = np.where(score < percentile)[0]
-		good_i = remaining_ind[list(np.where(score < cutoff_val)[0])]
+		good_i = list(np.array(remaining_ind)[list(np.where(score_2 < percentile)[0])])
 		good_ind.append(good_i)
-		remaining_ind = np.setdiff1d(remaining_ind,good_i)
+		remaining_ind = list(np.setdiff1d(remaining_ind,good_i))
 	fig.savefig(template_dir + 'template_matching_results_cluster' + str(clust_ind) + '.png',dpi=100)
 	plt.close(fig)
-	good_ind = list(np.unique(good_ind))
 	potential_spikes = [all_spikes[g_i] for g_i in good_ind]
 	
 #	#Plots for checking
@@ -845,6 +842,22 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 #  	plt.tight_layout()
 	
 	return potential_spikes, good_ind
+
+def gauss_1(x, a, b, c):
+	"""Gaussian curve for given x and parameters"""
+	return a*np.exp(-(x - b) ** 2 / c)
+
+def gauss_2(x, a, b, c, d, e, f):
+	"""Sum of 2 Gaussian curves for given x and parameters"""
+	return gauss_1(x,a,b,c) + gauss_1(x,d,e,f)
+
+def gamma_1(x, a, b, c):
+	"""Gamma curve for given x and parameters"""
+	return a*(x**b)*np.exp(-c*x)*(c**b)/(0.5*b**2)
+
+def gamma_2(x, a, b, c, d, e, f):
+	"""Sum of 2 Gamma curves for given x and parameters"""
+	return gamma_1(x,a,b,c) + gamma_1(x,d,e,f)
 	
 @jit(forceobj=True)
 def generate_templates(sampling_rate,num_pts_left,num_pts_right):
@@ -869,8 +882,8 @@ def generate_templates(sampling_rate,num_pts_left,num_pts_right):
 	reg_spike = reg_spike/max_reg_spike
 	
 	templates[0,:] = pos_spike
-	templates[1,:] = fast_spike
-	templates[2,:] = reg_spike
+	templates[1,:] = reg_spike
+	templates[2,:] = fast_spike
 	
  	# fig = plt.figure()
  	# plt.subplot(3,1,1)
