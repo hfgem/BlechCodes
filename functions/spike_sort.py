@@ -212,10 +212,13 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 		clust_loop = 1
 		while clust_loop == 1:
 			print("\n INPUT REQUESTED: Think of the number of clusters you'd like to use for initial sorting (removal of noise).")
-			cluster_num = input("Please enter the number you'd like to use (> 1): ")
+			cluster_num = input("Please enter the number you'd like to use (> 2): ")
 			try:
 				clust_num = int(cluster_num)
-				clust_loop = 0
+				if clust_num < 3:
+					print("ERROR: Please select a value > 2.")
+				else:
+					clust_loop = 0
 			except:
 				print("ERROR: Please enter a valid integer.")
 		del cluster_num, clust_loop
@@ -224,10 +227,13 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 		clust_loop = 1
 		while clust_loop == 1:
 			print("\n INPUT REQUESTED: Think of the number of clusters you'd like to use for final sorting (after template-matching).")
-			cluster_num_fin = input("Please enter the number you'd like to use (> 1): ")
+			cluster_num_fin = input("Please enter the number you'd like to use (> 2): ")
 			try:
 				clust_num_fin = int(cluster_num_fin)
-				clust_loop = 0
+				if clust_num_fin < 3:
+					print("ERROR: Please select a value > 2.")
+				else:
+					clust_loop = 0
 			except:
 				print("ERROR: Please enter a valid integer.")
 		del cluster_num_fin, clust_loop
@@ -522,10 +528,11 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			viol_2_percent = round(viol_2_times/len(peak_diff)*100,2)
 			violations.append([viol_1_percent,viol_2_percent])
 			avg_fr = round(len(peak_ind)/(segment_times[-1])*sampling_rate,2) #in Hz
-			#TEMPORARY CODE CHANGES BELOW
-			#Just to see what clusters look like, commenting violation cutoffs for now
-			if viol_2_percent < 100: #viol_2_cutoff:
-				if viol_1_percent < 100: #viol_1_cutoff:
+			if type_spike == 'noise_removal': #Noise removal phase needs higher cutoffs
+				viol_1_cutoff = 100
+				viol_2_cutoff = 100
+			if viol_2_percent < viol_2_cutoff:
+				if viol_1_percent < viol_1_cutoff:
 					any_good += 1
 					#Adding in pass test in meantime
 					pass_val = (viol_2_percent < viol_2_cutoff) and (viol_1_percent < viol_1_cutoff)
@@ -633,7 +640,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					clust_stats[li,0:4] = np.array([len(spikes_labelled),viol_1_percent,viol_2_percent,avg_fr])
 		neuron_spike_ind = []
 		neuron_waveform_ind = []
-		if any_good > 0:
+		if (any_good > 0) & (type_spike != 'noise_removal'): #Automatically skip over bad sorts
 			print("\n \t INPUT REQUESTED: Please navigate to the directory " + sort_neur_type_dir)
 			print("\t Inspect the output visuals of spike clusters, and decide which you'd like to keep.")
 			keep_loop = 1
@@ -646,7 +653,6 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			if keep_any == 'y':	
 				print("\n \t INPUT REQUESTED: Please enter a comma-separated list of indices you'd like to keep (ex. 0,4,6)")
 				ind_good = input("\t Keep-indices: ").split(',')
-####THERE IS AN ERROR IN THIS TRY STATEMENT THAT NEEDS TO BE FIXED####
 			try:
 				ind_good = [int(ind_good[i]) for i in range(len(ind_good))]
 				clust_stats[np.array(ind_good),4] = 1
@@ -668,16 +674,19 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 									 try:
 										  together_ind = [int(which_together[i]) for i in range(len(which_together))]
 										  which_comb.append(together_ind)
-										  cont_loop_2 = 1
-										  while cont_loop_2 == 1:
-											  continue_statement = input("\t Are there more indices which belong together (y/n)? ")
-											  if continue_statement != 'y' and continue_statement != 'n':
-												  print("\t Error, try again.")
-											  elif continue_statement == 'y':
-												  cont_loop_2 = 0
-											  else:
-												  cont_loop_2 = 0
-												  which_comb_loop = 0
+										  if len(together_ind) < len(ind_good):
+											  cont_loop_2 = 1
+											  while cont_loop_2 == 1:
+												  continue_statement = input("\t Are there more indices which belong together (y/n)? ")
+												  if continue_statement != 'y' and continue_statement != 'n':
+													  print("\t Error, try again.")
+												  elif continue_statement == 'y':
+													  cont_loop_2 = 0
+												  else:
+													  cont_loop_2 = 0
+													  which_comb_loop = 0
+										  else:
+											  which_comb_loop = 0
 									 except:
 										 print("Error, try again.")
 								 all_to_combine = []
@@ -711,6 +720,11 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 						neuron_spike_ind.append(peak_ind)
 			except:
 				print("\t No spikes selected.")
+		elif type_spike == 'noise_removal':
+			ind_good = np.arange(clust_num)
+			for ig in ind_good:
+				neuron_spike_ind.append(list(np.array(peak_indices)[np.where(labels == ig)[0]]))
+				neuron_waveform_ind.append(list(np.where(labels == ig)[0]))
 		else:
 			print("\t No good clusters.")
 		#Save to CSV spike indices
@@ -778,11 +792,10 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 	remaining_ind = list(np.arange(num_spikes))
 	#Grab templates of spikes
 	spike_templates = generate_templates(sampling_rate,num_pts_left,num_pts_right)
+	new_templates = np.zeros(np.shape(spike_templates))
 	num_types = np.shape(spike_templates)[0]
 	good_ind = []
 	print("\t Performing Template Comparison.")
-	#Plot a histogram of the scores and save to the tampleate_matching dir
-	fig = plt.figure(figsize=(20,20))
 	for i in range(num_types):
 		#Template distance scores
 		spike_mat = np.multiply(np.ones(np.shape(norm_spikes[remaining_ind,:])),spike_templates[i,:])
@@ -800,16 +813,30 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 			second_peak_value = percentile
 		halfway_value = (first_peak_value + second_peak_value)/2
 		new_template_waveform_ind = list(np.array(remaining_ind)[list(np.where(score < halfway_value)[0])])
-		new_template = np.mean(norm_spikes[new_template_waveform_ind,:],axis=0)
+		new_templates[i,:] = np.mean(norm_spikes[new_template_waveform_ind,:],axis=0)
+	#Plot a histogram of the scores and save to the template_matching dir
+	fig = plt.figure(figsize=(20,20))
+	for i in range(num_types):
 		#Calculate new template distance scores
+		new_template = new_templates[i,:]
+		num_peaks_i = num_peaks[remaining_ind]
 		spike_mat_2 = np.multiply(np.ones(np.shape(norm_spikes[remaining_ind,:])),new_template)
 		dist_2 = np.sqrt(np.sum(np.square(np.subtract(norm_spikes[remaining_ind,:],spike_mat_2)),1))
 		score_2 = dist_2*num_peaks_i
 		percentile = np.percentile(score_2,cut_percentile)
 		#Create subplot to plot histogram and percentile cutoff
 		plt.subplot(2,num_types,i + 1)
-		plt.hist(score_2,150,label='Mean Template Similarity Scores')
-		plt.axvline(percentile,color = 'r', linestyle = '--', label=str(cut_percentile)+'th percentile')
+		hist_counts = plt.hist(score_2,150,label='Mean Template Similarity Scores')
+		hist_peaks = find_peaks(hist_counts[0])
+		hist_peak_vals = hist_counts[0][list(hist_peaks[0])]
+		max_peak = hist_counts[1][hist_peaks[0][list(np.where(hist_peak_vals == np.sort(hist_peak_vals)[-1])[0])]]
+		max_peak_2 = hist_counts[1][hist_peaks[0][list(np.where(hist_peak_vals == np.sort(hist_peak_vals)[-2])[0])]]
+		halfway_value = (max_peak + max_peak_2)/2
+		if halfway_value < percentile:
+			cut_val = halfway_value
+		else:
+			cut_val = percentile
+		plt.axvline(cut_val,color = 'r', linestyle = '--', label='Cutoff Threshold')
 		plt.legend()
 		plt.xlabel('Score = distance*peak_count')
 		plt.ylabel('Number of occurrences')
@@ -817,8 +844,7 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 		plt.subplot(2,num_types,i + 1 + num_types)
 		plt.plot(new_template)
 		plt.title('Template #' + str(i))
-		#good_i = np.where(score < percentile)[0]
-		good_i = list(np.array(remaining_ind)[list(np.where(score_2 < percentile)[0])])
+		good_i = list(np.array(remaining_ind)[list(np.where(score_2 < cut_val)[0])])
 		good_ind.append(good_i)
 		remaining_ind = list(np.setdiff1d(remaining_ind,good_i))
 	fig.savefig(template_dir + 'template_matching_results_cluster' + str(clust_ind) + '.png',dpi=100)
@@ -865,7 +891,8 @@ def generate_templates(sampling_rate,num_pts_left,num_pts_right):
 	centered between num_pts_left and num_pts_right."""
 	
 	x_points = np.arange(-num_pts_left,num_pts_right)
-	templates = np.zeros((3,len(x_points)))
+	#templates = np.zeros((3,len(x_points)))
+	templates = np.zeros((2,len(x_points)))
 	
 	fast_spike_width = sampling_rate*(1/1000)
 	sd = fast_spike_width/20
@@ -873,7 +900,7 @@ def generate_templates(sampling_rate,num_pts_left,num_pts_right):
 	pos_spike = ss.norm.pdf(x_points, 0, sd)
 	max_pos_spike = max(abs(pos_spike))
 	pos_spike = pos_spike/max_pos_spike
-	fast_spike = -1*pos_spike
+	#fast_spike = -1*pos_spike
 	reg_spike_bit = ss.gamma.pdf(np.arange(fast_spike_width-1),5)
 	peak_reg = find_peaks(reg_spike_bit)[0][0]
 	reg_spike = np.concatenate((np.zeros(num_pts_left-peak_reg),-1*reg_spike_bit),axis=0)
@@ -883,7 +910,7 @@ def generate_templates(sampling_rate,num_pts_left,num_pts_right):
 	
 	templates[0,:] = pos_spike
 	templates[1,:] = reg_spike
-	templates[2,:] = fast_spike
+	#templates[2,:] = fast_spike
 	
  	# fig = plt.figure()
  	# plt.subplot(3,1,1)
@@ -1007,13 +1034,6 @@ def test_collisions(spike_raster,dir_save):
 
 	return remove_ind
 
-def re_cluster():
-	"""This function allows for re-clustering of previously clustered data by 
-	importing the final-clustering .csv results ('neuron_spikes.csv' and 
-	'neuron_spikes_bin.csv'), recombining all the previously okayed spikes,
-	and re-clustering with double the number of clusters of previously approved
-	clusters"""
-	
 # def run_ica_spike_sort(ICA_h5_dir):
 # 	"""This function pulls data from the ICA hf5 file, finds the ICA data 
 # 	peaks, and performs clustering spike sorting to separate out true peaks"""

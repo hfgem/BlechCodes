@@ -71,35 +71,6 @@ for s_n in sorted_units_node:
 	i+= 1
 blech_clust_h5.close()
 
-#%% Perform Fourier Transform on Old Spike Data
-
-for u_i in range(num_old_neur):
-	unit_waveforms = all_old_waveforms[u_i]
-	unit_fourier = np.array([list(rfft(unit_waveforms[s_i])) for s_i in range(len(unit_waveforms))])
-	freqs = fftfreq(len(unit_waveforms[0]),d=1/sampling_rate)
-	fourier_peaks = np.array([list(find_peaks(unit_fourier[s_i])[0][0:20]) for s_i in range(len(unit_waveforms))])
-	
-	freq_ind = (freqs<1000)*(freqs>0)
-	im_vals = unit_fourier[:,freq_ind]
-	norm_fourier = normalize(im_vals,axis=1,norm='max')
-	im_freqs = freqs[freq_ind]
-	indices = np.unique(np.round(np.linspace(0,len(norm_fourier[0]),10)).astype(int))
-	indices[-1] -= 1
-	fig = plt.figure(figsize=(20,20))
-	plt.imshow(norm_fourier,aspect='auto')
-	plt.xticks(ticks=indices,labels=im_freqs[indices])
-	plt.xlabel('Frequency (Hz)')
-	plt.ylabel('Waveform #')
-	plt.title('Normalized Fourier Transform of Unit ' + str(u_i))
-	fig.savefig(blech_clust_datadir + '/' + 'fourier_unit_' + str(u_i) + '.png', dpi=100)
-	plt.close(fig)
-
-fourier = rfft(mean_bit)
-freqs = fftfreq(len(mean_bit), d=1/sampling_rate)
-fourier_peaks = find_peaks(fourier)[0]
-peak_freqs = freqs[fourier_peaks]
-peak_freqs = peak_freqs[peak_freqs>0]
-
 #%% Perform bulk comparison - with all new spikes collapsed and compared against old
 blur_ind = round((0.5/1000)*sampling_rate)
 combined_percents = np.zeros(num_old_neur)
@@ -178,3 +149,32 @@ overlaps_csv = overlap_folder + 'overlap_vals.csv'
 with open(overlaps_csv, 'w') as f:
  	write = csv.writer(f)
  	write.writerows(old_matches)
+
+#%% Perform Fourier Transform on Old Spike Data
+
+for u_i in range(num_old_neur):
+	unit_waveforms = all_old_waveforms[u_i]
+	unit_fourier = np.array([list(rfft(unit_waveforms[s_i])) for s_i in range(len(unit_waveforms))])
+	freqs = fftfreq(len(unit_waveforms[0]),d=1/sampling_rate)
+	fourier_peaks = np.array([list(find_peaks(unit_fourier[s_i])[0][0:20]) for s_i in range(len(unit_waveforms))])
+	
+	freq_ind = (freqs<1000)*(freqs>0)
+	im_vals = unit_fourier[:,freq_ind]
+	norm_fourier = normalize(im_vals,axis=1,norm='max')
+	im_freqs = freqs[freq_ind]
+	indices = np.unique(np.round(np.linspace(0,len(norm_fourier[0]),10)).astype(int))
+	indices[-1] -= 1
+	fig = plt.figure(figsize=(20,20))
+	plt.imshow(norm_fourier,aspect='auto')
+	plt.xticks(ticks=indices,labels=im_freqs[indices])
+	plt.xlabel('Frequency (Hz)')
+	plt.ylabel('Waveform #')
+	plt.title('Normalized Fourier Transform of Unit ' + str(u_i))
+	fig.savefig(blech_clust_datadir + '/' + 'fourier_unit_' + str(u_i) + '.png', dpi=100)
+	plt.close(fig)
+
+fourier = rfft(mean_bit)
+freqs = fftfreq(len(mean_bit), d=1/sampling_rate)
+fourier_peaks = find_peaks(fourier)[0]
+peak_freqs = freqs[fourier_peaks]
+peak_freqs = peak_freqs[peak_freqs>0]
