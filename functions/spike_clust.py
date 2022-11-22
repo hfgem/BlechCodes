@@ -11,12 +11,13 @@ import os, csv, tqdm
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture as gm
 import matplotlib.pyplot as plt
 from scipy.fftpack import rfft, fftfreq
 from scipy.signal import find_peaks
 from sklearn.metrics import silhouette_score, silhouette_samples
 
-def cluster(spikes, peak_indices, i, sort_data_dir, axis_labels, type_spike, 
+def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike, 
 			segment_times, segment_names, dig_in_times, dig_in_names, 
 			sampling_rate, re_sort):
 	"""This function tests different numbers of clusters for spike clustering
@@ -28,18 +29,32 @@ def cluster(spikes, peak_indices, i, sort_data_dir, axis_labels, type_spike,
 	viol_2 = sampling_rate*(2/1000)
 	
 	#First test different numbers of clusters
-	clust_num_vec = np.arange(3,16)
+	clust_num_vec = np.arange(3,13)
 	silhouette_scores = np.zeros(np.shape(clust_num_vec))
+	distortion_scores = np.zeros(np.shape(clust_num_vec))
+	print("\t \t Testing different numbers of clusters.")
 	for i in tqdm.tqdm(range(len(clust_num_vec))):
 		clust_num = clust_num_vec[i]
-		silhouette_scores[i] = clust_num_test(spikes,clust_num,sort_data_dir)
+		silhouette_scores[i], distortion_scores[i] = clust_num_test(e_i, spikes,clust_num,axis_labels,sort_data_dir)
+	
+	plt.figure()
+	plt.plot(clust_num_vec,silhouette_scores)
+	plt.title("Average Silhouette Scores")
+	plt.xlabel("Cluster Count")
+	plt.ylabel("Average Silhouette Score")
+	
+	plt.figure()
+	plt.plot(clust_num_vec,distortion_scores)
+	plt.title("Average Distortions")
+	plt.xlabel("Cluster Count")
+	plt.ylabel("Average Distortion")
 	
 	#Next pick the best number of clusters
 	clust_num = clust_num_vec[np.where(silhouette_scores == np.max(silhouette_scores)[0])[0]]
 	
 	#Finally cluster by the best number of clusters
 	neuron_spike_ind, neuron_waveform_ind = spike_clust(spikes, peak_indices, 
-													 clust_num, i, sort_data_dir, 
+													 clust_num, e_i, sort_data_dir, 
 													 axis_labels, viol_1, viol_2, 
 													 type_spike, segment_times, 
 													 segment_names, dig_in_times,
@@ -120,11 +135,18 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		print("\t Performing clustering of data.")
 		rand_ind = np.random.randint(len(spikes),size=(100000,))
 		rand_spikes = list(np.array(spikes)[rand_ind])
+		#___KMeans___
+		#print('\t Performing fitting.')
+		#kmeans = KMeans(n_clusters=clust_num, random_state=0).fit(rand_spikes)
+		#print('\t Performing label prediction.')
+		#labels = kmeans.predict(spikes)
+		#centers = kmeans.cluster_centers_
+		#___GMM___
 		print('\t Performing fitting.')
-		kmeans = KMeans(n_clusters=clust_num, random_state=0).fit(rand_spikes)
+		gmm_fit = gm(n_components=clust_num, random_state=0).fit(rand_spikes)
 		print('\t Performing label prediction.')
-		labels = kmeans.predict(spikes)
-		centers = kmeans.cluster_centers_
+		labels = gmm_fit.predict(spikes)
+		centers = gm.means_
 		center_pca = pca.fit_transform(centers)
 		print('\t Now testing/plotting clusters.')
 		violations = []
@@ -405,10 +427,11 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 	return neuron_spike_ind, neuron_waveform_ind
 
 
-def clust_num_test(spikes,clust_num,save_dir):
+def clust_num_test(e_i, spikes,clust_num,axis_labels,save_dir):
 	"""This function performs silhouette score tests on different numbers of
 	clusters used on spike clustering to determine the best cluster number.
 	Inputs:
+		- e_i: index of electrode being analyzed
 		- spikes: matrix with all spikes being clustered (num_spikes x num_features)
 		- clust_num: vector with the number of clusters to test
 		- save_dir: directory to save silhouette test figures and cluster images
@@ -417,27 +440,57 @@ def clust_num_test(spikes,clust_num,save_dir):
 	"""
 	
 	#Set up save folder
-	silh_dir = save_dir + 'silhouette_analysis/'
+	sort_neur_dir = save_dir + 'unit_' + str(e_i) + '/'
+	if os.path.isdir(sort_neur_dir) == False:
+		print("\t \t \t Creating Unit Save Folder")
+		os.mkdir(sort_neur_dir)
+	silh_dir = sort_neur_dir + 'silhouette_analysis/'
 	if os.path.isdir(silh_dir) == False:
+		print("\t \t \t Creating Silhouette Save Folder")
 		os.mkdir(silh_dir)
 	
-	#Cluster data
-	rand_ind = np.random.randint(len(spikes),size=(100000,))
-	rand_spikes = list(np.array(spikes)[rand_ind])
-	kmeans = KMeans(n_clusters=clust_num, random_state=0).fit(rand_spikes)
-	labels = kmeans.predict(spikes)
-	centers = kmeans.cluster_centers_
+	#Grab spike properties
+	ind_zero = np.where(axis_labels == 0)[0]
+	peak_amplitudes = [wav[ind_zero][0] for wav in spikes]
+	pca = PCA(n_components = 5)
+	spikes_pca = pca.fit_transform(spikes)
+	reduced_spikes = np.concatenate((np.expand_dims(peak_amplitudes,1),spikes_pca),1)
 	
-	#Calculate silhouette scores and plot histograms
-	plot_dim = int(np.round(np.sqrt(clust_num)))
-	slh_avg = silhouette_score(spikes,labels)
-	slh_vals = silhouette_samples(spikes,labels)
+	#Cluster data
+	rand_ind = np.random.randint(len(reduced_spikes),size=(int(np.ceil(len(peak_amplitudes)/3)),))
+	rand_spikes = list(np.array(reduced_spikes)[rand_ind])
+	#___KMeans___
+	print('\t \t \t Performing K-Means fitting.')
+	kmeans = KMeans(n_clusters=clust_num, random_state=0).fit(rand_spikes)
+	print('\t \t \t Performing label prediction.')
+	labels = kmeans.predict(reduced_spikes)
+	rand_labels = list(np.array(labels)[rand_ind])
+	centers = kmeans.cluster_centers_
+	#___GMM___
+	#print('\t \t \t Performing GMM fitting.')
+	#gmm_fit = gm(n_components=clust_num, random_state=0).fit(rand_spikes)
+	#print('\t \t \t  Performing label prediction.')
+	#labels = gmm_fit.predict(reduced_spikes)
+	#rand_labels = list(np.array(labels)[rand_ind])
+	#centers = gmm_fit.means_
+	
+	#___Silhouette Scores___
+	rand_ind = np.random.randint(len(reduced_spikes),size=(int(np.ceil(len(peak_amplitudes)/10)),)) #Use less for Silhouette since it takes a long time
+	rand_spikes = list(np.array(reduced_spikes)[rand_ind])
+	rand_labels = list(np.array(labels)[rand_ind])
+	plot_dim = int(np.ceil(np.sqrt(clust_num)))
+	print("\t \t \t Calculating Silhouette Scores")
+	slh_vals = silhouette_samples(rand_spikes,rand_labels)
+	slh_avg = np.mean(slh_vals)
+	print("\t \t \t Plotting Silhouette Scores")
+	plot_dim = int(np.ceil(np.sqrt(clust_num)))
 	slh_fig = plt.figure(figsize=(15,15))
 	for i in range(clust_num):
-		plt.subplot(plot_dim,plot_dim,i)
-		slh_vals_clust_i = slh_vals[np.where(labels == i)]
-		hist_slh_i = plt.hist(slh_vals_clust_i)
-		plt.axvline(np.mean(slh_vals_clust_i),label='Mean')
+		plt.subplot(plot_dim,plot_dim,i+1)
+		slh_vals_clust_i = slh_vals[np.where(np.array(rand_labels) == i)[0]]
+		plt.hist(slh_vals_clust_i, alpha = 0.5)
+		clust_mean = np.mean(slh_vals_clust_i)
+		plt.axvline(clust_mean,label='Mean = '+str(np.round(clust_mean,2)))
 		plt.legend()
 		plt.title('Cluster #' + str(i))
 		plt.xlabel('Silhouette Score Value')
@@ -446,11 +499,33 @@ def clust_num_test(spikes,clust_num,save_dir):
 	slh_fig.savefig(silh_dir + 'slh_scores_clust_count_' + str(clust_num) + '.png', dpi=100)
 	plt.close(slh_fig)
 	
+	#___Distortion Scores___
+	print("\t \t \t Calculating Distortion Scores")
+	dist = [np.sum((centers[i] - np.array(rand_spikes)[np.where(np.array(rand_labels) == i)[0]])**2,1)  for i in range(clust_num)]
+	dist_avgs = [np.mean(dist[i]) for i in range(clust_num)]
+	avg_dist = np.mean([np.mean(dist[i]) for i in range(clust_num)])
+	print("\t \t \t Plotting Distortion Scores")
+	plot_dim = int(np.ceil(np.sqrt(clust_num)))
+	dist_fig = plt.figure(figsize=(15,15))
+	for i in range(clust_num):
+		plt.subplot(plot_dim,plot_dim,i+1)
+		plt.hist(dist[i], alpha = 0.5)
+		plt.axvline(dist_avgs[i],label='Mean = '+str(np.round(dist_avgs[i],2)))
+		plt.legend()
+		plt.title('Cluster #' + str(i))
+		plt.xlabel('Squared Distance')
+		plt.ylabel('Number of Cluster Members')
+	plt.suptitle('Squared Distance Distributions by Cluster')
+	dist_fig.savefig(silh_dir + 'dist_clust_count_' + str(clust_num) + '.png', dpi=100)
+	plt.close(dist_fig)
+	
 	#Plot clusters
+	print("\t \t \t Calculating PCA and Plotting Clusters")
 	pca = PCA(n_components = 3)
-	spikes_pca = pca.fit_transform(spikes)
+	spikes_pca = pca.fit_transform(reduced_spikes)
 	center_pca = pca.fit_transform(centers)
-	possible_colors = ['b','g','r','c','m','k','y','brown','pink','olive','gray'] #Colors for plotting different tastant deliveries
+	possible_colors = ['b','g','r','c','m','k','y','brown','pink','olive',
+					'gray','purple','orange','tan','salmon','navy','teal'] #Colors for plotting different tastant deliveries
 	clust_fig = plt.figure(figsize=(15,15))
 	ax = clust_fig.add_subplot(111, projection='3d')
 	ax2 = clust_fig.add_subplot(333)
@@ -475,8 +550,8 @@ def clust_num_test(spikes,clust_num,save_dir):
 	ax.legend(loc='lower left')
 	clust_fig.savefig(silh_dir + 'projections_clust_count_' + str(clust_num) + '.png', dpi=100)
 	plt.close(clust_fig)
-	
-	return slh_avg
+		
+	return slh_avg, avg_dist
 	
 	
 	
