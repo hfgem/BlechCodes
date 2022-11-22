@@ -8,6 +8,7 @@ This set of functions pulls spikes out of cleaned and ICA sorted data.
 """
 
 import numpy as np
+import functions.spike_clust as sc 
 import scipy.stats as ss
 from scipy.signal import find_peaks
 from sklearn.cluster import KMeans
@@ -161,8 +162,6 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	num_pts_right = int(np.round(sampling_rate*(1.5/1000)))
 	axis_labels = np.arange(-num_pts_left,num_pts_right)
 	#total_pts = num_pts_left + num_pts_right
-	viol_1 = sampling_rate*(1/1000)
-	viol_2 = sampling_rate*(2/1000)
 	threshold_percentile = 25
 	
 	#Grab dig in times for each tastant separately
@@ -208,37 +207,37 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 		
 		#Get the number of clusters to use in spike sorting
 		print("Beginning Spike Sorting")
-		clust_num = 0
-		clust_loop = 1
-		while clust_loop == 1:
-			print("\n INPUT REQUESTED: Think of the number of clusters you'd like to use for initial sorting (removal of noise).")
-			cluster_num = input("Please enter the number you'd like to use (> 2): ")
-			try:
-				clust_num = int(cluster_num)
-				if clust_num < 3:
-					print("ERROR: Please select a value > 2.")
-				else:
-					clust_loop = 0
-			except:
-				print("ERROR: Please enter a valid integer.")
-		del cluster_num, clust_loop
+# 		clust_num = 0
+# 		clust_loop = 1
+# 		while clust_loop == 1:
+# 			print("\n INPUT REQUESTED: Think of the number of clusters you'd like to use for initial sorting (removal of noise).")
+# 			cluster_num = input("Please enter the number you'd like to use (> 2): ")
+# 			try:
+# 				clust_num = int(cluster_num)
+# 				if clust_num < 3:
+# 					print("ERROR: Please select a value > 2.")
+# 				else:
+# 					clust_loop = 0
+# 			except:
+# 				print("ERROR: Please enter a valid integer.")
+# 		del cluster_num, clust_loop
+# 		
+# 		clust_num_fin = 0
+# 		clust_loop = 1
+# 		while clust_loop == 1:
+# 			print("\n INPUT REQUESTED: Think of the number of clusters you'd like to use for final sorting (after template-matching).")
+# 			cluster_num_fin = input("Please enter the number you'd like to use (> 2): ")
+# 			try:
+# 				clust_num_fin = int(cluster_num_fin)
+# 				if clust_num_fin < 3:
+# 					print("ERROR: Please select a value > 2.")
+# 				else:
+# 					clust_loop = 0
+# 			except:
+# 				print("ERROR: Please enter a valid integer.")
+# 		del cluster_num_fin, clust_loop
 		
-		clust_num_fin = 0
-		clust_loop = 1
-		while clust_loop == 1:
-			print("\n INPUT REQUESTED: Think of the number of clusters you'd like to use for final sorting (after template-matching).")
-			cluster_num_fin = input("Please enter the number you'd like to use (> 2): ")
-			try:
-				clust_num_fin = int(cluster_num_fin)
-				if clust_num_fin < 3:
-					print("ERROR: Please select a value > 2.")
-				else:
-					clust_loop = 0
-			except:
-				print("ERROR: Please enter a valid integer.")
-		del cluster_num_fin, clust_loop
-		
-		print("\n Now beginning spike sorting.")
+# 		print("\n Now beginning spike sorting.")
 		for i in tqdm.tqdm(range(num_neur)):
 			print("\n Sorting channel #" + str(i))
 			#First check for final sort and ask if want to keep
@@ -298,11 +297,15 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 				del p_i_l, p_i_r, data_chunk_lengths, too_short, keep_ind
 				#Cluster all spikes first to get rid of noise
 				print("\t Performing Clustering to Remove Noise (First Pass)")
-				sorted_peak_ind, waveform_ind = spike_clust(all_spikes, all_peaks, 
-											 clust_num, i, dir_save, axis_labels, 
-											 viol_1, viol_2, 'noise_removal', segment_times,
-											 segment_names, dig_in_times, dig_in_names,
-											 sampling_rate, re_sort='y')
+				sorted_peak_ind, waveform_ind  = sc.cluster(all_spikes, all_peaks, i, 
+											 dir_save, axis_labels, 'noise_removal',
+											 segment_times, segment_names, dig_in_times,
+											 dig_in_names, sampling_rate, re_sort='y')
+# 				sorted_peak_ind, waveform_ind = spike_clust(all_spikes, all_peaks, 
+# 											 clust_num, i, dir_save, axis_labels, 
+# 											 viol_1, viol_2, 'noise_removal', segment_times,
+# 											 segment_names, dig_in_times, dig_in_names,
+# 											 sampling_rate, re_sort='y')
 				good_spikes = []
 				good_ind = [] #List of lists with good indices in groupings
 				good_all_spikes_ind = [] #indices aligned with "all_spikes"
@@ -327,11 +330,15 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 				sorted_wav_inds = [] #grouped indices of spike waveforms from "all_spikes"
 				for g_i in range(len(good_ind)): #Run through each set of potential clusters and perform cleanup clustering
 					print("\t Sorting Template Matched Group " + str(g_i))
-					sort_ind_2, waveform_ind_2 = spike_clust(good_spikes[g_i], good_ind[g_i], 
-											 clust_num_fin, i, dir_save, axis_labels, 
-											 viol_1, viol_2, 'final/unit_' + str(g_i), segment_times,
-											 segment_names, dig_in_times, dig_in_names,
-											 sampling_rate)
+					sort_ind_2, waveform_ind_2  = sc.cluster(good_spikes[g_i], good_ind[g_i], i, 
+												 dir_save, axis_labels, 'final/unit_' + str(g_i),
+												 segment_times, segment_names, dig_in_times,
+												 dig_in_names, sampling_rate, re_sort='y')
+# 					sort_ind_2, waveform_ind_2 = spike_clust(good_spikes[g_i], good_ind[g_i], 
+# 											 clust_num_fin, i, dir_save, axis_labels, 
+# 											 viol_1, viol_2, 'final/unit_' + str(g_i), segment_times,
+# 											 segment_names, dig_in_times, dig_in_names,
+# 											 sampling_rate)
 					good_as_ind = good_all_spikes_ind[g_i]
 					sorted_spike_inds.extend(sort_ind_2)
 					for w_i in range(len(waveform_ind_2)):
