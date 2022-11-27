@@ -230,49 +230,55 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 # 	plt.tight_layout()
 # 	dist_fig.savefig(silh_dir + 'dist_clust_count_' + str(clust_num) + '.png', dpi=100)
 # 	plt.close(dist_fig)
-	#Plot clusters PCA components 2-4
-	print("\t \t \t Plotting Clusters")
-	pca = PCA(n_components = 3)
-	center_pca = pca.fit_transform(centers)
-	possible_colors = ['b','g','r','c','m','k','y','brown','pink','olive',
-					'gray','purple','orange','tan','salmon','navy','teal'] #Colors for plotting different tastant deliveries
-	clust_fig = plt.figure(figsize=(15,15))
-	ax = clust_fig.add_subplot(111, projection='3d')
-	ax2 = clust_fig.add_subplot(331, projection='3d')
-	ax3 = clust_fig.add_subplot(332, projection='3d')
-	ax4 = clust_fig.add_subplot(333, projection='3d')
-	ax5 = clust_fig.add_subplot(337, projection='3d')
-	ax6 = clust_fig.add_subplot(339, projection='3d')
-	for li in range(clust_num):
-		ind_labelled = np.where(labels == li)[0]
-		pca_labelled = spikes_pca[ind_labelled]
-		pca_labelled_2 = spikes_pca[np.where(labels == clust_num - li)[0]]
-		#3D plot dim 1-3
-		ax.view_init(30, 0, 0)
-		ax.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
-			  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
-		#3D plot rotated 180 degrees XY
-		ax2.view_init(30, 180, 0)
-		ax2.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
-			  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
-		#3D plot rotated 180 degrees YZ
-		ax3.view_init(30, 0, 180)
-		ax3.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
-			  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
-		#3D plot rotated 180 degrees YZ and XY
-		ax4.view_init(30, 180, 180)
-		ax4.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
-			  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
-		#3D plot dim 2-4
-		ax5.view_init(30, 0, 0)
-		ax5.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
-			  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
-		#Centroid 3D plot
-		ax6.scatter(center_pca[li,0],center_pca[li,1],center_pca[li,2],
-		   c = possible_colors[li])
-	ax.legend(loc='center left')
-	clust_fig.savefig(silh_dir + 'projections_clust_count_' + str(clust_num) + '.png', dpi=100)
-	plt.close(clust_fig)
+
+	if type_spike[0:5] == 'final': #Plot PCA cluster visualization for final clustering phase only
+		print("\t \t \t Plotting Clusters")
+		pca = PCA(n_components = 3)
+		center_pca = pca.fit_transform(centers)
+		possible_colors = ['b','g','r','c','m','k','y','brown','pink','olive',
+						'gray','purple','orange','tan','salmon','navy','teal'] #Colors for plotting different tastant deliveries
+		clust_fig = plt.figure(figsize=(15,15))
+		ax = clust_fig.add_subplot(111, projection='3d')
+		ax2 = clust_fig.add_subplot(331, projection='3d')
+		ax3 = clust_fig.add_subplot(332, projection='3d')
+		ax4 = clust_fig.add_subplot(333, projection='3d')
+		ax5 = clust_fig.add_subplot(337, projection='3d')
+		ax6 = clust_fig.add_subplot(338, projection='3d')
+		ax7 = clust_fig.add_subplot(339, projection='3d')
+		for li in range(clust_num):
+			ind_labelled = np.where(labels == li)[0]
+			pca_labelled = spikes_pca[ind_labelled]
+			pca_labelled_2 = spikes_pca[np.where(labels == clust_num - li)[0]]
+			#3D plot dim 1-3
+			ax.view_init(45, 0)
+			ax.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
+			#3D plot rotated
+			ax2.view_init(45, 120)
+			ax2.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
+			#3D plot rotated
+			ax3.view_init(-45, 0)
+			ax3.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
+			#3D plot rotated
+			ax4.view_init(45, 240)
+			ax4.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
+			#3D plot dim 2-4
+			ax5.view_init(45, 0)
+			ax5.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
+			#3D plot dim 2-4 rotated
+			ax6.view_init(-45, 180)
+			ax6.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
+			#Centroid 3D plot
+			ax7.scatter(center_pca[li,0],center_pca[li,1],center_pca[li,2],
+			   c = possible_colors[li])
+		ax.legend(loc='center left')
+		clust_fig.savefig(silh_dir + 'projections_clust_count_' + str(clust_num) + '.png', dpi=100)
+		plt.close(clust_fig)
 		
 	return slh_avg, avg_dist
 	
@@ -357,28 +363,42 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		center_pca = pca2.fit_transform(centers)
 		clust_fig = plt.figure(figsize=(15,15))
 		ax = clust_fig.add_subplot(111, projection='3d')
-		ax2 = clust_fig.add_subplot(333)
-		ax3 = clust_fig.add_subplot(331)
-		ax4 = clust_fig.add_subplot(337, projection='3d')
-		ax5 = clust_fig.add_subplot(339, projection='3d')
+		ax2 = clust_fig.add_subplot(331, projection='3d')
+		ax3 = clust_fig.add_subplot(332, projection='3d')
+		ax4 = clust_fig.add_subplot(333, projection='3d')
+		ax5 = clust_fig.add_subplot(337, projection='3d')
+		ax6 = clust_fig.add_subplot(338, projection='3d')
+		ax7 = clust_fig.add_subplot(339, projection='3d')
 		for li in range(clust_num):
 			ind_labelled = np.where(labels == li)[0]
 			pca_labelled = spikes_pca[ind_labelled]
 			pca_labelled_2 = spikes_pca[np.where(labels == clust_num - li)[0]]
-			#3D plot
+			#3D plot dim 1-3
+			ax.view_init(45, 0)
 			ax.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
-			#2D plot top
-			ax2.scatter(pca_labelled[:,0],pca_labelled[:,1],
-			   c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
-			#2D plot bottom
-			ax3.scatter(pca_labelled_2[:,0],pca_labelled_2[:,1],
-			   c=possible_colors[clust_num - li],label='cluster '+str(clust_num - li),alpha=0.1)
-			#Dim 2-4 3D plot
-			ax4.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
-			   c = possible_colors[li],alpha=0.1)
+			#3D plot rotated
+			ax2.view_init(45, 120)
+			ax2.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
+			#3D plot rotated
+			ax3.view_init(-45, 0)
+			ax3.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
+			#3D plot rotated
+			ax4.view_init(45, 240)
+			ax4.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
+			#3D plot dim 2-4
+			ax5.view_init(45, 0)
+			ax5.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
+			#3D plot dim 2-4 rotated
+			ax6.view_init(-45, 180)
+			ax6.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
+				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#Centroid 3D plot
-			ax5.scatter(center_pca[li,0],center_pca[li,1],center_pca[li,2],
+			ax7.scatter(center_pca[li,0],center_pca[li,1],center_pca[li,2],
 			   c = possible_colors[li])
 		ax.legend(loc='center left')
 		clust_fig.savefig(sort_neur_type_dir + 'cluster_projections.png', dpi=100)
