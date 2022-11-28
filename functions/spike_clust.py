@@ -15,7 +15,7 @@ from sklearn.mixture import GaussianMixture as gm
 import matplotlib.pyplot as plt
 from scipy.fftpack import rfft, fftfreq
 from scipy.signal import find_peaks
-from sklearn.metrics import silhouette_score, silhouette_samples
+from sklearn.metrics import silhouette_samples
 
 def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike, 
 			segment_times, segment_names, dig_in_times, dig_in_names, 
@@ -409,7 +409,8 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			spikes_labelled = np.array(spikes)[ind_labelled]
 			#Check for violations first
 			peak_ind = np.unique(np.array(peak_indices)[ind_labelled])
-			peak_diff = np.subtract(peak_ind[1:-1],peak_ind[0:-2])
+			peak_diff = np.subtract(peak_ind[1:-1],peak_ind[0:-2]) 
+			isi_ms = (peak_diff/sampling_rate)*1000
 			viol_1_times = len(np.where(peak_diff <= viol_1)[0])
 			viol_2_times = len(np.where(peak_diff <= viol_2)[0])
 			viol_1_percent = round(viol_1_times/len(peak_diff)*100,2)
@@ -419,15 +420,15 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			if type_spike == 'noise_removal': #Noise removal phase needs higher cutoffs
 				viol_1_cutoff = 100
 				viol_2_cutoff = 100
+			#Adding in pass test in meantime
+			pass_val = (viol_2_percent < viol_2_cutoff) and (viol_1_percent < viol_1_cutoff)
+			if pass_val == True:
+				print("\t \t Cluster " + str(li) + " passed violation cutoffs. Now plotting.")
+			else:
+				print("\t \t Cluster " + str(li) + " did not pass violation cutoffs.")
 			if viol_2_percent < viol_2_cutoff:
 				if viol_1_percent < viol_1_cutoff:
 					any_good += 1
-					#Adding in pass test in meantime
-					pass_val = (viol_2_percent < viol_2_cutoff) and (viol_1_percent < viol_1_cutoff)
-					if pass_val == True:
-						print("\t \t Cluster " + str(li) + " passed violation cutoffs. Now plotting.")
-					else:
-						print("\t \t Cluster " + str(li) + " did not pass violation cutoffs. Now plotting.")
 					#Select sub-population of spikes to plot as an example
 					plot_num_vis = min(num_vis,len(spikes_labelled)-1)
 					plot_ind = np.random.randint(0,len(peak_ind),size=(plot_num_vis,)) #Pick 500 random waveforms to plot
@@ -477,7 +478,9 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					plt.title('Cluster ' + str(li) + ' x' + str(plot_num_vis) + ' Waveforms')
 					#Find ISI distribution and plot
 					plt.subplot(3,3,3)
-					plt.hist(peak_diff[np.where(peak_diff < sampling_rate)[0]],bins=min(100,round(len(peak_diff)/10)))
+					plt.hist(isi_ms,bins=min(100,round(len(peak_diff)/10)))
+					plt.xlim((0,5000)) #Zoom into 5 s max distribution
+					plt.xlabel('ISI (ms)')
 					plt.title('Cluster ' + str(li) + ' ISI Distribution')
 					#Histogram of time of spike occurrence
 					plt.subplot(3,3,4)
