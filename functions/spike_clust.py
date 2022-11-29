@@ -55,7 +55,7 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 	
 	if re_sort != 'n':
 		#First test different numbers of clusters
-		clust_num_vec = np.arange(3,12)
+		clust_num_vec = np.arange(3,10)
 		silhouette_scores = np.zeros(np.shape(clust_num_vec))
 		distortion_scores = np.zeros(np.shape(clust_num_vec))
 		print("\t \t Testing different numbers of clusters.")
@@ -65,17 +65,20 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 																  clust_num,axis_labels,
 																  silh_dir,clust_type,type_spike)
 		
-# 		plt.figure()
-# 		plt.plot(clust_num_vec,silhouette_scores)
-# 		plt.title("Average Silhouette Scores")
-# 		plt.xlabel("Cluster Count")
-# 		plt.ylabel("Average Silhouette Score")
-# 		
-# 		plt.figure()
-# 		plt.plot(clust_num_vec,distortion_scores)
-# 		plt.title("Average Distortions")
-# 		plt.xlabel("Cluster Count")
-# 		plt.ylabel("Average Distortion")
+		sil_fig = plt.figure()
+		plt.plot(clust_num_vec,silhouette_scores)
+		plt.title("Average Silhouette Scores")
+		plt.xlabel("Cluster Count")
+		plt.ylabel("Average Silhouette Score")
+		sil_fig.savefig(silh_dir + 'avg_silh.png', dpi=100)
+ 		
+		dist_fig = plt.figure()
+		plt.plot(clust_num_vec,distortion_scores)
+		plt.title("Average Distortions")
+		plt.xlabel("Cluster Count")
+		plt.ylabel("Average Distortion")
+		dist_fig.savefig(silh_dir + 'avg_dist.png', dpi=100)
+ 		
 		
 		#Next pick the best number of clusters
 		clust_num = clust_num_vec[np.where(silhouette_scores == np.max(silhouette_scores))[0]][0]
@@ -165,11 +168,14 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 	reduced_spikes = np.concatenate((np.expand_dims(peak_amplitudes,1),spikes_pca),1)
 	
 	#Cluster data
-	rand_ind = np.random.randint(len(reduced_spikes),size=(int(np.ceil(len(peak_amplitudes)/3)),))
+	if type_spike[0:5] == 'final':
+		rand_ind = np.random.randint(len(reduced_spikes),size=(len(peak_amplitudes),))
+	else:
+		rand_ind = np.random.randint(len(reduced_spikes),size=(int(np.ceil(len(peak_amplitudes)/3)),))
 	rand_spikes = list(np.array(reduced_spikes)[rand_ind])
 	if clust_type == 'kmeans':
 		#___KMeans___
-		print('\t \t \t Performing K-Means fitting.')
+		print('\n \t \t \t Performing K-Means fitting.')
 		kmeans = KMeans(n_clusters=clust_num, random_state=0).fit(rand_spikes)
 		print('\t \t \t Performing label prediction.')
 		labels = kmeans.predict(reduced_spikes)
@@ -177,8 +183,8 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 		centers = kmeans.cluster_centers_
 	elif clust_type == 'gmm':
 		#___GMM___
-		print('\t \t \t Performing GMM fitting.')
-		gmm_fit = gm(n_components=clust_num, random_state=0).fit(rand_spikes)
+		print('\n \t \t \t Performing GMM fitting.')
+		gmm_fit = gm(n_components=clust_num, random_state=np.random.randint(100), max_iter = 200).fit(rand_spikes)
 		print('\t \t \t  Performing label prediction.')
 		labels = gmm_fit.predict(reduced_spikes)
 		rand_labels = list(np.array(labels)[rand_ind])
@@ -250,27 +256,27 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 			pca_labelled = spikes_pca[ind_labelled]
 			pca_labelled_2 = spikes_pca[np.where(labels == clust_num - li)[0]]
 			#3D plot dim 1-3
-			ax.view_init(45, 0)
+			ax.view_init(60, 0)
 			ax.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot rotated
-			ax2.view_init(45, 120)
+			ax2.view_init(60, 120)
 			ax2.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot rotated
-			ax3.view_init(-45, 0)
+			ax3.view_init(-180, 120)
 			ax3.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot rotated
-			ax4.view_init(45, 240)
+			ax4.view_init(60, 240)
 			ax4.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot dim 2-4
-			ax5.view_init(45, 0)
+			ax5.view_init(60, 0)
 			ax5.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot dim 2-4 rotated
-			ax6.view_init(-45, 180)
+			ax6.view_init(-180, 180)
 			ax6.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#Centroid 3D plot
@@ -284,7 +290,7 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 	
 def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels, 
 				viol_1, viol_2, type_spike, segment_times, segment_names, 
-				dig_in_times,dig_in_names,sampling_rate,clust_type,re_sort='y'):
+				dig_in_lens, dig_in_times ,dig_in_names,sampling_rate,clust_type,re_sort='y'):
 	"""This function performs clustering on spikes pulled from each component.
 	Inputs:
 		spikes = list of spike samples num_spikes x length_spike
@@ -298,7 +304,8 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		type_spike = type of peak (pos or neg)
 		segment_times = time of different experiment segments
 		segment_names = names of different segments
-		dig_in_times = array times of tastant delivery - each tastant separately
+		dig_in_lens = length of tastant delivery in samples
+		dig_in_times = array times of end of tastant delivery - each tastant separately
 		dig_in_names = names of different tastants
 		sampling_rate = number of samples per second
 		clust_type = selects the clustering method: kmeans or gmm
@@ -329,11 +336,19 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		
  		#Project data to lower dimensions
 		print("\t Projecting data to lower dimensions")
-		pca = PCA(n_components = 5) #TESTING VISUALIZATION OF 3 COMPONENTS FROM 5
+		#Grab spike properties
+		ind_zero = np.where(axis_labels == 0)[0]
+		peak_amplitudes = [wav[ind_zero][0] for wav in spikes]
+		pca = PCA(n_components = 5)
 		spikes_pca = pca.fit_transform(spikes)
-		#Grab spike amplitude and energy of spike to add to spikes_pca
-		amp_vals = np.array([np.abs(spikes[i][center]) for i in range(len(spikes))])
-		energy_vals = np.expand_dims(np.sum(np.square(spikes),1),1)
+		reduced_spikes = np.concatenate((np.expand_dims(peak_amplitudes,1),spikes_pca),1)
+		
+		#Cluster data
+		if type_spike[0:5] == 'final':
+			rand_ind = np.random.randint(len(reduced_spikes),size=(len(peak_amplitudes),))
+		else:
+			rand_ind = np.random.randint(len(reduced_spikes),size=(int(np.ceil(len(peak_amplitudes)/3)),))
+		rand_spikes = list(np.array(reduced_spikes)[rand_ind])
 		
 		#Perform kmeans clustering on downsampled data
 		print("\t Performing clustering of data.")
@@ -344,15 +359,15 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			print('\t Performing fitting.')
 			kmeans = KMeans(n_clusters=clust_num, random_state=0).fit(rand_spikes)
 			print('\t Performing label prediction.')
-			labels = kmeans.predict(spikes)
+			labels = kmeans.predict(reduced_spikes)
 			centers = kmeans.cluster_centers_
 		elif clust_type == 'gmm':
 			#___GMM___
 			print('\t Performing fitting.')
-			gmm_fit = gm(n_components=clust_num, random_state=0).fit(rand_spikes)
+			gmm_fit = gm(n_components=clust_num, random_state=np.random.randint(100), max_iter = 200).fit(rand_spikes)
 			print('\t Performing label prediction.')
-			labels = gmm_fit.predict(spikes)
-			centers = gm.means_
+			labels = gmm_fit.predict(reduced_spikes)
+			centers = gmm_fit.means_
 		print('\t Now testing/plotting clusters.')
 		violations = []
 		any_good = 0
@@ -374,27 +389,27 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			pca_labelled = spikes_pca[ind_labelled]
 			pca_labelled_2 = spikes_pca[np.where(labels == clust_num - li)[0]]
 			#3D plot dim 1-3
-			ax.view_init(45, 0)
+			ax.view_init(60, 0)
 			ax.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot rotated
-			ax2.view_init(45, 120)
+			ax2.view_init(60, 120)
 			ax2.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot rotated
-			ax3.view_init(-45, 0)
+			ax3.view_init(-180, 120)
 			ax3.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot rotated
-			ax4.view_init(45, 240)
+			ax4.view_init(60, 240)
 			ax4.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot dim 2-4
-			ax5.view_init(45, 0)
+			ax5.view_init(60, 0)
 			ax5.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot dim 2-4 rotated
-			ax6.view_init(-45, 180)
+			ax6.view_init(-180, 180)
 			ax6.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#Centroid 3D plot
@@ -441,7 +456,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 					for t_i in range(len(dig_in_times)): #By tastant
 						spike_raster = np.zeros((len(dig_in_times[t_i]),PSTH_width))
 						for d_i in range(len(dig_in_times[t_i])): #By delivery
-							d_time = dig_in_times[t_i][d_i] #Time of delivery
+							d_time = dig_in_times[t_i][d_i] #Time of end of delivery
 							spike_inds_left = np.where(peak_ind - d_time > PSTH_left)[0]
 							spike_inds_right = np.where(peak_ind - d_time < PSTH_right)[0]
 							overlap_inds = np.intersect1d(spike_inds_left,spike_inds_right)
@@ -515,6 +530,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 # 						plt.plot(PSTH_x_labels,PSTH_mat[p_i,:],alpha=0.1)
 					for d_i in range(len(dig_in_times)):
 						plt.plot(PSTH_x_labels,PSTH_avg_taste[d_i],c=possible_colors[d_i],label=dig_in_names[d_i])
+						plt.axvline(0-dig_in_lens[d_i],c=possible_colors[d_i])
 					plt.legend()
 					plt.axvline(0,c='k')
 					plt.xlabel('Milliseconds from delivery')

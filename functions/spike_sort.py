@@ -163,17 +163,26 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	axis_labels = np.arange(-num_pts_left,num_pts_right)
 	#total_pts = num_pts_left + num_pts_right
 	threshold_percentile = 25
-	clust_type = 'kmeans'
+	clust_type = 'gmm' #'kmeans' or 'gmm' are the 2 options
 	
-	#Grab dig in times for each tastant separately
+	#Grab dig in times for each tastant separately - grabs last index of delivery
 	dig_times = [list(np.where(dig_ins[i] > 0)[0]) for i in range(len(dig_in_names))]
-	dig_diff = [list(np.where(np.diff(dig_times[i])>1)[0] + 1) for i in range(len(dig_in_names))]
+	dig_diff = [list(np.where(np.diff(dig_times[i])>1)[0] - 1) for i in range(len(dig_in_names))]
 	dig_in_times = []
 	for i in range(len(dig_in_names)):
-		dig_in_vals = [0]
-		dig_in_vals.extend(dig_diff[i])
+		dig_in_vals = dig_diff[i]
+		dig_in_vals.extend([len(dig_times)])
 		dig_in_ind = list(np.array(dig_times[i])[dig_in_vals])
 		dig_in_times.append(dig_in_ind)
+	start_dig_diff = [list(np.where(np.diff(dig_times[i])>1)[0] + 1) for i in range(len(dig_in_names))]
+	start_dig_in_times = []
+	for i in range(len(dig_in_names)):
+		dig_in_vals = [0]
+		dig_in_vals.extend(start_dig_diff[i])
+		dig_in_ind = list(np.array(dig_times[i])[dig_in_vals])
+		start_dig_in_times.append(dig_in_ind)
+	#number of samples tastant delivery length
+	dig_in_lens = np.mean((np.array(dig_in_times) - np.array(start_dig_in_times))[:,2:-2],1)
 	
 	#Create .csv file name for storage of completed units
 	sorted_units_csv = dir_save + 'sorted_units.csv'
@@ -271,7 +280,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 				print("\t Performing Clustering to Remove Noise (First Pass)")
 				sorted_peak_ind, waveform_ind  = sc.cluster(all_spikes, all_peaks, i, 
 											 dir_save, axis_labels, 'noise_removal',
-											 segment_times, segment_names, dig_in_times,
+											 segment_times, segment_names, dig_in_lens, dig_in_times,
 											 dig_in_names, sampling_rate, clust_type, re_sort='y')
 # 				sorted_peak_ind, waveform_ind = spike_clust(all_spikes, all_peaks, 
 # 											 clust_num, i, dir_save, axis_labels, 
@@ -304,7 +313,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					print("\t Sorting Template Matched Group " + str(g_i))
 					sort_ind_2, waveform_ind_2  = sc.cluster(good_spikes[g_i], good_ind[g_i], i, 
 												 dir_save, axis_labels, 'final/unit_' + str(g_i),
-												 segment_times, segment_names, dig_in_times,
+												 segment_times, segment_names, dig_in_lens, dig_in_times,
 												 dig_in_names, sampling_rate, clust_type, re_sort='y')
 # 					sort_ind_2, waveform_ind_2 = spike_clust(good_spikes[g_i], good_ind[g_i], 
 # 											 clust_num_fin, i, dir_save, axis_labels, 
