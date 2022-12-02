@@ -4,7 +4,7 @@
 Created on Thu Aug  4 05:50:05 2022
 
 @author: hannahgermaine
-This set of functions pulls spikes out of cleaned and ICA sorted data.
+This set of functions pulls spikes out of cleaned data.
 """
 
 import numpy as np
@@ -125,7 +125,7 @@ def potential_spike_times(data,sampling_rate,dir_save):
 		#Grab mean and std
 		std_dev = np.std(data)
 		print("Searching for potential spike indices")
-		peak_ind = find_peaks(-1*data,height=1*std_dev)[0]
+		peak_ind = find_peaks(-1*data,height=2*std_dev)[0]
 		#Save results to .csv
 		with open(init_times_csv, 'w') as f:
 			# using csv.writer method from CSV package
@@ -163,7 +163,19 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	axis_labels = np.arange(-num_pts_left,num_pts_right)
 	#total_pts = num_pts_left + num_pts_right
 	threshold_percentile = 25
-	clust_type = 'gmm' #'kmeans' or 'gmm' are the 2 options
+	#Ask for user input on type of clustering to perform
+	clust_loop = 1
+	while clust_loop == 1:
+		print('Clustering can be performed with GMMs or KMeans. Which algorithm would you like to use?')
+		clust_type = input("INPUT REQUESTED: Enter 1 for gmm, 2 for kmeans: ")
+		if clust_type != 1 and clust_type != 2:
+			print("\t Incorrect entry.")
+		elif clust_type == 1:
+			clust_type = 'gmm'
+			clust_loop = 0
+		elif clust_type == 2:
+			clust_type = 'kmeans'
+			clust_loop = 0
 	
 	#Grab dig in times for each tastant separately - grabs last index of delivery
 	dig_times = [list(np.where(dig_ins[i] > 0)[0]) for i in range(len(dig_in_names))]

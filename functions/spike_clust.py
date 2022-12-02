@@ -16,9 +16,10 @@ import matplotlib.pyplot as plt
 from scipy.fftpack import rfft, fftfreq
 from scipy.signal import find_peaks
 from sklearn.metrics import silhouette_samples
+import umap
 
 def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike, 
-			segment_times, segment_names, dig_in_times, dig_in_names, 
+			segment_times, segment_names, dig_in_lens, dig_in_times, dig_in_names, 
 			sampling_rate, clust_type, re_sort):
 	"""This function tests different numbers of clusters for spike clustering
 	using the silhouette score method. It outputs the best clustering results
@@ -71,6 +72,7 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 		plt.xlabel("Cluster Count")
 		plt.ylabel("Average Silhouette Score")
 		sil_fig.savefig(silh_dir + 'avg_silh.png', dpi=100)
+		plt.close(sil_fig)
  		
 		dist_fig = plt.figure()
 		plt.plot(clust_num_vec,distortion_scores)
@@ -78,7 +80,7 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 		plt.xlabel("Cluster Count")
 		plt.ylabel("Average Distortion")
 		dist_fig.savefig(silh_dir + 'avg_dist.png', dpi=100)
- 		
+		plt.close(dist_fig)
 		
 		#Next pick the best number of clusters
 		clust_num = clust_num_vec[np.where(silhouette_scores == np.max(silhouette_scores))[0]][0]
@@ -89,8 +91,9 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 														 clust_num, e_i, sort_data_dir, 
 														 axis_labels, viol_1, viol_2, 
 														 type_spike, segment_times, 
-														 segment_names, dig_in_times,
+														 segment_names, dig_in_lens, dig_in_times,
 														 dig_in_names,sampling_rate,clust_type,re_sort='y')
+		
 	else:
 		#Finally cluster by the best number of clusters
 		neuron_spike_ind, neuron_waveform_ind = import_sorted(sort_neur_stats_csv, sort_neur_ind_csv, sort_neur_wav_csv)
@@ -198,44 +201,28 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 	print("\t \t \t Calculating Silhouette Scores")
 	slh_vals = silhouette_samples(rand_spikes,rand_labels)
 	slh_avg = np.mean(slh_vals)
-	print("\t \t \t Plotting Silhouette Scores")
-	plot_dim = int(np.ceil(np.sqrt(clust_num)))
-	slh_fig = plt.figure(figsize=(15,15))
-	for i in range(clust_num):
-		plt.subplot(plot_dim,plot_dim,i+1)
-		slh_vals_clust_i = slh_vals[np.where(np.array(rand_labels) == i)[0]]
-		plt.hist(slh_vals_clust_i, alpha = 0.5)
-		clust_mean = np.mean(slh_vals_clust_i)
-		plt.axvline(clust_mean,label='Mean = '+str(np.round(clust_mean,2)))
-		plt.legend()
-		plt.title('Cluster #' + str(i))
-		plt.xlabel('Silhouette Score Value')
-		plt.ylabel('Number of Cluster Members')
-	plt.suptitle('Silhouette Score Distributions by Cluster')
-	plt.tight_layout()
-	slh_fig.savefig(silh_dir + 'slh_scores_clust_count_' + str(clust_num) + '.png', dpi=100)
-	plt.close(slh_fig)
+# 	print("\t \t \t Plotting Silhouette Scores")
+# 	plot_dim = int(np.ceil(np.sqrt(clust_num)))
+# 	slh_fig = plt.figure(figsize=(15,15))
+# 	for i in range(clust_num):
+# 		plt.subplot(plot_dim,plot_dim,i+1)
+# 		slh_vals_clust_i = slh_vals[np.where(np.array(rand_labels) == i)[0]]
+# 		plt.hist(slh_vals_clust_i, alpha = 0.5)
+# 		clust_mean = np.mean(slh_vals_clust_i)
+# 		plt.axvline(clust_mean,label='Mean = '+str(np.round(clust_mean,2)))
+# 		plt.legend()
+# 		plt.title('Cluster #' + str(i))
+# 		plt.xlabel('Silhouette Score Value')
+# 		plt.ylabel('Number of Cluster Members')
+# 	plt.suptitle('Silhouette Score Distributions by Cluster')
+# 	plt.tight_layout()
+# 	slh_fig.savefig(silh_dir + 'slh_scores_clust_count_' + str(clust_num) + '.png', dpi=100)
+# 	plt.close(slh_fig)
 	
 	#___Distortion Scores___
 	print("\t \t \t Calculating Distortion Scores")
 	dist = [np.sum((centers[i] - np.array(rand_spikes)[np.where(np.array(rand_labels) == i)[0]])**2,1)  for i in range(clust_num)]
-#	dist_avgs = [np.mean(dist[i]) for i in range(clust_num)]
 	avg_dist = np.mean([np.mean(dist[i]) for i in range(clust_num)])
-# 	print("\t \t \t Plotting Distortion Scores")
-# 	plot_dim = int(np.ceil(np.sqrt(clust_num)))
-# 	dist_fig = plt.figure(figsize=(15,15))
-# 	for i in range(clust_num):
-# 		plt.subplot(plot_dim,plot_dim,i+1)
-# 		plt.hist(dist[i], alpha = 0.5)
-# 		plt.axvline(dist_avgs[i],label='Mean = '+str(np.round(dist_avgs[i],2)))
-# 		plt.legend()
-# 		plt.title('Cluster #' + str(i))
-# 		plt.xlabel('Squared Distance')
-# 		plt.ylabel('Number of Cluster Members')
-# 	plt.suptitle('Squared Distance Distributions by Cluster')
-# 	plt.tight_layout()
-# 	dist_fig.savefig(silh_dir + 'dist_clust_count_' + str(clust_num) + '.png', dpi=100)
-# 	plt.close(dist_fig)
 
 	if type_spike[0:5] == 'final': #Plot PCA cluster visualization for final clustering phase only
 		print("\t \t \t Plotting Clusters")
@@ -276,7 +263,7 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 			ax5.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot dim 2-4 rotated
-			ax6.view_init(-180, 180)
+			ax6.view_init(-180, 120)
 			ax6.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#Centroid 3D plot
@@ -285,6 +272,20 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 		ax.legend(loc='center left')
 		clust_fig.savefig(silh_dir + 'projections_clust_count_' + str(clust_num) + '.png', dpi=100)
 		plt.close(clust_fig)
+		
+		#Test UMAP projection
+		umap_fig = plt.figure(figsize=(15,15))
+		reducer = umap.UMAP()
+		embedding = reducer.fit_transform(reduced_spikes)
+		for li in range(clust_num):
+			ind_labelled = np.where(labels == li)[0]
+			plt.scatter(embedding[ind_labelled, 0], embedding[ind_labelled, 1], c=possible_colors[li],
+			   label='cluster '+str(li),alpha=0.1)
+		plt.gca().set_aspect('equal', 'datalim')
+		plt.legend()
+		plt.title('UMAP projection of the dataset', fontsize=24)
+		umap_fig.savefig(silh_dir + 'umap_clust_count_' + str(clust_num) + '.png', dpi=100)
+		plt.close(umap_fig)
 		
 	return slh_avg, avg_dist
 	
@@ -333,6 +334,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		PSTH_left_ms = 500
 		PSTH_right_ms = 2000
 		center = np.where(axis_labels == 0)[0]
+		dig_in_lens_ms = (dig_in_lens/sampling_rate)*1000
 		
  		#Project data to lower dimensions
 		print("\t Projecting data to lower dimensions")
@@ -352,8 +354,6 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		
 		#Perform kmeans clustering on downsampled data
 		print("\t Performing clustering of data.")
-		rand_ind = np.random.randint(len(spikes),size=(100000,))
-		rand_spikes = list(np.array(spikes)[rand_ind])
 		if clust_type == 'kmeans':
 			#___KMeans___
 			print('\t Performing fitting.')
@@ -444,6 +444,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			if viol_2_percent < viol_2_cutoff:
 				if viol_1_percent < viol_1_cutoff:
 					any_good += 1
+					
 					#Select sub-population of spikes to plot as an example
 					plot_num_vis = min(num_vis,len(spikes_labelled)-1)
 					plot_ind = np.random.randint(0,len(peak_ind),size=(plot_num_vis,)) #Pick 500 random waveforms to plot
@@ -470,7 +471,9 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 						PSTH_x_labels = np.arange(-PSTH_left_ms,PSTH_right_ms,bin_step_size_ms)
 						PSTH_mat = np.zeros((len(dig_in_times[t_i]),len(PSTH_x_labels)))
 						for b_i in range(len(PSTH_x_labels)):
-							PSTH_mat[:,b_i] = np.sum(spike_raster[:,b_i*bin_step_size:(b_i*bin_step_size)+bin_size],1)
+							left_ind = int(max(round(b_i*bin_step_size - 0.5*bin_size),0))
+							right_ind = int(min(round(b_i*bin_step_size + 0.5*bin_size),len(spike_raster[0])))
+							PSTH_mat[:,b_i] = np.sum(spike_raster[:,left_ind:right_ind],1)
 						PSTH_avg = (np.mean(PSTH_mat,0)/bin_ms)*1000 #Converted to Hz
 						PSTH_avg_taste.append(PSTH_avg)
 					#CREATE FIGURE
@@ -530,7 +533,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 # 						plt.plot(PSTH_x_labels,PSTH_mat[p_i,:],alpha=0.1)
 					for d_i in range(len(dig_in_times)):
 						plt.plot(PSTH_x_labels,PSTH_avg_taste[d_i],c=possible_colors[d_i],label=dig_in_names[d_i])
-						plt.axvline(0-dig_in_lens[d_i],c=possible_colors[d_i])
+						plt.axvline(0-dig_in_lens_ms[d_i],c=possible_colors[d_i])
 					plt.legend()
 					plt.axvline(0,c='k')
 					plt.xlabel('Milliseconds from delivery')
