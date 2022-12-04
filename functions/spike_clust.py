@@ -20,7 +20,7 @@ import umap
 
 def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike, 
 			segment_times, segment_names, dig_in_lens, dig_in_times, dig_in_names, 
-			sampling_rate, clust_type, re_sort):
+			sampling_rate, clust_type, wav_type, re_sort):
 	"""This function tests different numbers of clusters for spike clustering
 	using the silhouette score method. It outputs the best clustering results
 	and returns indices of good waveforms.
@@ -64,7 +64,8 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 			clust_num = clust_num_vec[i]
 			silhouette_scores[i], distortion_scores[i] = clust_num_test(e_i, spikes,
 																  clust_num,axis_labels,
-																  silh_dir,clust_type,type_spike)
+																  silh_dir,clust_type,
+																  wav_type,type_spike)
 		
 		sil_fig = plt.figure()
 		plt.plot(clust_num_vec,silhouette_scores)
@@ -91,8 +92,10 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 														 clust_num, e_i, sort_data_dir, 
 														 axis_labels, viol_1, viol_2, 
 														 type_spike, segment_times, 
-														 segment_names, dig_in_lens, dig_in_times,
-														 dig_in_names,sampling_rate,clust_type,re_sort='y')
+														 segment_names, dig_in_lens,
+														 dig_in_times, dig_in_names,
+														 sampling_rate,clust_type,
+														 wav_type,re_sort='y')
 		
 	else:
 		#Finally cluster by the best number of clusters
@@ -149,7 +152,7 @@ def import_sorted(sort_neur_stats_csv, sort_neur_ind_csv, sort_neur_wav_csv):
 		
 	return neuron_spike_ind, neuron_waveform_ind
 
-def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_spike):
+def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,wav_type,type_spike):
 	"""This function performs silhouette score tests on different numbers of
 	clusters used on spike clustering to determine the best cluster number.
 	Inputs:
@@ -158,6 +161,7 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 		- clust_num: vector with the number of clusters to test
 		- silh_dir: directory to save silhouette test figures and cluster images
 		- clust_type: type of clustering to use: kmeans or gmm
+		- wav_type: 'full' = full waveform, 'red' = reduced waveform
 		- type_spike: noise or final clustering
 	Outputs:
 		- slh_avg: silhouette score for this cluster count
@@ -168,7 +172,10 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 	peak_amplitudes = [wav[ind_zero][0] for wav in spikes]
 	pca = PCA(n_components = 5)
 	spikes_pca = pca.fit_transform(spikes)
-	reduced_spikes = np.concatenate((np.expand_dims(peak_amplitudes,1),spikes_pca),1)
+	if wav_type == 'full':
+		reduced_spikes = spikes
+	else:
+		reduced_spikes = np.concatenate((np.expand_dims(peak_amplitudes,1),spikes_pca),1)
 	
 	#Cluster data
 	if type_spike[0:5] == 'final':
@@ -179,7 +186,7 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 	if clust_type == 'kmeans':
 		#___KMeans___
 		print('\n \t \t \t Performing K-Means fitting.')
-		kmeans = KMeans(n_clusters=clust_num, random_state=0).fit(rand_spikes)
+		kmeans = KMeans(n_clusters=clust_num, random_state=np.random.randint(100)).fit(rand_spikes)
 		print('\t \t \t Performing label prediction.')
 		labels = kmeans.predict(reduced_spikes)
 		rand_labels = list(np.array(labels)[rand_ind])
@@ -251,7 +258,7 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 			ax2.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot rotated
-			ax3.view_init(-180, 120)
+			ax3.view_init(-120, 135)
 			ax3.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot rotated
@@ -263,7 +270,7 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 			ax5.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot dim 2-4 rotated
-			ax6.view_init(-180, 120)
+			ax6.view_init(-120, 135)
 			ax6.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#Centroid 3D plot
@@ -274,24 +281,25 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,type_sp
 		plt.close(clust_fig)
 		
 		#Test UMAP projection
-		umap_fig = plt.figure(figsize=(15,15))
-		reducer = umap.UMAP()
-		embedding = reducer.fit_transform(reduced_spikes)
-		for li in range(clust_num):
-			ind_labelled = np.where(labels == li)[0]
-			plt.scatter(embedding[ind_labelled, 0], embedding[ind_labelled, 1], c=possible_colors[li],
-			   label='cluster '+str(li),alpha=0.1)
-		plt.gca().set_aspect('equal', 'datalim')
-		plt.legend()
-		plt.title('UMAP projection of the dataset', fontsize=24)
-		umap_fig.savefig(silh_dir + 'umap_clust_count_' + str(clust_num) + '.png', dpi=100)
-		plt.close(umap_fig)
+		#umap_fig = plt.figure(figsize=(15,15))
+		#reducer = umap.UMAP()
+		#embedding = reducer.fit_transform(reduced_spikes)
+		#for li in range(clust_num):
+		#	ind_labelled = np.where(labels == li)[0]
+		#	plt.scatter(embedding[ind_labelled, 0], embedding[ind_labelled, 1], c=possible_colors[li],
+		#	   label='cluster '+str(li),alpha=0.1)
+		#plt.gca().set_aspect('equal', 'datalim')
+		#plt.legend()
+		#plt.title('UMAP projection of the dataset', fontsize=24)
+		#umap_fig.savefig(silh_dir + 'umap_clust_count_' + str(clust_num) + '.png', dpi=100)
+		#plt.close(umap_fig)
 		
 	return slh_avg, avg_dist
 	
 def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels, 
 				viol_1, viol_2, type_spike, segment_times, segment_names, 
-				dig_in_lens, dig_in_times ,dig_in_names,sampling_rate,clust_type,re_sort='y'):
+				dig_in_lens, dig_in_times ,dig_in_names,sampling_rate,clust_type,
+				wav_type,re_sort='y'):
 	"""This function performs clustering on spikes pulled from each component.
 	Inputs:
 		spikes = list of spike samples num_spikes x length_spike
@@ -310,6 +318,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		dig_in_names = names of different tastants
 		sampling_rate = number of samples per second
 		clust_type = selects the clustering method: kmeans or gmm
+		wav_type = 'full' = full waveform, 'red' = reduced waveform
 		re_sort = whether to re-sort if data has been previously sorted.
 	Outputs:
 		neuron_spike_ind = indices of spikes selected as true - the indices
@@ -343,7 +352,10 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		peak_amplitudes = [wav[ind_zero][0] for wav in spikes]
 		pca = PCA(n_components = 5)
 		spikes_pca = pca.fit_transform(spikes)
-		reduced_spikes = np.concatenate((np.expand_dims(peak_amplitudes,1),spikes_pca),1)
+		if wav_type == 'full':
+			reduced_spikes = spikes
+		else:
+			reduced_spikes = np.concatenate((np.expand_dims(peak_amplitudes,1),spikes_pca),1)
 		
 		#Cluster data
 		if type_spike[0:5] == 'final':
@@ -375,7 +387,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		clust_stats = np.zeros((clust_num,5))
 		#Create cluster projection plot
 		pca2 = PCA(n_components = 3)
-		center_pca = pca2.fit_transform(centers)
+		#center_pca = pca2.fit_transform(centers)
 		clust_fig = plt.figure(figsize=(15,15))
 		ax = clust_fig.add_subplot(111, projection='3d')
 		ax2 = clust_fig.add_subplot(331, projection='3d')
@@ -387,7 +399,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		for li in range(clust_num):
 			ind_labelled = np.where(labels == li)[0]
 			pca_labelled = spikes_pca[ind_labelled]
-			pca_labelled_2 = spikes_pca[np.where(labels == clust_num - li)[0]]
+			pca_labelled_means = np.mean(pca_labelled,axis=0)
 			#3D plot dim 1-3
 			ax.view_init(60, 0)
 			ax.scatter(pca_labelled[:,0],pca_labelled[:,1],pca_labelled[:,2],
@@ -409,12 +421,14 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			ax5.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#3D plot dim 2-4 rotated
-			ax6.view_init(-180, 180)
+			ax6.view_init(-180, -120)
 			ax6.scatter(pca_labelled[:,1],pca_labelled[:,2],pca_labelled[:,3],
 				  c=possible_colors[li],label='cluster '+str(li),alpha=0.1)
 			#Centroid 3D plot
-			ax7.scatter(center_pca[li,0],center_pca[li,1],center_pca[li,2],
+			ax7.scatter(pca_labelled_means[0],pca_labelled_means[1],pca_labelled_means[2],
 			   c = possible_colors[li])
+			#ax7.scatter(center_pca[li,0],center_pca[li,1],center_pca[li,2],
+			#   c = possible_colors[li])
 		ax.legend(loc='center left')
 		clust_fig.savefig(sort_neur_type_dir + 'cluster_projections.png', dpi=100)
 		plt.close(clust_fig)
@@ -423,6 +437,8 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			ind_labelled = np.where(labels == li)[0]
 			spikes_labelled = np.array(spikes)[ind_labelled]
 			#Check for violations first
+			print(np.shape(peak_indices))
+			print(ind_labelled)
 			peak_ind = np.unique(np.array(peak_indices)[ind_labelled])
 			peak_diff = np.subtract(peak_ind[1:-1],peak_ind[0:-2]) 
 			isi_ms = (peak_diff/sampling_rate)*1000

@@ -166,8 +166,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	#Ask for user input on type of clustering to perform
 	clust_loop = 1
 	while clust_loop == 1:
-		print('Clustering can be performed with GMMs or KMeans. Which algorithm would you like to use?')
-		clust_type = input("INPUT REQUESTED: Enter 1 for gmm, 2 for kmeans: ")
+		print('\n \n Clustering can be performed with GMMs or KMeans. Which algorithm would you like to use?')
+		clust_type = int(input("INPUT REQUESTED: Enter 1 for gmm, 2 for kmeans: "))
 		if clust_type != 1 and clust_type != 2:
 			print("\t Incorrect entry.")
 		elif clust_type == 1:
@@ -176,6 +176,34 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 		elif clust_type == 2:
 			clust_type = 'kmeans'
 			clust_loop = 0
+	#Ask for user input on what data to cluster
+	#'full' = full waveform, 'red' = reduced waveform
+	wav_loop = 1
+	while wav_loop == 1:
+		print('\n Clustering can be performed on full waveforms or reduced via PCA. Which would you like to use?')
+		wav_num = int(input("INPUT REQUESTED: Enter 1 for full waveform, 2 for PCA reduced: "))
+		if wav_num != 1 and wav_num != 2:
+			print("\t Incorrect entry.")
+		elif wav_num == 1:
+			wav_type = 'full'
+			wav_loop = 0
+		elif wav_num == 2:
+			wav_type = 'red'
+			wav_loop = 0
+	#Ask for user input on whether to recombine template results
+	#'comb' = combined, 'sep' = separate
+	comb_loop = 1
+	while comb_loop == 1:
+		print('\n Template matching results can be recombined or kept separate. Which would you like to use?')
+		comb_num = int(input("INPUT REQUESTED: Enter 1 for combined, 2 for separate: "))
+		if comb_num != 1 and comb_num != 2:
+			print("\t Incorrect entry.")
+		elif comb_num == 1:
+			comb_type = 'comb'
+			comb_loop = 0
+		elif comb_num == 2:
+			comb_type = 'sep'
+			comb_loop = 0
 	
 	#Grab dig in times for each tastant separately - grabs last index of delivery
 	dig_times = [list(np.where(dig_ins[i] > 0)[0]) for i in range(len(dig_in_names))]
@@ -293,12 +321,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 				sorted_peak_ind, waveform_ind  = sc.cluster(all_spikes, all_peaks, i, 
 											 dir_save, axis_labels, 'noise_removal',
 											 segment_times, segment_names, dig_in_lens, dig_in_times,
-											 dig_in_names, sampling_rate, clust_type, re_sort='y')
-# 				sorted_peak_ind, waveform_ind = spike_clust(all_spikes, all_peaks, 
-# 											 clust_num, i, dir_save, axis_labels, 
-# 											 viol_1, viol_2, 'noise_removal', segment_times,
-# 											 segment_names, dig_in_times, dig_in_names,
-# 											 sampling_rate, re_sort='y')
+											 dig_in_names, sampling_rate, clust_type, 
+											 wav_type, re_sort='y')
 				good_spikes = []
 				good_ind = [] #List of lists with good indices in groupings
 				good_all_spikes_ind = [] #indices aligned with "all_spikes"
@@ -312,26 +336,45 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,
 										   num_pts_left,num_pts_right,
 										   threshold_percentile,unit_dir,g_i)
-					good_spikes.extend(g_spikes) #Store the good spike profiles
-					s_ind = [list(np.array(s_i)[g_ind[i]]) for i in range(len(g_ind))]
-					p_ind = [list(np.array(p_i)[g_ind[i]]) for i in range(len(g_ind))]
+					if comb_type == 'sep':
+						#If separately clustering 
+						good_spikes.extend(g_spikes) #Store the good spike profiles
+						s_ind = [list(np.array(s_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
+						p_ind = [list(np.array(p_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
+					else:
+						#If combining before final clustering
+						[good_spikes.extend(g_s) for g_s in g_spikes] #Store the good spike profiles
+						s_ind = []
+						for g_ii in range(len(g_ind)):
+							s_ind.extend(list(np.array(s_i)[g_ind[g_ii]]))
+						p_ind = []
+						for g_ii in range(len(g_ind)):
+							p_ind.extend(list(np.array(p_i)[g_ind[g_ii]]))
 					good_ind.extend(s_ind) #Store the original indices
 					good_all_spikes_ind.extend(p_ind)
 				del g_i, s_i
 				print("\t Performing Clustering of Remaining Waveforms (Second Pass)")
 				sorted_spike_inds = [] #grouped indices of spike clusters
 				sorted_wav_inds = [] #grouped indices of spike waveforms from "all_spikes"
-				for g_i in range(len(good_ind)): #Run through each set of potential clusters and perform cleanup clustering
-					print("\t Sorting Template Matched Group " + str(g_i))
-					sort_ind_2, waveform_ind_2  = sc.cluster(good_spikes[g_i], good_ind[g_i], i, 
-												 dir_save, axis_labels, 'final/unit_' + str(g_i),
+				if comb_type == 'sep':
+					for g_i in range(len(good_ind)): #Run through each set of potential clusters and perform cleanup clustering
+						print("\t Sorting Template Matched Group " + str(g_i))
+						sort_ind_2, waveform_ind_2  = sc.cluster(good_spikes[g_i], good_ind[g_i], i, 
+													 dir_save, axis_labels, 'final/unit_' + str(g_i),
+													 segment_times, segment_names, dig_in_lens, dig_in_times,
+													 dig_in_names, sampling_rate, clust_type, 
+													 wav_type, re_sort='y')
+						good_as_ind = good_all_spikes_ind[g_i]
+						sorted_spike_inds.extend(sort_ind_2)
+						for w_i in range(len(waveform_ind_2)):
+							sorted_wav_inds.append(list(np.array(good_as_ind)[waveform_ind_2[w_i]]))
+				else:
+					print("\t Sorting Template Matched Data")
+					sort_ind_2, waveform_ind_2  = sc.cluster(good_spikes, good_ind, i, 
+												 dir_save, axis_labels, 'final',
 												 segment_times, segment_names, dig_in_lens, dig_in_times,
-												 dig_in_names, sampling_rate, clust_type, re_sort='y')
-# 					sort_ind_2, waveform_ind_2 = spike_clust(good_spikes[g_i], good_ind[g_i], 
-# 											 clust_num_fin, i, dir_save, axis_labels, 
-# 											 viol_1, viol_2, 'final/unit_' + str(g_i), segment_times,
-# 											 segment_names, dig_in_times, dig_in_names,
-# 											 sampling_rate)
+												 dig_in_names, sampling_rate, clust_type, 
+												 wav_type, re_sort='y')
 					good_as_ind = good_all_spikes_ind[g_i]
 					sorted_spike_inds.extend(sort_ind_2)
 					for w_i in range(len(waveform_ind_2)):
@@ -468,6 +511,11 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 		max_peak = hist_counts[1][hist_peaks[0][list(np.where(hist_peak_vals == np.sort(hist_peak_vals)[-1])[0])]]
 		max_peak_2 = hist_counts[1][hist_peaks[0][list(np.where(hist_peak_vals == np.sort(hist_peak_vals)[-2])[0])]]
 		halfway_value = (max_peak + max_peak_2)/2
+		if len(halfway_value) > 1:
+			halfway_value = halfway_value[0]
+			print('\n Error was thrown over halfway_value not being single value: ')
+			print(halfway_value)
+			print('\n')
 		if halfway_value < percentile:
 			cut_val = halfway_value
 		else:
@@ -544,8 +592,8 @@ def generate_templates(sampling_rate,num_pts_left,num_pts_right):
 	max_reg_spike = max(abs(reg_spike))
 	reg_spike = reg_spike/max_reg_spike
 	
-	templates[0,:] = pos_spike
-	templates[1,:] = reg_spike
+	templates[0,:] = reg_spike
+	templates[1,:] = pos_spike
 	#templates[2,:] = fast_spike
 	
  	# fig = plt.figure()
