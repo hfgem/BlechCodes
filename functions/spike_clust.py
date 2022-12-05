@@ -598,7 +598,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 									 try:
 										  together_ind = [int(which_together[i]) for i in range(len(which_together))]
 										  which_comb.append(together_ind)
-										  if len(together_ind) < len(ind_good):
+										  if len(ind_good) - len(together_ind) > 1:
 											  cont_loop_2 = 1
 											  while cont_loop_2 == 1:
 												  continue_statement = input("\t Are there more indices which belong together (y/n)? ")

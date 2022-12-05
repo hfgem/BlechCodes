@@ -79,10 +79,15 @@ def file_import(datadir, dat_files_list, electrodes_list, emg_ind, dig_in_list, 
 	
 	# Create arrays for all components
 	atom = tables.IntAtom()
-	for i in all_electrodes: #add electrode arrays
-		e_name = i.split('.')[0]
-		e_name = e_name.split('-')[-1]
-		hf5.create_earray('/raw',f'electrode_{e_name}',atom,(0,))
+	if len(all_electrodes) == 1: #Single amplifier file
+		print("Single Amplifier File Detected")
+		
+	else:
+		
+		for i in all_electrodes: #add electrode arrays
+			e_name = i.split('.')[0]
+			e_name = e_name.split('-')[-1]
+			hf5.create_earray('/raw',f'electrode_{e_name}',atom,(0,))
 	for i in all_emg: #add emg arrays
 		e_name = i.split('.')[0]
 		e_name = e_name.split('-')[-1]
