@@ -342,36 +342,27 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 						s_ind = [list(np.array(s_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
 						p_ind = [list(np.array(p_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
 					else:
-						#If combining before final clustering
-						[good_spikes.extend(g_s) for g_s in g_spikes] #Store the good spike profiles
+						#If combining template results before final clustering
+						g_spikes_comb = []
+						[g_spikes_comb.extend(list(g_s)) for g_s in g_spikes]
+						g_spikes_comb = np.array(g_spikes_comb)
+						good_spikes.extend([g_spikes_comb]) #Store the good spike profiles
 						s_ind = []
 						for g_ii in range(len(g_ind)):
 							s_ind.extend(list(np.array(s_i)[g_ind[g_ii]]))
 						p_ind = []
 						for g_ii in range(len(g_ind)):
 							p_ind.extend(list(np.array(p_i)[g_ind[g_ii]]))
-					good_ind.extend(s_ind) #Store the original indices
-					good_all_spikes_ind.extend(p_ind)
+					good_ind.extend([s_ind]) #Store the original indices
+					good_all_spikes_ind.extend([p_ind])
 				del g_i, s_i
 				print("\t Performing Clustering of Remaining Waveforms (Second Pass)")
 				sorted_spike_inds = [] #grouped indices of spike clusters
 				sorted_wav_inds = [] #grouped indices of spike waveforms from "all_spikes"
-				if comb_type == 'sep':
-					for g_i in range(len(good_ind)): #Run through each set of potential clusters and perform cleanup clustering
-						print("\t Sorting Template Matched Group " + str(g_i))
-						sort_ind_2, waveform_ind_2  = sc.cluster(good_spikes[g_i], good_ind[g_i], i, 
-													 dir_save, axis_labels, 'final/unit_' + str(g_i),
-													 segment_times, segment_names, dig_in_lens, dig_in_times,
-													 dig_in_names, sampling_rate, clust_type, 
-													 wav_type, re_sort='y')
-						good_as_ind = good_all_spikes_ind[g_i]
-						sorted_spike_inds.extend(sort_ind_2)
-						for w_i in range(len(waveform_ind_2)):
-							sorted_wav_inds.append(list(np.array(good_as_ind)[waveform_ind_2[w_i]]))
-				else:
-					print("\t Sorting Template Matched Data")
-					sort_ind_2, waveform_ind_2  = sc.cluster(good_spikes, good_ind, i, 
-												 dir_save, axis_labels, 'final',
+				for g_i in range(len(good_ind)): #Run through each set of potential clusters and perform cleanup clustering
+					print("\t Sorting Template Matched Group " + str(g_i))
+					sort_ind_2, waveform_ind_2  = sc.cluster(good_spikes[g_i], good_ind[g_i], i, 
+												 dir_save, axis_labels, 'final/unit_' + str(g_i),
 												 segment_times, segment_names, dig_in_lens, dig_in_times,
 												 dig_in_names, sampling_rate, clust_type, 
 												 wav_type, re_sort='y')
@@ -379,7 +370,6 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					sorted_spike_inds.extend(sort_ind_2)
 					for w_i in range(len(waveform_ind_2)):
 						sorted_wav_inds.append(list(np.array(good_as_ind)[waveform_ind_2[w_i]]))
-				
 				#Save sorted spike indices and profiles
 				num_neur_sort = len(sorted_spike_inds)
 				sorted_spike_wavs = []

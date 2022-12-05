@@ -337,7 +337,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 	if re_sort == 'y':
 		#Set parameters
 		viol_2_cutoff = 2 #Maximum allowed violation percentage for 2 ms
-		viol_1_cutoff = 1 #Maximum allowed violation percentage for 1 ms
+		viol_1_cutoff = 0.5 #Maximum allowed violation percentage for 1 ms
 		num_vis = 500 #Number of waveforms to visualize for example plot
 		all_dig_in_times = np.unique(np.array(dig_in_times).flatten())
 		PSTH_left_ms = 500
@@ -437,8 +437,6 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			ind_labelled = np.where(labels == li)[0]
 			spikes_labelled = np.array(spikes)[ind_labelled]
 			#Check for violations first
-			print(np.shape(peak_indices))
-			print(ind_labelled)
 			peak_ind = np.unique(np.array(peak_indices)[ind_labelled])
 			peak_diff = np.subtract(peak_ind[1:-1],peak_ind[0:-2]) 
 			isi_ms = (peak_diff/sampling_rate)*1000
