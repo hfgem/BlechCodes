@@ -110,6 +110,8 @@ print(np.mean(combined_percents))
 print(np.std(combined_percents))
 
 #%% Perform pairwise comparison - with 3 bin smudge as in collision tests
+
+###THIS CODE HAS ERRORS IN IT - NEED TO FIX
 blur_ind = 3
 collision_cutoff = 50 #Percent cutoff for collisions
 colorCodes = np.array([[0,1,0],[0,0,1]]) #Colors for plotting collision rasters
@@ -184,8 +186,8 @@ for u_i in range(num_old_neur):
 	fig.savefig(blech_clust_datadir + '/' + 'fourier_unit_' + str(u_i) + '.png', dpi=100)
 	plt.close(fig)
 
-fourier = rfft(mean_bit)
-freqs = fftfreq(len(mean_bit), d=1/sampling_rate)
-fourier_peaks = find_peaks(fourier)[0]
-peak_freqs = freqs[fourier_peaks]
-peak_freqs = peak_freqs[peak_freqs>0]
+#fourier = rfft(mean_bit)
+#freqs = fftfreq(len(mean_bit), d=1/sampling_rate)
+#fourier_peaks = find_peaks(fourier)[0]
+#peak_freqs = freqs[fourier_peaks]
+#peak_freqs = peak_freqs[peak_freqs>0]

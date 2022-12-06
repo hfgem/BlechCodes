@@ -7,13 +7,19 @@
  ## Functions
  
  ### data_cleaning.py
- This is a collection of functions intended for cleaning electrode data - including (1) bandpass filtering, (2) signal averaging, and (3) signal clustering
+ A set of functions intended for cleaning electrode data - including (1) bandpass filtering, (2) signal averaging, and (3) signal clustering
  
  ### data_processing.py
- This is a collection of functions intended for data processing - including (1) pulling filenames from directories, (2) splitting .dat files into electrodes, emg, and digital inputs, and (3) downsampling data
+ A set of functions intended for data processing - including (1) pulling filenames from directories, (2) splitting .dat files into electrodes, emg, and digital inputs, and (3) downsampling data
  
  ### hdf5_handling.py
- This is a collection of functions dedicated to handling / creating hdf5 files.
+ A set of functions dedicated to handling / creating hdf5 files.
+
+ ### spike_clust.py
+ A set of functions dedicated to clustering candidate spike waveforms.
  
- ### ICA_data_split.py
- This is a collection of functions dedicated to performing independent component analysis (ICA) on electrode data, as a spike-sorting step.
+ ### spike_nosort.py
+ A set of functions dedicated to pulling candidate spike waveforms into "neurons" without using sorting techniques, as inspired by the 2019 Trautmann et al paper.
+ 
+ ### spike_sort.py
+ A set of functions dedicated to sorting candidate spike waveforms into neurons.

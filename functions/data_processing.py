@@ -64,6 +64,29 @@ def dig_ins(dat_files_list):
 		dig_in_names = list()
 		for i in range(len(dig_ins)):
 			dig_in_names.append(input("\n INPUT REQUESTED: Enter single-word name for dig-in " + str(i) + ": "))
+	else:
+		dig_ins = [name for name in dat_files_list if name.startswith('digital')]
+		if len(dig_ins) > 0:
+			dig_in_names = list()
+			dig_in_name_loop = 1
+			i = 0
+			while dig_in_name_loop == 1:
+				dig_in_names.append(input("\n INPUT REQUESTED: Enter single-word name for dig-in " + str(i) + ": "))
+				i += 1
+				d_cont_loop = 1
+				while d_cont_loop == 1:
+					d_cont = input("\n Are there more dig-ins [y,n]? ")
+					if d_cont == 'n':
+						dig_in_name_loop = 0
+						d_cont_loop = 0
+					elif d_cont == 'y':
+						d_cont_loop = 0
+					elif d_cont != 'y' or d_cont != 'n':
+						print("ERROR: incorrect entry, try again.")
+						d_cont_loop = 1
+		else:
+			dig_ins = []
+			dig_in_names = []
 	return dig_ins, dig_in_names
 			
 def getEMG():
@@ -72,7 +95,7 @@ def getEMG():
 	emg_ind = list()
 	while emg_in_loop == 1:
 		try:
-			emg_in = int(input("\n INPUT REQUESTED: Enter first input index of EMG: "))
+			emg_in = int(input("\n INPUT REQUESTED: Enter input index of EMG: "))
 			emg_ind.append(emg_in)
 			more_emg_loop = 1
 			while more_emg_loop == 1:
@@ -91,6 +114,9 @@ def getEMG():
 def electrodes(dat_files_list):
 	"""This fucntion pulls a list of just electrodes"""
 	e_list = [name for name in dat_files_list if name.startswith('amp-A-0')]
+	if len(e_list) == 0:
+		#Single amplifier file
+		e_list = ['amplifier.dat']
 	return e_list
 
 def data_to_list(sub_amount,sampling_rate,hf5_dir):

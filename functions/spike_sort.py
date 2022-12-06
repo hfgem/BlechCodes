@@ -162,20 +162,10 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	num_pts_right = int(np.round(sampling_rate*(1.5/1000)))
 	axis_labels = np.arange(-num_pts_left,num_pts_right)
 	#total_pts = num_pts_left + num_pts_right
-	threshold_percentile = 25
+	threshold_percentile = 30
+	user_input = 0
 	#Ask for user input on type of clustering to perform
-	clust_loop = 1
-	while clust_loop == 1:
-		print('Clustering can be performed with GMMs or KMeans. Which algorithm would you like to use?')
-		clust_type = input("INPUT REQUESTED: Enter 1 for gmm, 2 for kmeans: ")
-		if clust_type != 1 and clust_type != 2:
-			print("\t Incorrect entry.")
-		elif clust_type == 1:
-			clust_type = 'gmm'
-			clust_loop = 0
-		elif clust_type == 2:
-			clust_type = 'kmeans'
-			clust_loop = 0
+	clust_type, wav_type, comb_type = sort_settings(dir_save)
 	
 	#Grab dig in times for each tastant separately - grabs last index of delivery
 	dig_times = [list(np.where(dig_ins[i] > 0)[0]) for i in range(len(dig_in_names))]
@@ -198,6 +188,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	
 	#Create .csv file name for storage of completed units
 	sorted_units_csv = dir_save + 'sorted_units.csv'
+	
 	
 	#First check if all units had previously been sorted
 	prev_sorted = 0
@@ -293,12 +284,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 				sorted_peak_ind, waveform_ind  = sc.cluster(all_spikes, all_peaks, i, 
 											 dir_save, axis_labels, 'noise_removal',
 											 segment_times, segment_names, dig_in_lens, dig_in_times,
-											 dig_in_names, sampling_rate, clust_type, re_sort='y')
-# 				sorted_peak_ind, waveform_ind = spike_clust(all_spikes, all_peaks, 
-# 											 clust_num, i, dir_save, axis_labels, 
-# 											 viol_1, viol_2, 'noise_removal', segment_times,
-# 											 segment_names, dig_in_times, dig_in_names,
-# 											 sampling_rate, re_sort='y')
+											 dig_in_names, sampling_rate, clust_type, 
+											 wav_type, user_input)
 				good_spikes = []
 				good_ind = [] #List of lists with good indices in groupings
 				good_all_spikes_ind = [] #indices aligned with "all_spikes"
@@ -312,11 +299,25 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,
 										   num_pts_left,num_pts_right,
 										   threshold_percentile,unit_dir,g_i)
-					good_spikes.extend(g_spikes) #Store the good spike profiles
-					s_ind = [list(np.array(s_i)[g_ind[i]]) for i in range(len(g_ind))]
-					p_ind = [list(np.array(p_i)[g_ind[i]]) for i in range(len(g_ind))]
-					good_ind.extend(s_ind) #Store the original indices
-					good_all_spikes_ind.extend(p_ind)
+					if comb_type == 'sep':
+						#If separately clustering 
+						good_spikes.extend(g_spikes) #Store the good spike profiles
+						s_ind = [list(np.array(s_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
+						p_ind = [list(np.array(p_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
+					else:
+						#If combining template results before final clustering
+						g_spikes_comb = []
+						[g_spikes_comb.extend(list(g_s)) for g_s in g_spikes]
+						g_spikes_comb = np.array(g_spikes_comb)
+						good_spikes.extend([g_spikes_comb]) #Store the good spike profiles
+						s_ind = []
+						for g_ii in range(len(g_ind)):
+							s_ind.extend(list(np.array(s_i)[g_ind[g_ii]]))
+						p_ind = []
+						for g_ii in range(len(g_ind)):
+							p_ind.extend(list(np.array(p_i)[g_ind[g_ii]]))
+					good_ind.extend([s_ind]) #Store the original indices
+					good_all_spikes_ind.extend([p_ind])
 				del g_i, s_i
 				print("\t Performing Clustering of Remaining Waveforms (Second Pass)")
 				sorted_spike_inds = [] #grouped indices of spike clusters
@@ -326,17 +327,12 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					sort_ind_2, waveform_ind_2  = sc.cluster(good_spikes[g_i], good_ind[g_i], i, 
 												 dir_save, axis_labels, 'final/unit_' + str(g_i),
 												 segment_times, segment_names, dig_in_lens, dig_in_times,
-												 dig_in_names, sampling_rate, clust_type, re_sort='y')
-# 					sort_ind_2, waveform_ind_2 = spike_clust(good_spikes[g_i], good_ind[g_i], 
-# 											 clust_num_fin, i, dir_save, axis_labels, 
-# 											 viol_1, viol_2, 'final/unit_' + str(g_i), segment_times,
-# 											 segment_names, dig_in_times, dig_in_names,
-# 											 sampling_rate)
+												 dig_in_names, sampling_rate, clust_type, 
+												 wav_type, user_input)
 					good_as_ind = good_all_spikes_ind[g_i]
 					sorted_spike_inds.extend(sort_ind_2)
 					for w_i in range(len(waveform_ind_2)):
 						sorted_wav_inds.append(list(np.array(good_as_ind)[waveform_ind_2[w_i]]))
-				
 				#Save sorted spike indices and profiles
 				num_neur_sort = len(sorted_spike_inds)
 				sorted_spike_wavs = []
@@ -381,6 +377,15 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 							write.writerows([[i]])
 				else:
 					print("\t No neurons found.")
+					#Save unit index to sort csv
+					if os.path.isfile(sorted_units_csv) == False:
+						with open(sorted_units_csv, 'w') as f:
+							write = csv.writer(f)
+							write.writerows([[i]])
+					else:
+						with open(sorted_units_csv, 'a') as f:
+							write = csv.writer(f)
+							write.writerows([[i]])
 					
 			toc = time.time()
 			print(" Time to sort channel " + str(i) + " = " + str(round((toc - tic)/60)) + " minutes")	
@@ -468,6 +473,11 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 		max_peak = hist_counts[1][hist_peaks[0][list(np.where(hist_peak_vals == np.sort(hist_peak_vals)[-1])[0])]]
 		max_peak_2 = hist_counts[1][hist_peaks[0][list(np.where(hist_peak_vals == np.sort(hist_peak_vals)[-2])[0])]]
 		halfway_value = (max_peak + max_peak_2)/2
+		if len(halfway_value) > 1:
+			halfway_value = halfway_value[0]
+			print('\n Error was thrown over halfway_value not being single value: ')
+			print(halfway_value)
+			print('\n')
 		if halfway_value < percentile:
 			cut_val = halfway_value
 		else:
@@ -504,22 +514,6 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 #  	plt.tight_layout()
 	
 	return potential_spikes, good_ind
-
-def gauss_1(x, a, b, c):
-	"""Gaussian curve for given x and parameters"""
-	return a*np.exp(-(x - b) ** 2 / c)
-
-def gauss_2(x, a, b, c, d, e, f):
-	"""Sum of 2 Gaussian curves for given x and parameters"""
-	return gauss_1(x,a,b,c) + gauss_1(x,d,e,f)
-
-def gamma_1(x, a, b, c):
-	"""Gamma curve for given x and parameters"""
-	return a*(x**b)*np.exp(-c*x)*(c**b)/(0.5*b**2)
-
-def gamma_2(x, a, b, c, d, e, f):
-	"""Sum of 2 Gamma curves for given x and parameters"""
-	return gamma_1(x,a,b,c) + gamma_1(x,d,e,f)
 	
 @jit(forceobj=True)
 def generate_templates(sampling_rate,num_pts_left,num_pts_right):
@@ -544,8 +538,8 @@ def generate_templates(sampling_rate,num_pts_left,num_pts_right):
 	max_reg_spike = max(abs(reg_spike))
 	reg_spike = reg_spike/max_reg_spike
 	
-	templates[0,:] = pos_spike
-	templates[1,:] = reg_spike
+	templates[0,:] = reg_spike
+	templates[1,:] = pos_spike
 	#templates[2,:] = fast_spike
 	
  	# fig = plt.figure()
@@ -701,6 +695,111 @@ def clust_num_user_input():
 			print("ERROR: Please enter a valid integer.")
 	return clust_num, clust_num_fin
 
+def sort_settings(dir_save):
+	"""Function to prompt the user for settings to use in 
+	sorting / re-load previously selected settings
+	Inputs:
+		- dir_save: for storage and upload of settings
+	Outputs:
+		- clust_type = the type of clustering algorithm to use: 'gmm' or 'kmeans'
+		- wav_type = the type of waveform to use in clustering: 'full' or 'red'
+		- comb_type = how to pass template-matching results to clustering: 'comb' or 'sep'
+	"""
+	
+	#Check if settings were previously saved
+	sort_settings_csv = dir_save + 'sort_settings.csv'
+	file_exists = 0
+	keep_file = 0
+	if os.path.isfile(sort_settings_csv) == True:
+		file_exists = 1
+		keep_loop = 1
+		while keep_loop == 1:
+			print("\n Sort settings for clustering type, waveform type, and post-template-matching handling already exist.")
+			keep_val = input("\n INPUT REQUESTED: Would you like to re-use the same settings [y,n]? ")
+			if keep_val != 'y' and keep_val != 'n':
+				print("Incorrect entry. Try again.")
+				keep_loop = 1
+			elif keep_val == 'y':
+				keep_file = 1
+				keep_loop = 0
+			elif keep_val == 'n':
+				keep_file = 0
+				keep_loop = 0
+	
+	if file_exists*keep_file == 1:
+		#Import the existing settings
+		with open(sort_settings_csv,newline='') as f:
+			reader = csv.reader(f)
+			sort_settings_list = list(reader)
+		clust_type = sort_settings_list[0][0]
+		wav_type = sort_settings_list[1][0]
+		comb_type = sort_settings_list[2][0]
+	else:
+		#Ask for user input on which clustering algorithm to use
+		clust_loop = 1
+		while clust_loop == 1:
+			print('\n \n Clustering can be performed with GMMs or KMeans. Which algorithm would you like to use?')
+			try:
+				clust_type = int(input("INPUT REQUESTED: Enter 1 for gmm, 2 for kmeans: "))
+				if clust_type != 1 and clust_type != 2:
+					print("\t Incorrect entry.")
+				elif clust_type == 1:
+					clust_type = 'gmm'
+					clust_loop = 0
+				elif clust_type == 2:
+					clust_type = 'kmeans'
+					clust_loop = 0
+			except:
+				print("Error. Try again.")
+		#Ask for user input on what data to cluster
+		#'full' = full waveform, 'red' = reduced waveform
+		wav_loop = 1
+		while wav_loop == 1:
+			print('\n Clustering can be performed on full waveforms or reduced via PCA. Which would you like to use?')
+			try:
+				wav_num = int(input("INPUT REQUESTED: Enter 1 for full waveform, 2 for PCA reduced: "))
+				if wav_num != 1 and wav_num != 2:
+					print("\t Incorrect entry.")
+				elif wav_num == 1:
+					wav_type = 'full'
+					wav_loop = 0
+				elif wav_num == 2:
+					wav_type = 'red'
+					wav_loop = 0
+			except:
+				print("Error. Try again.")
+		#Ask for user input on whether to recombine template results
+		#'comb' = combined, 'sep' = separate
+		comb_loop = 1
+		while comb_loop == 1:
+			print('\n Template matching results can be recombined or kept separate. Which would you like to use?')
+			try:
+				comb_num = int(input("INPUT REQUESTED: Enter 1 for combined, 2 for separate: "))
+				if comb_num != 1 and comb_num != 2:
+					print("\t Incorrect entry.")
+				elif comb_num == 1:
+					comb_type = 'comb'
+					comb_loop = 0
+				elif comb_num == 2:
+					comb_type = 'sep'
+					comb_loop = 0
+			except:
+				print("Error. Try again.")
+		
+		result_vals = [clust_type, wav_type, comb_type]
+		
+		for i in result_vals:
+			is_file = os.path.isfile(sort_settings_csv)
+			if is_file == False:
+				with open(sort_settings_csv, 'w') as f:
+					write = csv.writer(f)
+					write.writerows([[i]])
+			else:
+				with open(sort_settings_csv, 'a') as f:
+					write = csv.writer(f)
+					write.writerows([[i]])
+	
+	return clust_type, wav_type, comb_type
 
 # def run_ica_spike_sort(ICA_h5_dir):
 # 	"""This function pulls data from the ICA hf5 file, finds the ICA data 
