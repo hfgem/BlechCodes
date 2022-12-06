@@ -162,7 +162,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	num_pts_right = int(np.round(sampling_rate*(1.5/1000)))
 	axis_labels = np.arange(-num_pts_left,num_pts_right)
 	#total_pts = num_pts_left + num_pts_right
-	threshold_percentile = 25
+	threshold_percentile = 30
+	user_input = 0
 	#Ask for user input on type of clustering to perform
 	clust_type, wav_type, comb_type = sort_settings(dir_save)
 	
@@ -284,7 +285,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 											 dir_save, axis_labels, 'noise_removal',
 											 segment_times, segment_names, dig_in_lens, dig_in_times,
 											 dig_in_names, sampling_rate, clust_type, 
-											 wav_type, re_sort='y')
+											 wav_type, user_input)
 				good_spikes = []
 				good_ind = [] #List of lists with good indices in groupings
 				good_all_spikes_ind = [] #indices aligned with "all_spikes"
@@ -327,7 +328,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 												 dir_save, axis_labels, 'final/unit_' + str(g_i),
 												 segment_times, segment_names, dig_in_lens, dig_in_times,
 												 dig_in_names, sampling_rate, clust_type, 
-												 wav_type, re_sort='y')
+												 wav_type, user_input)
 					good_as_ind = good_all_spikes_ind[g_i]
 					sorted_spike_inds.extend(sort_ind_2)
 					for w_i in range(len(waveform_ind_2)):
@@ -513,8 +514,6 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 #  	plt.tight_layout()
 	
 	return potential_spikes, good_ind
-	"""Sum of 2 Gamma curves for given x and parameters"""
-	return gamma_1(x,a,b,c) + gamma_1(x,d,e,f)
 	
 @jit(forceobj=True)
 def generate_templates(sampling_rate,num_pts_left,num_pts_right):

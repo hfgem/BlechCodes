@@ -20,7 +20,7 @@ import umap
 
 def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike, 
 			segment_times, segment_names, dig_in_lens, dig_in_times, dig_in_names, 
-			sampling_rate, clust_type, wav_type, re_sort):
+			sampling_rate, clust_type, wav_type, user_input):
 	"""This function tests different numbers of clusters for spike clustering
 	using the silhouette score method. It outputs the best clustering results
 	and returns indices of good waveforms.
@@ -95,7 +95,7 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 														 segment_names, dig_in_lens,
 														 dig_in_times, dig_in_names,
 														 sampling_rate,clust_type,
-														 wav_type,re_sort='y')
+														 wav_type,user_input,re_sort)
 		
 	else:
 		#Finally cluster by the best number of clusters
@@ -299,7 +299,7 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,wav_typ
 def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels, 
 				viol_1, viol_2, type_spike, segment_times, segment_names, 
 				dig_in_lens, dig_in_times ,dig_in_names,sampling_rate,clust_type,
-				wav_type,re_sort='y'):
+				wav_type,user_input,re_sort='y'):
 	"""This function performs clustering on spikes pulled from each component.
 	Inputs:
 		spikes = list of spike samples num_spikes x length_spike
@@ -319,6 +319,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		sampling_rate = number of samples per second
 		clust_type = selects the clustering method: kmeans or gmm
 		wav_type = 'full' = full waveform, 'red' = reduced waveform
+		user_input = 1 if user manually selects final clusters, 0 otherwise
 		re_sort = whether to re-sort if data has been previously sorted.
 	Outputs:
 		neuron_spike_ind = indices of spikes selected as true - the indices
@@ -383,6 +384,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		print('\t Now testing/plotting clusters.')
 		violations = []
 		any_good = 0
+		which_good = []
 		possible_colors = ['b','g','r','c','m','k','y','brown','pink','olive','gray'] #Colors for plotting different tastant deliveries
 		clust_stats = np.zeros((clust_num,5))
 		#Create cluster projection plot
@@ -458,7 +460,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			if viol_2_percent < viol_2_cutoff:
 				if viol_1_percent < viol_1_cutoff:
 					any_good += 1
-					
+					which_good.append(li)
 					#Select sub-population of spikes to plot as an example
 					plot_num_vis = min(num_vis,len(spikes_labelled)-1)
 					plot_ind = np.random.randint(0,len(peak_ind),size=(plot_num_vis,)) #Pick 500 random waveforms to plot
@@ -565,68 +567,90 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		neuron_spike_ind = []
 		neuron_waveform_ind = []
 		if (any_good > 0) & (type_spike != 'noise_removal'): #Automatically skip over bad sorts
-			print("\n \t INPUT REQUESTED: Please navigate to the directory " + sort_neur_type_dir)
-			print("\t Inspect the output visuals of spike clusters, and decide which you'd like to keep.")
-			keep_loop = 1
-			while keep_loop == 1:
-				keep_any = input("\t Would you like to keep any of the clusters as spikes (y/n)? ")
-				if keep_any != 'y' and keep_any != 'n':
-					print("\t Error, please enter a valid value.")
-				else:
-					keep_loop = 0
-			if keep_any == 'y':	
-				print("\n \t INPUT REQUESTED: Please enter a comma-separated list of indices you'd like to keep (ex. 0,4,6)")
-				ind_good = input("\t Keep-indices: ").split(',')
-			try:
-				ind_good = [int(ind_good[i]) for i in range(len(ind_good))]
-				clust_stats[np.array(ind_good),4] = 1
-				combine_spikes = 'n'
-				comb_loop = 1
-				while comb_loop == 1:
-					if len(ind_good) > 1:
-						combine_spikes = input("\t Do any of these spikes come from the same neuron (y/n)? ")
-						if combine_spikes != 'y' and combine_spikes != 'n':
-							print("\t Error, please enter a valid value.")
-						else:
-							#Find if there are any that need to be combined into 1
-							comb_loop = 0
-							which_comb_loop = 1
-							which_comb = []
-							if combine_spikes == 'y':
-								 while which_comb_loop == 1:
-									 which_together = input("\t Which indices belong together [comma separated list]? ").split(',')
-									 try:
-										  together_ind = [int(which_together[i]) for i in range(len(which_together))]
-										  which_comb.append(together_ind)
-										  if len(ind_good) - len(together_ind) > 1:
-											  cont_loop_2 = 1
-											  while cont_loop_2 == 1:
-												  continue_statement = input("\t Are there more indices which belong together (y/n)? ")
-												  if continue_statement != 'y' and continue_statement != 'n':
-													  print("\t Error, try again.")
-												  elif continue_statement == 'y':
-													  cont_loop_2 = 0
-												  else:
-													  cont_loop_2 = 0
-													  which_comb_loop = 0
-										  else:
-											  which_comb_loop = 0
-									 except:
-										 print("Error, try again.")
-								 all_to_combine = []
-								 for c_i in range(len(which_comb)):
-									 all_to_combine.extend(which_comb[c_i])
-								 all_to_combine = np.array(all_to_combine)
-								 not_to_combine = np.setdiff1d(np.array(ind_good),all_to_combine)
-								 ind_good = []
-								 if len(not_to_combine) > 0:
-									  ind_good.append(list(not_to_combine))
-								 for w_i in range(len(which_comb)):
-									 ind_good.append(which_comb[w_i])
+			if user_input == 1: #Ask for user input to select clusters to keep
+				print("\n \t INPUT REQUESTED: Please navigate to the directory " + sort_neur_type_dir)
+				print("\t Inspect the output visuals of spike clusters, and decide which you'd like to keep.")
+				keep_loop = 1
+				while keep_loop == 1:
+					keep_any = input("\t Would you like to keep any of the clusters as spikes (y/n)? ")
+					if keep_any != 'y' and keep_any != 'n':
+						print("\t Error, please enter a valid value.")
 					else:
- 						combine_spikes = 'y'
- 						comb_loop = 0
-				for ig in ind_good:
+						keep_loop = 0
+				if keep_any == 'y':	
+					print("\n \t INPUT REQUESTED: Please enter a comma-separated list of indices you'd like to keep (ex. 0,4,6)")
+					ind_good = input("\t Keep-indices: ").split(',')
+				try:
+					ind_good = [int(ind_good[i]) for i in range(len(ind_good))]
+					clust_stats[np.array(ind_good),4] = 1
+					combine_spikes = 'n'
+					comb_loop = 1
+					while comb_loop == 1:
+						if len(ind_good) > 1:
+							combine_spikes = input("\t Do any of these spikes come from the same neuron (y/n)? ")
+							if combine_spikes != 'y' and combine_spikes != 'n':
+								print("\t Error, please enter a valid value.")
+							else:
+								#Find if there are any that need to be combined into 1
+								comb_loop = 0
+								which_comb_loop = 1
+								which_comb = []
+								if combine_spikes == 'y':
+									 while which_comb_loop == 1:
+										 which_together = input("\t Which indices belong together [comma separated list]? ").split(',')
+										 try:
+											  together_ind = [int(which_together[i]) for i in range(len(which_together))]
+											  which_comb.append(together_ind)
+											  if len(ind_good) - len(together_ind) > 1:
+												  cont_loop_2 = 1
+												  while cont_loop_2 == 1:
+													  continue_statement = input("\t Are there more indices which belong together (y/n)? ")
+													  if continue_statement != 'y' and continue_statement != 'n':
+														  print("\t Error, try again.")
+													  elif continue_statement == 'y':
+														  cont_loop_2 = 0
+													  else:
+														  cont_loop_2 = 0
+														  which_comb_loop = 0
+											  else:
+												  which_comb_loop = 0
+										 except:
+											 print("Error, try again.")
+									 all_to_combine = []
+									 for c_i in range(len(which_comb)):
+										 all_to_combine.extend(which_comb[c_i])
+									 all_to_combine = np.array(all_to_combine)
+									 not_to_combine = np.setdiff1d(np.array(ind_good),all_to_combine)
+									 ind_good = []
+									 if len(not_to_combine) > 0:
+										  ind_good.append(list(not_to_combine))
+									 for w_i in range(len(which_comb)):
+										 ind_good.append(which_comb[w_i])
+						else:
+	 						combine_spikes = 'y'
+	 						comb_loop = 0
+					for ig in ind_good:
+						if np.size(ig) > 1:
+							peak_ind = []
+							wav_ind = []
+							for ind_g in ig:
+								wav_ind.extend(list(np.where(labels == ind_g)[0]))
+								peak_ind.extend(list(np.array(peak_indices)[np.where(labels == ind_g)[0]]))
+							neuron_spike_ind.append(peak_ind)
+							neuron_waveform_ind.append(wav_ind)
+						else:
+							wav_ind = []
+							wav_ind.extend(list(np.where(labels == ig)[0]))
+							neuron_waveform_ind.append(wav_ind)
+							peak_ind = []
+							peak_ind.extend(list(np.array(peak_indices)[np.where(labels == ig)[0]]))
+							neuron_spike_ind.append(peak_ind)
+				except:
+					print("\t No spikes selected.")
+			else: #Automatically combine good clusters into a unit to keep
+				print("\t Automatically storing good clusters. To see clusters, please navigate to the directory " + sort_neur_type_dir)
+				ind_good = [which_good]
+				for ig in which_good:
 					if np.size(ig) > 1:
 						peak_ind = []
 						wav_ind = []
@@ -642,8 +666,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 						peak_ind = []
 						peak_ind.extend(list(np.array(peak_indices)[np.where(labels == ig)[0]]))
 						neuron_spike_ind.append(peak_ind)
-			except:
-				print("\t No spikes selected.")
+				
 		elif type_spike == 'noise_removal':
 			ind_good = np.arange(clust_num)
 			for ig in ind_good:
