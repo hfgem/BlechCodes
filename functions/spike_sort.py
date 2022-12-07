@@ -65,19 +65,19 @@ def run_spike_sort(data_dir):
 	del data
 	
 	#Perform compilation of all sorted spikes into a binary matrix
-	separated_spikes_bin, sort_stats = import_sorted(num_units,dir_save,sort_hf5_dir)
+	separated_spikes_ind, sort_stats = import_sorted(dir_save,sort_hf5_dir)
 	
 	#Perform collision tests of imported data and remove until no collisions reported
 	print("Now performing collision tests until no significant collisions are reported.")
 	collision_loop = 1
 	while collision_loop == 1:
-		remove_ind = test_collisions(separated_spikes_bin,dir_save)
+		remove_ind = test_collisions(separated_spikes_ind,dir_save)
 		if len(remove_ind) > 0:
 			remove_ind.sort(reverse=True)
 			for r_i in remove_ind:
 				try:
 					#First clean the spikes list
-					del separated_spikes_bin[r_i]
+					del separated_spikes_ind[r_i]
 				except:
 					print("Removal of index skipped - index out of range.")
 				try:
@@ -125,7 +125,7 @@ def potential_spike_times(data,sampling_rate,dir_save):
 		#Grab mean and std
 		std_dev = np.std(data)
 		print("Searching for potential spike indices")
-		peak_ind = find_peaks(-1*data,height=2*std_dev)[0]
+		peak_ind = find_peaks(-1*data,height=3*std_dev)[0]
 		#Save results to .csv
 		with open(init_times_csv, 'w') as f:
 			# using csv.writer method from CSV package
@@ -220,7 +220,6 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 		
 		#Get the number of clusters to use in spike sorting
 		print("Beginning Spike Sorting")
-		#clust_num, clust_num_fin = clust_num_user_input() #Ask for user input on number of clusters
 		
 		for i in tqdm.tqdm(range(num_neur)):
 			print("\n Sorting channel #" + str(i))
@@ -242,6 +241,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					print("\t Channel previously sorted.")
 					sort_loop = 1
 					while sort_loop == 1:
+						resort_channel = 'n'
 						resort_channel = input("\t INPUT REQUESTED: Would you like to re-sort [y/n]? ")
 						if resort_channel != 'y' and resort_channel != 'n':
 							print("\t Incorrect entry.")
@@ -251,6 +251,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 							continue_no_resort = 1
 						elif resort_channel == 'y':
 							sort_loop = 0
+			del in_list, resort_channel, sort_loop, reader, sorted_units_list, sorted_units_ind
 			tic = time.time()
 			if keep_final == 0:
 				#If no final sort or don't want to keep, then run through protocol
@@ -278,7 +279,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					all_spikes[k_i,:] = data_copy[p_i_l[ind]:p_i_r[ind]]
 				all_spikes = list(all_spikes)
 				all_peaks = list(np.array(peak_ind)[keep_ind]) #Peak indices in original recording length
-				del p_i_l, p_i_r, data_chunk_lengths, too_short, keep_ind
+				del p_i_l, p_i_r, data_chunk_lengths, too_short, keep_ind, data_copy
 				#Cluster all spikes first to get rid of noise
 				print("\t Performing Clustering to Remove Noise (First Pass)")
 				sorted_peak_ind, waveform_ind  = sc.cluster(all_spikes, all_peaks, i, 
@@ -313,12 +314,14 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 						s_ind = []
 						for g_ii in range(len(g_ind)):
 							s_ind.extend(list(np.array(s_i)[g_ind[g_ii]]))
+						del g_ii
 						p_ind = []
 						for g_ii in range(len(g_ind)):
 							p_ind.extend(list(np.array(p_i)[g_ind[g_ii]]))
+						del g_ii
 					good_ind.extend([s_ind]) #Store the original indices
 					good_all_spikes_ind.extend([p_ind])
-				del g_i, s_i
+				del g_i, s_i, p_i, sort_spikes, g_spikes, g_ind, s_ind, p_ind
 				print("\t Performing Clustering of Remaining Waveforms (Second Pass)")
 				sorted_spike_inds = [] #grouped indices of spike clusters
 				sorted_wav_inds = [] #grouped indices of spike waveforms from "all_spikes"
@@ -333,6 +336,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					sorted_spike_inds.extend(sort_ind_2)
 					for w_i in range(len(waveform_ind_2)):
 						sorted_wav_inds.append(list(np.array(good_as_ind)[waveform_ind_2[w_i]]))
+				del g_i, w_i, sort_ind_2, waveform_ind_2, good_as_ind
 				#Save sorted spike indices and profiles
 				num_neur_sort = len(sorted_spike_inds)
 				sorted_spike_wavs = []
@@ -340,6 +344,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					s_i = sorted_wav_inds[g_i]
 					spikes_i = [list(all_spikes[s_ii]) for s_ii in s_i]
 					sorted_spike_wavs.append(list(spikes_i))
+				del g_i, s_i, spikes_i
 				if num_neur_sort > 0:
 					#Save results
 					print("\t Saving final results to .h5 file.")
@@ -366,6 +371,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 						spike_inds_expanded = np.expand_dims(sorted_spike_inds[s_w],0)
 						exec('sort_hf5.root.sorted_units.unit_'+str(i)+'.times.neuron_'+str(s_w)+'.append(spike_inds_expanded)')
 					sort_hf5.close()
+					del already_stored, atom, u_int, s_w, spike_wavs_expanded, spike_inds_expanded
 					#Save unit index to sort csv
 					if os.path.isfile(sorted_units_csv) == False:
 						with open(sorted_units_csv, 'w') as f:
@@ -375,6 +381,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 						with open(sorted_units_csv, 'a') as f:
 							write = csv.writer(f)
 							write.writerows([[i]])
+					del write
 				else:
 					print("\t No neurons found.")
 					#Save unit index to sort csv
@@ -386,22 +393,23 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 						with open(sorted_units_csv, 'a') as f:
 							write = csv.writer(f)
 							write.writerows([[i]])
-					
+					del write
+			del sorted_peak_ind, waveform_ind, good_spikes, good_ind, good_all_spikes_ind
 			toc = time.time()
 			print(" Time to sort channel " + str(i) + " = " + str(round((toc - tic)/60)) + " minutes")	
-			if i < num_neur - 1:
-				if continue_no_resort == 0:
-					print("\n CHECKPOINT REACHED: You don't have to sort all neurons right now.")
-					cont_loop = 1
-					while cont_loop == 1:
-						cont_units = input("INPUT REQUESTED: Would you like to continue sorting [y/n]? ")
-						if cont_units != 'y' and cont_units != 'n':
-							print("Incorrect input.")
-						elif cont_units == 'n':
-							cont_loop = 0
-							sys.exit()
-						elif cont_units == 'y':
-							cont_loop = 0
+			#if i < num_neur - 1:
+			#	if continue_no_resort == 0:
+			#		print("\n CHECKPOINT REACHED: You don't have to sort all neurons right now.")
+			#		cont_loop = 1
+			#		while cont_loop == 1:
+			#			cont_units = input("INPUT REQUESTED: Would you like to continue sorting [y/n]? ")
+			#			if cont_units != 'y' and cont_units != 'n':
+			#				print("Incorrect input.")
+			#			elif cont_units == 'n':
+			#				cont_loop = 0
+			#				sys.exit()
+			#			elif cont_units == 'y':
+			#				cont_loop = 0
 		
 
 def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
@@ -556,47 +564,61 @@ def generate_templates(sampling_rate,num_pts_left,num_pts_right):
 	
 	return templates
 
-def import_sorted(num_units,dir_save,sort_hf5_dir):
+def import_sorted(dir_save,sort_hf5_dir):
 	"""This function imports the already sorted data into arrays + the sorting
-	statistics"""
+	statistics
+	INPUTS:
+		- dir_save: the directory of the sort results ('.../sort_results/')
+		- sort_hf5_dir: the directory of the dataset results (_sort.h5)
+	OUTPUTS:
+		- separated_spikes_ind: a list of lists containing the spike times for each unit
+		- sort_stats: an array of averaged sorting statistics for each unit
+	"""
 	
+	separated_spikes_ind = []
 	sort_hf5 = tables.open_file(sort_hf5_dir, 'r', title = sort_hf5_dir[-1])
-	separated_spikes_bin = []
-	print("\t Importing sorted data.")
-	for i in tqdm.tqdm(range(num_units)):
-		neuron_spikes = sort_hf5.get_node('/sorted_spikes_bin/unit_'+str(i))
-		neuron_spikes_bin = neuron_spikes[0]
-		del neuron_spikes
-		for j in range(len(neuron_spikes_bin)):
-			separated_spikes_bin.append(neuron_spikes_bin[j])
-		del neuron_spikes_bin
+	sorted_units_node = sort_hf5.get_node('/sorted_units')
+	num_units = len([s_n for s_n in sorted_units_node])
+	for s_n in sorted_units_node:
+		num_sub_u = len([w_n for w_n in s_n.times])
+		#For each electrode pull out unit spike times
+		for n_u in range(num_sub_u):
+			unit_times = eval('s_n.times.neuron_' + str(n_u) + '[0]').round().astype(int)
+			separated_spikes_ind.append([unit_times])
+		del num_sub_u, n_u, unit_times
 	sort_hf5.close()
 	
 	sort_stats = []
 	for i in tqdm.tqdm(range(num_units)):
 		final_sort_neur_dir = dir_save + 'unit_' + str(i) + '/final/'
-		sort_stats_csv = final_sort_neur_dir + 'sort_stats.csv'
-		#Import sort statistics
-		with open(sort_stats_csv,newline='') as f:
-			reader = csv.reader(f)
-			sort_stats_list = list(reader)
-		for i_s in range(len(sort_stats_list) - 1):
-			stat_row = sort_stats_list[i_s + 1]
-			stat_row_float = [i,i_s+1]
-			stat_row_float.extend([float(stat_row[i]) for i in range(len(stat_row) - 1)])
-			if float(stat_row[-1]) == 1:
-				sort_stats.append(stat_row_float)
+		folders = os.listdir(final_sort_neur_dir)
+		for f in folders:
+			sort_stats_csv = final_sort_neur_dir + f + '/sort_stats.csv'
+			#Import sort statistics
+			with open(sort_stats_csv,newline='') as f:
+				reader = csv.reader(f)
+				sort_stats_list = list(reader)
+			unit_sort_stats = []
+			for i_s in range(len(sort_stats_list) - 1):
+				stat_row = sort_stats_list[i_s + 1]
+				stat_row_float = [i,i_s+1]
+				stat_row_float.extend([float(stat_row[i]) for i in range(len(stat_row) - 1)])
+				if float(stat_row[-1]) == 1:
+					unit_sort_stats.append(stat_row_float)
+			sort_stats_comb = np.sum(unit_sort_stats,0)
+			sort_stats_comb[1:] /= np.shape(unit_sort_stats)[0]
 	sort_stats = np.array(sort_stats)
 	
-	return separated_spikes_bin, sort_stats
+	return separated_spikes_ind, sort_stats
 
-def test_collisions(spike_raster,dir_save):
+def test_collisions(sampling_rate,spike_times,dir_save):
 	"""This function tests the final selected neurons for collisions across 
 	all units. It performs pairwise tests and looks for spike times within 3 
 	time bins, totalling the number of overlaps / average number of spikes 
 	between the two neurons. If the percentage is over 50, the pair is flagged 
 	and the user can determine which to remove based on the statistics.
 	INPUTS:
+		- sampling_rate = sampling rate of data
 		- spike_raster = list of numpy arrays, where each array is the binary 
 						spiking of a neuron
 		- dir_save = directory to store collision results
@@ -801,26 +823,3 @@ def sort_settings(dir_save):
 	
 	return clust_type, wav_type, comb_type
 
-# def run_ica_spike_sort(ICA_h5_dir):
-# 	"""This function pulls data from the ICA hf5 file, finds the ICA data 
-# 	peaks, and performs clustering spike sorting to separate out true peaks"""
-# 	
-# 	#Import ICA weights and cleaned data
-# 	hf5 = tables.open_file(ICA_h5_dir, 'r+', title = ICA_h5_dir[-1])
-# 	ICA_weights = hf5.root.ica_weights[0,:,:]
-# 	clean_data = hf5.root.cleaned_data[0,:,:]
-# 	sampling_rate = hf5.root.sampling_rate[0]
-# 	hf5.close()
-# 	del hf5
-# 	
-# 	#Create directory for sorted data
-# 	sort_data_dir = ('/').join(ICA_h5_dir.split('/')[:-2]) + '/sort_results/'
-# 	
-# 	#Convert data to ICA components
-# 	components = np.matmul(ICA_weights,clean_data)
-# 	del clean_data	
-# 	
-# 	#Pull spikes from components	
-# 	sort_hf5_dir, separated_spikes = run_spike_sort(components,sampling_rate,sort_data_dir)
-# 		
-# 	return sort_hf5_dir, separated_spikes

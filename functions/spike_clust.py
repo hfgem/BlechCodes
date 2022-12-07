@@ -56,7 +56,7 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 	
 	if re_sort != 'n':
 		#First test different numbers of clusters
-		clust_num_vec = np.arange(3,10)
+		clust_num_vec = np.arange(5,9)
 		silhouette_scores = np.zeros(np.shape(clust_num_vec))
 		distortion_scores = np.zeros(np.shape(clust_num_vec))
 		print("\t \t Testing different numbers of clusters.")
@@ -338,7 +338,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 	if re_sort == 'y':
 		#Set parameters
 		viol_2_cutoff = 2 #Maximum allowed violation percentage for 2 ms
-		viol_1_cutoff = 0.5 #Maximum allowed violation percentage for 1 ms
+		viol_1_cutoff = 1 #Maximum allowed violation percentage for 1 ms
 		num_vis = 500 #Number of waveforms to visualize for example plot
 		all_dig_in_times = np.unique(np.array(dig_in_times).flatten())
 		PSTH_left_ms = 500
@@ -650,23 +650,12 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			else: #Automatically combine good clusters into a unit to keep
 				print("\t Automatically storing good clusters. To see clusters, please navigate to the directory " + sort_neur_type_dir)
 				ind_good = [which_good]
+				clust_stats[np.array(which_good),4] = 1
 				for ig in which_good:
-					if np.size(ig) > 1:
-						peak_ind = []
-						wav_ind = []
-						for ind_g in ig:
-							wav_ind.extend(list(np.where(labels == ind_g)[0]))
-							peak_ind.extend(list(np.array(peak_indices)[np.where(labels == ind_g)[0]]))
-						neuron_spike_ind.append(peak_ind)
-						neuron_waveform_ind.append(wav_ind)
-					else:
-						wav_ind = []
-						wav_ind.extend(list(np.where(labels == ig)[0]))
-						neuron_waveform_ind.append(wav_ind)
-						peak_ind = []
-						peak_ind.extend(list(np.array(peak_indices)[np.where(labels == ig)[0]]))
-						neuron_spike_ind.append(peak_ind)
-				
+					neuron_waveform_ind.extend(list(np.where(labels == ig)[0]))
+					neuron_spike_ind.extend(list(np.array(peak_indices)[np.where(labels == ig)[0]]))
+				neuron_waveform_ind = [neuron_waveform_ind]
+				neuron_spike_ind = [neuron_spike_ind]
 		elif type_spike == 'noise_removal':
 			ind_good = np.arange(clust_num)
 			for ig in ind_good:

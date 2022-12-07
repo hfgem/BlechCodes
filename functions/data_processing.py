@@ -120,7 +120,7 @@ def electrodes(dat_files_list):
 	return e_list
 
 def data_to_list(sub_amount,sampling_rate,hf5_dir):
-	"""This function pulls data from an HDF5 file and  downsamples before
+	"""This function pulls data from an HDF5 file and downsamples before
 	storing it to a list"""
 	
 	"""FIX THIS: Passing units does not mean it can access the hdf5 file.
