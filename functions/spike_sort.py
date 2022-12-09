@@ -64,42 +64,42 @@ def run_spike_sort(data_dir):
 											 dig_in_names,sort_hf5_dir)
 	del data
 	
-	#Perform compilation of all sorted spikes into a binary matrix
-	separated_spikes_ind, sort_stats = import_sorted(dir_save,sort_hf5_dir)
-	
-	#Perform collision tests of imported data and remove until no collisions reported
-	print("Now performing collision tests until no significant collisions are reported.")
-	collision_loop = 1
-	while collision_loop == 1:
-		remove_ind = test_collisions(separated_spikes_ind,dir_save)
-		if len(remove_ind) > 0:
-			remove_ind.sort(reverse=True)
-			for r_i in remove_ind:
-				try:
-					#First clean the spikes list
-					del separated_spikes_ind[r_i]
-				except:
-					print("Removal of index skipped - index out of range.")
-				try:
-					#Second clean the sort statistics
-					del sort_stats[r_i]
-				except:
-					print("Removal of index skipped - index out of range.")
-		else:
-			collision_loop = 0
-			
-	#Resave binary spikes as a numpy array
-	print("Reshaping data for storage.")
-	num_final_neur = len(separated_spikes_bin)
-	num_time = len(separated_spikes_bin[0])
-	spike_raster = np.zeros((num_final_neur,num_time))
-	for n_i in tqdm.tqdm(range(num_final_neur)):
-		spike_raster[n_i,:] = separated_spikes_bin[n_i]
-	
-	#Save spikes to an HDF5 file
-	final_h5_dir = ('_').join(data_dir.split('_')[:-1])+'_sorted_results.h5'
-	h5.save_sorted_spikes(final_h5_dir,spike_raster,sort_stats,sampling_rate,
-					   segment_times,segment_names,dig_ins,dig_in_names)
+# 	#Perform compilation of all sorted spikes into a binary matrix
+# 	separated_spikes_ind, sort_stats = import_sorted(dir_save,sort_hf5_dir)
+# 	
+# 	#Perform collision tests of imported data and remove until no collisions reported
+# 	print("Now performing collision tests until no significant collisions are reported.")
+# 	collision_loop = 1
+# 	while collision_loop == 1:
+# 		remove_ind = test_collisions(separated_spikes_ind,dir_save)
+# 		if len(remove_ind) > 0:
+# 			remove_ind.sort(reverse=True)
+# 			for r_i in remove_ind:
+# 				try:
+# 					#First clean the spikes list
+# 					del separated_spikes_ind[r_i]
+# 				except:
+# 					print("Removal of index skipped - index out of range.")
+# 				try:
+# 					#Second clean the sort statistics
+# 					del sort_stats[r_i]
+# 				except:
+# 					print("Removal of index skipped - index out of range.")
+# 		else:
+# 			collision_loop = 0
+# 			
+# 	#Resave binary spikes as a numpy array
+# 	print("Reshaping data for storage.")
+# 	num_final_neur = len(separated_spikes_bin)
+# 	num_time = len(separated_spikes_bin[0])
+# 	spike_raster = np.zeros((num_final_neur,num_time))
+# 	for n_i in tqdm.tqdm(range(num_final_neur)):
+# 		spike_raster[n_i,:] = separated_spikes_bin[n_i]
+# 	
+# 	#Save spikes to an HDF5 file
+# 	final_h5_dir = ('_').join(data_dir.split('_')[:-1])+'_sorted_results.h5'
+# 	h5.save_sorted_spikes(final_h5_dir,spike_raster,sort_stats,sampling_rate,
+# 					   segment_times,segment_names,dig_ins,dig_in_names)
 	
 	print('\n DONE SPIKE SORTING!')
 
@@ -163,6 +163,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	axis_labels = np.arange(-num_pts_left,num_pts_right)
 	#total_pts = num_pts_left + num_pts_right
 	threshold_percentile = 30
+	pre_clust = 0 #Whether to do an initial clustering step or not
 	user_input = 0
 	#Ask for user input on type of clustering to perform
 	clust_type, wav_type, comb_type = sort_settings(dir_save)
@@ -241,7 +242,6 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					print("\t Channel previously sorted.")
 					sort_loop = 1
 					while sort_loop == 1:
-						resort_channel = 'n'
 						resort_channel = input("\t INPUT REQUESTED: Would you like to re-sort [y/n]? ")
 						if resort_channel != 'y' and resort_channel != 'n':
 							print("\t Incorrect entry.")
@@ -251,7 +251,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 							continue_no_resort = 1
 						elif resort_channel == 'y':
 							sort_loop = 0
-			del in_list, resort_channel, sort_loop, reader, sorted_units_list, sorted_units_ind
+					del sort_loop, resort_channel
+				del in_list, reader, sorted_units_list, sorted_units_ind
 			tic = time.time()
 			if keep_final == 0:
 				#If no final sort or don't want to keep, then run through protocol
@@ -280,48 +281,85 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 				all_spikes = list(all_spikes)
 				all_peaks = list(np.array(peak_ind)[keep_ind]) #Peak indices in original recording length
 				del p_i_l, p_i_r, data_chunk_lengths, too_short, keep_ind, data_copy
-				#Cluster all spikes first to get rid of noise
-				print("\t Performing Clustering to Remove Noise (First Pass)")
-				sorted_peak_ind, waveform_ind  = sc.cluster(all_spikes, all_peaks, i, 
-											 dir_save, axis_labels, 'noise_removal',
-											 segment_times, segment_names, dig_in_lens, dig_in_times,
-											 dig_in_names, sampling_rate, clust_type, 
-											 wav_type, user_input)
-				good_spikes = []
-				good_ind = [] #List of lists with good indices in groupings
-				good_all_spikes_ind = [] #indices aligned with "all_spikes"
-				print("\t Performing Template Matching to Further Clean")
-				#FUTURE IMPROVEMENT NOTE: Add csv storage of indices for further speediness if re-processing in future
-				for g_i in range(len(sorted_peak_ind)):
-					print("\t Template Matching Sorted Group " + str(g_i))
-					s_i = sorted_peak_ind[g_i] #Original indices
-					p_i = waveform_ind[g_i]
-					sort_spikes = np.array(all_spikes)[p_i]
-					g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,
-										   num_pts_left,num_pts_right,
-										   threshold_percentile,unit_dir,g_i)
-					if comb_type == 'sep':
-						#If separately clustering 
-						good_spikes.extend(g_spikes) #Store the good spike profiles
-						s_ind = [list(np.array(s_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
-						p_ind = [list(np.array(p_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
-					else:
-						#If combining template results before final clustering
-						g_spikes_comb = []
-						[g_spikes_comb.extend(list(g_s)) for g_s in g_spikes]
-						g_spikes_comb = np.array(g_spikes_comb)
-						good_spikes.extend([g_spikes_comb]) #Store the good spike profiles
-						s_ind = []
-						for g_ii in range(len(g_ind)):
-							s_ind.extend(list(np.array(s_i)[g_ind[g_ii]]))
-						del g_ii
-						p_ind = []
-						for g_ii in range(len(g_ind)):
-							p_ind.extend(list(np.array(p_i)[g_ind[g_ii]]))
-						del g_ii
-					good_ind.extend([s_ind]) #Store the original indices
-					good_all_spikes_ind.extend([p_ind])
-				del g_i, s_i, p_i, sort_spikes, g_spikes, g_ind, s_ind, p_ind
+				if pre_clust == 1:
+					#Cluster all spikes first to get rid of noise
+					print("\n \t Performing Clustering to Remove Noise (First Pass)")
+					sorted_peak_ind, waveform_ind  = sc.cluster(all_spikes, all_peaks, i, 
+												 dir_save, axis_labels, 'noise_removal',
+												 segment_times, segment_names, dig_in_lens, dig_in_times,
+												 dig_in_names, sampling_rate, clust_type, 
+												 wav_type, user_input)
+					good_spikes = []
+					good_ind = [] #List of lists with good indices in groupings
+					good_all_spikes_ind = [] #indices aligned with "all_spikes"
+					print("\t Performing Template Matching to Further Clean")
+					#FUTURE IMPROVEMENT NOTE: Add csv storage of indices for further speediness if re-processing in future
+					for g_i in range(len(sorted_peak_ind)):
+						print("\t Template Matching Sorted Group " + str(g_i))
+						s_i = sorted_peak_ind[g_i] #Original indices
+						p_i = waveform_ind[g_i]
+						sort_spikes = np.array(all_spikes)[p_i]
+						g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,
+											   num_pts_left,num_pts_right,
+											   threshold_percentile,unit_dir,g_i)
+						if comb_type == 'sep':
+							#If separately clustering 
+							good_spikes.extend(g_spikes) #Store the good spike profiles
+							s_ind = [list(np.array(s_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
+							p_ind = [list(np.array(p_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
+						else:
+							#If combining template results before final clustering
+							g_spikes_comb = []
+							[g_spikes_comb.extend(list(g_s)) for g_s in g_spikes]
+							g_spikes_comb = np.array(g_spikes_comb)
+							good_spikes.extend([g_spikes_comb]) #Store the good spike profiles
+							s_ind = []
+							for g_ii in range(len(g_ind)):
+								s_ind.extend(list(np.array(s_i)[g_ind[g_ii]]))
+							del g_ii
+							p_ind = []
+							for g_ii in range(len(g_ind)):
+								p_ind.extend(list(np.array(p_i)[g_ind[g_ii]]))
+							del g_ii
+						good_ind.extend([s_ind]) #Store the original indices
+						good_all_spikes_ind.extend([p_ind])
+					del g_i, s_i, p_i, sort_spikes, g_spikes, g_ind, s_ind, p_ind
+				else:
+					print("\n \t Performing Template Matching To Sort Data")
+					good_spikes = []
+					good_ind = [] #List of lists with good indices in groupings
+					s_i = all_peaks
+					p_i = list(np.arange(len(all_peaks)))
+					good_all_spikes_ind = [] #indices aligned with "all_spikes"
+					for g_i in range(2):
+						print("\t Template Matching Sorted Group " + str(g_i))
+						sort_spikes = np.array(all_spikes)[p_i]
+						g_spikes, g_ind = spike_template_sort(sort_spikes,sampling_rate,
+											   num_pts_left,num_pts_right,
+											   threshold_percentile,unit_dir,g_i)
+						if comb_type == 'sep':
+							#If separately clustering 
+							good_spikes.extend(g_spikes) #Store the good spike profiles
+							s_ind = [list(np.array(s_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
+							p_ind = [list(np.array(p_i)[g_ind[g_ii]]) for g_ii in range(len(g_ind))]
+						else:
+							#If combining template results before final clustering
+							g_spikes_comb = []
+							[g_spikes_comb.extend(list(g_s)) for g_s in g_spikes]
+							g_spikes_comb = np.array(g_spikes_comb)
+							good_spikes.extend([g_spikes_comb]) #Store the good spike profiles
+							s_ind = []
+							for g_ii in range(len(g_ind)):
+								s_ind.extend(list(np.array(s_i)[g_ind[g_ii]]))
+							del g_ii
+							p_ind = []
+							for g_ii in range(len(g_ind)):
+								p_ind.extend(list(np.array(p_i)[g_ind[g_ii]]))
+							del g_ii
+						s_i = list(np.setdiff1d(s_i,np.array(s_ind).flatten()))
+						p_i = list(np.setdiff1d(p_i,np.array(p_ind).flatten()))
+						good_ind.extend([s_ind]) #Store the original indices
+						good_all_spikes_ind.extend([p_ind])
 				print("\t Performing Clustering of Remaining Waveforms (Second Pass)")
 				sorted_spike_inds = [] #grouped indices of spike clusters
 				sorted_wav_inds = [] #grouped indices of spike waveforms from "all_spikes"
@@ -336,7 +374,6 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					sorted_spike_inds.extend(sort_ind_2)
 					for w_i in range(len(waveform_ind_2)):
 						sorted_wav_inds.append(list(np.array(good_as_ind)[waveform_ind_2[w_i]]))
-				del g_i, w_i, sort_ind_2, waveform_ind_2, good_as_ind
 				#Save sorted spike indices and profiles
 				num_neur_sort = len(sorted_spike_inds)
 				sorted_spike_wavs = []
@@ -344,7 +381,6 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 					s_i = sorted_wav_inds[g_i]
 					spikes_i = [list(all_spikes[s_ii]) for s_ii in s_i]
 					sorted_spike_wavs.append(list(spikes_i))
-				del g_i, s_i, spikes_i
 				if num_neur_sort > 0:
 					#Save results
 					print("\t Saving final results to .h5 file.")
@@ -394,7 +430,6 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 							write = csv.writer(f)
 							write.writerows([[i]])
 					del write
-			del sorted_peak_ind, waveform_ind, good_spikes, good_ind, good_all_spikes_ind
 			toc = time.time()
 			print(" Time to sort channel " + str(i) + " = " + str(round((toc - tic)/60)) + " minutes")	
 			#if i < num_neur - 1:
@@ -619,11 +654,11 @@ def test_collisions(sampling_rate,spike_times,dir_save):
 	and the user can determine which to remove based on the statistics.
 	INPUTS:
 		- sampling_rate = sampling rate of data
-		- spike_raster = list of numpy arrays, where each array is the binary 
+		- spike_times = list of numpy arrays, where each array is the binary 
 						spiking of a neuron
 		- dir_save = directory to store collision results
 	"""
-	num_neur = len(spike_raster)
+	num_neur = len(spike_times)
 	all_pairs = list(itertools.combinations(np.arange(0,num_neur),2))
 	blur_ind = 3
 	collision_cutoff = 50 #Percent cutoff for collisions
@@ -638,8 +673,8 @@ def test_collisions(sampling_rate,spike_times,dir_save):
 	for i in tqdm.tqdm(range(len(all_pairs))):
 		ind_1 = all_pairs[i][0]
 		ind_2 = all_pairs[i][1]
-		spikes_1 = spike_raster[ind_1]
-		spikes_2 = spike_raster[ind_2]
+		spikes_1 = spike_times[ind_1]
+		spikes_2 = spike_times[ind_2]
 		#Blur spike times to blur_ind bins in either direction
 		spikes_1_blur = np.zeros(np.shape(spikes_1))
 		spikes_1_blur += spikes_1

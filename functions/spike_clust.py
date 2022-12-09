@@ -54,9 +54,9 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 		print("\t \t \t Creating Silhouette Save Folder")
 		os.mkdir(silh_dir)
 	
-	if re_sort != 'n':
+	if re_sort == 'y':
 		#First test different numbers of clusters
-		clust_num_vec = np.arange(5,9)
+		clust_num_vec = np.arange(5,8)
 		silhouette_scores = np.zeros(np.shape(clust_num_vec))
 		distortion_scores = np.zeros(np.shape(clust_num_vec))
 		print("\t \t Testing different numbers of clusters.")
@@ -98,7 +98,6 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 														 wav_type,user_input,re_sort)
 		
 	else:
-		#Finally cluster by the best number of clusters
 		neuron_spike_ind, neuron_waveform_ind = import_sorted(sort_neur_stats_csv, sort_neur_ind_csv, sort_neur_wav_csv)
 	
 	return neuron_spike_ind, neuron_waveform_ind
