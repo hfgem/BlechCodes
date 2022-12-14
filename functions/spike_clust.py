@@ -20,7 +20,8 @@ import umap
 
 def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike, 
 			segment_times, segment_names, dig_in_lens, dig_in_times, dig_in_names, 
-			sampling_rate, clust_type, wav_type, user_input):
+			sampling_rate, viol_1_percent, viol_2_percent, noise_clust, clust_min,
+			clust_max, clust_type, wav_type, user_input):
 	"""This function tests different numbers of clusters for spike clustering
 	using the silhouette score method. It outputs the best clustering results
 	and returns indices of good waveforms.
@@ -55,46 +56,51 @@ def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike,
 		os.mkdir(silh_dir)
 	
 	if re_sort == 'y':
-		#First test different numbers of clusters
-		clust_num_vec = np.arange(5,8)
-		silhouette_scores = np.zeros(np.shape(clust_num_vec))
-		distortion_scores = np.zeros(np.shape(clust_num_vec))
-		print("\t \t Testing different numbers of clusters.")
-		for i in tqdm.tqdm(range(len(clust_num_vec))):
-			clust_num = clust_num_vec[i]
-			silhouette_scores[i], distortion_scores[i] = clust_num_test(e_i, spikes,
-																  clust_num,axis_labels,
-																  silh_dir,clust_type,
-																  wav_type,type_spike)
 		
-		sil_fig = plt.figure()
-		plt.plot(clust_num_vec,silhouette_scores)
-		plt.title("Average Silhouette Scores")
-		plt.xlabel("Cluster Count")
-		plt.ylabel("Average Silhouette Score")
-		sil_fig.savefig(silh_dir + 'avg_silh.png', dpi=100)
-		plt.close(sil_fig)
- 		
-		dist_fig = plt.figure()
-		plt.plot(clust_num_vec,distortion_scores)
-		plt.title("Average Distortions")
-		plt.xlabel("Cluster Count")
-		plt.ylabel("Average Distortion")
-		dist_fig.savefig(silh_dir + 'avg_dist.png', dpi=100)
-		plt.close(dist_fig)
+		if type_spike[0:5] == 'final':
+			#First test different numbers of clusters
+			clust_num_vec = np.arange(clust_min, clust_max)
+			silhouette_scores = np.zeros(np.shape(clust_num_vec))
+			distortion_scores = np.zeros(np.shape(clust_num_vec))
+			print("\t \t Testing different numbers of clusters.")
+			for i in tqdm.tqdm(range(len(clust_num_vec))):
+				clust_num = clust_num_vec[i]
+				silhouette_scores[i], distortion_scores[i] = clust_num_test(e_i, spikes,
+																	  clust_num,axis_labels,
+																	  silh_dir,clust_type,
+																	  wav_type,type_spike)
+			
+			sil_fig = plt.figure()
+			plt.plot(clust_num_vec,silhouette_scores)
+			plt.title("Average Silhouette Scores")
+			plt.xlabel("Cluster Count")
+			plt.ylabel("Average Silhouette Score")
+			sil_fig.savefig(silh_dir + 'avg_silh.png', dpi=100)
+			plt.close(sil_fig)
+	 		
+			dist_fig = plt.figure()
+			plt.plot(clust_num_vec,distortion_scores)
+			plt.title("Average Distortions")
+			plt.xlabel("Cluster Count")
+			plt.ylabel("Average Distortion")
+			dist_fig.savefig(silh_dir + 'avg_dist.png', dpi=100)
+			plt.close(dist_fig)
+			
+			#Next pick the best number of clusters
+			clust_num = clust_num_vec[np.where(silhouette_scores == np.max(silhouette_scores))[0]][0]
+			####ADD STORAGE OF CLUST_NUM AND PULLING SO DON'T NEED TO RERUN SILHOUETTE TESTING
+			
+		else: #Noise clustering
+			clust_num = noise_clust
 		
-		#Next pick the best number of clusters
-		clust_num = clust_num_vec[np.where(silhouette_scores == np.max(silhouette_scores))[0]][0]
-		####ADD STORAGE OF CLUST_NUM AND PULLING SO DON'T NEED TO RERUN SILHOUETTE TESTING
-		
-		#Finally cluster by the best number of clusters
 		neuron_spike_ind, neuron_waveform_ind = spike_clust(spikes, peak_indices, 
 														 clust_num, e_i, sort_data_dir, 
 														 axis_labels, viol_1, viol_2, 
 														 type_spike, segment_times, 
 														 segment_names, dig_in_lens,
 														 dig_in_times, dig_in_names,
-														 sampling_rate,clust_type,
+														 sampling_rate,viol_1_percent,
+														 viol_2_percent,clust_type,
 														 wav_type,user_input,re_sort)
 		
 	else:
@@ -297,8 +303,8 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,wav_typ
 	
 def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels, 
 				viol_1, viol_2, type_spike, segment_times, segment_names, 
-				dig_in_lens, dig_in_times ,dig_in_names,sampling_rate,clust_type,
-				wav_type,user_input,re_sort='y'):
+				dig_in_lens, dig_in_times ,dig_in_names,sampling_rate,viol_1_cutoff,
+				viol_2_cutoff,clust_type,wav_type,user_input,re_sort='y'):
 	"""This function performs clustering on spikes pulled from each component.
 	Inputs:
 		spikes = list of spike samples num_spikes x length_spike
@@ -316,6 +322,8 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		dig_in_times = array times of end of tastant delivery - each tastant separately
 		dig_in_names = names of different tastants
 		sampling_rate = number of samples per second
+		viol_1_percent = 1 ms violation percent cutoff
+		viol_2_cutoff = 2 ms violation percent cutoff
 		clust_type = selects the clustering method: kmeans or gmm
 		wav_type = 'full' = full waveform, 'red' = reduced waveform
 		user_input = 1 if user manually selects final clusters, 0 otherwise
@@ -336,8 +344,6 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 	
 	if re_sort == 'y':
 		#Set parameters
-		viol_2_cutoff = 2 #Maximum allowed violation percentage for 2 ms
-		viol_1_cutoff = 1 #Maximum allowed violation percentage for 1 ms
 		num_vis = 500 #Number of waveforms to visualize for example plot
 		all_dig_in_times = np.unique(np.array(dig_in_times).flatten())
 		PSTH_left_ms = 500
@@ -397,8 +403,10 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		ax5 = clust_fig.add_subplot(337, projection='3d')
 		ax6 = clust_fig.add_subplot(338, projection='3d')
 		ax7 = clust_fig.add_subplot(339, projection='3d')
+		i_labelled = []
 		for li in range(clust_num):
 			ind_labelled = np.where(labels == li)[0]
+			i_labelled.append(ind_labelled)
 			pca_labelled = spikes_pca[ind_labelled]
 			pca_labelled_means = np.mean(pca_labelled,axis=0)
 			#3D plot dim 1-3
@@ -435,7 +443,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		plt.close(clust_fig)
 		#Create waveform/histogram/PSTH plots
 		for li in range(clust_num):
-			ind_labelled = np.where(labels == li)[0]
+			ind_labelled = i_labelled[li]
 			spikes_labelled = np.array(spikes)[ind_labelled]
 			#Check for violations first
 			peak_ind = np.unique(np.array(peak_indices)[ind_labelled])
@@ -460,111 +468,18 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 				if viol_1_percent < viol_1_cutoff:
 					any_good += 1
 					which_good.append(li)
-					#Select sub-population of spikes to plot as an example
-					plot_num_vis = min(num_vis,len(spikes_labelled)-1)
-					plot_ind = np.random.randint(0,len(peak_ind),size=(plot_num_vis,)) #Pick 500 random waveforms to plot
-					
-					#Pull PSTH data by tastant
-					PSTH_left = -1*round((1/1000)*sampling_rate*PSTH_left_ms)
-					PSTH_right = round((1/1000)*sampling_rate*PSTH_right_ms)
-					PSTH_width = PSTH_right - PSTH_left
-					PSTH_avg_taste = []
-					for t_i in range(len(dig_in_times)): #By tastant
-						spike_raster = np.zeros((len(dig_in_times[t_i]),PSTH_width))
-						for d_i in range(len(dig_in_times[t_i])): #By delivery
-							d_time = dig_in_times[t_i][d_i] #Time of end of delivery
-							spike_inds_left = np.where(peak_ind - d_time > PSTH_left)[0]
-							spike_inds_right = np.where(peak_ind - d_time < PSTH_right)[0]
-							overlap_inds = np.intersect1d(spike_inds_left,spike_inds_right)
-							spike_inds_overlap = peak_ind[overlap_inds] - d_time + PSTH_left
-							spike_raster[d_i][spike_inds_overlap] = 1
-						#The following bin size and step size come from Sadacca et al. 2016 
-						bin_ms = 250 #Number of ms for binning the spike counts
-						bin_size = round((bin_ms/1000)*sampling_rate)
-						bin_step_size_ms = 10 #Number of ms for sliding the bin over
-						bin_step_size = round((bin_step_size_ms/1000)*sampling_rate)
-						PSTH_x_labels = np.arange(-PSTH_left_ms,PSTH_right_ms,bin_step_size_ms)
-						PSTH_mat = np.zeros((len(dig_in_times[t_i]),len(PSTH_x_labels)))
-						for b_i in range(len(PSTH_x_labels)):
-							left_ind = int(max(round(b_i*bin_step_size - 0.5*bin_size),0))
-							right_ind = int(min(round(b_i*bin_step_size + 0.5*bin_size),len(spike_raster[0])))
-							PSTH_mat[:,b_i] = np.sum(spike_raster[:,left_ind:right_ind],1)
-						PSTH_avg = (np.mean(PSTH_mat,0)/bin_ms)*1000 #Converted to Hz
-						PSTH_avg_taste.append(PSTH_avg)
-					#CREATE FIGURE
-					fig = plt.figure(figsize=(30,20))
-					#Plot average waveform
-					plt.subplot(3,3,1)
-					spike_bit = spikes_labelled[np.random.randint(0,len(spikes_labelled),size=(10000,))]
-					mean_bit = np.mean(spike_bit,axis=0)
-					std_bit = np.std(spike_bit,axis=0)
-					plt.errorbar(axis_labels,mean_bit,yerr=std_bit,xerr=None)
-					plt.title('Cluster ' + str(li) + ' Average Waveform + Std Range')
-					#Plot spike overlay
-					plt.subplot(3,3,2)
-					for si in plot_ind:
-						try:
-							plt.plot(axis_labels,spikes_labelled[si],'-b',alpha=0.1)
-						except:
-							print("\t \t Error: Skipped plotting a waveform.")
-					plt.ylabel('mV')
-					plt.title('Cluster ' + str(li) + ' x' + str(plot_num_vis) + ' Waveforms')
-					#Find ISI distribution and plot
-					plt.subplot(3,3,3)
-					plt.hist(isi_ms,bins=min(100,round(len(peak_diff)/10)))
-					plt.xlim((0,5000)) #Zoom into 5 s max distribution
-					plt.xlabel('ISI (ms)')
-					plt.title('Cluster ' + str(li) + ' ISI Distribution')
-					#Histogram of time of spike occurrence
-					plt.subplot(3,3,4)
-					plt.hist(peak_ind,bins=min(100,round(len(peak_ind)/10)))
-					[plt.axvline(segment_times[i],label=segment_names[i],alpha=0.2,c=possible_colors[i]) for i in range(len(segment_names))]
-					plt.legend()
-					plt.title('Cluster ' + str(li) + ' Spike Time Histogram')
-					#Histogram of time of spike occurrence zoomed to taste delivery
-					plt.subplot(3,3,5)
-					plt.hist(peak_ind,bins=2*len(all_dig_in_times))
-					for d_i in range(len(dig_in_names)):
-						[plt.axvline(dig_in_times[d_i][i],c=possible_colors[d_i],alpha=0.2, label=dig_in_names[d_i]) for i in range(len(dig_in_times[d_i]))]
-					plt.xlim((min(all_dig_in_times)- sampling_rate,max(all_dig_in_times) + sampling_rate))
-					plt.title('Cluster ' + str(li) + ' Spike Time Histogram - Taste Interval')
-					#Fourier Transform of Average Waveform For Cluster
-					plt.subplot(3,3,6)
-					fourier = rfft(mean_bit)
-					freqs = fftfreq(len(mean_bit), d=1/sampling_rate)
-					fourier_peaks = find_peaks(fourier)[0]
-					peak_freqs = freqs[fourier_peaks]
-					peak_freqs = peak_freqs[peak_freqs>0]
-					plt.plot(freqs,fourier)
-					for p_f in range(len(peak_freqs)):
-						plt.axvline(peak_freqs[p_f],color=possible_colors[p_f],label=str(round(peak_freqs[p_f],2)))
-					plt.xlim((0,max(freqs)))
-					plt.legend()
-					plt.xlabel('Frequency (Hz)')
-					plt.title('Fourier Transform of Mean Waveform')
-					#PSTH figure
-					plt.subplot(3,3,7)
-# 					for p_i in range(len(dig_in_times)): #Plot individual instances
-# 						plt.plot(PSTH_x_labels,PSTH_mat[p_i,:],alpha=0.1)
-					for d_i in range(len(dig_in_times)):
-						plt.plot(PSTH_x_labels,PSTH_avg_taste[d_i],c=possible_colors[d_i],label=dig_in_names[d_i])
-						plt.axvline(0-dig_in_lens_ms[d_i],c=possible_colors[d_i])
-					plt.legend()
-					plt.axvline(0,c='k')
-					plt.xlabel('Milliseconds from delivery')
-					plt.ylabel('Average firing rate (Hz)')
-					plt.title('Cluster ' + str(li) + ' Average PSTH')
-					#Title and save figure
-					line_1 = 'Number of Waveforms = ' + str(len(spikes_labelled))
-					line_2 = '1 ms violation percent = ' + str(viol_1_percent)
-					line_3 = '2 ms violation percent = ' + str(viol_2_percent)
-					line_4 = 'Average firing rate = ' + str(avg_fr)
-					plt.suptitle(line_1 + '\n' + line_2 + ' ; ' + line_3 + '\n' + line_4,fontsize=24)
-					fig.savefig(sort_neur_type_dir + 'waveforms_' + str(li) + '.png', dpi=100)
-					plt.close(fig)
+					#Plot cluster
+					plot_neuron_properties(num_vis,spikes_labelled,peak_ind,sampling_rate,
+											   PSTH_left_ms,PSTH_right_ms,dig_in_times,axis_labels,
+											   li,isi_ms,peak_diff,segment_names,segment_times,
+											   all_dig_in_times,dig_in_names,dig_in_lens_ms,
+											   viol_1_percent,viol_2_percent,avg_fr,
+											   sort_neur_type_dir)
+					#Save cluster stats
 					clust_stats[li,0:4] = np.array([len(spikes_labelled),viol_1_percent,viol_2_percent,avg_fr])
 		neuron_spike_ind = []
 		neuron_waveform_ind = []
+		combined_clust_ind = []
 		if (any_good > 0) & (type_spike != 'noise_removal'): #Automatically skip over bad sorts
 			if user_input == 1: #Ask for user input to select clusters to keep
 				print("\n \t INPUT REQUESTED: Please navigate to the directory " + sort_neur_type_dir)
@@ -633,16 +548,16 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 							peak_ind = []
 							wav_ind = []
 							for ind_g in ig:
-								wav_ind.extend(list(np.where(labels == ind_g)[0]))
-								peak_ind.extend(list(np.array(peak_indices)[np.where(labels == ind_g)[0]]))
+								wav_ind.extend(list(i_labelled[ind_g]))
+								peak_ind.extend(list(np.array(peak_indices)[i_labelled[ind_g]]))
 							neuron_spike_ind.append(peak_ind)
 							neuron_waveform_ind.append(wav_ind)
 						else:
 							wav_ind = []
-							wav_ind.extend(list(np.where(labels == ig)[0]))
+							wav_ind.extend(list(i_labelled[ig]))
 							neuron_waveform_ind.append(wav_ind)
 							peak_ind = []
-							peak_ind.extend(list(np.array(peak_indices)[np.where(labels == ig)[0]]))
+							peak_ind.extend(list(np.array(peak_indices)[i_labelled[ig]]))
 							neuron_spike_ind.append(peak_ind)
 				except:
 					print("\t No spikes selected.")
@@ -651,17 +566,73 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 				ind_good = [which_good]
 				clust_stats[np.array(which_good),4] = 1
 				for ig in which_good:
-					neuron_waveform_ind.extend(list(np.where(labels == ig)[0]))
-					neuron_spike_ind.extend(list(np.array(peak_indices)[np.where(labels == ig)[0]]))
+					neuron_waveform_ind.extend(list(i_labelled[ig]))
+					neuron_spike_ind.extend(list(np.array(peak_indices)[i_labelled[ig]]))
 				neuron_waveform_ind = [neuron_waveform_ind]
 				neuron_spike_ind = [neuron_spike_ind]
 		elif type_spike == 'noise_removal':
 			ind_good = np.arange(clust_num)
 			for ig in ind_good:
-				neuron_spike_ind.append(list(np.array(peak_indices)[np.where(labels == ig)[0]]))
-				neuron_waveform_ind.append(list(np.where(labels == ig)[0]))
+				neuron_spike_ind.append(list(np.array(peak_indices)[i_labelled[ig]]))
+				neuron_waveform_ind.append(list(i_labelled[ig]))
 		else:
 			print("\t No good clusters.")
+		#Save new final recombined spike results
+		if type_spike != 'noise_removal':
+			save_folder = sort_neur_dir + 'final_results/'
+			if os.path.isdir(save_folder) == False:
+				os.mkdir(save_folder)
+			keep_ind = []
+			nonkeep_ind = []
+			new_clust_stats = np.zeros((len(neuron_waveform_ind),5))
+			for w_i in range(len(neuron_waveform_ind)):
+				num_wav = len(os.listdir(save_folder)) + 1 #Index of this set of waveforms
+				#Calculate violations
+				peak_ind = np.sort(np.array(neuron_spike_ind[w_i]))
+				wav_ind = np.sort(neuron_waveform_ind[w_i])
+				peak_diff = np.subtract(peak_ind[1:-1],peak_ind[0:-2]) 
+				isi_ms = (peak_diff/sampling_rate)*1000
+				viol_1_times = len(np.where(peak_diff <= viol_1)[0])
+				viol_2_times = len(np.where(peak_diff <= viol_2)[0])
+				viol_1_percent = round(viol_1_times/len(peak_diff)*100,2)
+				viol_2_percent = round(viol_2_times/len(peak_diff)*100,2)
+				avg_fr = round(len(peak_ind)/(segment_times[-1])*sampling_rate,2) #in Hz
+				#Pull waveforms for plotting
+				spikes_labelled = np.array(spikes)[wav_ind]
+				#Store fo cluster stats
+				new_clust_stats[w_i,0:4] = np.array([len(spikes_labelled),viol_1_percent,viol_2_percent,avg_fr])
+				#Plot final groupings
+				plot_neuron_properties(num_vis,spikes_labelled,peak_ind,sampling_rate,
+										   PSTH_left_ms,PSTH_right_ms,dig_in_times,axis_labels,
+										   num_wav,isi_ms,peak_diff,segment_names,segment_times,
+										   all_dig_in_times,dig_in_names,dig_in_lens_ms,
+										   viol_1_percent,viol_2_percent,avg_fr,
+										   save_folder)
+				if viol_1_percent < 2*viol_1_cutoff:
+					keep_ind.extend([w_i])
+					new_clust_stats[w_i,4] = 1
+				else:
+					nonkeep_ind.extend([w_i])
+				
+			new_neuron_waveform_ind = []
+			new_neuron_spike_ind = []
+			new_clust_stats = []
+			for k_i in keep_ind:
+				new_neuron_waveform_ind.append(neuron_waveform_ind[k_i])
+				new_neuron_spike_ind.append(neuron_spike_ind[k_i])
+			for n_i in nonkeep_ind:
+				orig_ind = ind_good[n_i]
+				clust_stats[orig_ind,-1] = 0
+			neuron_waveform_ind = new_neuron_waveform_ind
+			neuron_spike_ind = new_neuron_spike_ind
+			
+			#Save grouped stats to CSV
+			new_sort_neur_stats_csv = save_folder + 'sort_stats.csv'
+			with open(new_sort_neur_stats_csv, 'w') as f:
+				write = csv.writer(f,delimiter=',')
+				write.writerows([['Number of Spikes','1 ms Violations','2 ms Violations','Average Firing Rate','Good']])
+				write.writerows(clust_stats)
+				
 		#Save to CSV spike indices
 		with open(sort_neur_ind_csv, 'w') as f:
 			# using csv.writer method from CSV package
@@ -672,7 +643,7 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			# using csv.writer method from CSV package
 			write = csv.writer(f)
 			write.writerows(neuron_waveform_ind)
-		#Save stats to CSV
+		#Save indiv stats to CSV
 		with open(sort_neur_stats_csv, 'w') as f:
 			write = csv.writer(f,delimiter=',')
 			write.writerows([['Number of Spikes','1 ms Violations','2 ms Violations','Average Firing Rate','Good']])
@@ -697,5 +668,142 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			neuron_waveform_ind.append(int_list)
 			
 	return neuron_spike_ind, neuron_waveform_ind
+	
+def plot_neuron_properties(num_vis,spikes_labelled,peak_ind,sampling_rate,
+						   PSTH_left_ms,PSTH_right_ms,dig_in_times,axis_labels,
+						   li,isi_ms,peak_diff,segment_names,segment_times,
+						   all_dig_in_times,dig_in_names,dig_in_lens_ms,
+						   viol_1_percent,viol_2_percent,avg_fr,
+						   save_folder):
+	"""This function creates plots of the neuron properties
+	INPUTS:
+		- num_vis: number of waveforms to overlay visualize
+		- spikes_labelled: numpy array of waveforms in this grouping
+		- peak_ind: true indices of waveforms peaking in original dataset
+		- sampling_rate: sampling rate of dataset
+		- PSTH_left_ms: number of milliseconds to left of tastant delivery to visualize
+		- PSTH_right_ms: number of milliseconds to right of tastant delivery to visualize
+		- dig_in_times: indices when tastants were delivered
+		- axis_labels: x-axis labels for waveform visualization (in ms)
+		- li: cluster index being plotted
+		- isi_ms: all ISIs in ms
+		- peak_diff: all ISIs in sampling rate values
+		- segment_names: names of different experimental segments
+		- segment_times: times of different experimental segments
+		- all_dig_in_times: all times tastants were delivered in one vector
+		- dig_in_names: names of different dig_ins
+		- dig_in_lens_ms: length of individual tastant deliveries in ms
+		- viol_1_percent: percent of 1 ms violations
+		- viol_2_percent: percent of 2 ms violations
+		- avg_fr: average firing rate
+		- save_folder: figure storage folder
+	OUTPUTS:
+		- figure is stored in save_folder with cluster neuron data
+	
+	"""
+	possible_colors = ['b','g','r','c','m','k','y','brown','pink','olive','gray'] #Colors for plotting different tastant deliveries
+	
+	#Select sub-population of spikes to plot as an example
+	plot_num_vis = min(num_vis,len(spikes_labelled)-1)
+	plot_ind = np.random.randint(0,len(peak_ind),size=(plot_num_vis,)) #Pick 500 random waveforms to plot
+	
+	#Pull PSTH data by tastant
+	PSTH_left = -1*round((1/1000)*sampling_rate*PSTH_left_ms)
+	PSTH_right = round((1/1000)*sampling_rate*PSTH_right_ms)
+	PSTH_width = PSTH_right - PSTH_left
+	PSTH_avg_taste = []
+	for t_i in range(len(dig_in_times)): #By tastant
+		spike_raster = np.zeros((len(dig_in_times[t_i]),PSTH_width))
+		for d_i in range(len(dig_in_times[t_i])): #By delivery
+			d_time = dig_in_times[t_i][d_i] #Time of end of delivery
+			spike_inds_left = np.where(peak_ind - d_time > PSTH_left)[0]
+			spike_inds_right = np.where(peak_ind - d_time < PSTH_right)[0]
+			overlap_inds = np.intersect1d(spike_inds_left,spike_inds_right)
+			spike_inds_overlap = peak_ind[overlap_inds] - d_time + PSTH_left
+			spike_raster[d_i][spike_inds_overlap] = 1
+		#The following bin size and step size come from Sadacca et al. 2016 
+		bin_ms = 250 #Number of ms for binning the spike counts
+		bin_size = round((bin_ms/1000)*sampling_rate)
+		bin_step_size_ms = 10 #Number of ms for sliding the bin over
+		bin_step_size = round((bin_step_size_ms/1000)*sampling_rate)
+		PSTH_x_labels = np.arange(-PSTH_left_ms,PSTH_right_ms,bin_step_size_ms)
+		PSTH_mat = np.zeros((len(dig_in_times[t_i]),len(PSTH_x_labels)))
+		for b_i in range(len(PSTH_x_labels)):
+			left_ind = int(max(round(b_i*bin_step_size - 0.5*bin_size),0))
+			right_ind = int(min(round(b_i*bin_step_size + 0.5*bin_size),len(spike_raster[0])))
+			PSTH_mat[:,b_i] = np.sum(spike_raster[:,left_ind:right_ind],1)
+		PSTH_avg = (np.mean(PSTH_mat,0)/bin_ms)*1000 #Converted to Hz
+		PSTH_avg_taste.append(PSTH_avg)
+	#CREATE FIGURE
+	fig = plt.figure(figsize=(30,20))
+	#Plot average waveform
+	plt.subplot(3,3,1)
+	spike_bit = spikes_labelled[np.random.randint(0,len(spikes_labelled),size=(10000,))]
+	mean_bit = np.mean(spike_bit,axis=0)
+	std_bit = np.std(spike_bit,axis=0)
+	plt.errorbar(axis_labels,mean_bit,yerr=std_bit,xerr=None)
+	plt.title('Cluster ' + str(li) + ' Average Waveform + Std Range')
+	#Plot spike overlay
+	plt.subplot(3,3,2)
+	for si in plot_ind:
+		try:
+			plt.plot(axis_labels,spikes_labelled[si],'-b',alpha=0.1)
+		except:
+			print("\t \t Error: Skipped plotting a waveform.")
+	plt.ylabel('mV')
+	plt.title('Cluster ' + str(li) + ' x' + str(plot_num_vis) + ' Waveforms')
+	#Find ISI distribution and plot
+	plt.subplot(3,3,3)
+	plt.hist(isi_ms,bins=min(100,round(len(peak_diff)/10)))
+	plt.xlim((0,5000)) #Zoom into 5 s max distribution
+	plt.xlabel('ISI (ms)')
+	plt.title('Cluster ' + str(li) + ' ISI Distribution')
+	#Histogram of time of spike occurrence
+	plt.subplot(3,3,4)
+	plt.hist(peak_ind,bins=min(100,round(len(peak_ind)/10)))
+	[plt.axvline(segment_times[i],label=segment_names[i],alpha=0.2,c=possible_colors[i]) for i in range(len(segment_names))]
+	plt.legend()
+	plt.title('Cluster ' + str(li) + ' Spike Time Histogram')
+	#Histogram of time of spike occurrence zoomed to taste delivery
+	plt.subplot(3,3,5)
+	plt.hist(peak_ind,bins=2*len(all_dig_in_times))
+	for d_i in range(len(dig_in_names)):
+		[plt.axvline(dig_in_times[d_i][i],c=possible_colors[d_i],alpha=0.2, label=dig_in_names[d_i]) for i in range(len(dig_in_times[d_i]))]
+	plt.xlim((min(all_dig_in_times)- sampling_rate,max(all_dig_in_times) + sampling_rate))
+	plt.title('Cluster ' + str(li) + ' Spike Time Histogram - Taste Interval')
+	#Fourier Transform of Average Waveform For Cluster
+	plt.subplot(3,3,6)
+	fourier = rfft(mean_bit)
+	freqs = fftfreq(len(mean_bit), d=1/sampling_rate)
+	fourier_peaks = find_peaks(fourier)[0]
+	peak_freqs = freqs[fourier_peaks]
+	peak_freqs = peak_freqs[peak_freqs>0]
+	plt.plot(freqs,fourier)
+	for p_f in range(len(peak_freqs)):
+		plt.axvline(peak_freqs[p_f],color=possible_colors[p_f],label=str(round(peak_freqs[p_f],2)))
+	plt.xlim((0,max(freqs)))
+	plt.legend()
+	plt.xlabel('Frequency (Hz)')
+	plt.title('Fourier Transform of Mean Waveform')
+	#PSTH figure
+	plt.subplot(3,3,7)
+	for d_i in range(len(dig_in_times)):
+		plt.plot(PSTH_x_labels,PSTH_avg_taste[d_i],c=possible_colors[d_i],label=dig_in_names[d_i])
+		plt.axvline(0-dig_in_lens_ms[d_i],c=possible_colors[d_i])
+	plt.legend()
+	plt.axvline(0,c='k')
+	plt.xlabel('Milliseconds from delivery')
+	plt.ylabel('Average firing rate (Hz)')
+	plt.title('Cluster ' + str(li) + ' Average PSTH')
+	#Title and save figure
+	line_1 = 'Number of Waveforms = ' + str(len(spikes_labelled))
+	line_2 = '1 ms violation percent = ' + str(viol_1_percent)
+	line_3 = '2 ms violation percent = ' + str(viol_2_percent)
+	line_4 = 'Average firing rate = ' + str(avg_fr)
+	plt.suptitle(line_1 + '\n' + line_2 + ' ; ' + line_3 + '\n' + line_4,fontsize=24)
+	fig.savefig(save_folder + 'waveforms_' + str(li) + '.png', dpi=100)
+	plt.close(fig)
+	
+	
 	
 	

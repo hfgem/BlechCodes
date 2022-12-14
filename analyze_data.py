@@ -11,7 +11,6 @@ Created on Thu Jun 30 10:50:15 2022
 import sys, os
 sys.path.append('/Users/hannahgermaine/Documents/GitHub/BlechCodes/')
 import functions.data_processing as dp
-import functions.ICA_data_split as ica
 import functions.spike_sort as sort
 import functions.data_cleaning as dc
 import tkinter as tk
