@@ -64,6 +64,7 @@ for s_n in sorted_units_node:
 		unit_times = eval('s_n.times.neuron_' + str(n_u) + '[0]').round().astype(int)
 		new_spikes_bin[i,unit_times] = 1
 		i += 1
+del s_n, num_units, n_u
 new_hf5.close()
 
 #Transform data from blech_clust hdf5 file into correct format
