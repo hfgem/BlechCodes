@@ -113,7 +113,7 @@ def getEMG():
 	
 def electrodes(dat_files_list):
 	"""This fucntion pulls a list of just electrodes"""
-	e_list = [name for name in dat_files_list if name.startswith('amp-A-0')]
+	e_list = [name for name in dat_files_list if name.startswith('amp-')]
 	if len(e_list) == 0:
 		#Single amplifier file
 		e_list = ['amplifier.dat']

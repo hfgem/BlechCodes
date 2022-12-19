@@ -495,6 +495,7 @@ def sort_settings(dir_save):
 		clust_type = sort_settings_list[0][0]
 		wav_type = sort_settings_list[1][0]
 		comb_type = sort_settings_list[2][0]
+		autosort = sort_settings_list[3][0]
 	else:
 		#Ask for user input on which clustering algorithm to use
 		clust_loop = 1

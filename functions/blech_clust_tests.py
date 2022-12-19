@@ -37,34 +37,32 @@ except:
 	
 print("\n INPUT REQUESTED: Select directory with new sort method .h5 file.")
 new_datadir = fd.askdirectory(parent=root, initialdir=currdir, title='Please select the folder where data is stored.')
+info_file = np.fromfile(new_datadir + '/' + 'info.rhd', dtype = np.dtype('float32'))
+original_sampling_rate = int(info_file[2])
 new_hdf5_name = str(os.path.dirname(new_datadir + '/')).split('/')
 new_hf5_info_dir = new_datadir + '/' + new_hdf5_name[-1] + '_downsampled.h5'
 new_hf5_info = tables.open_file(new_hf5_info_dir,'r',title=new_hf5_info_dir[-1])
 num_new_time = np.shape(new_hf5_info.root.electrode_array.data)[-1]
+new_sampling_rate = new_hf5_info.root.sampling_rate[0]
 new_hf5_info.close()
-new_hf5_dir = new_datadir + '/sort_results/' + new_hdf5_name[-1].split('_')[0] + '_sort.h5'
-
+new_hf5_dir = new_datadir + '/' + new_datadir.split('/')[-1] + '_repacked.h5'
 #Create a directory to store overlap data
-overlap_folder = new_datadir + '/overlaps/'
+overlap_folder = new_datadir + '/compare_with_blech_clust/'
 if os.path.isdir(overlap_folder) == False:
 	os.mkdir(overlap_folder)
 
 #Import relevant data
 new_hf5 = tables.open_file(new_hf5_dir,'r',title = new_hf5_dir[-1])
 sorted_units_node = new_hf5.get_node('/sorted_units')
-sampling_rate = 30000
-assumed_sampling_rate = 30000
-downsample_div = round(assumed_sampling_rate/assumed_sampling_rate)
-num_new_neur = sum([len([w for w in s_n.waveforms]) for s_n in sorted_units_node])
+num_new_neur = len([s_n for s_n in sorted_units_node])
+downsample_div = round(original_sampling_rate/new_sampling_rate)
 new_spikes_bin = np.zeros((num_new_neur,num_new_time))
 i = 0
 for s_n in sorted_units_node:
-	num_units = len([w_n for w_n in s_n.times])
-	for n_u in range(num_units):
-		unit_times = eval('s_n.times.neuron_' + str(n_u) + '[0]').round().astype(int)
-		new_spikes_bin[i,unit_times] = 1
-		i += 1
-del s_n, num_units, n_u
+	unit_times = eval('s_n.times').round().astype(int)
+	new_spikes_bin[i,unit_times] = 1
+	i += 1
+del s_n
 new_hf5.close()
 
 #Transform data from blech_clust hdf5 file into correct format

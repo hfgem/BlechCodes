@@ -49,6 +49,19 @@ def file_import(datadir, dat_files_list, electrodes_list, emg_ind, dig_in_list, 
 	hf5.close()
 	print('Created nodes in HF5')
 	
+	# Read the amplifier sampling rate from info.rhd - 
+	# look at Intan's website for structure of header files
+	info_file = np.fromfile(datadir + '/' + 'info.rhd', dtype = np.dtype('float32'))
+	sampling_rate = int(info_file[2])
+	
+	# Read the time.dat file
+	num_recorded_samples = len(np.fromfile(datadir + '/' + 'time.dat', dtype = np.dtype('float32')))
+	total_recording_time = num_recorded_samples/sampling_rate #In seconds
+	
+	check_str = f'Amplifier files: {electrodes_list} \nSampling rate: {sampling_rate} Hz'\
+            f'\nDigital input files: {dig_in_list} \n ---------- \n \n'
+	print(check_str)
+	
 	# Sort all lists
 	dat_files_list.sort()
 	electrodes_list.sort()
@@ -56,64 +69,48 @@ def file_import(datadir, dat_files_list, electrodes_list, emg_ind, dig_in_list, 
 	emg_ind.sort()
 	#DO NOT SORT dig_in_names - they are already sorted!
 	
-	#Separate electrodes and emg into their own lists
-	all_electrodes = list()
-	all_emg = list()
-	for i in range(len(electrodes_list)):
-		try:
-			e_ind = emg_ind.index(i)
-			all_emg.append(electrodes_list[i])
-		except:
-			all_electrodes.append(electrodes_list[i])
-	
-	# Read the amplifier sampling rate from info.rhd - 
-	# look at Intan's website for structure of header files
-	sampling_rate = np.fromfile(datadir + '/' + 'info.rhd', dtype = np.dtype('float32'))
-	sampling_rate = int(sampling_rate[2])
-	
-	check_str = f'ports used: {electrodes_list} \n sampling rate: {sampling_rate} Hz'\
-            f'\n digital inputs on intan board: {dig_in_list} \n ---------- \n \n'
-	print(check_str)
-	
-	hf5 = tables.open_file(hf5_dir,'r+')
-	
-	# Create arrays for all components
-	atom = tables.IntAtom()
-	if len(all_electrodes) == 1: #Single amplifier file
+	#Pull data into arrays first
+	if len(electrodes_list) == 1: #Single amplifier file
 		print("Single Amplifier File Detected")
-		
+		amplifier_data = np.fromfile(datadir + '/' + electrodes_list[0], dtype = np.dtype('uint16'))
+		num_neur = int(len(amplifier_data)/num_recorded_samples)
+		all_electrodes = list()
+		all_emg = list()
+		for i in range(num_neur):
+			ind_data = amplifier_data[np.arange(i,len(amplifier_data),num_neur)]
+			try:
+				e_ind = emg_ind.index(i)
+				all_emg.append(ind_data)
+			except:
+				all_electrodes.append(ind_data)		
 	else:
-		
-		for i in all_electrodes: #add electrode arrays
-			e_name = i.split('.')[0]
-			e_name = e_name.split('-')[-1]
-			hf5.create_earray('/raw',f'electrode_{e_name}',atom,(0,))
-	for i in all_emg: #add emg arrays
-		e_name = i.split('.')[0]
-		e_name = e_name.split('-')[-1]
-		hf5.create_earray('/raw_emg',f'electrode_{e_name}',atom,(0,))	
+		#Separate electrodes and emg into their own lists
+		num_neur = len(electrodes_list)
+		all_electrodes = list()
+		all_emg = list()
+		for i in range(len(electrodes_list)):
+			ind_data = np.fromfile(datadir + '/' + i, dtype = np.dtype('uint16'))
+			try:
+				e_ind = emg_ind.index(i)
+				all_emg.append(ind_data)
+			except:
+				all_electrodes.append(ind_data)
+				
+	print("Saving data to hdf5 file.")
+	hf5 = tables.open_file(hf5_dir, 'r+', title = hdf5_name[-1])
+	atom = tables.FloatAtom()
+	for i in tqdm.tqdm(range(len(all_electrodes))): #add electrode arrays
+		e_name = str(i)
+		hf5.create_earray('/raw',f'electrode_{e_name}',atom,(0,))
+		exec("hf5.root.raw.electrode_"+str(e_name)+".append(all_electrodes[i][:])")
+	for i in tqdm.tqdm(range(len(all_emg))): #add emg arrays
+		e_name = str(i)
+		hf5.create_earray('/raw_emg',f'emg_{e_name}',atom,(0,))	
+		exec("hf5.root.raw_emg.electrode_"+str(e_name)+".append(all_emg[i][:])")
 	for i in range(len(dig_in_list)): #add dig-in arrays
 		d_name = dig_in_names[i]
-		hf5.create_earray('/digital_in',f'digin_{d_name}',atom,(0,))	
-		
-	print('Reading electrodes')
-	for i in tqdm.tqdm(all_electrodes):
-		inputs = np.fromfile(datadir + '/' + i, dtype = np.dtype('uint16'))
-		e_name = i.split('.')[0]
-		e_name = e_name.split('-')[-1]
-		exec("hf5.root.raw.electrode_"+str(e_name)+".append(inputs[:])")
-	
-	print('Reading emg')
-	for i in tqdm.tqdm(all_emg):
-		inputs = np.fromfile(datadir + '/' + i, dtype = np.dtype('uint16'))
-		e_name = i.split('.')[0]
-		e_name = e_name.split('-')[-1]
-		exec("hf5.root.raw_emg.electrode_"+str(e_name)+".append(inputs[:])")
-	
-	print('Reading dig-ins')
-	for i in tqdm.tqdm(range(len(dig_in_list))):
-		d_name = dig_in_names[i]
 		inputs = np.fromfile(datadir + '/' + dig_in_list[i], dtype = np.dtype('uint16'))
+		hf5.create_earray('/digital_in',f'digin_{d_name}',atom,(0,))	
 		exec("hf5.root.digital_in.digin_"+str(d_name)+".append(inputs[:])")
 	
 	hf5.close() #Close the file

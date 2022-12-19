@@ -17,6 +17,7 @@ from scipy.fftpack import rfft, fftfreq
 from scipy.signal import find_peaks
 from sklearn.metrics import silhouette_samples
 import umap
+from numba import jit
 
 def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike, 
 			segment_times, segment_names, dig_in_lens, dig_in_times, dig_in_names, 
@@ -288,7 +289,7 @@ def clust_num_test(e_i, spikes,clust_num,axis_labels,silh_dir,clust_type,wav_typ
 		#Test UMAP projection
 		#umap_fig = plt.figure(figsize=(15,15))
 		#reducer = umap.UMAP()
-		#embedding = reducer.fit_transform(reduced_spikes)
+		#embedding = reducer.fit_transform(spikes_pca)
 		#for li in range(clust_num):
 		#	ind_labelled = np.where(labels == li)[0]
 		#	plt.scatter(embedding[ind_labelled, 0], embedding[ind_labelled, 1], c=possible_colors[li],
@@ -447,14 +448,14 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			spikes_labelled = np.array(spikes)[ind_labelled]
 			#Check for violations first
 			peak_ind = np.unique(np.array(peak_indices)[ind_labelled])
+			num_spikes, viol_1_percent, viol_2_percent, avg_fr = calculate_spike_stats(peak_ind,
+																		   sampling_rate,segment_times[-1],
+																		   viol_1,viol_2)
+			#Save cluster stats
+			clust_stats[li,0:4] = np.array([num_spikes,viol_1_percent,viol_2_percent,avg_fr])
 			peak_diff = np.subtract(peak_ind[1:-1],peak_ind[0:-2]) 
 			isi_ms = (peak_diff/sampling_rate)*1000
-			viol_1_times = len(np.where(peak_diff <= viol_1)[0])
-			viol_2_times = len(np.where(peak_diff <= viol_2)[0])
-			viol_1_percent = round(viol_1_times/len(peak_diff)*100,2)
-			viol_2_percent = round(viol_2_times/len(peak_diff)*100,2)
 			violations.append([viol_1_percent,viol_2_percent])
-			avg_fr = round(len(peak_ind)/(segment_times[-1])*sampling_rate,2) #in Hz
 			if type_spike == 'noise_removal': #Noise removal phase needs higher cutoffs
 				viol_1_cutoff = 100
 				viol_2_cutoff = 100
@@ -475,8 +476,6 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 											   all_dig_in_times,dig_in_names,dig_in_lens_ms,
 											   viol_1_percent,viol_2_percent,avg_fr,
 											   sort_neur_type_dir)
-					#Save cluster stats
-					clust_stats[li,0:4] = np.array([len(spikes_labelled),viol_1_percent,viol_2_percent,avg_fr])
 		neuron_spike_ind = []
 		neuron_waveform_ind = []
 		combined_clust_ind = []
@@ -587,20 +586,18 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 			new_clust_stats = np.zeros((len(neuron_waveform_ind),5))
 			for w_i in range(len(neuron_waveform_ind)):
 				num_wav = len(os.listdir(save_folder)) + 1 #Index of this set of waveforms
-				#Calculate violations
+				#Calculate stats
 				peak_ind = np.sort(np.array(neuron_spike_ind[w_i]))
+				num_spikes, viol_1_percent, viol_2_percent, avg_fr = calculate_spike_stats(peak_ind,
+																			   sampling_rate,segment_times[-1],
+																			   viol_1,viol_2)
+				#Store cluster stats
+				new_clust_stats[w_i,0:4] = np.array([num_spikes,viol_1_percent,viol_2_percent,avg_fr])
 				wav_ind = np.sort(neuron_waveform_ind[w_i])
 				peak_diff = np.subtract(peak_ind[1:-1],peak_ind[0:-2]) 
 				isi_ms = (peak_diff/sampling_rate)*1000
-				viol_1_times = len(np.where(peak_diff <= viol_1)[0])
-				viol_2_times = len(np.where(peak_diff <= viol_2)[0])
-				viol_1_percent = round(viol_1_times/len(peak_diff)*100,2)
-				viol_2_percent = round(viol_2_times/len(peak_diff)*100,2)
-				avg_fr = round(len(peak_ind)/(segment_times[-1])*sampling_rate,2) #in Hz
 				#Pull waveforms for plotting
 				spikes_labelled = np.array(spikes)[wav_ind]
-				#Store fo cluster stats
-				new_clust_stats[w_i,0:4] = np.array([len(spikes_labelled),viol_1_percent,viol_2_percent,avg_fr])
 				#Plot final groupings
 				plot_neuron_properties(num_vis,spikes_labelled,peak_ind,sampling_rate,
 										   PSTH_left_ms,PSTH_right_ms,dig_in_times,axis_labels,
@@ -804,6 +801,27 @@ def plot_neuron_properties(num_vis,spikes_labelled,peak_ind,sampling_rate,
 	fig.savefig(save_folder + 'waveforms_' + str(li) + '.png', dpi=100)
 	plt.close(fig)
 	
+@jit(nogil = True)
+def calculate_spike_stats(peak_ind,sampling_rate,recording_len,viol_1,viol_2):
+	"""This function calculates the statistics of a neuron based on spike times
+	INPUTS:
+		- peak_ind: spike time indices numpy array
+		- sampling_rate: sampling rate of dataset to convert indices to time
+		- recording_len: length of recording in samples
+		- viol_1: 1 ms violation in samples
+		- viol_2: 2 ms violation in samples
+	OUTPUTS:
+		- num_spikes: number of spikes
+		- viol_1_percent: percent of 1 ms violations
+		- viol_2_percent: percent of 2 ms violations
+		- avg_fr: average firing rate
+	"""
+	num_spikes = len(peak_ind)
+	peak_diff = np.subtract(peak_ind[1:-1],peak_ind[0:-2]) 
+	viol_1_times = len(np.where(peak_diff <= viol_1)[0])
+	viol_2_times = len(np.where(peak_diff <= viol_2)[0])
+	viol_1_percent = round(viol_1_times/len(peak_diff)*100,2)
+	viol_2_percent = round(viol_2_times/len(peak_diff)*100,2)
+	avg_fr = round(len(peak_ind)/(recording_len)*sampling_rate,2) #in Hz	
 	
-	
-	
+	return num_spikes, viol_1_percent, viol_2_percent, avg_fr

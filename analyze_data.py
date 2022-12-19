@@ -16,6 +16,7 @@ import functions.data_cleaning as dc
 import tkinter as tk
 import tkinter.filedialog as fd
 import functions.hdf5_handling as h5
+import functions.postsort as ps
 
 
 #Ask if data has already been stored as hdf5
@@ -52,7 +53,7 @@ else:
 	#tk.Button(root, text="Quit", command=root.destroy).pack()
 	#root.mainloop() #The Tkinter window will now show a button "Quit" to close the window.
 	#^ This only works when run from terminal. In Spyder a window will stay open - don't close it, just press Quit!!
-	del hdf5_name, datadir, currdir, root, h_exists
+	del hdf5_name, currdir, root, h_exists
 	
 if cont_prompt == 'y':
 	cont_prompt_2 = 'y'
@@ -61,7 +62,19 @@ if cont_prompt == 'y':
 	if cont_prompt_2 == 'y':
 		# Spike sort ICA data
 		sorted_dir = sort.run_spike_sort(data_dir) #Runs on regular cleaned data, not ICA data
-	
+		cont_loop = 1
+		while cont_loop == 1:
+			cont_prompt_3 = input("Would you like to continue to post-sorting collision tests / repacking [y/n]? ")
+			if cont_prompt_3 != 'n' and cont_prompt_3 != 'y':
+				print("Error, incorrect selection. Try again.")
+			elif cont_prompt_3 == 'n':
+				print("Come back and finish at your leisure!")
+				cont_loop = 0
+			elif cont_prompt_3 == 'y':
+				print("Now beginning post-sorting.")
+				cont_loop = 0
+				ps.run_postsort(datadir)
+
 #%% Perform ICA on electrode data to separate out spikes and other components
 #NEEDS WORK.
 #print("Performing ICA")
