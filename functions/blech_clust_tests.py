@@ -18,6 +18,11 @@ from scipy.fftpack import rfft, fftfreq
 from scipy.signal import find_peaks
 from sklearn.preprocessing import normalize
 from sklearn.decomposition import PCA
+try:
+	from function.postsort import collision_func
+except:
+	from postsort import collision_func
+from numba import jit
 
 #Get the directory of the hdf5 files
 print("\n INPUT REQUESTED: Select directory with blech_clust .h5 file.")
@@ -37,34 +42,34 @@ except:
 	
 print("\n INPUT REQUESTED: Select directory with new sort method .h5 file.")
 new_datadir = fd.askdirectory(parent=root, initialdir=currdir, title='Please select the folder where data is stored.')
+info_file = np.fromfile(new_datadir + '/' + 'info.rhd', dtype = np.dtype('float32'))
+original_sampling_rate = int(info_file[2])
 new_hdf5_name = str(os.path.dirname(new_datadir + '/')).split('/')
 new_hf5_info_dir = new_datadir + '/' + new_hdf5_name[-1] + '_downsampled.h5'
 new_hf5_info = tables.open_file(new_hf5_info_dir,'r',title=new_hf5_info_dir[-1])
 num_new_time = np.shape(new_hf5_info.root.electrode_array.data)[-1]
+new_sampling_rate = new_hf5_info.root.sampling_rate[0]
 new_hf5_info.close()
-new_hf5_dir = new_datadir + '/sort_results/' + new_hdf5_name[-1].split('_')[0] + '_sort.h5'
-
+new_hf5_dir = new_datadir + '/' + new_datadir.split('/')[-1] + '_repacked.h5'
 #Create a directory to store overlap data
-overlap_folder = new_datadir + '/overlaps/'
+overlap_folder = new_datadir + '/compare_with_blech_clust/'
 if os.path.isdir(overlap_folder) == False:
 	os.mkdir(overlap_folder)
 
 #Import relevant data
 new_hf5 = tables.open_file(new_hf5_dir,'r',title = new_hf5_dir[-1])
 sorted_units_node = new_hf5.get_node('/sorted_units')
-sampling_rate = 30000
-assumed_sampling_rate = 30000
-downsample_div = round(assumed_sampling_rate/assumed_sampling_rate)
-num_new_neur = sum([len([w for w in s_n.waveforms]) for s_n in sorted_units_node])
-new_spikes_bin = np.zeros((num_new_neur,num_new_time))
+num_new_neur = len([s_n for s_n in sorted_units_node])
+downsample_div = round(original_sampling_rate/new_sampling_rate)
+new_spikes_times = []
+new_spikes_times_combined = []
 i = 0
 for s_n in sorted_units_node:
-	num_units = len([w_n for w_n in s_n.times])
-	for n_u in range(num_units):
-		unit_times = eval('s_n.times.neuron_' + str(n_u) + '[0]').round().astype(int)
-		new_spikes_bin[i,unit_times] = 1
-		i += 1
-del s_n, num_units, n_u
+	unit_times = list(eval('s_n.times[0]').round().astype(int))
+	new_spikes_times.append(unit_times)
+	new_spikes_times_combined.extend(unit_times)
+del s_n, unit_times
+new_spikes_times_combined = list(np.sort(new_spikes_times_combined))
 new_hf5.close()
 
 #Transform data from blech_clust hdf5 file into correct format
@@ -72,39 +77,29 @@ blech_clust_h5 = tables.open_file(blech_clust_hf5_dir, 'r', title = blech_clust_
 sorted_units_node = blech_clust_h5.get_node('/sorted_units')
 num_old_neur = len([s_n for s_n in sorted_units_node])
 all_old_waveforms = [sn.waveforms[:] for sn in sorted_units_node]
-old_spikes_bin = np.zeros((num_old_neur,num_new_time))
+old_spikes_times = []
 i = 0
 for s_n in sorted_units_node:
 	node_times = s_n.times[:]
-	node_times_downsampled = (node_times/2).round().astype(int)
-	bin_unit_vector = np.zeros((1,num_new_time))
-	bin_unit_vector[0,node_times_downsampled] = 1
-	old_spikes_bin[i,:] = bin_unit_vector
+	node_times_downsampled = (node_times/downsample_div).round().astype(int)
+	old_spikes_times.append(list(node_times_downsampled))
 	i+= 1
+del s_n, node_times, node_times_downsampled
 blech_clust_h5.close()
 
+print("Both datasets imported.")
+
 #%% Perform bulk comparison - with all new spikes collapsed and compared against old
-blur_ind = round((0.5/1000)*sampling_rate)
+blur_ind = round((0.5/1000)*new_sampling_rate) #amount of blurring allowed
 combined_percents = np.zeros(num_old_neur)
-combined_spikes = np.sum(new_spikes_bin,0)
-combined_spikes_blur = np.zeros(np.shape(combined_spikes))
-combined_spikes_blur += combined_spikes
-for b_i in range(blur_ind):
-    combined_spikes_blur[0:-1*(b_i+1)] += combined_spikes[b_i+1:]
-    combined_spikes_blur[b_i+1:] += combined_spikes[0:-1*(b_i+1)]
 for old_i in tqdm.tqdm(range(num_old_neur)):
     #Grab old unit spikes and blur
-    old_unit = old_spikes_bin[old_i,:]
-    num_spikes_old = np.sum(old_unit)
-    old_u_blur = np.zeros(np.shape(old_unit))
-    old_u_blur += old_unit
-    for b_i in range(blur_ind):
-        old_u_blur[0:-1*(b_i+1)] += old_unit[b_i+1:]
-        old_u_blur[b_i+1:] += old_unit[0:-1*(b_i+1)]
+    old_unit_list = old_spikes_times[old_i]
+    num_spikes_old = len(old_unit_list)
+    old_overlaps, new_overlaps = collision_func(old_unit_list,new_spikes_times_combined,blur_ind)
     #Find the number of overlaps and store percents
-    overlaps_pair = np.multiply(combined_spikes_blur,old_u_blur)
-    overlaps_count = len(np.where(np.diff(overlaps_pair)>1)[0])+1
-    combined_percents[old_i] = round((overlaps_count/num_spikes_old)*100,2)
+    col_perc_old = np.round(100*old_overlaps/num_spikes_old,2)
+    combined_percents[old_i] = col_perc_old
 
 print(combined_percents)
 print(np.mean(combined_percents))
@@ -112,35 +107,23 @@ print(np.std(combined_percents))
 
 #%% Perform pairwise comparison - with 3 bin smudge as in collision tests
 
-###THIS CODE HAS ERRORS IN IT - NEED TO FIX
-blur_ind = 3
+blur_ind = round((0.5/1000)*new_sampling_rate) #amount of blurring allowed
 collision_cutoff = 50 #Percent cutoff for collisions
 colorCodes = np.array([[0,1,0],[0,0,1]]) #Colors for plotting collision rasters
 new_percents = np.zeros((num_new_neur,num_old_neur))
 old_percents = np.zeros((num_new_neur,num_old_neur))
 for new_i in tqdm.tqdm(range(num_new_neur)):
  	#Grab new unit spikes and blur
- 	new_unit = new_spikes_bin[new_i,:]
- 	num_spikes_new = np.sum(new_unit)
- 	new_u_blur = np.zeros(np.shape(new_unit))
- 	new_u_blur += new_unit
- 	for b_i in range(blur_ind):
-		 new_u_blur[0:-1*(b_i+1)] += new_unit[b_i+1:]
-		 new_u_blur[b_i+1:] += new_unit[0:-1*(b_i+1)]
+ 	new_unit = new_spikes_times[new_i]
+ 	num_spikes_new = len(new_unit)
  	for old_i in range(num_old_neur):
 		 #Grab old unit spikes and blur
-		 old_unit = old_spikes_bin[old_i,:]
-		 num_spikes_old = np.sum(old_unit)
-		 old_u_blur = np.zeros(np.shape(old_unit))
-		 old_u_blur += old_unit
-		 for b_i in range(blur_ind):
- 			old_u_blur[0:-1*(b_i+1)] += old_unit[b_i+1:]
- 			old_u_blur[b_i+1:] += old_unit[0:-1*(b_i+1)]
+		 old_unit = old_spikes_times[old_i]
+		 num_spikes_old = len(old_unit)
 		 #Find the number of overlaps and store percents
-		 overlaps_pair = np.multiply(new_u_blur,old_u_blur)
-		 overlaps_count = len(np.where(np.diff(overlaps_pair)>1)[0])+1
-		 new_percents[new_i,old_i] = round((overlaps_count/num_spikes_new)*100,2)
-		 old_percents[new_i,old_i] = round((overlaps_count/num_spikes_old)*100,2)
+		 old_overlaps, new_overlaps = collision_func(old_unit,new_unit,blur_ind)
+		 new_percents[new_i,old_i] = round((new_overlaps/num_spikes_new)*100,2)
+		 old_percents[new_i,old_i] = round((old_overlaps/num_spikes_old)*100,2)
 #Create a figure of the percents
 fig = plt.figure(figsize=(20,20))
 plt.subplot(1,2,1)
