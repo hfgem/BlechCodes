@@ -64,7 +64,7 @@ if cont_prompt == 'y':
 		sorted_dir = sort.run_spike_sort(data_dir) #Runs on regular cleaned data, not ICA data
 		cont_loop = 1
 		while cont_loop == 1:
-			cont_prompt_3 = input("Would you like to continue to post-sorting collision tests / repacking [y/n]? ")
+			cont_prompt_3 = input("\n INPUT REQUESTED: Would you like to continue to post-sorting collision tests / repacking [y/n]? ")
 			if cont_prompt_3 != 'n' and cont_prompt_3 != 'y':
 				print("Error, incorrect selection. Try again.")
 			elif cont_prompt_3 == 'n':

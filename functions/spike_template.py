@@ -35,7 +35,7 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 		os.mkdir(template_dir)
 		
 	#Setting
-	avg_peak = 1 #If = 1, will use the average between the 2 max peaks for a cutoff
+	avg_peak = 0 #If = 1, will use the average between the 2 max peaks for a cutoff, if 0 will just use the percentile cutoff
 	
 	#Grab templates
 	print("\t Preparing Data for Template Matching")
@@ -95,7 +95,8 @@ def spike_template_sort(all_spikes,sampling_rate,num_pts_left,num_pts_right,
 			else:
 				cut_val = percentile
 		else:
-			cut_val = hist_counts[1][hist_peaks[0][0] + 1]
+			#cut_val = hist_counts[1][hist_peaks[0][0] + 1]
+			cut_val = percentile
 		plt.axvline(cut_val,color = 'r', linestyle = '--', label='Cutoff Threshold')
 		plt.legend()
 		plt.xlabel('Score = distance*peak_count')

@@ -14,7 +14,11 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_samples
 from numba import jit
-from functions.spike_clust import calculate_spike_stats
+try:
+	from functions.spike_clust import calculate_spike_stats
+except:
+	from spike_clust import calculate_spike_stats
+from scipy import stats
 
 def run_postsort(datadir):
 	"""This function serves to run through the post-sorting flow of importing
@@ -57,6 +61,10 @@ def run_postsort(datadir):
 	#Ask for the user to select waveforms to keep and remove
 	separated_spikes_ind, separated_spikes_wav, separated_spikes_stats = user_removal(separated_spikes_ind, separated_spikes_wav, separated_spikes_stats, datadir)
 	
+	#Plot and combine waveforms
+	separated_spikes_ind, separated_spikes_wav, separated_spikes_stats = compare_waveforms(separated_spikes_wav,separated_spikes_ind,
+								 separated_spikes_stats,sampling_rate,num_new_time)
+	
 	#Perform collision tests of sorted data
 	collision_results_dir = sort_data_dir + 'collision_results/'
 	if os.path.isdir(collision_results_dir) == False:
@@ -71,9 +79,10 @@ def run_postsort(datadir):
 		del separated_spikes_stats[r_i+1]
 		np.delete(collision_mat,r_i,axis=0)
 		np.delete(collision_mat,r_i,axis=1)
+	del remove_ind
 	
 	#Save new sort data in new .h5 file with ending "_repacked.h5"
-	save_sort_hdf5(separated_spikes_ind,separated_spikes_wav,
+	save_sort_hdf5(sampling_rate,separated_spikes_ind,separated_spikes_wav,
 				separated_spikes_stats,save_sort_dir,segment_names,
 				segment_times,dig_in_names,dig_ins,raw_emg,collision_mat)
 	
@@ -154,7 +163,7 @@ def user_removal(separated_spikes_ind, separated_spikes_wav, separated_spikes_st
 		print("Keep/Remove indices already exist. Would you like to import them or reselect?")
 		keep_loop = 1
 		while keep_loop == 1:
-			keep_val = input("Keep [y/n]? ")
+			keep_val = input("Import [y/n]? ")
 			if keep_val != 'y' and keep_val != 'n':
 				print("Incorrect selection. Try again.")
 			else:
@@ -243,7 +252,6 @@ def user_removal(separated_spikes_ind, separated_spikes_wav, separated_spikes_st
 	
 	return new_separated_spikes_ind, new_separated_spikes_wav, new_separated_spikes_stats
 	
-
 def test_collisions(sampling_rate,spike_times,spike_wavs,dir_save):
 	"""This function tests the final selected neurons for collisions across 
 	all units. It performs pairwise tests and looks for spike times within 3 
@@ -270,18 +278,18 @@ def test_collisions(sampling_rate,spike_times,spike_wavs,dir_save):
 	
 	#First check for data to import
 	if os.path.isfile(colllision_csv):
-		print("Collisions previously calculated. Would you like to import or recalculate?")
+		print("Collisions previously calculated. Would you like to import them or recalculate?")
 		recalc_loop = 1
 		while recalc_loop == 1:
-			recalc_val = input("Recalculate = y, import = n: ")
-			if recalc_val != 'y' and recalc_val != 'n':
+			import_val = input("Import [y/n]? ")
+			if import_val != 'y' and import_val != 'n':
 				print("Incorrect entry. Enter only n or y.")
 			else:
 				recalc_loop = 0
 	else:
-		recalc_val = 'y'
+		import_val = 'n'
 	#Now import or calculate	
-	if recalc_val == 'n':
+	if import_val == 'y':
 		with open(colllision_csv, newline='') as f:
 			reader = csv.reader(f)
 			collision_csv_import = list(reader)
@@ -291,9 +299,15 @@ def test_collisions(sampling_rate,spike_times,spike_wavs,dir_save):
 			float_list = [float(str_list[i]) for i in range(len(str_list))]
 			collision_percents.append(float_list)
 		collision_percents = np.array(collision_percents)
+		collision_percents_flat = collision_percents[np.triu_indices(np.shape(collision_percents)[1])]
 		#Calculate number of collisions
-		collisions_detected = len(np.where(collision_percents > collision_cutoff))
-		print("Collisions detected: " + str(collisions_detected))
+		collisions_indices = np.where(collision_percents > collision_cutoff)
+		if len(collisions_indices[0]) > 0:
+			collisions_detected = len(collisions_indices[0])
+			for i in range(len(collisions_indices)):
+				print("Collisions detected between unit " + str(collisions_indices[i][0]) + " and unit " + str(collisions_indices[i][1]))
+		else:
+			collisions_detected = 0
 	else:
 		print("\t Testing all units pairwise.")
 		collisions_detected = 0
@@ -301,8 +315,10 @@ def test_collisions(sampling_rate,spike_times,spike_wavs,dir_save):
 		for i in tqdm.tqdm(range(len(all_pairs))):
 			ind_1 = all_pairs[i][0]
 			ind_2 = all_pairs[i][1]
-			spike_1_list = spike_times[ind_1][0]
-			spike_2_list = spike_times[ind_2][0]
+			spike_1_array = spike_times[ind_1]
+			spike_2_array = spike_times[ind_2]
+			spike_1_list = list(spike_1_array)
+			spike_2_list = list(spike_2_array)
 			
 			#Calculate overlaps
 			spike_1_overlaps, spike_2_overlaps = collision_func(spike_1_list,spike_2_list,blur_ind)
@@ -319,7 +335,7 @@ def test_collisions(sampling_rate,spike_times,spike_wavs,dir_save):
 				#Create a figure of the spike rasters together and save
 				fig = plt.figure(figsize=(20,20))
 				plt.subplot(2,2,1)
-				spike_1_wavs = spike_wavs[ind_1][0]
+				spike_1_wavs = spike_wavs[ind_1]
 				mean_bit = np.mean(spike_1_wavs,axis=0)
 				std_bit = np.std(spike_1_wavs,axis=0)
 				plt.plot(mean_bit,'-b',alpha = 1)
@@ -329,7 +345,7 @@ def test_collisions(sampling_rate,spike_times,spike_wavs,dir_save):
 				plt.ylabel('mV')
 				plt.title('Unit ' + str(ind_1))
 				plt.subplot(2,2,2)
-				spike_2_wavs = spike_wavs[ind_2][0]
+				spike_2_wavs = spike_wavs[ind_2]
 				mean_bit = np.mean(spike_2_wavs,axis=0)
 				std_bit = np.std(spike_2_wavs,axis=0)
 				plt.plot(mean_bit,'-b',alpha = 1)
@@ -340,8 +356,10 @@ def test_collisions(sampling_rate,spike_times,spike_wavs,dir_save):
 				plt.title('Unit ' + str(ind_2))
 				plt.subplot(2,2,3)
 				plt.eventplot(spikes_combined,colors=colorCodes)
+				plt.xlim([0,500000])
 				plt.ylabel('Neuron')
 				plt.xlabel('Spike')
+				plt.title('Zoomed Raster Plot')
 				#Final title stuff
 				line_1 = 'Unit ' + str(ind_1) + ' vs. Unit ' + str(ind_2)
 				line_2 = 'Collision Percents = ' + str(col_perc_1) + ' and ' + str(col_perc_2)
@@ -376,7 +394,7 @@ def test_collisions(sampling_rate,spike_times,spike_wavs,dir_save):
 	
 	return collision_percents, remove_ind
 
-@jit(nogil = True)
+@jit(forceobj=True)
 def collision_func(spike_1_list,spike_2_list,blur_ind):
 	"""Numba compiled function to compute overlaps for 2 neurons
 	INPUTS:
@@ -396,6 +414,142 @@ def collision_func(spike_1_list,spike_2_list,blur_ind):
 				spike_2_overlaps += 1
 		
 	return spike_1_overlaps, spike_2_overlaps
+
+def compare_waveforms(separated_spikes_wav,separated_spikes_ind,
+					  separated_spikes_stats,sampling_rate,num_new_time):
+	"""This function compares remaining neurons by their waveforms and combines
+	them based on waveform similarity"""
+	print("Now beginning waveform overlap tests.")
+	num_neur = len(separated_spikes_wav)
+	mean_dist = np.zeros((num_neur,num_neur))
+	for i in range(num_neur):
+		mean_i = np.mean(separated_spikes_wav[i][0],0)
+		for j in range(num_neur - 1):
+			mean_j = np.mean(separated_spikes_wav[j+1][0],0)
+			dist = np.round(np.sqrt(np.sum((mean_i - mean_j)**2)),2)
+			mean_dist[i,j+1] = dist
+			mean_dist[j+1,i] = dist
+	mean_dist_flat = mean_dist[np.triu_indices(num_neur)]
+	#Calculate percentiles of distance - the higher the value, the greater the distance
+	percentiles_dist = np.zeros((num_neur,num_neur))
+	candidate_comb = np.zeros((num_neur,num_neur))
+	for i in range(num_neur):
+		for j in range(num_neur - 1):
+			percent = stats.percentileofscore(mean_dist_flat,mean_dist[i,j+1])
+			percentiles_dist[i,j+1] = percent
+			percentiles_dist[j+1,i] = percent
+			if percent < 50:
+				candidate_comb[i,j+1] = 1
+				candidate_comb[j+1,i] = 1
+
+	combine_pairs = np.zeros((num_neur,num_neur)) #To store pairs of neurons that you'd like to combine
+	already_combined = []
+	for i in range(num_neur):
+		wav_i = separated_spikes_wav[i][0]
+		mean_i = np.mean(wav_i,0)
+		std_i = np.std(wav_i,0)
+		ind_i = separated_spikes_ind[i][0]
+		stats_i = separated_spikes_stats[i+1]
+		ind_overlap = np.setdiff1d(np.where(percentiles_dist[i,:] <= 20)[0],already_combined)
+		if len(ind_overlap) > 1:
+			dim_plot = int(np.ceil(np.sqrt(len(ind_overlap) + 1)))
+			plt.figure(figsize=(20,20))
+			ax_last = plt.subplot(dim_plot,dim_plot,len(ind_overlap) + 1)
+			for i_o in range(len(ind_overlap)):
+				j = ind_overlap[i_o]
+				wav_j = separated_spikes_wav[j][0]
+				mean_j = np.mean(wav_j,0)
+				std_j = np.std(wav_j,0)
+				ind_j = separated_spikes_ind[j][0]
+				stats_j = separated_spikes_stats[j+1]
+				#Plot the matching waveform
+				plt.subplot(dim_plot,dim_plot,i_o+1)
+				plt.plot(mean_j,c = 'r', alpha=1)
+				plt.plot(mean_j + std_j,c = 'r', alpha=0.5)
+				plt.plot(mean_j - std_j,c = 'r', alpha=0.5)
+				plt.title("Unit " + str(j))
+				ax_last.plot(mean_j,alpha=1)
+				ax_last.plot(mean_j + std_j,alpha=0.5)
+				ax_last.plot(mean_j - std_j,alpha=0.5)
+			plt.suptitle('Average and Overlaid Waveforms')
+			plt.tight_layout()
+			plt.show()
+			#Ask for user input on whether to combine
+			combine_loop = 1
+			while combine_loop == 1:
+				combine_neuron = input("Would you like to combine these neurons [y/n]? ")
+				if combine_neuron != 'n' and combine_neuron != 'y':
+					print("Incorrect entry, try again.")
+				elif combine_neuron == 'y':
+					for i_o in ind_overlap:
+						combine_pairs[i,i_o] = 1
+						combine_pairs[i_o,i] = 1
+						already_combined.extend([i_o])
+					combine_loop = 0
+					plt.close()
+				elif combine_neuron == 'n':
+					combine_loop = 0
+					plt.close()
+	
+	remaining_ind = np.arange(num_neur)
+	neur_remaining = num_neur
+	already_combined = []
+	new_separated_spikes_wav = []
+	new_separated_spikes_ind = []
+	new_separated_spikes_stats = [separated_spikes_stats[0]]
+	while neur_remaining > 0:
+		n_c = remaining_ind[0]
+		overlaps = np.where(combine_pairs[n_c,:] == 1)[0]
+		if len(overlaps) > 0:
+			unmatched_neur = np.setdiff1d(overlaps,np.array(already_combined))
+			if len(unmatched_neur) > 0:
+				combined_wav = list(separated_spikes_wav[n_c][0])
+				combined_ind = list(separated_spikes_ind[n_c][0])
+				for u_n in unmatched_neur:
+					combined_wav.extend(list(separated_spikes_wav[u_n][0]))
+					combined_ind.extend(list(separated_spikes_ind[u_n][0]))
+				#Calculate updated stats
+				#If separated_spikes_stats is not populated, populate it
+				viol_1 = sampling_rate*(1/1000) #1 ms in samples
+				viol_2 = sampling_rate*(2/1000) #2 ms in samples
+				num_spikes, viol_1_percent, viol_2_percent, avg_fr = calculate_spike_stats(combined_ind,
+																					  sampling_rate,num_new_time,
+																					  viol_1,viol_2)
+				combined_stats = [-1,num_spikes,viol_1_percent,viol_2_percent,avg_fr]
+				print([separated_spikes_stats[0][i] + ': ' + str(combined_stats[i]) for i in range(len(combined_stats))])
+				print('\nINPUT REQUESTED: Please review the above combined neuron statistics.')
+				keep_loop = 1
+				while keep_loop == 1:
+					keep_clust = input('Would you like to keep this combined neuron [y/n]? ')
+					if keep_clust != 'y' and keep_clust != 'n':
+						print("Incorrect entry. Please try again.")
+					else:
+						keep_loop = 0
+				if keep_clust == 'y':
+					new_separated_spikes_wav.append(np.array(combined_wav))
+					new_separated_spikes_ind.append(np.array(combined_ind))
+					new_separated_spikes_stats.append(combined_stats)
+				used_neur = list(unmatched_neur)
+				used_neur.extend([n_c])
+				#Update while loop parameters
+				remaining_ind = np.setdiff1d(remaining_ind,used_neur)
+				neur_remaining = len(remaining_ind)				
+			else:
+				new_separated_spikes_wav.append(np.array(separated_spikes_wav[n_c][0]))
+				new_separated_spikes_ind.append(np.array(separated_spikes_ind[n_c][0]))
+				new_separated_spikes_stats.append(separated_spikes_stats[n_c+1])
+				used_neur.extend([n_c])
+				remaining_ind = np.setdiff1d(remaining_ind,used_neur)
+				neur_remaining = len(remaining_ind)
+		else:
+			new_separated_spikes_wav.append(np.array(separated_spikes_wav[n_c][0]))
+			new_separated_spikes_ind.append(np.array(separated_spikes_ind[n_c][0]))
+			new_separated_spikes_stats.append(separated_spikes_stats[n_c+1])
+			used_neur.extend([n_c])
+			remaining_ind = np.setdiff1d(remaining_ind,used_neur)
+			neur_remaining = len(remaining_ind)
+	
+	return 	new_separated_spikes_ind,new_separated_spikes_wav,new_separated_spikes_stats
 
 def save_sort_hdf5(sampling_rate,separated_spikes_ind,separated_spikes_wav,
 			separated_spikes_stats,save_sort_dir,segment_names,
@@ -461,12 +615,12 @@ def save_sort_hdf5(sampling_rate,separated_spikes_ind,separated_spikes_wav,
 		unit_name = 'unit' + str(i).zfill(3)
 		atom = tables.IntAtom()
 		hf5.create_group('/sorted_units',unit_name)
-		spike_times = separated_spikes_ind[i][0]
+		spike_times = separated_spikes_ind[i]
 		times = hf5.create_earray('/sorted_units/' + unit_name,'times',atom,(0,) + np.shape(spike_times))
 		np_times = np.expand_dims(spike_times,0)
 		times.append(np_times[:])
 		atom = tables.FloatAtom()
-		spike_wavs = separated_spikes_wav[i][0]
+		spike_wavs = separated_spikes_wav[i]
 		waves = hf5.create_earray('/sorted_units/' + unit_name,'waveforms',atom,(0,) + np.shape(spike_wavs))
 		np_waves = np.expand_dims(spike_wavs,0)
 		waves.append(np_waves[:])

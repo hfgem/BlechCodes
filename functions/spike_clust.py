@@ -391,7 +391,8 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 		violations = []
 		any_good = 0
 		which_good = []
-		possible_colors = ['b','g','r','c','m','k','y','brown','pink','olive','gray'] #Colors for plotting different tastant deliveries
+		possible_colors = ['b','g','r','c','m','k','y','brown','pink','olive',
+						'gray','purple','orange','tan','salmon','navy','teal'] #Colors for plotting different tastant deliveries
 		clust_stats = np.zeros((clust_num,5))
 		#Create cluster projection plot
 		pca2 = PCA(n_components = 3)
@@ -560,15 +561,20 @@ def spike_clust(spikes, peak_indices, clust_num, i, sort_data_dir, axis_labels,
 							neuron_spike_ind.append(peak_ind)
 				except:
 					print("\t No spikes selected.")
-			else: #Automatically combine good clusters into a unit to keep
+			else:
 				print("\t Automatically storing good clusters. To see clusters, please navigate to the directory " + sort_neur_type_dir)
 				ind_good = [which_good]
 				clust_stats[np.array(which_good),4] = 1
 				for ig in which_good:
-					neuron_waveform_ind.extend(list(i_labelled[ig]))
-					neuron_spike_ind.extend(list(np.array(peak_indices)[i_labelled[ig]]))
-				neuron_waveform_ind = [neuron_waveform_ind]
-				neuron_spike_ind = [neuron_spike_ind]
+					#Recombine final clusters that are good
+					#neuron_waveform_ind.extend(list(i_labelled[ig]))
+					#neuron_spike_ind.extend(list(np.array(peak_indices)[i_labelled[ig]]))
+					
+					#Keep final clusters that are good separate
+					neuron_waveform_ind.append(i_labelled[ig])
+					neuron_spike_ind.append(list(np.array(peak_indices)[i_labelled[ig]]))
+				#neuron_waveform_ind = [neuron_waveform_ind]
+				#neuron_spike_ind = [neuron_spike_ind]
 		elif type_spike == 'noise_removal':
 			ind_good = np.arange(clust_num)
 			for ig in ind_good:
@@ -801,7 +807,7 @@ def plot_neuron_properties(num_vis,spikes_labelled,peak_ind,sampling_rate,
 	fig.savefig(save_folder + 'waveforms_' + str(li) + '.png', dpi=100)
 	plt.close(fig)
 	
-@jit(nogil = True)
+@jit(forceobj=True)
 def calculate_spike_stats(peak_ind,sampling_rate,recording_len,viol_1,viol_2):
 	"""This function calculates the statistics of a neuron based on spike times
 	INPUTS:

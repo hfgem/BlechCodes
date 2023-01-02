@@ -7,7 +7,7 @@ Data manipulation with bandpass filtering, etc... to pull out cleaner spikes
 """
 import numpy as np
 from scipy.signal import butter, lfilter
-import os, tables
+import os, tables, tqdm
 import functions.hdf5_handling as h5
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
@@ -34,12 +34,16 @@ def signal_averaging(data):
 	"""Function to increase the signal-to-noise ratio by removing common signals
 	across electrodes"""
 	
-	mean_odd = np.mean(data[np.arange(1,len(data),2),:],0)
-	mean_even = np.mean(data[np.arange(0,len(data),2),:],0)
-	
-	overall_mean = np.mean([[mean_odd],[mean_even]],0)
-	
-	cleaned_data = data - overall_mean
+	total_time = len(data[0])
+	chunk = int(np.ceil(total_time/10000))
+	start_times = np.arange(stop = total_time,step = chunk)
+	cleaned_data = np.zeros(np.shape(data))
+	for t in tqdm.tqdm(range(len(start_times))):
+		s_t = start_times[t]
+		data_chunk = data[:,s_t:s_t+chunk]
+		med = np.median(data_chunk,0)
+		cleaned_chunk = data_chunk - med
+		cleaned_data[:,s_t:s_t+chunk] = cleaned_chunk
 	
 	return cleaned_data
 

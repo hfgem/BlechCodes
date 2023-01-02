@@ -4,11 +4,13 @@
 Created on Tue Jul 19 19:12:11 2022
 
 @author: hannahgermaine
-A collection of functions to handle HDF5 data storage
+A collection of functions to handle HDF5 data storage and imports
 """
-import tables, os, tqdm
+import tables, os, tqdm, sys
 import numpy as np
 import functions.data_processing as dp
+import tkinter as tk
+import tkinter.filedialog as fd
 
 def hdf5_exists():
 	"""This function asks for user input on whether a .h5 file exists"""
@@ -267,3 +269,23 @@ def save_sorted_spikes(final_h5_dir,spike_raster,sort_stats,sampling_rate,
 	dig_names = final_hf5.create_earray('/dig_ins','dig_in_names',atom,(0,))
 	dig_names.append(np.array(dig_in_names))
 	final_hf5.close()
+	
+def sorted_data_import():
+	"""This function asks for user input to retrieve the directory of sorted data"""
+	
+	print("\n INPUT REQUESTED: Select directory with the sorted .h5 file (name = '...._repacked.h5').")
+	root = tk.Tk()
+	currdir = os.getcwd()
+	blech_clust_datadir = fd.askdirectory(parent=root, initialdir=currdir, title='Please select the folder where data is stored.')
+	files_in_dir = os.listdir(blech_clust_datadir)
+	for i in range(len(files_in_dir)): #Assumes the correct file is the only .h5 in the directory
+		filename = files_in_dir[i]
+		if filename.split('_')[-1] == 'repacked.h5':
+			blech_clust_hdf5_name = filename
+	try:
+		blech_clust_hf5_dir = blech_clust_datadir + '/' + blech_clust_hdf5_name
+	except:
+		print("Old .h5 file not found. Quitting program.")
+		sys.exit()
+		
+	return blech_clust_hf5_dir
