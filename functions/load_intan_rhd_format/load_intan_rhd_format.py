@@ -2,9 +2,11 @@
 #
 # Michael Gibson 17 July 2015
 # Modified Adrian Foy February 2021
+# Modified Hannah Germaine January 2023
 
 import sys, struct, math, os, time
-sys.path.append('/Users/hannahgermaine/Downloads/load_intan_rhd_format/load_intan_rhd_format/')
+file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
+os.chdir(file_path)
 import numpy as np
 import tkinter as tk
 import tkinter.filedialog as fd
@@ -201,7 +203,8 @@ def plural(n):
     else:
         return 's'
 
-if __name__ == '__main__':
+def import_data():
+	print("Loading rhd file recording data - please select the folder where the data is stored.")
 	#Ask for user input of folder where data is stored
 	root = tk.Tk()
 	root.withdraw() #use to hide tkinter window
@@ -210,7 +213,12 @@ if __name__ == '__main__':
 	file_list = os.listdir(datadir)
 	filenames = []
 	for name in file_list:
-		name_val = name.split('.')[1]
-		if name_val == 'rhd':
-			filename = datadir + '/' + name
-			a=read_data(filename)
+		try:
+			name_val = name.split('.')[1]
+			if name_val == 'rhd':
+				filename = datadir + '/' + name
+				a=read_data(filename)
+		except:
+			print("Skipped file.")
+			
+	return a

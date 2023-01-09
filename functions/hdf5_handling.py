@@ -7,6 +7,8 @@ Created on Tue Jul 19 19:12:11 2022
 A collection of functions to handle HDF5 data storage and imports
 """
 import tables, os, tqdm, sys
+file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
+os.chdir(file_path)
 import numpy as np
 import functions.data_processing as dp
 import tkinter as tk
@@ -208,12 +210,11 @@ def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data,di
 	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
 	dig_names = hf5_new.create_earray('/dig_ins','dig_in_names',atom,(0,))
 	dig_names.append(np.array(dig_in_names))
-	del np_dig_ins, data_digs, dig_in_data, dig_names
        #Close HDF5 file
 	hf5.close()
 	hf5_new.close()
 	print("Getting Experiment Components")
-	segment_names, segment_times = dp.get_experiment_components(new_hf5_dir)
+	segment_names, segment_times = dp.get_experiment_components(sampling_rate, dig_in_data)
 	hf5_new = tables.open_file(new_hf5_dir, 'r+', title = new_hf5_dir[-1])
 	hf5_new.create_group('/','experiment_components')
 	atom = tables.IntAtom()
@@ -271,7 +272,9 @@ def save_sorted_spikes(final_h5_dir,spike_raster,sort_stats,sampling_rate,
 	final_hf5.close()
 	
 def sorted_data_import():
-	"""This function asks for user input to retrieve the directory of sorted data"""
+	"""This function asks for user input to retrieve the directory of sorted data
+	it also returns the directory of cleaned data where the segment times/names are
+	stored (if it exists)"""
 	
 	print("\n INPUT REQUESTED: Select directory with the sorted .h5 file (name = '...._repacked.h5').")
 	root = tk.Tk()
@@ -282,10 +285,17 @@ def sorted_data_import():
 		filename = files_in_dir[i]
 		if filename.split('_')[-1] == 'repacked.h5':
 			blech_clust_hdf5_name = filename
+		elif filename.split('_')[-1] == 'downsampled.h5':
+			downsampled_hf5_name = filename
+			
 	try:
 		blech_clust_hf5_dir = blech_clust_datadir + '/' + blech_clust_hdf5_name
 	except:
 		print("Old .h5 file not found. Quitting program.")
 		sys.exit()
+	try:
+		downsampled_hf5_dir = blech_clust_datadir + '/' + downsampled_hf5_name
+	except:
+		downsampled_hf5_dir = ''
 		
-	return blech_clust_hf5_dir
+	return blech_clust_hf5_dir, downsampled_hf5_dir

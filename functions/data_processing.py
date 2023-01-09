@@ -213,12 +213,9 @@ def electrode_data_removal(hf5_dir):
 	hf5.close()
 	print("Removal complete")
 	
-def get_experiment_components(new_hf5_dir):
+def get_experiment_components(sampling_rate, dig_ins):
 	"""This function asks for timings of experiment components, and 
 	breaks up the data into chunks accordingly"""
-	hf5_new = tables.open_file(new_hf5_dir,'r')
-	
-	sampling_rate = hf5_new.root.sampling_rate[:]
 	
 	#Create storage for segmentation
 	segments_loop = 1
@@ -248,20 +245,20 @@ def get_experiment_components(new_hf5_dir):
 	
 	#Grab dig in times to separate out taste delivery interval
 	print("Pulling taste delivery interval times from digital inputs.")
-	dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
 	num_dig_ins = len(dig_ins)
 	dig_in_ind_range = np.zeros((2))
 	for i in tqdm.tqdm(range(num_dig_ins)):
-		dig_in_data = dig_ins[i][:]
+		dig_in_data = np.array(dig_ins[i])
 		dig_in_delivered = np.where(dig_in_data == 1)
-		min_dig_in = min(dig_in_delivered[0])
-		max_dig_in = max(dig_in_delivered[0])
-		if dig_in_ind_range[0] == 0:
-			dig_in_ind_range[0] = min_dig_in
-		elif dig_in_ind_range[0] > min_dig_in:
-			dig_in_ind_range[0] = min_dig_in
-		if dig_in_ind_range[1] < max_dig_in:
-			dig_in_ind_range[1] = max_dig_in
+		if len(dig_in_delivered[0] > 0):
+			min_dig_in = min(dig_in_delivered[0])
+			max_dig_in = max(dig_in_delivered[0])
+			if dig_in_ind_range[0] == 0:
+				dig_in_ind_range[0] = min_dig_in
+			elif dig_in_ind_range[0] > min_dig_in:
+				dig_in_ind_range[0] = min_dig_in
+			if dig_in_ind_range[1] < max_dig_in:
+				dig_in_ind_range[1] = max_dig_in
 	taste_loop = 1
 	while taste_loop == 1:
 		try:
@@ -288,7 +285,5 @@ def get_experiment_components(new_hf5_dir):
 				print("Error: Value must be an integer. Try again.")
 		int_len_samples = sampling_rate*60*int_len #Converted to seconds and then samples / second
 		segment_times[i+1] = segment_times[i] + int_len_samples
-		
-	hf5_new.close()
 		
 	return segment_names, segment_times

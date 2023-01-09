@@ -8,8 +8,9 @@ Created on Thu Jun 30 10:50:15 2022
 
 #This file calls functions from data_processing.py to analyze data
 
-import sys, os
-sys.path.append('/Users/hannahgermaine/Documents/GitHub/BlechCodes/')
+import os
+file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
+os.chdir(file_path)
 import functions.data_processing as dp
 import functions.spike_sort as sort
 import functions.data_cleaning as dc

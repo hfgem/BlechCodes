@@ -9,15 +9,14 @@ This code is written to perform post-sorting functions such as collisions
 testing and re-combination of oversplit neurons.
 """
 import tables, tqdm, os, csv, itertools
+file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
+os.chdir(file_path)
 import matplotlib.pyplot as plt
 import numpy as np 
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_samples
 from numba import jit
-try:
-	from functions.spike_clust import calculate_spike_stats
-except:
-	from spike_clust import calculate_spike_stats
+from spike_clust import calculate_spike_stats
 from scipy import stats
 
 def run_postsort(datadir):
@@ -500,8 +499,9 @@ def compare_waveforms(separated_spikes_wav,separated_spikes_ind,
 	while neur_remaining > 0:
 		n_c = remaining_ind[0]
 		overlaps = np.where(combine_pairs[n_c,:] == 1)[0]
+		unmatched_neur = np.setdiff1d(overlaps,np.array(already_combined))
+		used_neur = list(unmatched_neur)
 		if len(overlaps) > 0:
-			unmatched_neur = np.setdiff1d(overlaps,np.array(already_combined))
 			if len(unmatched_neur) > 0:
 				combined_wav = list(separated_spikes_wav[n_c][0])
 				combined_ind = list(separated_spikes_ind[n_c][0])
@@ -529,7 +529,6 @@ def compare_waveforms(separated_spikes_wav,separated_spikes_ind,
 					new_separated_spikes_wav.append(np.array(combined_wav))
 					new_separated_spikes_ind.append(np.array(combined_ind))
 					new_separated_spikes_stats.append(combined_stats)
-				used_neur = list(unmatched_neur)
 				used_neur.extend([n_c])
 				#Update while loop parameters
 				remaining_ind = np.setdiff1d(remaining_ind,used_neur)
