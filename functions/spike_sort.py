@@ -134,21 +134,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	user_input = 0 #Whether a user manually selects final clusters and combines them
 	
 	#Grab dig in times for each tastant separately - grabs last index of delivery
-	dig_times = [list(np.where(dig_ins[i] > 0)[0]) for i in range(len(dig_in_names))]
-	dig_diff = [list(np.where(np.diff(dig_times[i])>1)[0] - 1) for i in range(len(dig_in_names))]
-	dig_in_times = []
-	for i in range(len(dig_in_names)):
-		dig_in_vals = dig_diff[i]
-		dig_in_vals.extend([len(dig_times)])
-		dig_in_ind = list(np.array(dig_times[i])[dig_in_vals])
-		dig_in_times.append(dig_in_ind)
-	start_dig_diff = [list(np.where(np.diff(dig_times[i])>1)[0] + 1) for i in range(len(dig_in_names))]
-	start_dig_in_times = []
-	for i in range(len(dig_in_names)):
-		dig_in_vals = [0]
-		dig_in_vals.extend(start_dig_diff[i])
-		dig_in_ind = list(np.array(dig_times[i])[dig_in_vals])
-		start_dig_in_times.append(dig_in_ind)
+	dig_in_times = [list(np.where(np.diff(np.array(dig_ins[i])) == -1)[0] + 1) for i in range(len(dig_ins))]
+	start_dig_in_times = [list(np.where(np.diff(np.array(dig_ins[i])) == 1)[0] + 1) for i in range(len(dig_ins))]
 	#number of samples tastant delivery length
 	dig_in_lens = np.mean((np.array(dig_in_times) - np.array(start_dig_in_times))[:,2:-2],1)
 	
