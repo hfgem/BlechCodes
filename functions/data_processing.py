@@ -63,7 +63,14 @@ def dig_ins(dat_files_list):
 	if len(dig_ins) > 0:
 		dig_in_names = list()
 		for i in range(len(dig_ins)):
-			dig_in_names.append(input("\n INPUT REQUESTED: Enter single-word name for dig-in " + str(i) + ": "))
+			d_loop = 1
+			while d_loop == 1:
+				d_name = input("\n INPUT REQUESTED: Enter single-word name for dig-in " + str(i) + ": ")
+				if len(d_name) < 2:
+					print("Error, entered name seems too short. Please try again.")
+				else:
+					d_loop = 0
+			dig_in_names.append(d_name)
 	else:
 		dig_ins = [name for name in dat_files_list if name.startswith('digital')]
 		if len(dig_ins) > 0:
