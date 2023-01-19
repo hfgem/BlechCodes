@@ -41,8 +41,12 @@ def signal_averaging(data):
 	for t in tqdm.tqdm(range(len(start_times))):
 		s_t = start_times[t]
 		data_chunk = data[:,s_t:s_t+chunk]
-		med = np.median(data_chunk,0)
-		cleaned_chunk = data_chunk - med
+		#Median Subtraction
+		#med = np.median(data_chunk,0)
+		#cleaned_chunk = data_chunk - med
+		#Mean Subtraction
+		mean = np.mean(data_chunk,0)
+		cleaned_chunk = data_chunk - mean
 		cleaned_data[:,s_t:s_t+chunk] = cleaned_chunk
 	
 	return cleaned_data
