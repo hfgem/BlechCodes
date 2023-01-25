@@ -188,6 +188,7 @@ def downsample_dig_ins(hf5_dir,dig_in,num_avg,time_points):
 		dig_in_data = np.add(dig_in_data,dig_ins[dig_in][i::num_avg])
 	hf5.close()
 	dig_in_data = np.divide(dig_in_data,num_avg) #Needs updating to simply be binary
+	dig_in_data = np.ceil(dig_in_data).astype('int64')
 	return dig_in_data
 
 def import_units(hf5_dir,unit):

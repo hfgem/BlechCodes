@@ -12,7 +12,7 @@ import functions.spike_clust as sc
 import functions.spike_template as st
 from scipy.signal import find_peaks
 import tables, tqdm, os, csv, time, sys
-
+import functions.plot_funcs as pf
 
 def run_spike_sort(data_dir):
 	"""This function performs clustering spike sorting to separate out spikes
@@ -55,7 +55,7 @@ def run_spike_sort(data_dir):
 	
 	print('\n DONE SPIKE SORTING!')
 
-def potential_spike_times(data,sampling_rate,dir_save,peak_thresh):
+def potential_spike_times(data,sampling_rate,dir_save,peak_thresh,clust_type):
 	"""Function to grab potential spike times for further analysis. Peaks 
 	outside 1 absolute deviation and 1 ms to the left, and 1.5 ms to the right 
 	around them are kept, while the rest are scrubbed.
@@ -75,10 +75,23 @@ def potential_spike_times(data,sampling_rate,dir_save,peak_thresh):
 		print('\t Initial spike times previously pulled.')
 		
 	if get_ind == 'y':	
-		#Grab mean and std
-		std_dev = np.std(data)
 		print("Searching for potential spike indices")
-		peak_ind = find_peaks(-1*data,height=peak_thresh*std_dev)[0]
+		#Perform a sweeping search using a local larger window bin to grab the 
+		#mean and standard deviation - not smooth search, but overlapping
+		total_data_points = len(data)
+		window_size = int(np.ceil(total_data_points/100))
+		window_starts = np.arange(0,total_data_points,int(np.ceil(window_size/2)))
+		peak_ind = []
+		#Grab mean and std
+		for w_i in range(len(window_starts)):
+			w_ind = int(window_starts[w_i])
+			data_chunk = data[w_ind:min(w_ind+window_size,total_data_points)]
+			std_dev = np.std(data_chunk)
+			mean_chunk = np.mean(data_chunk)
+			peak_ind.extend(list(find_peaks(-1*data_chunk,height=mean_chunk+peak_thresh*std_dev)[0]))
+			peak_ind.extend(list(find_peaks(data_chunk,height=mean_chunk+peak_thresh*std_dev)[0]))
+		#Reduce to only unique indices
+		peak_ind = np.sort(np.unique(peak_ind))
 		#Save results to .csv
 		with open(init_times_csv, 'w') as f:
 			# using csv.writer method from CSV package
@@ -121,7 +134,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	axis_labels = np.round(np.arange(-ms_left,ms_right,step_size),2)
 	axis_labels[num_pts_left] = 0
 	#total_pts = num_pts_left + num_pts_right
-	peak_thresh = 3.5 #Standard deviations from mean to cut off for peak finding
+	peak_thresh = 5 #Standard deviations from mean to cut off for peak finding
 	threshold_percentile = 30 #Percentile to cut off in template-matching
 	viol_1_percent = 1 #1 ms violations percent cutoff
 	viol_2_percent = 2 #2 ms violations percent cutoff
@@ -212,7 +225,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 				#If no final sort or don't want to keep, then run through protocol
 				data_copy = np.array(data[i,:])
 				#Grab peaks
-				peak_ind = potential_spike_times(data_copy,sampling_rate,unit_dir,peak_thresh)
+				peak_ind = potential_spike_times(data_copy,sampling_rate,unit_dir,peak_thresh,clust_type)
 				#Pull spike profiles
 				print("\t Pulling Spike Profiles.")
 				left_peak_ind = np.array(peak_ind) - num_pts_left
@@ -361,8 +374,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 							sorted_spike_wavs.append(list(spikes_i))
 					else: #The no clustering / no sorting approach - all times above the standard deviation are kept
 						num_neur_sort = 1
-						sorted_spike_wavs = list(all_spikes)
-						sorted_spike_inds = list(all_peaks)
+						sorted_spike_wavs = [[list(all_spikes[s_i]) for s_i in range(len(all_spikes))]]
+						sorted_spike_inds = [all_peaks]
 					#Save sort results
 					if num_neur_sort > 0:
 						#Save results
@@ -501,41 +514,46 @@ def sort_settings(dir_save):
 					clust_loop = 0
 			except:
 				print("Error. Try again.")
-		#Ask for user input on what data to cluster
-		#'full' = full waveform, 'red' = reduced waveform
-		wav_loop = 1
-		while wav_loop == 1:
-			print('\n Clustering can be performed on full waveforms or reduced via PCA. Which would you like to use?')
-			try:
-				wav_num = int(input("INPUT REQUESTED: Enter 1 for full waveform, 2 for PCA reduced: "))
-				if wav_num != 1 and wav_num != 2:
-					print("\t Incorrect entry.")
-				elif wav_num == 1:
-					wav_type = 'full'
-					wav_loop = 0
-				elif wav_num == 2:
-					wav_type = 'red'
-					wav_loop = 0
-			except:
-				print("Error. Try again.")
-		#Ask for user input on whether to recombine template results
-		#'comb' = combined, 'sep' = separate
-		comb_loop = 1
-		while comb_loop == 1:
-			print('\n Template matching results can be recombined or kept separate. Which would you like to use?')
-			try:
-				comb_num = int(input("INPUT REQUESTED: Enter 1 for combined, 2 for separate: "))
-				if comb_num != 1 and comb_num != 2:
-					print("\t Incorrect entry.")
-				elif comb_num == 1:
-					comb_type = 'comb'
-					comb_loop = 0
-				elif comb_num == 2:
-					comb_type = 'sep'
-					comb_loop = 0
-			except:
-				print("Error. Try again.")
-			
+				
+		if clust_type != 'nosort':
+			#Ask for user input on what data to cluster
+			#'full' = full waveform, 'red' = reduced waveform
+			wav_loop = 1
+			while wav_loop == 1:
+				print('\n Clustering can be performed on full waveforms or reduced via PCA. Which would you like to use?')
+				try:
+					wav_num = int(input("INPUT REQUESTED: Enter 1 for full waveform, 2 for PCA reduced: "))
+					if wav_num != 1 and wav_num != 2:
+						print("\t Incorrect entry.")
+					elif wav_num == 1:
+						wav_type = 'full'
+						wav_loop = 0
+					elif wav_num == 2:
+						wav_type = 'red'
+						wav_loop = 0
+				except:
+					print("Error. Try again.")
+			#Ask for user input on whether to recombine template results
+			#'comb' = combined, 'sep' = separate
+			comb_loop = 1
+			while comb_loop == 1:
+				print('\n Template matching results can be recombined or kept separate. Which would you like to use?')
+				try:
+					comb_num = int(input("INPUT REQUESTED: Enter 1 for combined, 2 for separate: "))
+					if comb_num != 1 and comb_num != 2:
+						print("\t Incorrect entry.")
+					elif comb_num == 1:
+						comb_type = 'comb'
+						comb_loop = 0
+					elif comb_num == 2:
+						comb_type = 'sep'
+						comb_loop = 0
+				except:
+					print("Error. Try again.")
+		else:
+			wav_type = 'NA'
+			comb_type = 'NA'
+		
 		#Ask for user input on whether to autosort or ask for the user to 
 		#approve whether to move on to the next neuron" 1 = auto, 0 = manual
 		autosort = 0

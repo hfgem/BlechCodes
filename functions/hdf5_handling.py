@@ -7,8 +7,9 @@ Created on Tue Jul 19 19:12:11 2022
 A collection of functions to handle HDF5 data storage and imports
 """
 import tables, os, tqdm, sys
-file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
-os.chdir(file_path)
+#If this file is not being run from the directory of .../BlechCodes/, uncomment the next two lines
+#file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
+#os.chdir(file_path)
 import numpy as np
 import functions.data_processing as dp
 import tkinter as tk
@@ -96,7 +97,7 @@ def file_import(datadir, dat_files_list, electrodes_list, emg_ind, dig_in_list, 
 		all_electrodes = list()
 		all_emg = list()
 		for i in range(len(electrodes_list)):
-			ind_data = np.fromfile(datadir + '/' + i, dtype = np.dtype('uint16'))
+			ind_data = np.fromfile(datadir + '/' + electrodes_list[i], dtype = np.dtype('uint16'))
 			try:
 				e_ind = emg_ind.index(i)
 				all_emg.append(ind_data)
@@ -122,22 +123,25 @@ def file_import(datadir, dat_files_list, electrodes_list, emg_ind, dig_in_list, 
 			for s_i in range(len(start_ind)):
 				dig_inputs[n_i,start_ind[s_i]:end_ind[s_i]] = 1
 	else:
-		dig_inputs = np.fromfile(datadir + '/' + dig_in_list[i], dtype = np.dtype('uint16'))
+		dig_inputs = np.array([np.fromfile(datadir + '/' + dig_in_list[i], dtype = np.dtype('uint16')) for i in range(len(dig_in_list))])
 		num_dig_ins = np.shape(dig_inputs)[0]
 	print("\tNum Dig Ins = " + str(num_dig_ins))
 	
 	print("Saving data to hdf5 file.")
 	hf5 = tables.open_file(hf5_dir, 'r+', title = hdf5_name[-1])
 	atom = tables.FloatAtom()
+	print("\tSaving Neuron Electrode Data")
 	for i in tqdm.tqdm(range(num_neur)): #add electrode arrays
 		e_name = str(i)
 		hf5.create_earray('/raw',f'electrode_{e_name}',atom,(0,))
 		exec("hf5.root.raw.electrode_"+str(e_name)+".append(all_electrodes[i][:])")
+	print("\tSaving EMG Electrode Data")
 	for i in tqdm.tqdm(range(num_emg)): #add emg arrays
 		e_name = str(i)
 		hf5.create_earray('/raw_emg',f'emg_{e_name}',atom,(0,))	
 		exec("hf5.root.raw_emg.emg_"+str(e_name)+".append(all_emg[i][:])")
-	for i in range(num_dig_ins): #add dig-in arrays
+	print("\tSaving Tastant Delivery Data")
+	for i in tqdm.tqdm(range(num_dig_ins)): #add dig-in arrays
 		d_name = dig_in_names[i]
 		hf5.create_earray('/digital_in',f'digin_{d_name}',atom,(0,))	
 		exec("hf5.root.digital_in.digin_"+str(d_name)+".append(dig_inputs[i,:])")
@@ -157,7 +161,7 @@ def downsampled_electrode_data_import(hf5_dir):
 	print("Checking for downsampled data.")
 	if os.path.exists(new_hf5_dir):
 		hf5_new = tables.open_file(new_hf5_dir, 'r', title = hf5_dir[-1])
-		print("Data was previously stored in HDF5 file and is being imported. \n \n")
+		print("Downsampled data was previously stored in HDF5 file and is being imported. \n \n")
 		e_data = hf5_new.root.electrode_array.data[0,:,:]
 		dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
 		unit_nums = hf5_new.root.electrode_array.unit_nums[:]
@@ -165,7 +169,7 @@ def downsampled_electrode_data_import(hf5_dir):
 		segment_times = hf5_new.root.experiment_components.segment_times[:]
 		hf5_new.close()
 	else:
-		print("Data was not previously stored in hf5. \n")
+		print("Downsampled data was not previously stored in hf5. \n")
 		#Ask about subsampling data
 		sampling_rate = np.fromfile(folder_dir + 'info.rhd', dtype = np.dtype('float32'))
 		sampling_rate = int(sampling_rate[2])
