@@ -88,7 +88,7 @@ def potential_spike_times(data,sampling_rate,dir_save,peak_thresh,clust_type):
 			data_chunk = data[w_ind:min(w_ind+window_size,total_data_points)]
 			std_dev = np.std(data_chunk)
 			mean_chunk = np.mean(data_chunk)
-			peak_ind.extend(list(find_peaks(-1*data_chunk,height=mean_chunk+peak_thresh*std_dev)[0]))
+			peak_ind.extend(list(find_peaks(-1*data_chunk,height=-1*(mean_chunk-peak_thresh*std_dev))[0]))
 			peak_ind.extend(list(find_peaks(data_chunk,height=mean_chunk+peak_thresh*std_dev)[0]))
 		#Reduce to only unique indices
 		peak_ind = np.sort(np.unique(peak_ind))
