@@ -9,14 +9,15 @@ This code is written to perform post-sorting functions such as collisions
 testing and re-combination of oversplit neurons.
 """
 import tables, tqdm, os, csv, itertools
-file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
-os.chdir(file_path)
+#If this file is not being run from the directory of .../BlechCodes/, uncomment the next two lines
+#file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-2])
+#os.chdir(file_path)
 import matplotlib.pyplot as plt
 import numpy as np 
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_samples
 from numba import jit
-from spike_clust import calculate_spike_stats
+from functions.spike_clust import calculate_spike_stats
 from scipy import stats
 
 def run_postsort(datadir):
@@ -34,6 +35,16 @@ def run_postsort(datadir):
 	sort_hf5_name = datadir.split('/')[-1].split('.')[0].split('_')[0] + '_sort.h5'
 	sort_hf5_dir = sort_data_dir + sort_hf5_name
 	save_sort_dir = datadir + '/' + datadir.split('/')[-1] + '_repacked.h5'
+	sort_data_settings = sort_data_dir + 'sort_settings.csv'
+	
+	#Check for sort settings
+	if os.path.isfile(sort_data_settings) == True:
+		with open(sort_data_settings,newline='') as f:
+			reader = csv.reader(f)
+			sort_settings_list = list(reader)
+		clust_type = sort_settings_list[0][0]
+	else:
+		clust_type = 'no_sort_file'
 	
 	#Import data info
 	orig_dir_info = tables.open_file(orig_dir,'r',title=orig_dir[-1])
@@ -44,8 +55,8 @@ def run_postsort(datadir):
 	downsampled_dir_info = tables.open_file(downsampled_dir,'r',title=downsampled_dir[-1])
 	num_new_time = np.shape(downsampled_dir_info.root.electrode_array.data)[-1]
 	sampling_rate = downsampled_dir_info.root.sampling_rate[0]
-	segment_names = downsampled_dir_info.root.experiment_components.segment_names[0]
-	segment_times = downsampled_dir_info.root.experiment_components.segment_times[0]
+	segment_names = [downsampled_dir_info.root.experiment_components.segment_names[i].decode('UTF-8') for i in range(len(downsampled_dir_info.root.experiment_components.segment_names))]
+	segment_times = downsampled_dir_info.root.experiment_components.segment_times[:]
 	dig_in_names = [downsampled_dir_info.root.dig_ins.dig_in_names[i].decode('UTF-8') for i in range(len(downsampled_dir_info.root.dig_ins.dig_in_names))]
 	dig_ins = downsampled_dir_info.root.dig_ins.dig_ins[0]
 	downsampled_dir_info.close()
@@ -57,34 +68,38 @@ def run_postsort(datadir):
 																					sampling_rate,
 																					num_new_time)
 	
-	#Ask for the user to select waveforms to keep and remove
-	separated_spikes_ind, separated_spikes_wav, separated_spikes_stats = user_removal(separated_spikes_ind, separated_spikes_wav, separated_spikes_stats, datadir)
-	
-	#Plot and combine waveforms
-	separated_spikes_ind, separated_spikes_wav, separated_spikes_stats = compare_waveforms(separated_spikes_wav,separated_spikes_ind,
-								 separated_spikes_stats,sampling_rate,num_new_time)
-	
-	#Perform collision tests of sorted data
-	collision_results_dir = sort_data_dir + 'collision_results/'
-	if os.path.isdir(collision_results_dir) == False:
-		os.mkdir(collision_results_dir)
-	collision_mat, remove_ind = test_collisions(sampling_rate,separated_spikes_ind,separated_spikes_wav,collision_results_dir)
-	if len(remove_ind) > 1:
-		remove_ind.sort(reverse=True)
-	#Remove data selected above
-	for r_i in remove_ind:
-		del separated_spikes_ind[r_i]
-		del separated_spikes_wav[r_i]
-		del separated_spikes_stats[r_i+1]
-		np.delete(collision_mat,r_i,axis=0)
-		np.delete(collision_mat,r_i,axis=1)
-	del remove_ind
+	if clust_type == 'nosort':
+		separated_spikes_ind, separated_spikes_wav = reorg_unsorted(separated_spikes_ind,separated_spikes_wav)
+		separated_spikes_ind, separated_spikes_wav, separated_spikes_stats, collision_mat = compare_unsorted(separated_spikes_ind,separated_spikes_wav,separated_spikes_stats,sampling_rate,num_new_time)
+		
+	else:
+		#Ask for the user to select waveforms to keep and remove
+		separated_spikes_ind, separated_spikes_wav, separated_spikes_stats = user_removal(separated_spikes_ind, separated_spikes_wav, separated_spikes_stats, datadir)
+		
+		#Plot and combine waveforms
+		separated_spikes_ind, separated_spikes_wav, separated_spikes_stats = compare_waveforms(separated_spikes_wav,separated_spikes_ind,
+									 separated_spikes_stats,sampling_rate,num_new_time)
+		
+		#Perform collision tests of sorted data
+		collision_results_dir = sort_data_dir + 'collision_results/'
+		if os.path.isdir(collision_results_dir) == False:
+			os.mkdir(collision_results_dir)
+		collision_mat, remove_ind = test_collisions(sampling_rate,separated_spikes_ind,separated_spikes_wav,collision_results_dir)
+		if len(remove_ind) > 1:
+			remove_ind.sort(reverse=True)
+		#Remove data selected above
+		for r_i in remove_ind:
+			del separated_spikes_ind[r_i]
+			del separated_spikes_wav[r_i]
+			del separated_spikes_stats[r_i+1]
+			np.delete(collision_mat,r_i,axis=0)
+			np.delete(collision_mat,r_i,axis=1)
+		del remove_ind
 	
 	#Save new sort data in new .h5 file with ending "_repacked.h5"
 	save_sort_hdf5(sampling_rate,separated_spikes_ind,separated_spikes_wav,
 				separated_spikes_stats,save_sort_dir,segment_names,
 				segment_times,dig_in_names,dig_ins,raw_emg,collision_mat)
-	
 	
 def import_sorted(dir_save,sort_data_dir,sort_hf5_dir,sampling_rate,num_new_time):
 	"""This function imports the already sorted data into arrays + the sorting
@@ -394,11 +409,11 @@ def test_collisions(sampling_rate,spike_times,spike_wavs,dir_save):
 	return collision_percents, remove_ind
 
 @jit(forceobj=True)
-def collision_func(spike_1_list,spike_2_list,blur_ind):
+def collision_func(spikes_1,spikes_2,blur_ind):
 	"""Numba compiled function to compute overlaps for 2 neurons
 	INPUTS:
-		-spike_1_list: list of spike indices for neuron 1
-		-spike_2_list: list of spike indices for neuron 2
+		-spikes_1: spike indices for neuron 1
+		-spikes_2: spike indices for neuron 2
 		-blur_ind: number of indices within which to test for collisions
 	OUTPUTS:
 		-spike_1_overlaps: number of spikes fired by neuron 1 overlapping with neuron 2 spikes
@@ -406,8 +421,8 @@ def collision_func(spike_1_list,spike_2_list,blur_ind):
 	"""
 	spike_1_overlaps = 0
 	spike_2_overlaps = 0
-	for s_1 in spike_1_list:
-		for s_2 in spike_2_list:
+	for s_1 in spikes_1:
+		for s_2 in spikes_2:
 			if abs(s_1 - s_2) <= blur_ind:
 				spike_1_overlaps += 1
 				spike_2_overlaps += 1
@@ -588,6 +603,7 @@ def save_sort_hdf5(sampling_rate,separated_spikes_ind,separated_spikes_wav,
 	hf5.create_group('/', 'digital_out')
 	hf5.create_group('/', 'raw_emg')
 	hf5.create_group('/', 'sorted_units')
+	hf5.create_group('/', 'segments')
 	print('Created nodes in HF5')
 	
 	#Save dig in data
@@ -639,8 +655,94 @@ def save_sort_hdf5(sampling_rate,separated_spikes_ind,separated_spikes_wav,
 	samp_array = hf5.create_earray('/','sampling_rate',atom,(0,)+np.shape(sampling_rate))
 	samp_array.append(np.expand_dims(sampling_rate,0))
 	
+	#Save segment times/names
+	atom = tables.FloatAtom()
+	np_seg_times = segment_times
+	data_segs = hf5.create_earray('/segments','segment_times',atom,(0,)+np.shape(np_seg_times))
+	np_seg_times = np.expand_dims(np_seg_times,0)
+	data_segs.append(np_seg_times)
+	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
+	seg_names = hf5.create_earray('/segments','segment_names',atom,(0,))
+	exec('hf5.root.segments.segment_names.append(np.array(segment_names))')
+	
 	#NEVER FORGET TO CLOSE THE HDF5 FILE
 	hf5.close()
 	
+def reorg_unsorted(separated_spikes_ind,separated_spikes_wav):
+	"""This function reorganizes the imported data for easier analysis/
+	manipulation moving forward"""
+	num_channels = len(separated_spikes_ind)
+	separated_spikes_ind_reshaped = []
+	separated_spikes_wav_reshaped = []
+	for n_i in range(num_channels):
+		separated_spikes_ind_reshaped.extend(separated_spikes_ind[n_i])
+		separated_spikes_wav_reshaped.extend(separated_spikes_wav[n_i])
 	
+	return separated_spikes_ind_reshaped,separated_spikes_wav_reshaped
 
+def compare_unsorted(separated_spikes_ind,separated_spikes_wav,separated_spikes_stats,sampling_rate,num_new_time):
+	"""This function is dedicated to post-sort protocols on unsorted data - aka
+	data that has only been thresholded
+	INPUTS:
+		- separated_spikes_ind: indices of spike times for each channel
+		- separated_spikes_wav: waveforms of spikes for each channel
+		- separated_spikes_stats: spike statistics for each channel
+	OUTPUTS:
+		- separated_spikes_ind updated
+		- separated_spikes_wav updated
+		- separated_spikes_stats updated
+	"""
+	#Set up parameters
+	num_channels = len(separated_spikes_ind)
+	collision_window = int((1/1000)*sampling_rate)
+	overlap_cutoff = int(np.ceil(0.5*num_channels)) #number of channels
+	
+	#Binary rewrite of spike times
+	print("Pulling binary spike data")
+	bin_spikes = np.zeros((num_channels,num_new_time))
+	for c_i in tqdm.tqdm(range(num_channels)):
+		bin_spikes[c_i,separated_spikes_ind[c_i]] = 1
+	bin_summed = np.sum(bin_spikes,0)
+	time_check = np.where(bin_summed > 0)[0]
+	
+	#Calculate binary vector of which indices have collisions
+	print("Calculating collisions")
+	collision_mat = np.zeros((num_channels,num_channels))
+	wav_to_remove = [[] for n_i in range(num_channels)]
+	for t_c_i in tqdm.tqdm(range(len(time_check))):
+		t_i = time_check[t_c_i]
+		min_t_i = int(np.max([0,t_i - collision_window]))
+		max_t_i = int(np.min([num_new_time,t_i + collision_window]))
+		chunk = bin_spikes[:,min_t_i:max_t_i]
+		total_overlaps = np.sum(chunk)
+		if total_overlaps > overlap_cutoff:
+			#Remove collision indices across channels
+			bin_spikes[:,min_t_i:max_t_i] = 0
+			neur_collide = np.unique(np.where(chunk > 0)[0])
+			if len(neur_collide) > 0:
+				for n_c in neur_collide:
+					collision_mat[n_c,neur_collide] += 1
+			#Mark which waveforms to remove
+			[wav_to_remove[n_i].extend(list(np.where((separated_spikes_wav[n_i] >= min_t_i)&(separated_spikes_wav[n_i]<= max_t_i))[0])) for n_i in range(num_channels)]
+	
+	#Delete waveforms
+	print("Removing waveforms")
+	for n_i in range(num_channels):
+		wav_array = separated_spikes_wav[n_i]
+		wav_remove_i = np.sort(wav_to_remove[n_i])
+		wav_remove_resort = wav_remove_i[::-1]
+		for w_i in wav_remove_resort:
+			np.delete(wav_array,w_i)
+		separated_spikes_wav[n_i] = wav_array
+	
+	#Next re-calculate the spike stats for each channel
+	viol_1 = sampling_rate*(1/1000) #1 ms in samples
+	viol_2 = sampling_rate*(2/1000) #2 ms in samples
+	for c_i in tqdm.tqdm(range(num_channels)):
+		spike_inds = separated_spikes_ind[c_i] #Grab its spike indices
+		num_spikes, viol_1_percent, viol_2_percent, avg_fr = calculate_spike_stats(spike_inds,
+																		  sampling_rate,num_new_time,
+																		  viol_1,viol_2)
+		separated_spikes_stats[c_i+1] = [c_i,num_spikes,viol_1_percent,viol_2_percent,avg_fr]
+	
+	return separated_spikes_ind, separated_spikes_wav, separated_spikes_stats, collision_mat

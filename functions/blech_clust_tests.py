@@ -19,7 +19,7 @@ from scipy.signal import find_peaks
 from sklearn.preprocessing import normalize
 from sklearn.decomposition import PCA
 try:
-	from function.postsort import collision_func
+	from functions.postsort import collision_func
 except:
 	from postsort import collision_func
 from numba import jit
@@ -61,15 +61,15 @@ new_hf5 = tables.open_file(new_hf5_dir,'r',title = new_hf5_dir[-1])
 sorted_units_node = new_hf5.get_node('/sorted_units')
 num_new_neur = len([s_n for s_n in sorted_units_node])
 downsample_div = round(original_sampling_rate/new_sampling_rate)
-new_spikes_times = []
-new_spikes_times_combined = []
+new_spike_times = []
+new_spike_times_combined = []
 i = 0
 for s_n in sorted_units_node:
 	unit_times = list(eval('s_n.times[0]').round().astype(int))
-	new_spikes_times.append(unit_times)
-	new_spikes_times_combined.extend(unit_times)
+	new_spike_times.append(unit_times)
+	new_spike_times_combined.extend(unit_times)
 del s_n, unit_times
-new_spikes_times_combined = list(np.sort(new_spikes_times_combined))
+new_spike_times_combined = np.sort(new_spike_times_combined)
 new_hf5.close()
 
 #Transform data from blech_clust hdf5 file into correct format
@@ -78,16 +78,44 @@ sorted_units_node = blech_clust_h5.get_node('/sorted_units')
 num_old_neur = len([s_n for s_n in sorted_units_node])
 all_old_waveforms = [sn.waveforms[:] for sn in sorted_units_node]
 old_spikes_times = []
+old_spike_times_combined = []
 i = 0
 for s_n in sorted_units_node:
 	node_times = s_n.times[:]
 	node_times_downsampled = (node_times/downsample_div).round().astype(int)
 	old_spikes_times.append(list(node_times_downsampled))
+	old_spike_times_combined.extend(list(node_times_downsampled))
 	i+= 1
 del s_n, node_times, node_times_downsampled
+old_spike_times_combined = np.sort(old_spike_times_combined)
 blech_clust_h5.close()
 
+num_old_neur = len(old_spike_times_combined)
+num_new_neur = len(new_spike_times_combined)
+
 print("Both datasets imported.")
+print("Total old spike times = " + str(num_old_neur))
+print("Total new spike times = " + str(num_new_neur))
+print("Ratio of number of new:old spikes = " + str(int(np.ceil(num_new_neur/num_old_neur))) + ":1")
+
+#%% Compare spike times running through each old spike and seeing if it has a collision in the new spike times
+print("Checking old indices represented in new dataset.")
+blur_ind = round((0.5/1000)*new_sampling_rate) #amount of blurring allowed
+num_old_neur = len(old_spike_times_combined)
+old_rep = np.zeros(num_old_neur)
+for o_i in tqdm.tqdm(range(len(old_spike_times_combined))):
+	old_ind = old_spike_times_combined[o_i]
+	close_ind = np.where((new_spike_times_combined <= old_ind + blur_ind)&(new_spike_times_combined >= old_ind - blur_ind))[0]
+	old_rep[o_i] = len(close_ind)
+#Number of old neurons represented
+num_old_overlap = len(np.where(old_rep > 0)[0])
+num_over_overlap = len(np.where(old_rep > 1)[0])
+total_overlap = np.sum(old_rep)
+print("Percent of old neurons represented = " + str(np.ceil(100*num_old_overlap/num_old_neur)))
+print("Percent of over-represented represented-neurons = " + str(np.ceil(100*num_over_overlap/num_old_overlap)))
+
+#%% Compare overall spike counts
+
 
 #%% Perform bulk comparison - with all new spikes collapsed and compared against old
 blur_ind = round((0.5/1000)*new_sampling_rate) #amount of blurring allowed
@@ -96,7 +124,7 @@ for old_i in tqdm.tqdm(range(num_old_neur)):
     #Grab old unit spikes and blur
     old_unit_list = old_spikes_times[old_i]
     num_spikes_old = len(old_unit_list)
-    old_overlaps, new_overlaps = collision_func(old_unit_list,new_spikes_times_combined,blur_ind)
+    old_overlaps, new_overlaps = collision_func(old_unit_list,new_spike_times_combined,blur_ind)
     #Find the number of overlaps and store percents
     col_perc_old = np.round(100*old_overlaps/num_spikes_old,2)
     combined_percents[old_i] = col_perc_old
@@ -114,7 +142,7 @@ new_percents = np.zeros((num_new_neur,num_old_neur))
 old_percents = np.zeros((num_new_neur,num_old_neur))
 for new_i in tqdm.tqdm(range(num_new_neur)):
  	#Grab new unit spikes and blur
- 	new_unit = new_spikes_times[new_i]
+ 	new_unit = new_spike_times[new_i]
  	num_spikes_new = len(new_unit)
  	for old_i in range(num_old_neur):
 		 #Grab old unit spikes and blur
@@ -146,32 +174,3 @@ overlaps_csv = overlap_folder + 'overlap_vals.csv'
 with open(overlaps_csv, 'w') as f:
  	write = csv.writer(f)
  	write.writerows(old_matches)
-
-#%% Perform Fourier Transform on Old Spike Data
-
-for u_i in range(num_old_neur):
-	unit_waveforms = all_old_waveforms[u_i]
-	unit_fourier = np.array([list(rfft(unit_waveforms[s_i])) for s_i in range(len(unit_waveforms))])
-	freqs = fftfreq(len(unit_waveforms[0]),d=1/sampling_rate)
-	fourier_peaks = np.array([list(find_peaks(unit_fourier[s_i])[0][0:20]) for s_i in range(len(unit_waveforms))])
-	
-	freq_ind = (freqs<1000)*(freqs>0)
-	im_vals = unit_fourier[:,freq_ind]
-	norm_fourier = normalize(im_vals,axis=1,norm='max')
-	im_freqs = freqs[freq_ind]
-	indices = np.unique(np.round(np.linspace(0,len(norm_fourier[0]),10)).astype(int))
-	indices[-1] -= 1
-	fig = plt.figure(figsize=(20,20))
-	plt.imshow(norm_fourier,aspect='auto')
-	plt.xticks(ticks=indices,labels=im_freqs[indices])
-	plt.xlabel('Frequency (Hz)')
-	plt.ylabel('Waveform #')
-	plt.title('Normalized Fourier Transform of Unit ' + str(u_i))
-	fig.savefig(blech_clust_datadir + '/' + 'fourier_unit_' + str(u_i) + '.png', dpi=100)
-	plt.close(fig)
-
-#fourier = rfft(mean_bit)
-#freqs = fftfreq(len(mean_bit), d=1/sampling_rate)
-#fourier_peaks = find_peaks(fourier)[0]
-#peak_freqs = freqs[fourier_peaks]
-#peak_freqs = peak_freqs[peak_freqs>0]

@@ -5,16 +5,17 @@
 # Modified Hannah Germaine January 2023
 
 import sys, struct, math, os, time
-file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
-os.chdir(file_path)
+#If this file is not being run from the directory of .../BlechCodes/, uncomment the next two lines
+#file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
+#os.chdir(file_path)
 import numpy as np
 import tkinter as tk
 import tkinter.filedialog as fd
-from intanutil.read_header import read_header
-from intanutil.get_bytes_per_data_block import get_bytes_per_data_block
-from intanutil.read_one_data_block import read_one_data_block
-from intanutil.notch_filter import notch_filter
-from intanutil.data_to_result import data_to_result
+from functions.load_intan_rhd_format.intanutil.read_header import read_header
+from functions.load_intan_rhd_format.intanutil.get_bytes_per_data_block import get_bytes_per_data_block
+from functions.load_intan_rhd_format.intanutil.read_one_data_block import read_one_data_block
+from functions.load_intan_rhd_format.intanutil.notch_filter import notch_filter
+from functions.load_intan_rhd_format.intanutil.data_to_result import data_to_result
 
 
 def read_data(filename):
