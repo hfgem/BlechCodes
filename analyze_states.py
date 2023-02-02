@@ -26,15 +26,14 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 	num_neur = len([s_n for s_n in sorted_units_node])
 	#Grab waveforms
 	print("\tGrabbing waveforms")
-	all_waveforms = [sn.waveforms[:] for sn in sorted_units_node]
+	all_waveforms = [sn.waveforms[0] for sn in sorted_units_node]
 	#Grab times
 	print("\tGrabbing spike times")
 	spike_times = []
 	i = 0
 	for s_n in sorted_units_node:
-		spike_times.append(list(s_n.times[:]))
+		spike_times.append(list(s_n.times))
 		i+= 1
-	del s_n, sorted_units_node, i
 
 	#Grab digital inputs
 	print("\tGrabbing digital input times")
@@ -129,6 +128,8 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 #_____Get the directory of the hdf5 file_____
 sorted_dir, segment_dir = hf5.sorted_data_import() #Program will automatically quit if file not found in given folder
 fig_save_dir = ('/').join(sorted_dir.split('/')[0:-1]) + '/'
+print('\nData Directory:')
+print(fig_save_dir)
 
 #_____Import data_____
 num_neur, all_waveforms, spike_times, num_dig_in, sampling_rate, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes = import_data(sorted_dir, segment_dir, fig_save_dir)
@@ -156,34 +157,34 @@ PSTH_times, PSTH_taste_deliv_times, tastant_PSTH, avg_tastant_PSTH = pf.PSTH_plo
 #_____Grab and plot firing rate deviations from local mean (by segment)_____
 local_bin_size = 30 #bin size for local interval to compute mean firing rate (in seconds)
 deviation_bin_size = 0.05 #bin size for which to compute deviation value (in seconds)
-segment_devs, segment_bout_lengths, segment_ibis = pf.FR_deviation_plots(fig_save_dir,sampling_rate,
-																		 segment_names,segment_times,
-																		 segment_spike_times,num_neur,
-																		 num_tastes,local_bin_size,deviation_bin_size)
-
-
+fig_buffer_size = 1; #How many seconds in either direction to plot for a deviation event raster
+segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis = pf.FR_deviation_plots(fig_save_dir,sampling_rate,
+																																																			 segment_names,segment_times,
+																																																			 segment_spike_times,num_neur,
+																																																			 num_tastes,local_bin_size,
+																																																			 deviation_bin_size,fig_buffer_size)
 
 
 
 #%%	
 #_____Perform changepoint detection on individual trial raster plots_____
-for t_i in range(num_tastes): #By tastant
-	t_st = tastant_spike_times[t_i]
-	num_trials = len(t_st)
-	trial_times = []
-	for n_t in range(num_trials): #By delivery trial
-		n_st = t_st[n_t]
-		#Convert spike times to binary raster
-		max_index = 0
-		for i in range(num_neur):
-			try:
-				m_i = np.max(n_st[i])
-			except:
-				m_i = 0
-			if m_i > max_index:
-				max_index = m_i
-		binary_raster = np.zeros((num_neur,max_index + 1))
-		for i in range(num_neur):
-			binary_raster[i,n_st[i]] = 1
-		#Send binary raster to changepoint detection algorithm
+# for t_i in range(num_tastes): #By tastant
+# 	t_st = tastant_spike_times[t_i]
+# 	num_trials = len(t_st)
+# 	trial_times = []
+# 	for n_t in range(num_trials): #By delivery trial
+# 		n_st = t_st[n_t]
+# 		#Convert spike times to binary raster
+# 		max_index = 0
+# 		for i in range(num_neur):
+# 			try:
+# 				m_i = np.max(n_st[i])
+# 			except:
+# 				m_i = 0
+# 			if m_i > max_index:
+# 				max_index = m_i
+# 		binary_raster = np.zeros((num_neur,max_index + 1))
+# 		for i in range(num_neur):
+# 			binary_raster[i,n_st[i]] = 1
+# 		#Send binary raster to changepoint detection algorithm
 		

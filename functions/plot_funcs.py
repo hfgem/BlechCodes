@@ -11,6 +11,7 @@ This is a collection of functions for plotting data
 import os, tqdm
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm
 
 def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_times, 
 				 segment_names, segment_times, spike_times, num_neur, num_tastes, 
@@ -31,11 +32,12 @@ def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_time
 		#Plot segment rasters and save
 		plt.figure(figsize=(30,num_neur))
 		plt.xlabel('Time (m)')
-		plt.eventplot(s_t_time)
+		plt.eventplot(s_t_time,colors='k')
 		plt.title(s_name + " segment")
 		plt.tight_layout()
-		im_name = ('_').join(s_name.split(' ')) + '.png'
-		plt.savefig(raster_save_dir + im_name)
+		im_name = ('_').join(s_name.split(' '))
+		plt.savefig(raster_save_dir + im_name + '.png')
+		plt.savefig(raster_save_dir + im_name + '.svg')
 		plt.close()
 		segment_spike_times.append(s_t)
 
@@ -47,6 +49,9 @@ def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_time
 	tastant_spike_times = []
 	for t_i in tqdm.tqdm(range(num_tastes)):
 		print("\nGrabbing spike rasters for tastant " + dig_in_names[t_i] + " deliveries")
+		rast_taste_save_dir = raster_save_dir + ('_').join((dig_in_names[t_i]).split(' ')) + '/'
+		if os.path.isdir(rast_taste_save_dir) == False:
+			os.mkdir(rast_taste_save_dir)
 		t_start = start_dig_in_times[t_i]
 		t_end = end_dig_in_times[t_i]
 		num_deliv = len(t_start)
@@ -61,16 +66,39 @@ def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_time
 			t_st.append(s_t)
 			#Plot the raster
 			plt.subplot(num_deliv,1,t_d_i+1)
-			plt.eventplot(s_t_time)
+			plt.eventplot(s_t_time,colors='k')
 			plt.xlabel('Time (s)')
 			plt.axvline(t_start[t_d_i]/sampling_rate,color='r')
 			plt.axvline(t_end[t_d_i]/sampling_rate,color='r')
 		#Save the figure
-		im_name = ('_').join((dig_in_names[t_i]).split(' ')) + '_spike_rasters.png'
+		im_name = ('_').join((dig_in_names[t_i]).split(' ')) + '_spike_rasters'
 		t_fig.tight_layout()
-		t_fig.savefig(raster_save_dir + im_name)
+		t_fig.savefig(rast_taste_save_dir + im_name + '.png')
+		t_fig.savefig(rast_taste_save_dir + im_name + '.svg')
 		plt.close(t_fig)
 		tastant_spike_times.append(t_st)
+		
+		#Plot rasters for each neuron for each taste separately
+		rast_taste_save_dir = raster_save_dir + ('_').join((dig_in_names[t_i]).split(' ')) + '/'
+		if os.path.isdir(rast_taste_save_dir) == False:
+			os.mkdir(rast_taste_save_dir)
+		rast_neur_save_dir = rast_taste_save_dir + 'neurons/'
+		if os.path.isdir(rast_neur_save_dir) == False:
+			os.mkdir(rast_neur_save_dir)
+		for n_i in range(num_neur):
+			n_st = [t_st[t_d_i][n_i] - t_start[t_d_i] for t_d_i in range(len(t_start))]
+			n_st_time = [list(np.array(n_st[i])*(1/sampling_rate)) for i in range(len(n_st))]
+			t_fig = plt.figure(figsize=(10,10))
+			plt.eventplot(n_st_time,colors='k')
+			plt.xlabel('Time (s)')
+			plt.ylabel('Trial')
+			plt.axvline(pre_taste_dt/sampling_rate,color='r')
+			#Save the figure
+			im_name = ('_').join((dig_in_names[t_i]).split(' ')) + '_unit_' + str(n_i)
+			t_fig.tight_layout()
+			t_fig.savefig(rast_neur_save_dir + im_name + '.png')
+			t_fig.savefig(rast_neur_save_dir + im_name + '.svg')
+			plt.close(t_fig)
 	
 	return segment_spike_times, tastant_spike_times, pre_taste_dt, post_taste_dt
 
@@ -127,9 +155,10 @@ def PSTH_plots(fig_save_dir, sampling_rate, num_tastes, num_neur, dig_in_names,
 			all_PSTH[t_d_i,:,:] = PSTH_spikes
 		del t_d_i, start_i, end_i, bin_spikes, PSTH_spikes
 		tastant_name = dig_in_names[t_i]
-		im_name = ('_').join((tastant_name).split(' ')) + '_PSTHs.png'
+		im_name = ('_').join((tastant_name).split(' ')) + '_PSTHs'
 		t_fig.tight_layout()
-		t_fig.savefig(PSTH_save_dir + im_name)
+		t_fig.savefig(PSTH_save_dir + im_name + '.png')
+		t_fig.savefig(PSTH_save_dir + im_name + '.svg')
 		plt.close(t_fig)
 		avg_PSTH = np.mean(all_PSTH,axis=0)
 		t_fig = plt.figure()
@@ -141,9 +170,10 @@ def PSTH_plots(fig_save_dir, sampling_rate, num_tastes, num_neur, dig_in_names,
 		plt.title('Avg Individual Neuron PSTH for ' + tastant_name + '\nAligned to Taste Delivery Start')
 		plt.xlabel('Time (s)')
 		plt.ylabel('Firing Rate (Hz)')
-		im_name = ('_').join((dig_in_names[t_i]).split(' ')) + '_avg_PSTH.png'
+		im_name = ('_').join((dig_in_names[t_i]).split(' ')) + '_avg_PSTH'
 		t_fig.tight_layout()
-		t_fig.savefig(PSTH_save_dir + im_name)
+		t_fig.savefig(PSTH_save_dir + im_name + '.png')
+		t_fig.savefig(PSTH_save_dir + im_name + '.svg')
 		plt.close(t_fig)
 		tastant_PSTH.append(all_PSTH)
 		avg_tastant_PSTH.append(avg_PSTH)
@@ -163,14 +193,16 @@ def PSTH_plots(fig_save_dir, sampling_rate, num_tastes, num_neur, dig_in_names,
 		plt.title('Neuron ' + str(n_i))
 		plt.ylabel('Firing Rate (Hz)')
 		plt.xlabel('Time (s)')
-		plt.savefig(neuron_PSTH_dir + 'neuron_' + str(n_i) + '_PSTHs.png')
+		im_name = 'neuron_' + str(n_i) + '_PSTHs'
+		plt.savefig(neuron_PSTH_dir + im_name + '.png')
+		plt.savefig(neuron_PSTH_dir + im_name + '.svg')
 		plt.close()
 		
 	return PSTH_times, PSTH_taste_deliv_times, tastant_PSTH, avg_tastant_PSTH
 
 def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 					      segment_spike_times,num_neur,num_tastes,local_bin_size,
-						  deviation_bin_size):
+						  deviation_bin_size,fig_buffer_size):
 	"""This function calculates firing rate deviations from local means and
 	generates plots of different experimental segments with points above 1 + 2 
 	deviations highlighted
@@ -184,6 +216,7 @@ def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 		- num_tastes:
 		- local_bin_size:
 		- deviation_bin_size:
+		- fig_buffer_size
 	OUTPUTS:
 		- segment_deviations: 
 	"""
@@ -203,6 +236,7 @@ def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 	#the local window are calculated. Those that are above 2 std. from the mean
 	#are marked as being deviating bins
 	segment_devs = []
+	segment_dev_frac_ind = []
 	for i in range(num_segments):
 		print("\tCalculating deviations for segment " + segment_names[i])
 		segment_spikes = segment_spike_times[i]
@@ -211,17 +245,16 @@ def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 		end_segment = segment_times[i+1]
 		dev_bin_starts = np.arange(start_segment,end_segment,dev_bin_dt)
 		#First calculate the firing rates of all small bins
-		bin_fcs = np.zeros((num_neur,len(dev_bin_starts)))
-		bin_frs = np.zeros((num_neur,len(dev_bin_starts)))
+		bin_frs = np.zeros(len(dev_bin_starts)) #Store average firing rate for each bin
 		for b_i in tqdm.tqdm(range(len(dev_bin_starts))):
 			bin_start_dt = dev_bin_starts[b_i]
 			start_db = max(bin_start_dt - half_dev_bin_dt, start_segment)
 			end_db = min(bin_start_dt + half_dev_bin_dt, end_segment)
 			neur_fc = [len(np.where((np.array(segment_spikes[n_i]) < end_db) & (np.array(segment_spikes[n_i]) > start_db))[0]) for n_i in range(num_neur)]
-			bin_fcs[:,b_i] = np.array(neur_fc)
-			bin_frs[:,b_i] = bin_fcs[:,b_i]/deviation_bin_size
+			bin_fcs = np.array(neur_fc)
+			bin_frs[b_i] = np.sum(bin_fcs,0)/deviation_bin_size
 		#Next slide a larger window over the small bins and calculate deviations for each small bin
-		bin_devs = np.zeros((num_neur,len(dev_bin_starts))) #storage array for deviations from mean
+		bin_devs = np.zeros(len(dev_bin_starts)) #storage array for deviations from mean
 		bin_dev_lens = np.zeros(np.shape(bin_devs))
 		for b_i in tqdm.tqdm(range(len(dev_bin_starts))): #slide a mean window over all the starts and calculate the small bin firing rate's deviation
 			bin_start_dt = dev_bin_starts[b_i]
@@ -231,57 +264,107 @@ def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 			end_mean_int = min(start_mean_int + local_bin_dt,end_segment-1)
 			end_mean_bin_start_ind = np.where(np.abs(dev_bin_starts - end_mean_int) == np.min(np.abs(dev_bin_starts - end_mean_int)))[0][0]
 			#Next calculate mean + std FR for the interval
-			local_dev_bin_fr = bin_frs[:,np.arange(start_mean_bin_start_ind,end_mean_bin_start_ind)]
-			mean_fr = np.mean(local_dev_bin_fr,axis=1)
-			std_fr = np.std(local_dev_bin_fr,axis=1)
-			cutoff = np.expand_dims(mean_fr + 2*std_fr,1)
+			local_dev_bin_fr = bin_frs[np.arange(start_mean_bin_start_ind,end_mean_bin_start_ind)]
+			mean_fr = np.mean(local_dev_bin_fr)
+			std_fr = np.std(local_dev_bin_fr)
+			cutoff = mean_fr + 2*std_fr
 			#Calculate which bins are > mean + 2std
 			dev_neur_fr_locations = local_dev_bin_fr > cutoff*np.ones(np.shape(local_dev_bin_fr))
-			dev_neur_fr_indices = np.where(dev_neur_fr_locations == True)
-			for fr_i in range(len(dev_neur_fr_indices[0])):
-				bin_devs[dev_neur_fr_indices[0][fr_i],start_mean_bin_start_ind + dev_neur_fr_indices[1][fr_i]] += 1
-			for n_i in range(num_neur):
-				bin_dev_lens[n_i,start_mean_bin_start_ind + np.arange(len(dev_neur_fr_locations[n_i,:]))] += 1
+			dev_neur_fr_indices = np.where(dev_neur_fr_locations == True)[0]
+			bin_devs[start_mean_bin_start_ind + dev_neur_fr_indices] += 1
+			bin_dev_lens[start_mean_bin_start_ind + np.arange(len(dev_neur_fr_locations))] += 1
 		avg_bin_devs = bin_devs/bin_dev_lens
 		segment_devs.append([dev_bin_starts,avg_bin_devs])
+		dev_inds = np.where(avg_bin_devs > 0)[0]
+		segment_dev_frac_ind.append([avg_bin_devs[dev_inds],dev_inds])
+		
+	#Plot deviation points for each neuron in each segment
+	deviation_plots(num_segments,num_neur,segment_names,dev_save_dir,segment_devs)
+	
+	#Calculate and plot bouts of deviations and inter-bout-intervals (IBIs)
+	segment_bouts, segment_bout_lengths, segment_ibis = deviation_bout_ibi_calc_plot(num_segments,
+																				  segment_names,num_neur,
+																				  dev_save_dir,segment_devs,
+																				  dev_bin_dt,deviation_bin_size,
+																				  sampling_rate)
+	
+	#Calculate and plot mean and standard deviations of bout lengths and IBIs
+	mean_segment_bout_lengths,std_segment_bout_lengths,mean_segment_ibis,std_segment_ibis = mean_std_bout_ibi_calc_plot(num_segments,num_neur,
+																													 segment_names,dev_save_dir,
+																													 segment_bout_lengths,segment_ibis)
+	
+	dev_bin_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
+						      segment_spike_times,num_neur,fig_buffer_size,
+							  segment_dev_frac_ind,segment_devs)
+		
+	return segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis
+		
+def deviation_plots(num_segments,num_neur,segment_names,dev_save_dir,segment_devs):
+	"""
+	INPUTS:
+		- num_segments: number of segments in experiment
+		- num_neur: number of neurons in data
+		- segment_names: names of different segments
+		- dev_save_dir: where to save plots
+	"""
 	#Now plot deviations
 	for i in tqdm.tqdm(range(num_segments)):
 		print("\tPlotting deviations for segment " + segment_names[i])
-		fig_i = plt.figure(figsize=(30,num_neur))
-		plt.imshow(segment_devs[i][1],cmap='jet',aspect='auto')
-		plt.colorbar()
+		seg_dev_save_dir = dev_save_dir + ('_').join(segment_names[i].split(' ')) + '/'
+		if os.path.isdir(seg_dev_save_dir) == False:
+			os.mkdir(seg_dev_save_dir)
+		fig_i = plt.figure(figsize=(10,10))
+		plt.plot(segment_devs[i][0],segment_devs[i][1])
 		im_name = (' ').join(segment_names[i].split('_'))
 		plt.title(im_name + ' deviation fractions')
-		save_name = ('_').join(segment_names[i].split(' ')) + '_devs.png'
-		fig_i.savefig(dev_save_dir + save_name)
+		save_name = ('_').join(segment_names[i].split(' ')) + '_devs'
+		fig_i.savefig(seg_dev_save_dir + save_name + '.png')
+		fig_i.savefig(seg_dev_save_dir + save_name + '.svg')
 		plt.close(fig_i)
-		fig_i = plt.figure(figsize=(30,num_neur))
-		plt.imshow((segment_devs[i][1]>0.9).astype('uint8'),cmap='jet',aspect='auto')
-		plt.colorbar()
+		fig_i = plt.figure(figsize=(10,10))
+		plt.plot(segment_devs[i][0],(segment_devs[i][1]>0.9).astype('uint8'))
 		im_name = (' ').join(segment_names[i].split('_'))
 		plt.title(im_name + ' strong deviations (>0.9)')
-		save_name = ('_').join(segment_names[i].split(' ')) + '_high_devs.png'
-		fig_i.savefig(dev_save_dir + save_name)
+		save_name = ('_').join(segment_names[i].split(' ')) + '_high_devs'
+		fig_i.savefig(seg_dev_save_dir + save_name + '.png')
+		fig_i.savefig(seg_dev_save_dir + save_name + '.svg')
 		plt.close(fig_i)
+
+def deviation_bout_ibi_calc_plot(num_segments,segment_names,num_neur,dev_save_dir,segment_devs,dev_bin_dt,deviation_bin_size,sampling_rate):
 	#Calculate the deviation bout size and frequency
+	segment_bouts = []
 	segment_bout_lengths = []
 	segment_ibis = []
 	for i in tqdm.tqdm(range(num_segments)):
-		print("\Calculating deviation bout sizes and frequencies")
-		seg_devs = segment_devs[i][1]
-		seg_times = segment_devs[i][0]
-		dev_inds = [np.where(seg_devs[n_i,:] > 0)[0] for n_i in range(num_neur)]
-		dev_times = [seg_times[dev_inds[n_i]] for n_i in range(num_neur)]
-		bout_starts = [dev_inds[n_i][np.where(np.diff(dev_inds[n_i]) > 1)[0]] for n_i in range(num_neur)]
-		bout_start_inds = [list(np.concatenate((np.array([0]),bout_starts[n_i] + 1),axis=0)) for n_i in range(num_neur)]
-		bout_ends = [dev_inds[n_i][np.where(np.diff(dev_inds[n_i]) > 1)[0]] - 1 for n_i in range(num_neur)]
-		bout_end_inds = [list(np.concatenate((bout_ends[n_i] + 1,np.array([dev_inds[n_i][-1]])),axis=0)) for n_i in range(num_neur)]
-		bout_start_times = [dev_times[bout_start_inds[n_i]] for n_i in range(num_neur)]
-		bout_end_times = [dev_times[bout_end_inds[n_i]] for n_i in range(num_neur)]
-		bout_lengths = [bout_end_times[n_i] - bout_start_times[n_i] for n_i in range(num_neur)] #in samples
-		bout_lengths_s = [bout_lengths[n_i]/sampling_rate for n_i in range(num_neur)]#in Hz
+		print("\t Calculating deviation bout sizes and frequencies")
+		seg_dev_save_dir = dev_save_dir + ('_').join(segment_names[i].split(' ')) + '/'
+		if os.path.isdir(seg_dev_save_dir) == False:
+			os.mkdir(seg_dev_save_dir)
+		seg_devs = segment_devs[i][1] #Fraction of deviations for each segment bout
+		seg_times = segment_devs[i][0] #Original data indices of each segment bout
+		dev_inds = np.where(seg_devs > 0)[0] #Indices of deviating segment bouts
+		dev_times = seg_times[dev_inds] #Original data deviation data indices
+		bout_start_inds = np.concatenate((np.array([0]),np.where(np.diff(dev_inds) > 1)[0] + 1))
+		#bout_starts = [dev_inds[n_i][bout_start_inds[n_i]] for n_i in range(num_neur)]
+		bout_end_inds = np.concatenate((np.where(np.diff(dev_inds) > 1)[0],np.array([-1])))
+		#bout_ends = [dev_inds[n_i][bout_end_inds[n_i]] for n_i in range(num_neur)]
+		try:
+			bout_start_times = dev_times[bout_start_inds]
+		except:
+			bout_start_times = np.empty(0)
+		try:
+			bout_end_times = dev_times[bout_end_inds]
+		except:
+			bout_end_times = np.empty(0)
+		bout_pairs = np.array([bout_start_times,bout_end_times]).T
+		for b_i in range(len(bout_pairs)):
+			if bout_pairs[b_i][0] == bout_pairs[b_i][1]:
+				bout_pairs[b_i][1] += dev_bin_dt
+		segment_bouts.append(bout_pairs)
+		bout_lengths = bout_end_times - bout_start_times + int(deviation_bin_size*sampling_rate) #in samples
+		bout_lengths_s = bout_lengths/sampling_rate #in Hz
 		segment_bout_lengths.append(bout_lengths_s)
-		ibi = [(bout_start_times[n_i][1:] - bout_end_times[n_i][:-1])/sampling_rate for n_i in range(num_neur)]
+		ibi = (bout_start_times[1:] - bout_end_times[:-1])/sampling_rate
 		segment_ibis.append(ibi)
 		fig_i = plt.figure(figsize = (10,10))
 		plt.subplot(1,2,1)
@@ -295,7 +378,119 @@ def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 		plt.xlabel('IBI (s)')
 		plt.ylabel('Counts')
 		save_name = ('_').join(segment_names[i].split(' ')) + '_dev_hist.png'
-		fig_i.savefig(dev_save_dir + save_name)
+		fig_i.savefig(seg_dev_save_dir + save_name)
 		plt.close(fig_i)
+	
+	return segment_bouts, segment_bout_lengths, segment_ibis
 		
-	return segment_devs, segment_bout_lengths, segment_ibis
+def mean_std_bout_ibi_calc_plot(num_segments,num_neur,segment_names,dev_save_dir,segment_bout_lengths,segment_ibis):
+	#Calculate mean and standard deviations of bout lengths and ibis
+	print("\t Calculating and plotting mean deviation bout length / ibis")
+	mean_segment_bout_lengths = []
+	std_segment_bout_lengths = []
+	mean_segment_ibis = []
+	std_segment_ibis = []
+	for i in range(num_segments):
+		seg_bout_means = [np.mean(segment_bout_lengths[i])]
+		seg_bout_stds = [np.std(segment_bout_lengths[i])]
+		seg_ibi_means = [np.mean(segment_ibis[i])]
+		seg_ibi_stds = [np.std(segment_ibis[i])]
+		mean_segment_bout_lengths.append(seg_bout_means)
+		std_segment_bout_lengths.append(seg_bout_stds)
+		mean_segment_ibis.append(seg_ibi_means)
+		std_segment_ibis.append(seg_ibi_stds)
+	#Convert to np.arrays for easy transposition
+	mean_segment_bout_lengths = np.array(mean_segment_bout_lengths)
+	std_segment_bout_lengths = np.array(std_segment_bout_lengths)
+	mean_segment_ibis = np.array(mean_segment_ibis)
+	std_segment_ibis = np.array(std_segment_ibis)
+	#Plot mean bouts and ibis
+	fig_i = plt.figure(figsize = (10,10))
+	cm_subsection = np.linspace(0,1,num_neur)
+	cmap = [cm.gist_rainbow(x) for x in cm_subsection]
+	plt.subplot(1,2,1)
+	plt.plot(segment_names,mean_segment_bout_lengths,color='k',label='Mean Across Neurons')
+	plt.plot(segment_names,mean_segment_bout_lengths + std_segment_bout_lengths,alpha=0.25,color='k',linestyle='-',label='Mean Across Neurons')
+	plt.plot(segment_names,mean_segment_bout_lengths - std_segment_bout_lengths,alpha=0.25,color='k',linestyle='-',label='Mean Across Neurons')
+	plt.legend()
+	plt.title('Mean Bout Lengths by Segment')
+	plt.xlabel('Experimental Segment')
+	plt.ylabel('Mean Bout Length (s)')
+	plt.subplot(1,2,2)
+	plt.plot(segment_names,mean_segment_ibis,color='k',label='Mean Across Neurons')
+	plt.plot(segment_names,mean_segment_ibis + std_segment_ibis,alpha=0.25,color='k',linestyle='-',label='Mean Across Neurons')
+	plt.plot(segment_names,mean_segment_ibis - std_segment_ibis,alpha=0.25,color='k',linestyle='-',label='Mean Across Neurons')
+	plt.legend()
+	plt.title('Mean Inter-Bout-Intervals by Segment')
+	plt.xlabel('Experimental Segment')
+	plt.ylabel('Mean Inter-Bout-Interval (s)')
+	fig_i.tight_layout()
+	save_name = 'mean_bouts_ibis.png'
+	fig_i.savefig(dev_save_dir + save_name)
+	plt.close(fig_i)
+	
+	return mean_segment_bout_lengths,std_segment_bout_lengths,mean_segment_ibis,std_segment_ibis
+	
+def dev_bin_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
+					      segment_spike_times,num_neur,fig_buffer_size,
+						  segment_dev_frac_ind,segment_devs):
+	"""This function creates visualizations of bins with high deviation from local mean
+	INPUTS:
+		- fig_save_dir: directory to save visualizations
+		- sampling_rate: sampling rate of data
+		- segment_names: names of different experiment segments
+		- segment_times: time indices of different segment starts/ends
+		- segment_spike_times: when spikes occur in each segment
+		- num_neur: the number of neurons
+		- fig_buffer_size: how much (in seconds) to plot before and after a deviation event
+		- segment_dev_frac_ind: fraction of deviation strength [0] + indices of deviation times [1]
+		- segment_devs: contains fraction deviations and index info
+	OUTPUTS:
+		- 
+	"""
+	print("\nBeginning individual deviation segment plots.")
+	#Create save directory
+	dev_save_dir = fig_save_dir + 'deviations/'
+	if os.path.isdir(dev_save_dir) == False:
+		os.mkdir(dev_save_dir)
+	#Convert the bin size from time to samples
+	num_segments = len(segment_names)
+	local_bin_dt = int(np.ceil(fig_buffer_size*sampling_rate))
+	half_local_bin_dt = int(np.ceil(local_bin_dt/2))
+	#Run through deviation times by segment and plot rasters
+	for s_i in tqdm.tqdm(range(num_segments)):
+		print("\nGrabbing spike rasters for segment " + segment_names[s_i])
+		seg_dev_save_dir = dev_save_dir + ('_').join(segment_names[s_i].split(' ')) + '/'
+		if os.path.isdir(seg_dev_save_dir) == False:
+			os.mkdir(seg_dev_save_dir)
+		seg_rast_save_dir = seg_dev_save_dir + 'dev_rasters/'
+		if os.path.isdir(seg_rast_save_dir) == False:
+			os.mkdir(seg_rast_save_dir)
+		segment_dev_times = segment_devs[s_i][0][segment_dev_frac_ind[s_i][1]]
+		segment_spikes = [np.array(segment_spike_times[s_i][n_i]) for n_i in range(num_neur)]
+		min_seg_time = segment_times[s_i]
+		max_seg_time = segment_times[s_i+1]
+		for d_i in range(len(segment_dev_times)):
+			dev_time = segment_dev_times[d_i]
+			min_time = max(dev_time - half_local_bin_dt,min_seg_time)
+			max_time = min(dev_time + half_local_bin_dt,max_seg_time)
+			s_t = []
+			for n_i in range(num_neur):
+				try:
+					s_t.append(list(segment_spikes[n_i][np.where((segment_spikes[n_i] >= min_time)*(segment_spikes[n_i] <= max_time))[0]]))
+				except:
+					print(segment_spikes[n_i])
+			s_t_time = [list(np.array(s_t[i])*(1/sampling_rate)) for i in range(len(s_t))] #In seconds
+			#Plot segment deviation raster
+			plt.figure(figsize=(10,10))
+			plt.xlabel('Time (s)')
+			plt.eventplot(s_t_time)
+			plt.axvline(dev_time*(1/sampling_rate))
+			plt.title('Deviation ' + str(d_i))
+			plt.tight_layout()
+			im_name = 'dev_' + str(d_i) + '.png'
+			plt.savefig(seg_rast_save_dir + im_name)
+			plt.close()
+		
+		
+	
