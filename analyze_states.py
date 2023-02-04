@@ -15,10 +15,12 @@ import functions.hdf5_handling as hf5
 import functions.data_processing as dp
 import functions.load_intan_rhd_format.load_intan_rhd_format as rhd
 import functions.plot_funcs as pf
+import time
 
 def import_data(sorted_dir, segment_dir, fig_save_dir):
 	"""Import data from .h5 file and grab any missing data through user inputs"""
 	print("Beginning Data Import")
+	tic = time.time()
 	#_____Import spike times and waveforms_____
 	#Grab data from hdf5 file
 	blech_clust_h5 = tables.open_file(sorted_dir, 'r', title = sorted_dir[-1])
@@ -122,7 +124,8 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 	end_dig_in_times = [list(np.where(np.diff(np.array(dig_in_data[i])) == -1)[0] + 1) for i in range(len(dig_in_data))]
 	num_tastes = len(start_dig_in_times)
 	del dig_in_data
-	
+	toc = time.time()
+	print("Time to import data = " + str(round((toc - tic)/60)) + " minutes \n")	
 	return num_neur, all_waveforms, spike_times, num_dig_in, sampling_rate, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes
 
 #_____Get the directory of the hdf5 file_____
@@ -158,12 +161,15 @@ PSTH_times, PSTH_taste_deliv_times, tastant_PSTH, avg_tastant_PSTH = pf.PSTH_plo
 local_bin_size = 30 #bin size for local interval to compute mean firing rate (in seconds)
 deviation_bin_size = 0.05 #bin size for which to compute deviation value (in seconds)
 fig_buffer_size = 1; #How many seconds in either direction to plot for a deviation event raster
-segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis = pf.FR_deviation_plots(fig_save_dir,sampling_rate,
-																																																			 segment_names,segment_times,
-																																																			 segment_spike_times,num_neur,
-																																																			 num_tastes,local_bin_size,
-																																																			 deviation_bin_size,fig_buffer_size)
-
+dev_thresh = 0.9 #Cutoff for high deviation bins to keep
+std_cutoff = 3 #Cutoff of number of standard deviations above mean a deviation must be to be considered a potential replay bin
+segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis = pf.FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
+																																												  segment_spike_times,num_neur,num_tastes,local_bin_size,
+																																												  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size)
+#NOTES TO SELF:
+#Add storage of deviation counts and stats across intervals for comparison between datasets
+#Normalize counts by length of segment as well
+#Add more bins to histograms
 
 
 #%%	
