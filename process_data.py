@@ -75,3 +75,5 @@ if cont_prompt == 'y':
 				print("Now beginning post-sorting.")
 				cont_loop = 0
 				ps.run_postsort(datadir)
+
+#%% Separate out LFPs

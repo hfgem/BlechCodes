@@ -161,11 +161,17 @@ PSTH_times, PSTH_taste_deliv_times, tastant_PSTH, avg_tastant_PSTH = pf.PSTH_plo
 local_bin_size = 30 #bin size for local interval to compute mean firing rate (in seconds)
 deviation_bin_size = 0.05 #bin size for which to compute deviation value (in seconds)
 fig_buffer_size = 1; #How many seconds in either direction to plot for a deviation event raster
-dev_thresh = 0.9 #Cutoff for high deviation bins to keep
-std_cutoff = 3 #Cutoff of number of standard deviations above mean a deviation must be to be considered a potential replay bin
+dev_thresh = 0.95 #Cutoff for high deviation bins to keep
+std_cutoff = 4 #Cutoff of number of standard deviations above mean a deviation must be to be considered a potential replay bin
 segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis = pf.FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 																																												  segment_spike_times,num_neur,num_tastes,local_bin_size,
 																																												  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size)
+
+#_____Plot what the original recording looks like around times of deviation_____
+
+
+
+
 #NOTES TO SELF:
 #Add storage of deviation counts and stats across intervals for comparison between datasets
 #Normalize counts by length of segment as well
