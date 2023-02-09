@@ -121,25 +121,35 @@ def data_cleanup(hf5_dir):
 		
 		del e_data
 		
-		print("Bandpass Filtering Data")
+		print("Band Pass Filtering Data for Spike Detection")
 		low_fq = 300
 		high_fq = 3000
 		filtered_data = bandpass_filter(mv_data, low_fq, high_fq,
+										sampling_rate, order=5)
+		
+		print("Low Pass Filtering Data for LFPs")
+		low_fq = 0
+		high_fq = 300
+		LFP_filtered_data = bandpass_filter(mv_data, low_fq, high_fq,
 										sampling_rate, order=5)
 		
 		del mv_data
 			
 		print("Signal Averaging to Improve Signal-Noise Ratio")
 		avg_data = signal_averaging(filtered_data)
+		lfp_avg_data = signal_averaging(LFP_filtered_data)
 		
-		del filtered_data
+		del filtered_data, LFP_filtered_data
 		
 		print("Saving cleaned data.")
 		clean_hf5 = tables.open_file(clean_data_dir, 'r+', title = clean_data_dir[-1])
 		atom = tables.FloatAtom()
-		data_array = clean_hf5.create_earray('/','clean_data',atom,(0,) + np.shape(avg_data))
+		clean_hf5.create_earray('/','clean_data',atom,(0,) + np.shape(avg_data))
 		avg_data_expanded = np.expand_dims(avg_data[:],0)
 		clean_hf5.root.clean_data.append(avg_data_expanded)
+		clean_hf5.create_earray('/','lfp_data',atom,(0,) + np.shape(lfp_avg_data))
+		lfp_avg_data_expanded = np.expand_dims(lfp_avg_data[:],0)
+		clean_hf5.root.clean_data.append(lfp_avg_data_expanded)
 		clean_hf5.close()
 		
 		print("\n NOTICE: Checkpoint 2 Complete: You can quit the program here, if you like, and come back another time.")
