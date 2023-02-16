@@ -10,6 +10,17 @@ from scipy.signal import butter, lfilter
 import os, tables, tqdm
 import functions.hdf5_handling as h5
 
+
+def butter_lowpass(cutoff, fs, order=5):
+	"""Function per https://stackoverflow.com/questions/25191620/creating-lowpass-filter-in-scipy-understanding-methods-and-units"""
+	return butter(order, cutoff, fs=fs, btype='low', analog=False)
+
+def butter_lowpass_filter(data, cutoff, fs, order=5):
+	"""Function per https://stackoverflow.com/questions/25191620/creating-lowpass-filter-in-scipy-understanding-methods-and-units"""
+	b, a = butter_lowpass(cutoff, fs, order=order)
+	y = lfilter(b, a, data)
+	return y
+
 def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs
     low = lowcut / nyq
@@ -128,18 +139,26 @@ def data_cleanup(hf5_dir):
 										sampling_rate, order=5)
 		
 		print("Low Pass Filtering Data for LFPs")
-		low_fq = 0
-		high_fq = 300
-		LFP_filtered_data = bandpass_filter(mv_data, low_fq, high_fq,
-										sampling_rate, order=5)
+		cutoff = 300  # desired cutoff frequency of the filter, Hz
+		order = 6
+		LFP_filtered_data = butter_lowpass_filter(mv_data, cutoff, sampling_rate, order)
 		
-		del mv_data
+		del mv_data, low_fq, high_fq, cutoff, order
+		
+		print("Saving LFP Data")
+		clean_hf5 = tables.open_file(clean_data_dir, 'r+', title = clean_data_dir[-1])
+		atom = tables.FloatAtom()
+		clean_hf5.create_earray('/','lfp_data',atom,(0,) + np.shape(LFP_filtered_data))
+		lfp_filtered_data_expanded = np.expand_dims(LFP_filtered_data,0)
+		clean_hf5.root.lfp_data.append(lfp_filtered_data_expanded)
+		clean_hf5.close()
+		
+		del LFP_filtered_data
 			
-		print("Signal Averaging to Improve Signal-Noise Ratio")
+		print("Signal Averaging Band Pass Data to Improve Signal-Noise Ratio")
 		avg_data = signal_averaging(filtered_data)
-		lfp_avg_data = signal_averaging(LFP_filtered_data)
 		
-		del filtered_data, LFP_filtered_data
+		del filtered_data
 		
 		print("Saving cleaned data.")
 		clean_hf5 = tables.open_file(clean_data_dir, 'r+', title = clean_data_dir[-1])
@@ -147,9 +166,6 @@ def data_cleanup(hf5_dir):
 		clean_hf5.create_earray('/','clean_data',atom,(0,) + np.shape(avg_data))
 		avg_data_expanded = np.expand_dims(avg_data[:],0)
 		clean_hf5.root.clean_data.append(avg_data_expanded)
-		clean_hf5.create_earray('/','lfp_data',atom,(0,) + np.shape(lfp_avg_data))
-		lfp_avg_data_expanded = np.expand_dims(lfp_avg_data[:],0)
-		clean_hf5.root.clean_data.append(lfp_avg_data_expanded)
 		clean_hf5.close()
 		
 		print("\n NOTICE: Checkpoint 2 Complete: You can quit the program here, if you like, and come back another time.")

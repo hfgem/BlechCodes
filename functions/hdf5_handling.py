@@ -310,12 +310,14 @@ def sorted_data_import():
 	currdir = os.getcwd()
 	blech_clust_datadir = fd.askdirectory(parent=root, initialdir=currdir, title='Please select the folder where data is stored.')
 	files_in_dir = os.listdir(blech_clust_datadir)
-	for i in range(len(files_in_dir)): #Assumes the correct file is the only .h5 in the directory
+	for i in range(len(files_in_dir)): #Checks for repacked and downsampled .h5 in the directory
 		filename = files_in_dir[i]
 		if filename.split('_')[-1] == 'repacked.h5':
 			blech_clust_hdf5_name = filename
 		elif filename.split('_')[-1] == 'downsampled.h5':
 			downsampled_hf5_name = filename
+		elif filename.split('_')[-1] == 'cleaned.h5':
+			cleaned_hf5_name = filename
 			
 	try:
 		blech_clust_hf5_dir = blech_clust_datadir + '/' + blech_clust_hdf5_name
@@ -327,5 +329,10 @@ def sorted_data_import():
 	except:
 		downsampled_hf5_dir = ''
 		
-	return blech_clust_hf5_dir, downsampled_hf5_dir
+	try:
+		cleaned_hf5_dir = blech_clust_datadir + '/' + cleaned_hf5_name
+	except:
+		cleaned_hf5_dir = ''
+		
+	return blech_clust_hf5_dir, downsampled_hf5_dir, cleaned_hf5_dir
 

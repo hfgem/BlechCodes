@@ -7,7 +7,9 @@ Created on Mon Jan  2 11:04:51 2023
 
 This code is written to import sorted data and perform state-change analyses
 """
-import os, tables
+import os, tables, tqdm
+import tkinter as tk
+import tkinter.filedialog as fd
 file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
 os.chdir(file_path)
 import numpy as np
@@ -128,12 +130,13 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 	print("Time to import data = " + str(round((toc - tic)/60)) + " minutes \n")	
 	return num_neur, all_waveforms, spike_times, num_dig_in, sampling_rate, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes
 
-#_____Get the directory of the hdf5 file_____
-sorted_dir, segment_dir = hf5.sorted_data_import() #Program will automatically quit if file not found in given folder
+#%%_____Get the directory of the hdf5 file_____
+sorted_dir, segment_dir, cleaned_dir = hf5.sorted_data_import() #Program will automatically quit if file not found in given folder
 fig_save_dir = ('/').join(sorted_dir.split('/')[0:-1]) + '/'
 print('\nData Directory:')
 print(fig_save_dir)
 
+#%%
 #_____Import data_____
 num_neur, all_waveforms, spike_times, num_dig_in, sampling_rate, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes = import_data(sorted_dir, segment_dir, fig_save_dir)
 
@@ -163,20 +166,61 @@ deviation_bin_size = 0.05 #bin size for which to compute deviation value (in sec
 fig_buffer_size = 1; #How many seconds in either direction to plot for a deviation event raster
 dev_thresh = 0.95 #Cutoff for high deviation bins to keep
 std_cutoff = 4 #Cutoff of number of standard deviations above mean a deviation must be to be considered a potential replay bin
+partic_neur_cutoff = 0.1 #Cutoff for minimum fraction of neurons present in a deviation
 segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis = pf.FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 																																												  segment_spike_times,num_neur,num_tastes,local_bin_size,
-																																												  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size)
-
+																																												  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size,partic_neur_cutoff)
+#%%
 #_____Plot what the original recording looks like around times of deviation_____
-
-
+if len(cleaned_dir) < 2: #First check if clean data actually exists for this analysis
+	print("No cleaned LFP data found in directory given.")
+	clean_loop = 0
+	while clean_loop == 0:
+		clean_exists = input("Does cleaned data exist elsewhere (y/n)? ")
+		if clean_exists != 'y' and clean_exists != 'n':
+			print("Incorrect response given. Try again.")
+		else:
+			clean_loop = 1
+	if clean_exists == 'y':
+		print("Please select the directory where the cleaned data exists.")
+		clean_loop = 0
+		while clean_loop == 0:
+			root = tk.Tk()
+			currdir = os.getcwd()
+			cleaned_folder_dir = fd.askdirectory(parent=root, initialdir=currdir, title='Please select the folder where data is stored.')
+			files_in_dir = os.listdir(cleaned_folder_dir)
+			for i in range(len(files_in_dir)): #Checks for repacked and downsampled .h5 in the directory
+				filename = files_in_dir[i]
+				if filename.split('_')[-1] == 'cleaned.h5':
+					cleaned_filename = filename
+					print(filename)
+					cleaned_dir = cleaned_folder_dir + '/' + cleaned_filename
+					clean_loop = 1
+			if clean_loop == 0:
+				print("Clean data not found in folder provided. LFP analysis will not proceed.")
+				clean_loop = 1
+else:
+	clean_exists = 'y'
+#Now perform the analysis
+if clean_exists == 'y':
+	#Import LFP data
+	clean_h5 = tables.open_file(cleaned_dir, 'r+', title = cleaned_dir[-1])
+	LFP_data = clean_h5.root.lfp_data[0]
+	wave_sampling_rate = clean_h5.root.sampling_rate[0]
+	#clean_data = clean_h5.root.clean_data[0]
+	clean_h5.close()
+	#time_bouts = np.arange(len(clean_data[0,:]),step=sampling_rate)
+	#combined_waveforms = np.zeros(np.shape(clean_data))
+	#print("Combining LFP and spike waveforms for full range of frequencies.")
+	#for t_i in tqdm.tqdm(range(len(time_bouts)-1)):
+	#	combined_waveforms[:,time_bouts[t_i]:time_bouts[t_i+1]] = LFP_data[:,time_bouts[t_i]:time_bouts[t_i+1]] + clean_data[:,time_bouts[t_i]:time_bouts[t_i+1]]
+	#del clean_data, LFP_data
+	pf.LFP_dev_plots(fig_save_dir,sampling_rate,wave_sampling_rate,segment_names,segment_times,fig_buffer_size,segment_bouts,LFP_data)
 
 
 #NOTES TO SELF:
-#Add storage of deviation counts and stats across intervals for comparison between datasets
 #Normalize counts by length of segment as well
 #Add more bins to histograms
-
 
 #%%	
 #_____Perform changepoint detection on individual trial raster plots_____

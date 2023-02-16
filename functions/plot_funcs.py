@@ -13,6 +13,8 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from scipy import signal
+from scipy.fft import fftshift
 
 def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_times, 
 				 segment_names, segment_times, spike_times, num_neur, num_tastes, 
@@ -205,7 +207,7 @@ def PSTH_plots(fig_save_dir, sampling_rate, num_tastes, num_neur, dig_in_names,
 
 def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 					      segment_spike_times,num_neur,num_tastes,local_bin_size,
-						  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size):
+						  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size,partic_neur_cutoff):
 	"""This function calculates firing rate deviations from local means and
 	generates plots of different experimental segments with points above 1 + 2 
 	deviations highlighted
@@ -220,6 +222,7 @@ def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 		- local_bin_size:
 		- deviation_bin_size:
 		- fig_buffer_size: how many seconds to plot out in either direction of a deviation bin
+		- partic_neur_cutoff
 	OUTPUTS:
 		- 
 	"""
@@ -240,7 +243,9 @@ def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 		deviation_bin_size_import = hf5.root.settings.deviation_bin_size[0]
 		dev_thresh_import = hf5.root.settings.dev_thresh[0]
 		std_cutoff_import = hf5.root.settings.std_cutoff[0]
+		partic_neur_cutoff_import = hf5.root.settings.partic_neur_cutoff[0]
 		#ADD IN CODE HERE TO COMPARE WITH THE GIVEN FUNCTION SETTINGS AND ASK FOR USER INPUT
+		hf5.close()
 	except:
 		hf5 = tables.open_file(hf5_dir, 'w', title = hf5_dir[-1])
 		hf5.create_group('/', 'true_calcs')
@@ -257,6 +262,8 @@ def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 		exec("hf5.root.settings.dev_thresh.append(np.expand_dims(dev_thresh,0))")
 		hf5.create_earray('/settings','std_cutoff',atom,(0,))
 		exec("hf5.root.settings.std_cutoff.append(np.expand_dims(std_cutoff,0))")
+		hf5.create_earray('/settings','partic_neur_cutoff',atom,(0,))
+		exec("hf5.root.settings.partic_neur_cutoff.append(np.expand_dims(partic_neur_cutoff,0))")
 		hf5.close()
 		print('Created nodes in HF5')
 		
@@ -268,7 +275,8 @@ def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 	#the local window are calculated. Those that are above 2 std. from the mean
 	#are marked as being deviating bins
 	segment_devs, segment_dev_frac_ind = dev_calcs(hf5_dir,num_neur,num_segments,segment_names,segment_times,
-												segment_spike_times,deviation_bin_size,local_bin_size,std_cutoff,sampling_rate)
+												segment_spike_times,deviation_bin_size,local_bin_size,
+												std_cutoff,partic_neur_cutoff,sampling_rate)
 		
 	#Plot deviation points for each neuron in each segment
 	deviation_plots(num_segments,num_neur,sampling_rate,segment_names,dev_save_dir,segment_devs,dev_thresh)
@@ -294,14 +302,14 @@ def FR_deviation_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 	null_segment_dev_counts,null_segment_dev_ibis,null_segment_dev_bout_len = null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,
 																						 segment_times,num_null_sets,segment_spike_times,
 																						 deviation_bin_size,local_bin_size,std_cutoff,
-																						 dev_thresh,sampling_rate)
+																						 dev_thresh,partic_neur_cutoff,sampling_rate)
 	
 	#Plot true deviations against null distribution
 	null_v_true_dev_plots(fig_save_dir,segment_names,segment_bouts,segment_bout_lengths,segment_ibis,num_null_sets,null_segment_dev_counts,null_segment_dev_ibis,null_segment_dev_bout_len)
 	
 	return segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis
 		
-def dev_calcs(hf5_dir,num_neur,num_segments,segment_names,segment_times,segment_spike_times,deviation_bin_size,local_bin_size,std_cutoff,sampling_rate):
+def dev_calcs(hf5_dir,num_neur,num_segments,segment_names,segment_times,segment_spike_times,deviation_bin_size,local_bin_size,std_cutoff,partic_neur_cutoff,sampling_rate):
 	"""This function calculates the bins which deviate per segment"""
 	#First try importing previously stored data
 	try:
@@ -312,46 +320,46 @@ def dev_calcs(hf5_dir,num_neur,num_segments,segment_names,segment_times,segment_
 		segment_devs_times = []
 		saved_nodes = hf5.list_nodes('/true_calcs/segment_devs')
 		for s_i in saved_nodes:
-			data_name = s_i.name
-			data_seg = ('-').join(data_name.split('_')[0:-1])
-			data_type = data_name.split('_')[-1]
-			if data_type == 'devs':
-				segment_devs_vals.append(s_i[0,:])
-			elif data_type == 'times':
-				segment_devs_times.append(s_i[0,:])
-			index_match = segment_names.index(data_seg)
-			try:
-				segment_names_import.index(index_match)
-			except:
-				segment_names_import.extend([index_match])
+ 			data_name = s_i.name
+ 			data_seg = ('-').join(data_name.split('_')[0:-1])
+ 			data_type = data_name.split('_')[-1]
+ 			if data_type == 'devs':
+				 segment_devs_vals.append(s_i[0,:])
+ 			elif data_type == 'times':
+				 segment_devs_times.append(s_i[0,:])
+ 			index_match = segment_names.index(data_seg)
+ 			try:
+				 segment_names_import.index(index_match)
+ 			except:
+				 segment_names_import.extend([index_match])
 		segment_devs = []
 		for ind in range(len(segment_names_import)):
-			ind_loc = segment_names_import.index(ind)
-			segment_dev_bit = [segment_devs_times[ind_loc].astype('int'),segment_devs_vals[ind_loc]]
-			segment_devs.append(segment_dev_bit)
+ 			ind_loc = segment_names_import.index(ind)
+ 			segment_dev_bit = [segment_devs_times[ind_loc].astype('int'),segment_devs_vals[ind_loc]]
+ 			segment_devs.append(segment_dev_bit)
 		#segment_dev_frac_ind import
 		segment_names_import = []
 		segment_devs_fracs = []
 		segment_devs_times = []
 		saved_nodes = hf5.list_nodes('/true_calcs/segment_dev_frac_ind')
 		for s_i in saved_nodes:
-			data_name = s_i.name
-			data_seg = ('-').join(data_name.split('_')[0:-1])
-			data_type = data_name.split('_')[-1]
-			if data_type == 'fracs':
-				segment_devs_fracs.append(s_i[0,:])
-			elif data_type == 'times':
-				segment_devs_times.append(s_i[0,:])
-			index_match = segment_names.index(data_seg)
-			try:
-				segment_names_import.index(index_match)
-			except:
-				segment_names_import.extend([index_match])
+ 			data_name = s_i.name
+ 			data_seg = ('-').join(data_name.split('_')[0:-1])
+ 			data_type = data_name.split('_')[-1]
+ 			if data_type == 'fracs':
+				 segment_devs_fracs.append(s_i[0,:])
+ 			elif data_type == 'times':
+				 segment_devs_times.append(s_i[0,:])
+ 			index_match = segment_names.index(data_seg)
+ 			try:
+				 segment_names_import.index(index_match)
+ 			except:
+				 segment_names_import.extend([index_match])
 		segment_dev_frac_ind = []
 		for ind in range(len(segment_names_import)):
-			ind_loc = segment_names_import.index(ind)
-			segment_dev_frac_bit = [segment_devs_fracs[ind_loc],segment_devs_times[ind_loc].astype('int')]
-			segment_dev_frac_ind.append(segment_dev_frac_bit)		
+ 			ind_loc = segment_names_import.index(ind)
+ 			segment_dev_frac_bit = [segment_devs_fracs[ind_loc],segment_devs_times[ind_loc].astype('int')]
+ 			segment_dev_frac_ind.append(segment_dev_frac_bit)		
 		hf5.close()	
 		
 		#Save results to .h5
@@ -359,10 +367,6 @@ def dev_calcs(hf5_dir,num_neur,num_segments,segment_names,segment_times,segment_
 	except:
 		print("DO SOMETHING")
 	
-	a = 0
-	if a == 1: #USER WANTS TO KEEP IMPORTED RESULTS
-		print("DO SOMETHING ^fix above")
-	else: #USER WANTS TO RECALCULATE
 		#Parameters
 		dev_bin_dt = int(np.ceil(deviation_bin_size*sampling_rate))
 		half_dev_bin_dt = int(np.ceil(dev_bin_dt/2))
@@ -380,12 +384,14 @@ def dev_calcs(hf5_dir,num_neur,num_segments,segment_names,segment_times,segment_
 			dev_bin_starts = np.arange(start_segment,end_segment,dev_bin_dt)
 			#First calculate the firing rates of all small bins
 			bin_frs = np.zeros(len(dev_bin_starts)) #Store average firing rate for each bin
+			bin_num_neur = np.zeros(len(dev_bin_starts)) #Store number of neurons firing in each bin
 			for b_i in tqdm.tqdm(range(len(dev_bin_starts))):
 				bin_start_dt = dev_bin_starts[b_i]
 				start_db = max(bin_start_dt - half_dev_bin_dt, start_segment)
 				end_db = min(bin_start_dt + half_dev_bin_dt, end_segment)
 				neur_fc = [len(np.where((np.array(segment_spikes[n_i]) < end_db) & (np.array(segment_spikes[n_i]) > start_db))[0]) for n_i in range(num_neur)]
 				bin_fcs = np.array(neur_fc)
+				bin_num_neur[b_i] = np.array(len(np.where(np.array(neur_fc) > 0)[0]))
 				bin_frs[b_i] = np.sum(bin_fcs,0)/deviation_bin_size
 			#Next slide a larger window over the small bins and calculate deviations for each small bin
 			bin_devs = np.zeros(len(dev_bin_starts)) #storage array for deviations from mean
@@ -399,12 +405,14 @@ def dev_calcs(hf5_dir,num_neur,num_segments,segment_names,segment_times,segment_
 				end_mean_bin_start_ind = np.where(np.abs(dev_bin_starts - end_mean_int) == np.min(np.abs(dev_bin_starts - end_mean_int)))[0][0]
 				#Next calculate mean + std FR for the interval
 				local_dev_bin_fr = bin_frs[np.arange(start_mean_bin_start_ind,end_mean_bin_start_ind)]
+				local_dev_bin_num_neur = bin_num_neur[np.arange(start_mean_bin_start_ind,end_mean_bin_start_ind)]
 				mean_fr = np.mean(local_dev_bin_fr)
 				std_fr = np.std(local_dev_bin_fr)
 				cutoff = mean_fr + std_cutoff*std_fr
 				#Calculate which bins are > mean + 2std
 				dev_neur_fr_locations = local_dev_bin_fr > cutoff*np.ones(np.shape(local_dev_bin_fr))
-				dev_neur_fr_indices = np.where(dev_neur_fr_locations == True)[0]
+				dev_neur_num_locations = local_dev_bin_num_neur > partic_neur_cutoff*num_neur
+				dev_neur_fr_indices = np.where(dev_neur_fr_locations*dev_neur_num_locations == True)[0]
 				bin_devs[start_mean_bin_start_ind + dev_neur_fr_indices] += 1
 				bin_dev_lens[start_mean_bin_start_ind + np.arange(len(dev_neur_fr_locations))] += 1
 			avg_bin_devs = bin_devs/bin_dev_lens
@@ -479,74 +487,116 @@ def deviation_plots(num_segments,num_neur,sampling_rate,segment_names,dev_save_d
 		plt.close(fig_i)
 
 def deviation_bout_ibi_calc_plot(hf5_dir,num_segments,sampling_rate,segment_names,segment_times,num_neur,dev_save_dir,segment_devs,deviation_bin_size):
-	#Calculate the deviation bout size and frequency
-	dev_bin_dt = int(np.ceil(deviation_bin_size*sampling_rate))
-	half_dev_bin_dt = int(np.ceil(dev_bin_dt/2))
-	segment_bouts = []
-	segment_bout_lengths = []
-	segment_ibis = []
-	for i in tqdm.tqdm(range(num_segments)):
-		print("\t Calculating deviation bout sizes and frequencies")
-		seg_dev_save_dir = dev_save_dir + ('_').join(segment_names[i].split(' ')) + '/'
-		if os.path.isdir(seg_dev_save_dir) == False:
-			os.mkdir(seg_dev_save_dir)
-		seg_devs = segment_devs[i][1] #Fraction of deviations for each segment bout
-		seg_times = segment_devs[i][0] #Original data indices of each segment bout
-		dev_inds = np.where(seg_devs > 0)[0] #Indices of deviating segment bouts
-		dev_times = seg_times[dev_inds] #Original data deviation data indices
-		bout_start_inds = np.concatenate((np.array([0]),np.where(np.diff(dev_inds) > 2)[0] + 1))
-		bout_end_inds = np.concatenate((np.where(np.diff(dev_inds) > 2)[0],np.array([-1]))) #>2 because the half-bin leaks into a second bin
-		try:
-			bout_start_times = dev_times[bout_start_inds] - half_dev_bin_dt
-		except:
-			bout_start_times = np.empty(0)
-		try:
-			bout_end_times = dev_times[bout_end_inds] + half_dev_bin_dt
-		except:
-			bout_end_times = np.empty(0)
-		bout_pairs = np.array([bout_start_times,bout_end_times]).T
-		for b_i in range(len(bout_pairs)):
-			if bout_pairs[b_i][0] == bout_pairs[b_i][1]:
-				bout_pairs[b_i][1] += dev_bin_dt
-		segment_bouts.append(bout_pairs)
-		bout_lengths = bout_end_times - bout_start_times + int(deviation_bin_size*sampling_rate) #in samples
-		bout_lengths_s = bout_lengths/sampling_rate #in Hz
-		segment_bout_lengths.append(bout_lengths_s)
-		ibi = (bout_start_times[1:] - bout_end_times[:-1])/sampling_rate
-		segment_ibis.append(ibi)
-		fig_i = plt.figure(figsize = (10,10))
-		plt.subplot(1,2,1)
-		plt.hist(bout_lengths_s)
-		plt.title('Bout lengths (s) histogram')
-		plt.xlabel('Bout length (s)')
-		plt.ylabel('Counts')
-		plt.subplot(1,2,2)
-		plt.hist(ibi)
-		plt.title('Inter-bout-intervals (s) histogram')
-		plt.xlabel('IBI (s)')
-		plt.ylabel('Counts')
-		save_name = ('_').join(segment_names[i].split(' ')) + '_dev_hist.png'
-		fig_i.savefig(seg_dev_save_dir + save_name)
-		plt.close(fig_i)
 	
-	#Save results to .h5
-	print("Saving results to .h5")
-	#Save to .h5
-	hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
-	atom = tables.FloatAtom()
-	hf5.create_group('/true_calcs', 'segment_bouts')
-	for s_i in range(num_segments):
-		seg_name = ('_').join(segment_names[s_i].split('-'))
-		hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_times',atom,(0,)+np.shape(segment_bouts[s_i]))
-		seg_bout_expand = np.expand_dims(segment_bouts[s_i],0)
-		exec("hf5.root.true_calcs.segment_bouts."+f'{seg_name}'+"_times.append(seg_bout_expand)")
-		hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_lengths',atom,(0,)+np.shape(segment_bout_lengths[s_i]))
-		seg_bout_expand = np.expand_dims(segment_bout_lengths[s_i],0)
-		exec("hf5.root.true_calcs.segment_bouts."+f"{seg_name}"+"_lengths.append(seg_bout_expand)")
-		hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_ibis',atom,(0,)+np.shape(segment_ibis[s_i]))
-		seg_bout_expand = np.expand_dims(segment_ibis[s_i],0)
-		exec("hf5.root.true_calcs.segment_bouts."+f"{seg_name}"+"_ibis.append(seg_bout_expand)")
-	hf5.close()
+	try:
+		#import hf5 data
+		hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+		#dev calc imports
+		segment_bouts_import = []
+		segment_bouts_ibis_vals = []
+		segment_bouts_lengths_vals = []
+		segment_bouts_times_vals = []
+		saved_nodes = hf5.list_nodes('/true_calcs/segment_bouts')
+		for s_i in saved_nodes:
+			data_name = s_i.name
+			data_seg = ('-').join(data_name.split('_')[0:-1])
+			data_type = data_name.split('_')[-1]
+			if data_type == 'lengths':
+				segment_bouts_lengths_vals.append(s_i[0,:])
+			elif data_type == 'ibis':
+				segment_bouts_ibis_vals.append(s_i[0,:])
+			elif data_type == 'times':
+				segment_bouts_times_vals.append(s_i[0,:])
+			index_match = segment_names.index(data_seg)
+			try:
+				segment_bouts_import.index(index_match)
+			except:
+				segment_bouts_import.extend([index_match])
+		del saved_nodes, s_i, data_name, data_seg, data_type, index_match
+		#set up storage variables
+		segment_bouts = []
+		segment_bout_lengths = []
+		segment_ibis = []
+		for ind in range(len(segment_bouts_import)):
+			ind_loc = segment_bouts_import.index(ind)
+			segment_bouts.append(segment_bouts_times_vals[ind_loc])
+			segment_bout_lengths.append(segment_bouts_lengths_vals[ind_loc])
+			segment_ibis.append(segment_bouts_ibis_vals[ind_loc])
+		del segment_bouts_import, segment_bouts_ibis_vals, segment_bouts_lengths_vals, segment_bouts_times_vals, ind
+		#Always close the h5 file!
+		hf5.close()	
+		
+		#Save results to .h5
+		print("Imported previously saved deviation calculations.")
+	except:
+		#Calculate the deviation bout size and frequency
+		dev_bin_dt = int(np.ceil(deviation_bin_size*sampling_rate))
+		half_dev_bin_dt = int(np.ceil(dev_bin_dt/2))
+		segment_bouts = []
+		segment_bout_lengths = []
+		segment_ibis = []
+		for i in tqdm.tqdm(range(num_segments)):
+			print("\t Calculating deviation bout sizes and frequencies")
+			seg_dev_save_dir = dev_save_dir + ('_').join(segment_names[i].split(' ')) + '/'
+			if os.path.isdir(seg_dev_save_dir) == False:
+				os.mkdir(seg_dev_save_dir)
+			seg_devs = segment_devs[i][1] #Fraction of deviations for each segment bout
+			seg_times = segment_devs[i][0] #Original data indices of each segment bout
+			dev_inds = np.where(seg_devs > 0)[0] #Indices of deviating segment bouts
+			dev_times = seg_times[dev_inds] #Original data deviation data indices
+			bout_start_inds = np.concatenate((np.array([0]),np.where(np.diff(dev_inds) > 2)[0] + 1))
+			bout_end_inds = np.concatenate((np.where(np.diff(dev_inds) > 2)[0],np.array([-1]))) #>2 because the half-bin leaks into a second bin
+			try:
+				bout_start_times = dev_times[bout_start_inds] - half_dev_bin_dt
+			except:
+				bout_start_times = np.empty(0)
+			try:
+				bout_end_times = dev_times[bout_end_inds] + half_dev_bin_dt
+			except:
+				bout_end_times = np.empty(0)
+			bout_pairs = np.array([bout_start_times,bout_end_times]).T
+			for b_i in range(len(bout_pairs)):
+				if bout_pairs[b_i][0] == bout_pairs[b_i][1]:
+					bout_pairs[b_i][1] += dev_bin_dt
+			segment_bouts.append(bout_pairs)
+			bout_lengths = bout_end_times - bout_start_times + int(deviation_bin_size*sampling_rate) #in samples
+			bout_lengths_s = bout_lengths/sampling_rate #in Hz
+			segment_bout_lengths.append(bout_lengths_s)
+			ibi = (bout_start_times[1:] - bout_end_times[:-1])/sampling_rate
+			segment_ibis.append(ibi)
+			fig_i = plt.figure(figsize = (10,10))
+			plt.subplot(1,2,1)
+			plt.hist(bout_lengths_s)
+			plt.title('Bout lengths (s) histogram')
+			plt.xlabel('Bout length (s)')
+			plt.ylabel('Counts')
+			plt.subplot(1,2,2)
+			plt.hist(ibi)
+			plt.title('Inter-bout-intervals (s) histogram')
+			plt.xlabel('IBI (s)')
+			plt.ylabel('Counts')
+			save_name = ('_').join(segment_names[i].split(' ')) + '_dev_hist.png'
+			fig_i.savefig(seg_dev_save_dir + save_name)
+			plt.close(fig_i)
+		
+		#Save results to .h5
+		print("Saving results to .h5")
+		#Save to .h5
+		hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+		atom = tables.FloatAtom()
+		hf5.create_group('/true_calcs', 'segment_bouts')
+		for s_i in range(num_segments):
+			seg_name = ('_').join(segment_names[s_i].split('-'))
+			hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_times',atom,(0,)+np.shape(segment_bouts[s_i]))
+			seg_bout_expand = np.expand_dims(segment_bouts[s_i],0)
+			exec("hf5.root.true_calcs.segment_bouts."+f'{seg_name}'+"_times.append(seg_bout_expand)")
+			hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_lengths',atom,(0,)+np.shape(segment_bout_lengths[s_i]))
+			seg_bout_expand = np.expand_dims(segment_bout_lengths[s_i],0)
+			exec("hf5.root.true_calcs.segment_bouts."+f"{seg_name}"+"_lengths.append(seg_bout_expand)")
+			hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_ibis',atom,(0,)+np.shape(segment_ibis[s_i]))
+			seg_bout_expand = np.expand_dims(segment_ibis[s_i],0)
+			exec("hf5.root.true_calcs.segment_bouts."+f"{seg_name}"+"_ibis.append(seg_bout_expand)")
+		hf5.close()
 	
 	return segment_bouts, segment_bout_lengths, segment_ibis
 		
@@ -654,16 +704,17 @@ def dev_bin_plots(fig_save_dir,sampling_rate,segment_names,segment_times,
 			plt.figure(figsize=(10,num_neur))
 			plt.xlabel('Time (s)')
 			plt.ylabel('Neuron Index')
-			plt.eventplot(s_t_time)
-			plt.axvline(segment_dev_start_times[d_i]*(1/sampling_rate),color='r')
-			plt.axvline(segment_dev_end_times[d_i]*(1/sampling_rate),color='r')
+			plt.axvline(segment_dev_start_times[d_i]*(1/sampling_rate),color='r',alpha=0.4)
+			plt.axvline(segment_dev_end_times[d_i]*(1/sampling_rate),color='r',alpha=0.4)
+			plt.eventplot(s_t_time,color='b')
 			plt.title('Deviation ' + str(d_i))
 			plt.tight_layout()
-			im_name = 'dev_' + str(d_i) + '.png'
-			plt.savefig(seg_rast_save_dir + im_name)
+			im_name = 'dev_' + str(d_i)
+			plt.savefig(seg_rast_save_dir + im_name + '.png')
+			plt.savefig(seg_rast_save_dir + im_name + '.svg')
 			plt.close()
 		
-def null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_null_sets,segment_spike_times,deviation_bin_size,local_bin_size,std_cutoff,dev_thresh,sampling_rate):
+def null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_null_sets,segment_spike_times,deviation_bin_size,local_bin_size,std_cutoff,dev_thresh,partic_neur_cutoff,sampling_rate):
 	"""This function calculates the number of deviations in time-shuffled data
 	to create null distributions for statistical significance
 	INPUTS:
@@ -712,11 +763,14 @@ def null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_
 			shuffle_spikes_bin = segment_spikes_bin[:, np.random.permutation(segment_spikes_bin.shape[1])]
 			#First calculate the firing rates of all small bins
 			bin_frs = np.zeros(len(dev_bin_starts)) #Store average firing rate for each bin
+			bin_num_neur = np.zeros(len(dev_bin_starts)) #Store number of neurons firing in each bin
 			for b_i in range(len(dev_bin_starts)):
 				bin_start_dt = dev_bin_starts[b_i]
 				start_db = max(bin_start_dt - half_dev_bin_dt, 0)
 				end_db = min(bin_start_dt + half_dev_bin_dt, seg_len)
 				neur_fc = np.sum(shuffle_spikes_bin[:,start_db:end_db],1)
+				bin_fcs = np.array(neur_fc)
+				bin_num_neur[b_i] = np.array(len(np.where(np.array(neur_fc) > 0)[0]))
 				bin_frs[b_i] = np.sum(neur_fc,0)/deviation_bin_size
 			#Next slide a larger window over the small bins and calculate deviations for each small bin
 			bin_devs = np.zeros(len(dev_bin_starts)) #storage array for deviations from mean
@@ -730,12 +784,14 @@ def null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_
 				end_mean_bin_start_ind = np.where(np.abs(dev_bin_starts - end_mean_int) == np.min(np.abs(dev_bin_starts - end_mean_int)))[0][0]
 				#Next calculate mean + std FR for the interval
 				local_dev_bin_fr = bin_frs[np.arange(start_mean_bin_start_ind,end_mean_bin_start_ind)]
+				local_dev_bin_num_neur = bin_num_neur[np.arange(start_mean_bin_start_ind,end_mean_bin_start_ind)]
 				mean_fr = np.mean(local_dev_bin_fr)
 				std_fr = np.std(local_dev_bin_fr)
 				cutoff = mean_fr + std_cutoff*std_fr
 				#Calculate which bins are > mean + std_cutoff*std
 				dev_neur_fr_locations = local_dev_bin_fr > cutoff*np.ones(np.shape(local_dev_bin_fr))
-				dev_neur_fr_indices = np.where(dev_neur_fr_locations == True)[0]
+				dev_neur_num_locations = local_dev_bin_num_neur > partic_neur_cutoff*num_neur
+				dev_neur_fr_indices = np.where(dev_neur_fr_locations*dev_neur_num_locations == True)[0]
 				bin_devs[start_mean_bin_start_ind + dev_neur_fr_indices] += 1
 				bin_dev_lens[start_mean_bin_start_ind + np.arange(len(dev_neur_fr_locations))] += 1
 			avg_bin_devs = bin_devs/bin_dev_lens
@@ -928,4 +984,129 @@ def null_v_true_dev_plots(fig_save_dir,segment_names,segment_bouts,segment_bout_
 	plt.tight_layout()
 	plt.close(fig_counts)
 
-
+def LFP_dev_plots(fig_save_dir,sampling_rate,wave_sampling_rate,segment_names,segment_times,fig_buffer_size,segment_bouts,combined_waveforms):
+	"""This function plots the LFP spectrogram data in intervals surrounding the
+	location of deviations
+	INPUTS:
+		- fig_save_dir: directory to save visualizations
+		- sampling_rate: sampling rate of data
+		- wave_sampling_rate: sampling rate of waveform data
+		- segment_names: names of different experiment segments
+		- segment_times: time indices of different segment starts/ends
+		- fig_buffer_size: how much (in seconds) to plot before and after a deviation event
+		- segment_bouts: bouts of time in which deviations occur
+		- combined_waveforms: 0-3000 Hz range from recording
+	OUTPUTS:
+		- Figures containing spectrograms and waveforms of LFP data surrounding deviation times
+	"""
+	
+	print("\nBeginning individual deviation segment plots.")
+	#Create save directory
+	dev_save_dir = fig_save_dir + 'deviations/'
+	if os.path.isdir(dev_save_dir) == False:
+		os.mkdir(dev_save_dir)
+	#Convert the bin size from time to samples
+	sampling_rate_ratio = wave_sampling_rate/sampling_rate
+	num_segments = len(segment_names)
+	[num_neur,num_time] = np.shape(combined_waveforms)
+	local_bin_dt = int(np.ceil(fig_buffer_size*sampling_rate))
+	half_local_bin_dt = int(np.ceil(local_bin_dt/2))
+	spect_NFFT = int(sampling_rate*0.05)  # 10ms window
+	spect_overlap = 20
+	max_recording_time = len(combined_waveforms[0,:])/sampling_rate_ratio
+	#Run through deviation times by segment and plot rasters
+	for s_i in range(num_segments):
+		print("\nGrabbing waveforms for segment " + segment_names[s_i])
+		seg_dev_save_dir = dev_save_dir + ('_').join(segment_names[s_i].split(' ')) + '/'
+		if os.path.isdir(seg_dev_save_dir) == False:
+			os.mkdir(seg_dev_save_dir)
+		seg_wav_save_dir = seg_dev_save_dir + 'dev_waveforms/'
+		if os.path.isdir(seg_wav_save_dir) == False:
+			os.mkdir(seg_wav_save_dir)
+		seg_spect_save_dir = seg_dev_save_dir + 'dev_spectrograms/'
+		if os.path.isdir(seg_spect_save_dir) == False:
+			os.mkdir(seg_spect_save_dir)
+		segment_dev_start_times = segment_bouts[s_i][:,0]
+		segment_dev_end_times = segment_bouts[s_i][:,1]
+		spect_f = []
+		spect_dev_t = []
+		for d_i in tqdm.tqdm(range(len(segment_dev_start_times))):
+			min_time = int(max(segment_dev_start_times[d_i] - half_local_bin_dt,0))
+			max_time = int(min(segment_dev_end_times[d_i] + half_local_bin_dt,max_recording_time))
+			dev_start_ind = segment_dev_start_times[d_i] - min_time
+			dev_start_time = dev_start_ind/sampling_rate
+			len_dev = (segment_dev_end_times[d_i] - segment_dev_start_times[d_i])
+			len_dev_time = len_dev/sampling_rate
+			dev_waveforms = combined_waveforms[:,int(min_time*sampling_rate_ratio):int(max_time*sampling_rate_ratio)]
+			avg_waveform = np.mean(dev_waveforms,0)
+			#Plot segment deviation raster
+			plt.figure(figsize=(10,num_neur))
+			plt.xlabel('Time (s)')
+			plt.ylabel('Neuron Index')
+			for n_i in range(num_neur):
+				plt.subplot(num_neur,1,n_i+1)
+				plt.plot((1/sampling_rate)*np.arange(min_time*sampling_rate_ratio,max_time*sampling_rate_ratio),dev_waveforms[n_i,:])
+				plt.axvline((1/sampling_rate)*(min_time + dev_start_ind)*sampling_rate_ratio,color='r')
+				plt.axvline((1/sampling_rate)*(min_time + dev_start_ind + len_dev)*sampling_rate_ratio,color='r')
+			plt.suptitle('Deviation ' + str(d_i))
+			plt.tight_layout()
+			im_name = 'dev_' + str(d_i) + '.png'
+			plt.savefig(seg_wav_save_dir + im_name)
+			plt.close()
+			#Plot LFP spectrogram
+			plt.figure(figsize=(num_neur,num_neur))
+			f, t, Sxx = signal.spectrogram(avg_waveform, wave_sampling_rate, nfft=spect_NFFT, noverlap=spect_overlap)
+			max_freqs = [f[np.argmax(Sxx[:,i])] for i in range(len(t))]
+			spect_f.append(max_freqs)
+			start_dev_int = (1/sampling_rate)*(min_time + dev_start_ind)*sampling_rate_ratio
+			end_dev_int = (1/sampling_rate)*(min_time + dev_start_ind + len_dev)*sampling_rate_ratio
+			ind_plot = np.where(f < 300)[0]
+			plt.subplot(1,2,1)
+			plt.plot((1/sampling_rate)*np.arange(min_time*sampling_rate_ratio,max_time*sampling_rate_ratio),avg_waveform)
+			plt.axvline(start_dev_int,color='r')
+			plt.axvline(end_dev_int,color='r')
+			plt.title('Average Waveform')
+			plt.subplot(1,2,2)
+			plt.pcolormesh(t, f[ind_plot], Sxx[ind_plot,:], shading='gouraud')
+			plt.ylabel('Frequency [Hz]')
+			plt.xlabel('Time [sec]')
+			start_dev_int_t = np.argmin(np.abs(t - dev_start_time))
+			end_dev_int_t = np.argmin(np.abs(t - (dev_start_time + len_dev_time)))
+			spect_dev_t.append([start_dev_int_t,end_dev_int_t])
+			plt.axvline(dev_start_time,color='r')
+			plt.axvline(dev_start_time + len_dev_time,color='r')
+			plt.title('Spectrogram')
+			plt.tight_layout()
+			im_name = 'dev_' + str(d_i) + '.png'
+			plt.savefig(seg_spect_save_dir + im_name)
+			plt.close()
+		#Now look at average spectrogram around the taste delivery interval
+		plt.figure(figsize=(10,10))
+		plt.subplot(1,2,1)
+		for d_i in range(len(segment_dev_start_times)):
+			dev_start_t = int(spect_dev_t[d_i][0])
+			dev_freq_vals = spect_f[d_i]
+			t_vals = np.concatenate(np.arange(-dev_start_t,0),np.arange(len(dev_freq_vals)-dev_start_t))
+			plt.plot(t_vals,dev_freq_vals)
+		plt.axvline(0)
+		plt.title('Dev Start Aligned')
+		plt.xlabel('Aligned time (s)')
+		plt.ylabel('Spectrogram Max Frequency (Hz)')
+		plt.subplot(1,2,2)
+		for d_i in range(len(segment_dev_start_times)):
+			dev_end_t = int(spect_dev_t[d_i][1])
+			dev_freq_vals = spect_f[d_i]
+			t_vals = np.concatenate(np.arange(-dev_end_t,0),np.arange(len(dev_freq_vals)-dev_end_t))
+			plt.plot(t_vals,dev_freq_vals)
+		plt.axvline(0)
+		plt.title('Dev End Aligned')
+		plt.xlabel('Aligned time (s)')
+		plt.ylabel('Spectrogram Max Frequency (Hz)')
+		plt.tight_layout()
+		im_name = 'aligned_max_frequencies'
+		plt.savefig(seg_spect_save_dir + im_name + '.png')
+		plt.savefig(seg_spect_save_dir + im_name + '.svg')
+		plt.close()
+	
+	
+	
