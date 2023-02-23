@@ -236,7 +236,6 @@ def FR_deviation_plots(fig_save_dir,segment_names,segment_times,
 	hf5_dir = dev_save_dir + hdf5_name
 	try:
 		hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
-		sampling_rate_import = hf5.root.settings.sampling_rate[0]
 		local_bin_size_import = hf5.root.settings.local_bin_size[0]
 		deviation_bin_size_import = hf5.root.settings.deviation_bin_size[0]
 		dev_thresh_import = hf5.root.settings.dev_thresh[0]
@@ -727,6 +726,7 @@ def null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_
 		- 
 	
 	"""
+	print("Now calculating Null Deviations")
 	#Parameters
 	dev_bin_dt = int(np.ceil(deviation_bin_size*1000))
 	half_dev_bin_dt = int(np.ceil(dev_bin_dt/2))
@@ -742,12 +742,12 @@ def null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_
 		#Generate arrays of start times for calculating the deviation from the mean
 		start_segment = segment_times[i]
 		end_segment = segment_times[i+1]
-		seg_len = end_segment - start_segment
+		seg_len = int(end_segment - start_segment)
 		dev_bin_starts = np.arange(0,seg_len,dev_bin_dt)
 		#Create a binary array of spiking to shuffle
 		segment_spikes_bin = np.zeros((num_neur,seg_len))
 		for n_i in range(num_neur):
-			n_i_spikes = np.array(segment_spikes[n_i]) - start_segment
+			n_i_spikes = (np.array(segment_spikes[n_i]) - start_segment).astype('int')
 			segment_spikes_bin[n_i,n_i_spikes] = 1
 		#Create storage arrays
 		seg_dev_counts = []
