@@ -18,6 +18,7 @@ import functions.data_processing as dp
 import functions.load_intan_rhd_format.load_intan_rhd_format as rhd
 import functions.plot_funcs as pf
 import functions.dev_calcs as dc
+import functions.seg_compare as sc
 import time
 
 def import_data(sorted_dir, segment_dir, fig_save_dir):
@@ -191,12 +192,16 @@ segment_devs,segment_dev_frac_ind,segment_bouts,segment_bout_lengths,segment_ibi
 #Plot functions [INSERT BELOW]
 				
 #segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis = pf.FR_deviation_plots(fig_save_dir,segment_names,segment_times,
-																																												  segment_spike_times,num_neur,num_tastes,local_bin_size,
+#																																												  segment_spike_times,num_neur,num_tastes,local_bin_size,
+#																																												  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size,partic_neur_cutoff)
 
 #%%
 #_____Grab and plot firing rate distributions and comparisons (by segment)_____
-
-																																												  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size,partic_neur_cutoff)
+sc_save_dir = fig_save_dir + 'Segment_Comparison/'
+if os.path.isdir(sc_save_dir) == False:
+	os.mkdir(sc_save_dir)
+sc.bin_spike_counts(sc_save_dir,segment_spike_times,segment_names,segment_times)
+  
 #%%
 #_____Plot what the original recording looks like around times of deviation_____
 if len(cleaned_dir) < 2: #First check if clean data actually exists for this analysis
