@@ -17,6 +17,8 @@ import functions.hdf5_handling as hf5
 import functions.data_processing as dp
 import functions.load_intan_rhd_format.load_intan_rhd_format as rhd
 import functions.plot_funcs as pf
+import functions.dev_calcs as dc
+import functions.seg_compare as sc
 import time
 
 def import_data(sorted_dir, segment_dir, fig_save_dir):
@@ -172,14 +174,34 @@ PSTH_times, PSTH_taste_deliv_times, tastant_PSTH, avg_tastant_PSTH = pf.PSTH_plo
 #%%
 #_____Grab and plot firing rate deviations from local mean (by segment)_____
 local_bin_size = 30 #bin size for local interval to compute mean firing rate (in seconds)
-deviation_bin_size = 0.05 #bin size for which to compute deviation value (in seconds)
+deviation_bin_size = 0.02 #bin size for which to compute deviation value (in seconds)
 fig_buffer_size = 1; #How many seconds in either direction to plot for a deviation event raster
 dev_thresh = 0.95 #Cutoff for high deviation bins to keep
 std_cutoff = 4 #Cutoff of number of standard deviations above mean a deviation must be to be considered a potential replay bin
 partic_neur_cutoff = 0.1 #Cutoff for minimum fraction of neurons present in a deviation
-segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis = pf.FR_deviation_plots(fig_save_dir,segment_names,segment_times,
-																																												  segment_spike_times,num_neur,num_tastes,local_bin_size,
-																																												  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size,partic_neur_cutoff)
+
+#Calculator functions
+segment_devs,segment_dev_frac_ind,segment_bouts,segment_bout_lengths,segment_ibis,\
+	mean_segment_bout_lengths,std_segment_bout_lengths,mean_segment_ibis,std_segment_ibis,\
+		num_dev_per_seg,dev_per_seg_freq,null_segment_dev_counts,null_segment_dev_ibis,\
+			null_segment_dev_bout_len = dc.FR_dev_calcs(fig_save_dir,segment_names,segment_times,\
+											   segment_spike_times,num_neur,num_tastes,local_bin_size,\
+												   deviation_bin_size,dev_thresh,std_cutoff,\
+													   fig_buffer_size,partic_neur_cutoff)
+				
+#Plot functions [INSERT BELOW]
+				
+#segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis = pf.FR_deviation_plots(fig_save_dir,segment_names,segment_times,
+#																																												  segment_spike_times,num_neur,num_tastes,local_bin_size,
+#																																												  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size,partic_neur_cutoff)
+
+#%%
+#_____Grab and plot firing rate distributions and comparisons (by segment)_____
+sc_save_dir = fig_save_dir + 'Segment_Comparison/'
+if os.path.isdir(sc_save_dir) == False:
+	os.mkdir(sc_save_dir)
+sc.bin_spike_counts(sc_save_dir,segment_spike_times,segment_names,segment_times)
+  
 #%%
 #_____Plot what the original recording looks like around times of deviation_____
 if len(cleaned_dir) < 2: #First check if clean data actually exists for this analysis
