@@ -8,7 +8,7 @@ Created on Mon Feb 20 13:06:17 2023
 This is a collection of functions for calculating and analyzing deviation bins
 """
 
-import os, tqdm, tables
+import os, tqdm, tables, random
 os.environ["OMP_NUM_THREADS"] = "4"
 import numpy as np
 from joblib import Parallel, delayed
@@ -431,13 +431,8 @@ def null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_
 		end_segment = segment_times[i+1]
 		seg_len = int(end_segment - start_segment)
 		dev_bin_starts = np.arange(0,seg_len,dev_bin_dt)
-		#Create a binary array of spiking to shuffle
-		segment_spikes_bin = np.zeros((num_neur,seg_len))
-		for n_i in range(num_neur):
-			n_i_spikes = (np.array(segment_spikes[n_i]) - start_segment).astype('int')
-			segment_spikes_bin[n_i,n_i_spikes] = 1
 		#Calculate values
-		results = Parallel(n_jobs=-1)(shuffle_dev_func(segment_spikes_bin,dev_bin_starts,half_dev_bin_dt,seg_len,deviation_bin_size,
+		results = Parallel(n_jobs=-1)(shuffle_dev_func(segment_spikes,start_segment,end_segment,dev_bin_starts,half_dev_bin_dt,seg_len,deviation_bin_size,
 								 half_local_bin_dt,local_bin_dt,std_cutoff,partic_neur_cutoff,num_neur,dev_thresh) for i in tqdm.tqdm(range(num_null_sets)))
 		#Pull apart results
 		seg_dev_counts, seg_dev_bout_lens, seg_dev_ibis = zip(*results)
@@ -467,18 +462,16 @@ def null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_
 	
 	return [null_segment_dev_counts, null_segment_dev_ibis, null_segment_dev_bout_len]
 
-def shuffle_dev_func(segment_spikes_bin,dev_bin_starts,half_dev_bin_dt,seg_len,deviation_bin_size,
+def shuffle_dev_func(segment_spikes,segment_start_time,segment_end_time,dev_bin_starts,half_dev_bin_dt,seg_len,deviation_bin_size,
 					 half_local_bin_dt,local_bin_dt,std_cutoff,partic_neur_cutoff,num_neur,dev_thresh):
-	#Set up shuffler
-	rng = np.random.default_rng()
 	
-	#Create a segment shuffle keeping sampling bin relationships between neurons
-	#shuffle_spikes_bin = segment_spikes_bin[:, np.random.permutation(segment_spikes_bin.shape[1])]
-	
-	#Create a segment shuffle without maintaing relationships between neurons
-	shuffle_spikes_bin = np.array(segment_spikes_bin)
-	rng.shuffle(segment_spikes_bin, axis=1)
-	
+	#Shuffle spike times
+	true_spike_counts = [len(segment_spikes[n_i]) for n_i in range(num_neur)]
+	#Create binary matrix
+	shuffle_spikes_bin = np.zeros((num_neur,int(segment_end_time - segment_start_time)))
+	for n_i in range(num_neur):
+		fake_spike_times = random.sample(range(segment_start_time,segment_end_time),true_spike_counts[n_i])
+		shuffle_spikes_bin[n_i,fake_spike_times] += 1	
 	#First calculate the firing rates of all small bins
 	bin_frs = np.zeros(len(dev_bin_starts)) #Store average firing rate for each bin
 	bin_num_neur = np.zeros(len(dev_bin_starts)) #Store number of neurons firing in each bin
@@ -534,6 +527,3 @@ def shuffle_dev_func(segment_spikes_bin,dev_bin_starts,half_dev_bin_dt,seg_len,d
 	
 	return result_dict
 
-def dev_correlations():
-	"""This function calculates the correlation between individual deviation bins and taste response intervals"""
-	
