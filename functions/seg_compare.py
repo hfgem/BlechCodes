@@ -9,11 +9,12 @@ This is a collection of functions for calculating and analyzing general
 cross-segment activity changes.
 """
 
-import os, tqdm, itertools
+import os, tqdm, itertools, random
 os.environ["OMP_NUM_THREADS"] = "4"
 from joblib import Parallel, delayed
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm
 import scipy.stats as stats
 from numba import jit
 
@@ -32,6 +33,7 @@ def bin_spike_counts(save_dir,segment_spike_times,segment_names,segment_times):
 	if os.path.isdir(figure_save_dir) == False:
 		os.mkdir(figure_save_dir)
 	#First calculate individual distributions, plot them, and save
+	segment_neur_counts = dict()
 	segment_counts = dict()
 	segment_frs = dict()
 	segment_isis = dict()
@@ -51,16 +53,19 @@ def bin_spike_counts(save_dir,segment_spike_times,segment_names,segment_times):
 			spike_indices = (np.array(segment_spikes[n_i]) - segment_start_time).astype('int')
 			bin_spike[n_i,spike_indices] = 1
 		#Calculate count, fr, isi, and fano factor distributions
+		neur_count_results = dict(calculate_spike_neuron_distribution(bin_spike,bin_sizes[i]) for i in range(len(bin_sizes)))
 		count_results = dict(calculate_spike_count_distribution(bin_spike,bin_sizes[i]) for i in range(len(bin_sizes)))
 		fr_results = dict(calculate_fr_distribution(bin_spike,bin_sizes[i]) for i in range(len(bin_sizes)))
 		isi_results = calculate_isi_distribution(bin_spike)
 		fano_results = calculate_fano_factors(count_results)
 		#Save results to master dictionary
+		segment_neur_counts.update({segment_names[s_i]:neur_count_results})
 		segment_counts.update({segment_names[s_i]:count_results})
 		segment_frs.update({segment_names[s_i]:fr_results})
 		segment_isis.update({segment_names[s_i]:isi_results})
 		segment_fano_factors.update({segment_names[s_i]:fano_results})
 		#Plot spike distributions
+		plot_distributions(neur_count_results,segment_names[s_i],'Neuron Spike Counts',figure_save_dir)
 		plot_distributions(count_results,segment_names[s_i],'Spike Counts',figure_save_dir)
 		plot_distributions(fr_results,segment_names[s_i],'Firing Rates',figure_save_dir)
 		plot_distributions(isi_results,'ISI Distributions' + ' CV = ' + str(round(np.std(isi_results)/np.mean(isi_results),2)),'ISIs (s)',figure_save_dir)
@@ -72,6 +77,11 @@ def bin_spike_counts(save_dir,segment_spike_times,segment_names,segment_times):
 	if os.path.isdir(figure_save_dir) == False:
 		os.mkdir(figure_save_dir)
 	s_i_pairs = list(itertools.combinations(segment_names, 2))
+	print("\tNeurons Spiking Count distributions:")
+	#First calculating for spike counts
+	neur_count_save_dir = figure_save_dir + 'neur_spike_counts/'
+	dist_name = 'Neuron Spike Count'
+	segment_pair_count_calculations = KS_test_pipeline(neur_count_save_dir,dist_name,s_i_pairs,segment_counts)
 	print("\tCount distributions:")
 	#First calculating for spike counts
 	count_save_dir = figure_save_dir + 'spike_counts/'
@@ -90,6 +100,22 @@ def bin_spike_counts(save_dir,segment_spike_times,segment_names,segment_times):
 	single_trend_plots(segment_fano_factors,'Fano Factor',isi_fano_save_dir)
 	
 		
+@jit(forceobj=True)
+def calculate_spike_neuron_distribution(spike_times,bin_size):
+	"""This function calculates the spike count distribution for a given dataset
+	and given bin sizes
+	INPUTS:
+		- spike_times: binary matrix of num_neur x num_time (in ms bins) with 1s where a neuron fires
+		- bin_size: width (in seconds) of bins to calculate the number of spikes in
+	"""
+	bin_dt = int(bin_size*1000)
+	bin_borders = np.arange(0,len(spike_times[0,:]),bin_dt)
+	bin_neur_counts = np.zeros(len(bin_borders)-1)
+	for b_i in range(len(bin_borders)-1):
+		bin_neur_counts[b_i] = int(np.sum(np.sum(spike_times[:,bin_borders[b_i]:bin_borders[b_i+1]],1)>0))
+	
+	return str(bin_size), bin_neur_counts	
+	
 @jit(forceobj=True)
 def calculate_spike_count_distribution(spike_times,bin_size):
 	"""This function calculates the spike count distribution for a given dataset
@@ -336,7 +362,355 @@ def single_trend_plots(segment_trends,trend_name,fig_save_dir):
 	plt.savefig(fig_save_dir + ('_').join(trend_name.split(' ')) + '.png')
 	plt.close()
 
-def seg_compare():
+
+def bin_neur_spike_counts(save_dir,segment_spike_times,segment_names,segment_times,num_thresh,bin_size):
+	"""This function calculates the number of neurons spiking in a bin for each
+	segment, and compares different related calculations across segments"""
+	
+	bin_dt = int(bin_size*1000)
+	
+	print("Calculating High Neuron Spike Count Bins")
+	neur_count_results = high_bins(segment_spike_times,segment_times,bin_size,num_thresh)
+	
+	num_null = 50
+	print("Calculating Null Distribution Spike Count Bins")
+	null_neur_count_results_separate = null_high_bins(num_null,segment_spike_times,segment_times,bin_size,num_thresh)
+	null_neur_count_results = null_results_recombined(null_neur_count_results_separate, segment_times)
+	
+	print("Calculating Bin Start/End Times")
+	neur_bout_times = high_bin_times(segment_names,neur_count_results,bin_dt)
+	null_neur_bout_times_separate = [high_bin_times(segment_names,null_neur_count_results_separate[n_n],bin_dt) for n_n in range(num_null)]
+	
+	print("Calculating High Neuron Bin Lengths")
+	neur_bout_lengths = high_bin_lengths(segment_names,neur_count_results,bin_dt)
+	null_neur_bout_lengths = high_bin_lengths(segment_names,null_neur_count_results,bin_dt)
+	null_neur_bout_lengths_separate = [high_bin_lengths(segment_names,null_neur_count_results_separate[n_n],bin_dt) for n_n in range(num_null)]
+	
+	print("Plotting Neuron Bin Length Distributions")
+	plot_name = 'True Data'
+	plot_indiv_seg_high_length_dist(save_dir,plot_name,segment_names,neur_count_results,bin_dt)
+	plot_name = 'Null Data'
+	plot_indiv_seg_high_length_dist(save_dir,plot_name,segment_names,null_neur_count_results,bin_dt)
+	
+	print("Plotting Neuron Bin Length Distributions x Segments")
+	plot_name = 'True Data'
+	plot_cross_seg_length_dist(save_dir,plot_name,num_thresh,segment_names,neur_bout_lengths)
+	plot_name = 'Example Null Data'
+	plot_cross_seg_length_dist(save_dir,plot_name,num_thresh,segment_names,null_neur_bout_lengths_separate[0])
+	
+	print("Plotting Bout Count Trends x Segments")
+	plot_name = 'True Data'
+	plot_bout_count_trends(save_dir,plot_name,segment_names,segment_times,neur_bout_lengths)
+	plot_name = 'Example Null Data'
+	plot_bout_count_trends(save_dir,plot_name,segment_names,segment_times,null_neur_bout_lengths_separate[0])
+	
+	print("Plotting Bout Count Trends True x Null")
+	plot_name = 'True x Null Data'
+	plot_bout_count_trends_truexnull(save_dir,plot_name,segment_names,segment_times,neur_bout_lengths,null_neur_bout_lengths_separate)
+
+@jit(forceobj=True)	
+def high_bins(segment_spike_times,segment_times,bin_size,num_thresh):
+	"""This function calculates bins of time that have the number of neurons 
+	spiking above some given threshold"""
+	bin_dt = int(np.ceil(bin_size*1000)) #Convert from seconds to ms = dt
+	num_seg = len(segment_spike_times)
+	seg_high_bins = []
+	for s_i in tqdm.tqdm(range(num_seg)):
+		segment_spikes = segment_spike_times[s_i]
+		num_neur = len(segment_spikes)
+		seg_len = int(segment_times[s_i+1]-segment_times[s_i])
+		#Create binary spike array
+		bin_spikes = np.zeros((num_neur,seg_len))
+		for n_i in range(num_neur):
+			neur_spike_times = list((np.array(segment_spikes[n_i]) - segment_times[s_i]).astype('int'))
+			bin_spikes[n_i,neur_spike_times] += 1
+		#Sweep array in bins searching for those with the number of neurons >= num_thresh
+		bin_counts = [np.sum(np.sum(bin_spikes[:,b_i:b_i+bin_dt],1)>0) for b_i in range(seg_len-bin_dt)]
+		high_bins = dict()
+		for t_i in num_thresh:
+			high_bins.update({str(t_i): (np.array(bin_counts) >= t_i).astype('int')})
+		seg_high_bins.append(high_bins)
+	
+	return seg_high_bins
+
+@jit(forceobj=True)
+def null_high_bins(num_null,segment_spike_times,segment_times,bin_size,num_thresh):
+	"""This function calculates the numbers of high bins per high_bins() for 
+	shufled data to find null distribution calculation.
+	"""
+	num_seg = len(segment_times) - 1
+	null_results = []
+	for n_n in tqdm.tqdm(range(num_null)):
+		shuffled_spike_times = []
+		for s_i in range(num_seg):
+			num_neur = len(segment_spike_times[s_i])
+			segment_start_time = int(segment_times[s_i])
+			segment_end_time = int(segment_times[s_i+1])
+			true_spike_counts = [len(segment_spike_times[s_i][n_i]) for n_i in range(num_neur)]
+			fake_spike_times = [random.sample(range(segment_start_time,segment_end_time),true_spike_counts[n_i]) for n_i in range(num_neur)]
+			shuffled_spike_times.append(fake_spike_times)
+		#Now calculate the high bin counts
+		shuffled_count_results = high_bins(shuffled_spike_times,segment_times,bin_size,num_thresh)
+		null_results.append(shuffled_count_results)
+	del n_n, shuffled_spike_times, segment_start_time, segment_end_time, true_spike_counts, fake_spike_times, shuffled_count_results
+	
+	return null_results
+
+@jit(forceobj=True)
+def null_results_recombined(null_results, segment_times):
+	#Reformat null results into same format as regular results
+	num_seg = len(segment_times) - 1
+	num_null = len(null_results)
+	null_results_combined = []
+	for s_i in range(num_seg):
+		seg_dict = dict()
+		for n_n in range(num_null):
+			new_vals = null_results[n_n][s_i]
+			if n_n == 0:
+				for key in new_vals:
+					seg_dict.update({key:new_vals[key]})
+			else:
+				for key in new_vals:
+					current_vals = seg_dict[key]
+					seg_dict.update({key:np.concatenate((current_vals,new_vals[key]))})
+		null_results_combined.append(seg_dict)
+	del s_i, seg_dict, n_n, new_vals, key, current_vals
+	
+	return null_results_combined
+	
+@jit(forceobj=True)
+def high_bin_times(segment_names,count_results,bin_dt):
+	segment_bout_times = []
+	for s_i in range(len(segment_names)):
+		seg_name = ('_').join(segment_names[s_i].split(' '))
+		bout_times_dict = dict()
+		for key in count_results[s_i]:
+			high_times = np.where(count_results[s_i][key] > 0)[0]
+			if len(high_times) > 1:
+				time_diffs = np.diff(high_times)
+				bout_start_ind = np.concatenate((np.zeros(1),np.where(time_diffs > 1)[0] + 1)).astype('int')
+				bout_end_ind = np.concatenate((bout_start_ind[1:] - 1,len(high_times)*np.ones(1)-1)).astype('int')
+				bout_times_dict.update({key:[bout_start_ind,bout_end_ind]})
+		#Store bout lengths
+		segment_bout_times.append(bout_times_dict)
+		
+	return segment_bout_times
+
+@jit(forceobj=True)
+def high_bin_lengths(segment_names,count_results,bin_dt):
+	segment_bout_lengths = []
+	for s_i in range(len(segment_names)):
+		seg_name = ('_').join(segment_names[s_i].split(' '))
+		bout_length_dict = dict()
+		for key in count_results[s_i]:
+			high_times = np.where(count_results[s_i][key] > 0)[0]
+			if len(high_times) > 1:
+				time_diffs = np.diff(high_times)
+				bout_start_ind = np.concatenate((np.zeros(1),np.where(time_diffs > 1)[0] + 1)).astype('int')
+				bout_end_ind = np.concatenate((bout_start_ind[1:] - 1,len(high_times)*np.ones(1)-1)).astype('int')
+				bout_lengths = (high_times[bout_end_ind] - high_times[bout_start_ind] + bin_dt)/1000 #In seconds
+				bout_length_dict.update({key:bout_lengths})
+		#Store bout lengths
+		segment_bout_lengths.append(bout_length_dict)
+		
+	return segment_bout_lengths
+
+
+def plot_indiv_seg_high_length_dist(save_dir,plot_name,segment_names,segment_bout_lengths,bin_dt):
+	for s_i in range(len(segment_names)):
+		bout_length_dict = segment_bout_lengths[s_i]
+		seg_name = ('_').join(segment_names[s_i].split(' '))
+		seg_thresh_bin_save_dir = save_dir + seg_name + '/'
+		if os.path.isdir(seg_thresh_bin_save_dir) == False:
+			os.mkdir(seg_thresh_bin_save_dir)
+		plot_save_dir = seg_thresh_bin_save_dir + ('_').join(plot_name.split(' ')) + '/'
+		if os.path.isdir(plot_save_dir) == False:
+			os.mkdir(plot_save_dir)
+		for key in bout_length_dict:
+			bout_lengths = bout_length_dict[key]
+			if len(bout_lengths) > 1:
+				#Generate individual histograms of bin lengths
+				plt.figure(figsize=(5,5))
+				plt.hist(bout_lengths)
+				plt.xlabel('Bout Length (s)')
+				plt.ylabel('Number of Instances')
+				plt.title('Bout Lengths for > ' + key + ' Neurons Firing' + '\n' + 'Total Number of Bins = ' + str(len(bout_lengths)))
+				plt.tight_layout()
+				im_name = 'thresh_' + key + '_neur'
+				plt.savefig(plot_save_dir + im_name + '.png')
+				plt.savefig(plot_save_dir + im_name + '.svg')
+				plt.close()
+		#Generate combined histogram of bin lengths
+		plt.figure(figsize=(5,5))
+		for key in bout_length_dict:
+			plt.hist(bout_length_dict[key],alpha=0.4,label = '>' + key + ' neurons; ' + str(len(bout_length_dict[key])) + ' bouts')
+		plt.legend()
+		plt.xlabel('Bout Length (s)')
+		plt.ylabel('Number of Instances')
+		plt.title('Bout Lengths For Different Neuron Firing Cutoffs')
+		plt.tight_layout()
+		im_name = 'combined_thresh' + '_' + ('_').join(plot_name.split(' '))
+		plt.savefig(seg_thresh_bin_save_dir + im_name + '.png')
+		plt.savefig(seg_thresh_bin_save_dir + im_name + '.svg')
+		plt.close()
+	del s_i, seg_name, seg_thresh_bin_save_dir, bout_length_dict, key, bout_lengths, im_name
+	
+	return segment_bout_lengths
+	
+
+def plot_cross_seg_length_dist(save_dir,plot_name,num_thresh,segment_names,bout_lengths):
+	#Plot the bout length distributions by cutoff trend across segments
+	for n_i in num_thresh:
+		try:
+			plt.figure(figsize=(5,5))
+			for s_i in range(len(segment_names)):
+				plt.hist(bout_lengths[s_i][str(n_i)],alpha=0.4,label=segment_names[s_i])
+			plt.legend()
+			plt.xlabel('Bout Length (s)')
+			plt.ylabel('Number of Instances')
+			plt.title('Bout Lengths for > ' + str(n_i) + ' Neurons Firing')
+			plt.tight_layout()
+			im_name = 'thresh_' + str(n_i) + '_lengths' + '_' + ('_').join(plot_name.split(' '))
+			plt.savefig(save_dir + im_name + '.png')
+			plt.savefig(save_dir + im_name + '.svg')
+			plt.close()	
+		except:
+			print("Could not plot for num = " + str(n_i))
+	del n_i, s_i, im_name
+
+
+def plot_bout_count_trends(save_dir,plot_name,segment_names,segment_times,bout_lengths):
+	"""This function plots the number of bouts by cutoff for each segment"""
+	#Plot the number of bouts by cutoff trend for each segment
+	plt.figure(figsize=(5,5))
+	for s_i in range(len(segment_names)):
+		segment_bouts = bout_lengths[s_i]
+		segment_bout_counts = []
+		for key in segment_bouts:
+			segment_bout_counts.append([int(key),len(segment_bouts[key])])
+		segment_bout_counts = np.array(segment_bout_counts).T
+		plt.plot(segment_bout_counts[0,:],segment_bout_counts[1,:],label=segment_names[s_i])
+	plt.legend()
+	plt.xlabel('Neuron Count Cutoff')
+	plt.ylabel('Number of Bouts')
+	plt.title('Number of Bouts by Cutoff per Segment')
+	plt.tight_layout()
+	im_name = 'bouts_by_cutoff' + '_' + ('_').join(plot_name.split(' '))
+	plt.savefig(save_dir + im_name + '.png')
+	plt.savefig(save_dir  + im_name + '.svg')
+	plt.close()
+	del s_i, segment_bouts, segment_bout_counts, key, im_name
+	#Plot the number of bouts by cutoff trend for each segment normalized by length
+	plt.figure(figsize=(5,5))
+	for s_i in range(len(segment_names)):
+		segment_bouts = bout_lengths[s_i]
+		segment_length = (segment_times[s_i+1] - segment_times[s_i])/1000
+		segment_bout_counts = []
+		for key in segment_bouts:
+			segment_bout_counts.append([int(key),len(segment_bouts[key])/segment_length])
+		segment_bout_counts = np.array(segment_bout_counts).T
+		plt.plot(segment_bout_counts[0,:],segment_bout_counts[1,:],label=segment_names[s_i])
+	plt.legend()
+	plt.xlabel('Neuron Count Cutoff')
+	plt.ylabel('Bouts/Second')
+	plt.title('Bouts/Second by Cutoff per Segment')
+	plt.tight_layout()
+	im_name = 'bouts_per_second_by_cutoff' + '_' + ('_').join(plot_name.split(' '))
+	plt.savefig(save_dir + im_name + '.png')
+	plt.savefig(save_dir + im_name + '.svg')
+	plt.close()
+	del s_i, segment_bouts, segment_length, segment_bout_counts, key, im_name
+
+
+def plot_bout_count_trends_truexnull(save_dir,plot_name,segment_names,segment_times,true_bout_lengths,null_bout_lengths):
+	"""This function plots the number of bouts by cutoff for each segment"""
+	#Set up plot colors
+	num_segments = len(segment_names)
+	num_null = len(null_bout_lengths)
+	cm_subsection = np.linspace(0,1,num_segments)
+	cmap = [cm.gist_rainbow(x) for x in cm_subsection] #Color maps for each segment
+	#Save calculations for separate plots
+	true_bout_counts = []
+	null_bout_counts_mean = []
+	null_bout_counts_std = []
+	#Plot the number of bouts by cutoff trend for each segment
+	plt.figure(figsize=(5,5))
+	for s_i in range(num_segments):
+		segment_length = (segment_times[s_i+1] - segment_times[s_i])/1000 #Segment length in seconds for normalization
+		#Calculate and plot true segment counts
+		true_segment_bouts = true_bout_lengths[s_i]
+		true_segment_bout_counts = []
+		for key in true_segment_bouts:
+			true_segment_bout_counts.append([int(key),len(true_segment_bouts[key])])
+		true_segment_bout_counts = np.array(true_segment_bout_counts).T
+		true_bout_counts.append(true_segment_bout_counts)
+		plt.plot(true_segment_bout_counts[0,:],true_segment_bout_counts[1,:]/segment_length,color=cmap[s_i],label='True ' + segment_names[s_i])
+		#Calculate and plot null segment count distributions
+		null_segment_bout_counts = dict()
+		for n_n in range(num_null):
+			for key in null_bout_lengths[n_n][s_i]:
+				try:
+					existing_vals = null_segment_bout_counts[key]
+					new_vals = np.array([len(null_bout_lengths[n_n][s_i])])
+					null_segment_bout_counts.update({key: np.concatenate((existing_vals,new_vals))})
+				except:
+					new_vals = np.array([len(null_bout_lengths[n_n][s_i])])
+					null_segment_bout_counts.update({key: new_vals})
+		null_segment_bout_counts_mean = []
+		null_segment_bout_counts_std = []
+		for key in null_segment_bout_counts:
+			null_segment_bout_counts_mean.append([int(key),np.mean(null_segment_bout_counts[key])])
+			null_segment_bout_counts_std.append([int(key),np.std(null_segment_bout_counts[key])])
+		null_segment_bout_counts_mean = np.array(null_segment_bout_counts_mean).T
+		null_bout_counts_mean.append(null_segment_bout_counts_mean)
+		null_segment_bout_counts_std = np.array(null_segment_bout_counts_std).T
+		null_bout_counts_std.append(null_segment_bout_counts_std)
+		plt.plot(null_segment_bout_counts_mean[0,:], null_segment_bout_counts_mean[1,:]/segment_length,color=cmap[s_i],linestyle='--',label='Null mean ' + segment_names[s_i])
+		plt.fill_between(null_segment_bout_counts_std[0,:], 
+				   (null_segment_bout_counts_mean[1,:]-null_segment_bout_counts_std[1,:])/segment_length, 
+				  (null_segment_bout_counts_mean[1,:]+null_segment_bout_counts_std[1,:])/segment_length,
+				  alpha=0.4,color=cmap[s_i],label='Null std ' + segment_names[s_i])
+	plt.legend()
+	plt.xlabel('Neuron Count Cutoff')
+	plt.ylabel('Number of Bouts/Second')
+	plt.title('Number of Bouts/Second by Cutoff per Segment')
+	plt.tight_layout()
+	im_name = 'norm_bouts_by_cutoff' + '_' + ('_').join(plot_name.split(' '))
+	plt.savefig(save_dir + im_name + '.png')
+	plt.savefig(save_dir  + im_name + '.svg')
+	plt.close()
+	#Now plot for individual segments
+	for s_i in range(num_segments):
+		segment_length = (segment_times[s_i+1] - segment_times[s_i])/1000 #Segment length in seconds for normalization
+		seg_name = segment_names[s_i]
+		seg_thresh_bin_save_dir = save_dir + seg_name + '/'
+		if os.path.isdir(seg_thresh_bin_save_dir) == False:
+			os.mkdir(seg_thresh_bin_save_dir)
+		plot_save_dir = seg_thresh_bin_save_dir + ('_').join(plot_name.split(' ')) + '/'
+		if os.path.isdir(plot_save_dir) == False:
+			os.mkdir(plot_save_dir)
+		plt.figure(figsize=(5,5))
+		plt.plot(true_bout_counts[s_i][0,:],true_bout_counts[s_i][1,:]/segment_length,color=cmap[s_i],label='True ' + segment_names[s_i])
+		plt.plot(null_bout_counts_mean[s_i][0,:], null_bout_counts_mean[s_i][1,:]/segment_length,color=cmap[s_i],linestyle='--',label='Null mean ')
+		plt.fill_between(null_segment_bout_counts_std[0,:], 
+				   (null_bout_counts_mean[s_i][1,:]-null_bout_counts_std[s_i][1,:])/segment_length, 
+				  (null_bout_counts_mean[s_i][1,:]+null_bout_counts_std[s_i][1,:])/segment_length,
+				  alpha=0.4,color=cmap[s_i],label='Null std ')
+		plt.legend()
+		plt.xlabel('Neuron Count Cutoff')
+		plt.ylabel('Number of Bouts/Second')
+		plt.title('Number of Bouts/Second by Cutoff')
+		plt.tight_layout()
+		im_name = 'norm_bouts_by_cutoff' + '_' + ('_').join(seg_name.split(' '))
+		plt.savefig(save_dir + im_name + '.png')
+		plt.savefig(save_dir  + im_name + '.svg')
+		plt.close()
+	del s_i, true_segment_bouts, true_segment_bout_counts, \
+		null_segment_bout_counts, n_n, key, im_name, existing_vals, new_vals, \
+			null_segment_bout_counts_mean, null_segment_bout_counts_std
+
+
+def seg_compare_null():
 	"""This function calculates whether given segments of the experiment are different
 	from each other, by comparing each segment to a null distrbution which shuffles
 	time bins from all given segments randomly"""

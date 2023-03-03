@@ -7,7 +7,7 @@ Created on Mon Jan  2 11:04:51 2023
 
 This code is written to import sorted data and perform state-change analyses
 """
-import os, tables, tqdm
+import os, tables, tqdm, time, random
 import tkinter as tk
 import tkinter.filedialog as fd
 file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
@@ -19,7 +19,8 @@ import functions.load_intan_rhd_format.load_intan_rhd_format as rhd
 import functions.plot_funcs as pf
 import functions.dev_calcs as dc
 import functions.seg_compare as sc
-import time
+import functions.dev_corr_calcs as dcc
+import matplotlib.pyplot as plt
 
 def import_data(sorted_dir, segment_dir, fig_save_dir):
 	"""Import data from .h5 file and grab any missing data through user inputs.
@@ -171,16 +172,16 @@ PSTH_times, PSTH_taste_deliv_times, tastant_PSTH, avg_tastant_PSTH = pf.PSTH_plo
 																				   pre_taste_dt, post_taste_dt, 
 																				   segment_times, spike_times)
 
-#%%
+#%% IN PROGRESS
 #_____Grab and plot firing rate deviations from local mean (by segment)_____
 local_bin_size = 30 #bin size for local interval to compute mean firing rate (in seconds)
-deviation_bin_size = 0.02 #bin size for which to compute deviation value (in seconds)
+deviation_bin_size = 0.05 #bin size for which to compute deviation value (in seconds)
 fig_buffer_size = 1; #How many seconds in either direction to plot for a deviation event raster
 dev_thresh = 0.95 #Cutoff for high deviation bins to keep
 std_cutoff = 4 #Cutoff of number of standard deviations above mean a deviation must be to be considered a potential replay bin
 partic_neur_cutoff = 0.1 #Cutoff for minimum fraction of neurons present in a deviation
 
-#Calculator functions
+#Calculator functions: THESE STILL THROW AN ERROR: USE THE BELOW CODE BLOCK IN THE MEANTIME
 segment_devs,segment_dev_frac_ind,segment_bouts,segment_bout_lengths,segment_ibis,\
 	mean_segment_bout_lengths,std_segment_bout_lengths,mean_segment_ibis,std_segment_ibis,\
 		num_dev_per_seg,dev_per_seg_freq,null_segment_dev_counts,null_segment_dev_ibis,\
@@ -189,19 +190,82 @@ segment_devs,segment_dev_frac_ind,segment_bouts,segment_bout_lengths,segment_ibi
 												   deviation_bin_size,dev_thresh,std_cutoff,\
 													   fig_buffer_size,partic_neur_cutoff)
 				
-#Plot functions [INSERT BELOW]
-				
-#segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths, std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis = pf.FR_deviation_plots(fig_save_dir,segment_names,segment_times,
-#																																												  segment_spike_times,num_neur,num_tastes,local_bin_size,
-#																																												  deviation_bin_size,dev_thresh,std_cutoff,fig_buffer_size,partic_neur_cutoff)
+#Plot functions [INSERT BELOW ONCE WRITTEN]
+
+#%%	
+#_____Grab and plot firing rate deviations from local mean (by segment)_____
+local_bin_size = 30 #bin size for local interval to compute mean firing rate (in seconds)
+deviation_bin_size = 0.05 #bin size for which to compute deviation value (in seconds)
+fig_buffer_size = 1; #How many seconds in either direction to plot for a deviation event raster
+dev_thresh = 0.95 #Cutoff for high deviation bins to keep
+std_cutoff = 4 #Cutoff of number of standard deviations above mean a deviation must be to be considered a potential replay bin
+partic_neur_cutoff = 0.1 #Cutoff for minimum fraction of neurons present in a deviation
+#Create results save directory
+dev_save_dir = fig_save_dir + 'deviations/'
+if os.path.isdir(dev_save_dir) == False:
+	os.mkdir(dev_save_dir)
+
+segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths,\
+	 std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis, null_segment_dev_counts,\
+		 null_segment_dev_ibis, null_segment_dev_bout_len, null_segment_dev_rasters = pf.FR_deviation_plots(dev_save_dir,\
+																		   segment_names,segment_times,\
+																			   segment_spike_times,num_neur,\
+																				   num_tastes,local_bin_size,\
+																					   deviation_bin_size,dev_thresh,\
+																						   std_cutoff,fig_buffer_size,\
+																							   partic_neur_cutoff)
+
+#%%
+#_____Grab and plot bins above a neuron count threshold by different count values_____
+num_thresh = np.arange(2,num_neur)
+bin_size = 0.05 #size of test bin in seconds
+
+thresh_bin_save_dir = fig_save_dir + 'thresholded_deviations/'
+if os.path.isdir(thresh_bin_save_dir) == False:
+	os.mkdir(thresh_bin_save_dir)
+
+sc.bin_neur_spike_counts(thresh_bin_save_dir,segment_spike_times,segment_names,segment_times,num_thresh,bin_size)
+
 
 #%%
 #_____Grab and plot firing rate distributions and comparisons (by segment)_____
 sc_save_dir = fig_save_dir + 'Segment_Comparison/'
 if os.path.isdir(sc_save_dir) == False:
 	os.mkdir(sc_save_dir)
+		
 sc.bin_spike_counts(sc_save_dir,segment_spike_times,segment_names,segment_times)
   
+
+
+#%%
+#_____Calculate cross-correlation between post-taste-delivery data and deviation bins_____
+#Set up parameters
+taste_intervals = [0,200,700,1500]
+dc_save_dir = fig_save_dir + 'Dev_Correlations/'
+if os.path.isdir(dc_save_dir) == False:
+	os.mkdir(dc_save_dir)
+
+#Grab segment rasters
+segment_dev_rasters = []
+for s_i in range(len(segment_names)):
+	#First create a binary segment array
+	segment_spikes = segment_spike_times[s_i]
+	start_segment = segment_times[s_i]
+	end_segment = segment_times[s_i+1]
+	seg_len = int(end_segment - start_segment)
+	segment_bin = np.zeros((num_neur,seg_len))
+	for n_i in range(num_neur):
+		segment_bin[n_i,segment_spikes[n_i]] += 1
+	#Then pull out individual bouts
+	seg_bout_list = segment_bouts[s_i]
+	segment_dev_rasts = []
+	for s_b in range(len(seg_bout_list)):
+		segment_dev_rasts.append(segment_bin[:,seg_bout_list[s_b,0]:seg_bout_list[s_b,1]])
+	segment_dev_rasters.append(segment_dev_rasts)
+	
+dcc.dev_corr(dc_save_dir,segment_dev_rasters,null_segment_dev_rasters,taste_intervals,tastant_spike_times)
+
+
 #%%
 #_____Plot what the original recording looks like around times of deviation_____
 if len(cleaned_dir) < 2: #First check if clean data actually exists for this analysis
