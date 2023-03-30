@@ -56,9 +56,8 @@ else:
 	#^ This only works when run from terminal. In Spyder a window will stay open - don't close it, just press Quit!!
 	del hdf5_name, currdir, root, h_exists
 	
-#NOTE: Separate regions
+#NOTE: Add handling of separate regions
 
-#%%
 if cont_prompt == 'y':
 	cont_prompt_2 = 'y'
 	# Clean the dataset

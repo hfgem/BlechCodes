@@ -432,13 +432,14 @@ def null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_
 		seg_len = int(end_segment - start_segment)
 		dev_bin_starts = np.arange(0,seg_len,dev_bin_dt)
 		#Calculate values
-		results = Parallel(n_jobs=-1)(shuffle_dev_func(segment_spikes,start_segment,end_segment,dev_bin_starts,half_dev_bin_dt,seg_len,deviation_bin_size,
-								 half_local_bin_dt,local_bin_dt,std_cutoff,partic_neur_cutoff,num_neur,dev_thresh) for i in tqdm.tqdm(range(num_null_sets)))
+		results = [shuffle_dev_func(segment_spikes,start_segment,end_segment,dev_bin_starts,half_dev_bin_dt,seg_len,deviation_bin_size,
+								 half_local_bin_dt,local_bin_dt,std_cutoff,partic_neur_cutoff,num_neur,dev_thresh) for i in tqdm.tqdm(range(num_null_sets))]
 		#Pull apart results
 		seg_dev_counts, seg_dev_bout_lens, seg_dev_ibis = zip(*results)
-		null_segment_dev_counts.append([seg_dev_counts])
-		null_segment_dev_ibis.append(seg_dev_ibis)
-		null_segment_dev_bout_len.append(seg_dev_bout_lens)
+		
+		null_segment_dev_counts.append(list(seg_dev_counts))
+		null_segment_dev_ibis.append(list(seg_dev_ibis))
+		null_segment_dev_bout_len.append(list(seg_dev_bout_lens))
 	
 	#Save results to .h5
 	print("Saving results to .h5")
@@ -470,7 +471,7 @@ def shuffle_dev_func(segment_spikes,segment_start_time,segment_end_time,dev_bin_
 	#Create binary matrix
 	shuffle_spikes_bin = np.zeros((num_neur,int(segment_end_time - segment_start_time)))
 	for n_i in range(num_neur):
-		fake_spike_times = random.sample(range(segment_start_time,segment_end_time),true_spike_counts[n_i])
+		fake_spike_times = random.sample(range(0,int(segment_end_time - segment_start_time)),true_spike_counts[n_i])
 		shuffle_spikes_bin[n_i,fake_spike_times] += 1	
 	#First calculate the firing rates of all small bins
 	bin_frs = np.zeros(len(dev_bin_starts)) #Store average firing rate for each bin
@@ -505,7 +506,7 @@ def shuffle_dev_func(segment_spikes,segment_start_time,segment_end_time,dev_bin_
 		bin_devs[start_mean_bin_start_ind + dev_neur_fr_indices] += 1
 		bin_dev_lens[start_mean_bin_start_ind + np.arange(len(dev_neur_fr_locations))] += 1
 	avg_bin_devs = bin_devs/bin_dev_lens
-	seg_dev_count_calc = [len(np.where(avg_bin_devs > dev_thresh)[0])]
+	seg_dev_count_calc = len(np.where(avg_bin_devs > dev_thresh)[0]) #Add brackets if using result_dict below
 	#Calculate bout lengths and ibis
 	dev_inds = np.where(avg_bin_devs > 0)[0] #Indices of deviating segment bouts
 	dev_times = dev_bin_starts[dev_inds] #Original data deviation data indices
@@ -523,7 +524,8 @@ def shuffle_dev_func(segment_spikes,segment_start_time,segment_end_time,dev_bin_
 	seg_dev_bout_lens_calc = list(bout_lengths/1000) #in Hz
 	seg_dev_ibis_calc = list((bout_start_times[1:] - bout_end_times[:-1])/1000) #in seconds
 	
-	result_dict = {'seg_dev_count_calc':seg_dev_count_calc,'seg_dev_bout_lens_calc':seg_dev_bout_lens_calc,'seg_dev_ibis_calc':seg_dev_ibis_calc}
+	#result_dict = {'seg_dev_count_calc':seg_dev_count_calc,'seg_dev_bout_lens_calc':seg_dev_bout_lens_calc,'seg_dev_ibis_calc':seg_dev_ibis_calc}
+	result_array = [seg_dev_count_calc,seg_dev_bout_lens_calc,seg_dev_ibis_calc]
 	
-	return result_dict
+	return result_array #result_dict
 

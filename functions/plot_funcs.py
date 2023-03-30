@@ -336,7 +336,7 @@ def dev_calcs(hf5_dir,num_neur,num_segments,segment_names,segment_times,segment_
 		#Save results to .h5
 		print("Imported previously saved deviation calculations.")
 	except:
-		print("DO SOMETHING")
+		print("Calculating deviations.")
 	
 		#Parameters
 		dev_bin_dt = int(np.ceil(deviation_bin_size*1000))
@@ -432,14 +432,6 @@ def deviation_plots(num_segments,num_neur,segment_names,dev_save_dir,segment_dev
 		fig_i.savefig(seg_dev_save_dir + save_name + '.png')
 		fig_i.savefig(seg_dev_save_dir + save_name + '.svg')
 		plt.close(fig_i)
-# 		fig_i = plt.figure(figsize=((max(dev_times)-min(dev_times))*(1/60),10))
-# 		plt.plot(dev_times,(dev_vals>dev_thresh).astype('uint8'))
-# 		im_name = (' ').join(segment_names[i].split('_'))
-# 		plt.title(im_name + ' strong deviations (>' + str(dev_thresh) + ')')
-# 		save_name = ('_').join(segment_names[i].split(' ')) + '_high_devs'
-# 		fig_i.savefig(seg_dev_save_dir + save_name + '.png')
-# 		fig_i.savefig(seg_dev_save_dir + save_name + '.svg')
-# 		plt.close(fig_i)
 
 def deviation_bout_ibi_calc_plot(hf5_dir,num_segments,segment_names,segment_times,num_neur,dev_save_dir,segment_devs,deviation_bin_size):
 	

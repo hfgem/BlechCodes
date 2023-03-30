@@ -9,7 +9,7 @@ This is a collection of functions for calculating and analyzing general
 cross-segment activity changes.
 """
 
-import os, tqdm, itertools, random
+import os, tqdm, itertools, random, tables, json
 os.environ["OMP_NUM_THREADS"] = "4"
 from joblib import Parallel, delayed
 import numpy as np
@@ -369,17 +369,100 @@ def bin_neur_spike_counts(save_dir,segment_spike_times,segment_names,segment_tim
 	
 	bin_dt = int(bin_size*1000)
 	
+	#Create HDF5 to save results
+	hdf5_name = 'thresh_data.h5'
+	hf5_dir = save_dir + hdf5_name
+	hf5 = tables.open_file(hf5_dir, 'w', title = hf5_dir[-1])
+	hf5.create_group('/', 'true_calcs')
+	hf5.create_group('/', 'null_calcs')
+	hf5.create_group('/', 'settings')
+	atom = tables.FloatAtom()
+	hf5.create_earray('/settings','bin_size',atom,(0,))
+	exec("hf5.root.settings.bin_size.append(np.expand_dims(bin_size,0))")
+	hf5.create_earray('/settings','num_thresh',atom,(0,))
+	exec("hf5.root.settings.num_thresh.append(num_thresh)")
+	hf5.close()
+	print('Created nodes in HF5')
+	
 	print("Calculating High Neuron Spike Count Bins")
-	neur_count_results = high_bins(segment_spike_times,segment_times,bin_size,num_thresh)
+	#Get neur_count_results dictionary
+	try:
+		#Load json data
+		neur_count_results = json.load(save_dir + "neur_count_results.json")
+	except:
+		neur_count_results = high_bins(segment_spike_times,segment_times,bin_size,num_thresh)
+		#Save count dict - NEEDS WORK
+		#for s_i in range(len(segment_names)):
+		#	json_file = json.dumps(neur_count_results[s_i])
+		#	f = open(save_dir + "neur_count_results" + ('_').join(segment_names[s_i].split(' ')) + ".json","w")
+		#	f.write(json_file)
+		#	f.close()
+	#Get list results
+	try:
+		#Load hf5 data
+		hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+		neur_count_seg = []
+		for s_i in range(len(segment_names)):
+			seg_name = ('_').join(('_').join(segment_names[s_i].split(' ')).split('-'))
+			data_imported = exec("hf5.root.true_calcs.neur_counts." + seg_name + "[:]")
+			neur_count_seg.append(data_imported)
+		hf5.close()
+	except:
+		#Reformat count results for storage
+		neur_count_seg = []
+		for s_i in range(len(segment_names)):
+			seg_counts = neur_count_results[s_i]
+			reformat_seg_counts = []
+			for key in seg_counts:
+				reformat_seg_counts.append(seg_counts[key])
+			reformat_seg_counts = np.array(reformat_seg_counts)
+			neur_count_seg.append(reformat_seg_counts)
+		#Save count results
+		hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+		atom = tables.FloatAtom()
+		hf5.create_group('/true_calcs', 'neur_counts')
+		for s_i in range(len(segment_names)):
+			seg_name = ('_').join(('_').join(segment_names[s_i].split(' ')).split('-'))
+			hf5.create_earray('/true_calcs/neur_counts',seg_name,atom,(0,)+np.shape(neur_count_seg[s_i]))
+			exec("hf5.root.true_calcs.neur_counts."+seg_name+".append(np.expand_dims(neur_count_seg[s_i],0))")
+		hf5.close()
 	
 	num_null = 50
 	print("Calculating Null Distribution Spike Count Bins")
 	null_neur_count_results_separate = null_high_bins(num_null,segment_spike_times,segment_times,bin_size,num_thresh)
 	null_neur_count_results = null_results_recombined(null_neur_count_results_separate, segment_times)
+	#TO DO: Add storage of null results
 	
 	print("Calculating Bin Start/End Times")
 	neur_bout_times = high_bin_times(segment_names,neur_count_results,bin_dt)
 	null_neur_bout_times_separate = [high_bin_times(segment_names,null_neur_count_results_separate[n_n],bin_dt) for n_n in range(num_null)]
+	#Reformat bout time results
+	neur_bout_seg_thresh = []
+	neur_bout_seg = []
+	for s_i in range(len(segment_names)):
+		seg_bouts = neur_bout_times[s_i]
+		reformat_seg_thresh = []
+		reformat_seg_bouts = []
+		for key in seg_bouts:
+			reformat_seg_thresh.extend([int(key)])
+			bout_arrays = seg_bouts[key]
+			reformat_seg_bouts.append(np.concatenate((np.expand_dims(bout_arrays[0],0),np.expand_dims(bout_arrays[1],0))))
+		neur_bout_seg.append(reformat_seg_bouts)
+		neur_bout_seg_thresh.append(reformat_seg_thresh)
+		del seg_bouts, reformat_seg_bouts, key, bout_arrays
+	
+	#Save bout times
+	hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+	atom = tables.FloatAtom()
+	hf5.create_group('/true_calcs','neur_bout_times')
+	for s_i in range(len(segment_names)):
+		seg_name = ('_').join(('_').join(segment_names[s_i].split(' ')).split('-'))
+		hf5.create_group('/true_calcs/neur_bout_times/',seg_name)
+		for n_t in range(len(neur_bout_seg_thresh[s_i])):
+			hf5.create_earray('/true_calcs/neur_bout_times/'+seg_name,'thresh_'+str(neur_bout_seg_thresh[s_i][n_t]),atom,(0,)+np.shape(neur_bout_seg[s_i][n_t]))
+			exec("hf5.root.true_calcs.neur_bout_times."+seg_name+".thresh_"+str(neur_bout_seg_thresh[s_i][n_t])+".append(np.expand_dims(neur_bout_seg[s_i][n_t],0))")
+	hf5.close()
+	#TO DO: Add storage of null bout times?
 	
 	print("Calculating High Neuron Bin Lengths")
 	neur_bout_lengths = high_bin_lengths(segment_names,neur_count_results,bin_dt)
@@ -407,6 +490,8 @@ def bin_neur_spike_counts(save_dir,segment_spike_times,segment_names,segment_tim
 	print("Plotting Bout Count Trends True x Null")
 	plot_name = 'True x Null Data'
 	plot_bout_count_trends_truexnull(save_dir,plot_name,segment_names,segment_times,neur_bout_lengths,null_neur_bout_lengths_separate)
+
+	return neur_bout_seg_thresh, neur_bout_seg
 
 @jit(forceobj=True)	
 def high_bins(segment_spike_times,segment_times,bin_size,num_thresh):
@@ -490,7 +575,7 @@ def high_bin_times(segment_names,count_results,bin_dt):
 				time_diffs = np.diff(high_times)
 				bout_start_ind = np.concatenate((np.zeros(1),np.where(time_diffs > 1)[0] + 1)).astype('int')
 				bout_end_ind = np.concatenate((bout_start_ind[1:] - 1,len(high_times)*np.ones(1)-1)).astype('int')
-				bout_times_dict.update({key:[bout_start_ind,bout_end_ind]})
+				bout_times_dict.update({key:[high_times[bout_start_ind],high_times[bout_end_ind]+bin_dt]})
 		#Store bout lengths
 		segment_bout_times.append(bout_times_dict)
 		
