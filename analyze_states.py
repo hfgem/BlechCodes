@@ -57,7 +57,10 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 	spike_times = []
 	i = 0
 	for s_n in sorted_units_node:
-		spike_times.append(list(s_n.times))
+		try:
+			spike_times.append(list(s_n.times[0]))
+		except:
+			spike_times.append(list(s_n.times))
 		i+= 1
 	#Converting spike times to ms timescale
 	spike_times = [np.ceil(np.array(spike_times[i])*ms_conversion) for i in range(len(spike_times))]
@@ -65,17 +68,22 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 	#Grab digital inputs
 	print("\tGrabbing digital input times")
 	dig_in_node = blech_clust_h5.list_nodes('/digital_in')
-	dig_in_names = np.array([d_i.name.split('_')[-1] for d_i in dig_in_node])
+	dig_in_indices = np.array([d_i.name.split('_')[-1] for d_i in dig_in_node])
 	dig_in_ind = []
 	i = 0
-	for d_i in dig_in_names:
+	for d_i in dig_in_indices:
 		try:
 			int(d_i)
 			dig_in_ind.extend([i])
 		except:
 			"not an input - do nothing"
 		i += 1
-	dig_in_data = [list(dig_in_node[d_i]) for d_i in dig_in_ind]
+	del dig_in_indices
+	try:
+		if len(dig_in_node[0][0]):
+			dig_in_data = [list(dig_in_node[d_i][0]) for d_i in dig_in_ind]
+	except:
+		dig_in_data = [list(dig_in_node[d_i]) for d_i in dig_in_ind]
 	num_dig_in = len(dig_in_data)
 	del dig_in_node
 	
@@ -120,13 +128,17 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 			blech_clust_h5.create_earray('/experiment_components','segment_times',atom,(0,))
 			exec("blech_clust_h5.root.experiment_components.segment_times.append(segment_times[:])")
 		except:
-			print("\t\tSegment times previously stored")
+			blech_clust_h5.remove_node('/experiment_components','segment_times')
+			blech_clust_h5.create_earray('/experiment_components','segment_times',atom,(0,))
+			exec("blech_clust_h5.root.experiment_components.segment_times.append(segment_times[:])")
 		atom = tables.Atom.from_dtype(np.dtype('U20'))
 		try:
 			blech_clust_h5.create_earray('/experiment_components','segment_names',atom,(0,))
 			exec("blech_clust_h5.root.experiment_components.segment_names.append(np.array(segment_names))")
 		except:
-			print("\t\tSegment names previously stored")
+			blech_clust_h5.remove_node('/experiment_components','segment_names')
+			blech_clust_h5.create_earray('/experiment_components','segment_names',atom,(0,))
+			exec("blech_clust_h5.root.experiment_components.segment_names.append(np.array(segment_names))")
 		#Convert segment times to ms timescale
 		segment_times = np.ceil(segment_times*ms_conversion)
 		
@@ -224,8 +236,7 @@ thresh_bin_save_dir = fig_save_dir + 'thresholded_deviations/'
 if os.path.isdir(thresh_bin_save_dir) == False:
 	os.mkdir(thresh_bin_save_dir)
 
-sc.bin_neur_spike_counts(thresh_bin_save_dir,segment_spike_times,segment_names,segment_times,num_thresh,bin_size)
-
+neur_bout_seg_thresh, neur_bout_seg = sc.bin_neur_spike_counts(thresh_bin_save_dir,segment_spike_times,segment_names,segment_times,num_thresh,bin_size)
 
 #%%
 #_____Grab and plot firing rate distributions and comparisons (by segment)_____
@@ -236,34 +247,40 @@ if os.path.isdir(sc_save_dir) == False:
 sc.bin_spike_counts(sc_save_dir,segment_spike_times,segment_names,segment_times)
   
 
+#%%
+#_____Calculate cross-correlation between post-taste-delivery data and threshold deviation bins_____
+#Set up parameters
+taste_intervals = [0,200,700,1500] #Must be in milliseconds = sampling rate of data
+taste_interval_names = ['Presence','Identity','Palatability']
+dc_save_dir = fig_save_dir + 'Thresh_Dev_Correlations/'
+if os.path.isdir(dc_save_dir) == False:
+	os.mkdir(dc_save_dir)
+	
+#TEMPORARY WORKAROUND: Select which threshold value to use for this
+thresh_cutoff = int(np.ceil(0.5*num_neur))
+segment_bout_vals = []
+for s_i in range(len(segment_names)):
+	try:
+		ind_cutoff_data = np.where(np.array(neur_bout_seg_thresh[s_i]) == thresh_cutoff)[0][0]
+		segment_bout_vals.append(neur_bout_seg[s_i][ind_cutoff_data])
+	except:
+		print("Cutoff data doesn't exist for segment " + segment_names[s_i])
+		segment_bout_vals.append(np.empty(0))
+	
+dcc.dev_corr(dc_save_dir,segment_spike_times,segment_names,segment_times,segment_bout_vals,
+			 tastant_spike_times, dig_in_names, start_dig_in_times, end_dig_in_times, 
+			 taste_intervals, taste_interval_names)
 
 #%%
-#_____Calculate cross-correlation between post-taste-delivery data and deviation bins_____
+#_____Calculate cross-correlation between post-taste-delivery data and activity deviation bins_____
 #Set up parameters
-taste_intervals = [0,200,700,1500]
+taste_intervals = [0,200,700,1500] #Must be in milliseconds = sampling rate of data
+taste_interval_names = ['Presence','Identity','Palatability']
 dc_save_dir = fig_save_dir + 'Dev_Correlations/'
 if os.path.isdir(dc_save_dir) == False:
 	os.mkdir(dc_save_dir)
 
-#Grab segment rasters
-segment_dev_rasters = []
-for s_i in range(len(segment_names)):
-	#First create a binary segment array
-	segment_spikes = segment_spike_times[s_i]
-	start_segment = segment_times[s_i]
-	end_segment = segment_times[s_i+1]
-	seg_len = int(end_segment - start_segment)
-	segment_bin = np.zeros((num_neur,seg_len))
-	for n_i in range(num_neur):
-		segment_bin[n_i,segment_spikes[n_i]] += 1
-	#Then pull out individual bouts
-	seg_bout_list = segment_bouts[s_i]
-	segment_dev_rasts = []
-	for s_b in range(len(seg_bout_list)):
-		segment_dev_rasts.append(segment_bin[:,seg_bout_list[s_b,0]:seg_bout_list[s_b,1]])
-	segment_dev_rasters.append(segment_dev_rasts)
-	
-dcc.dev_corr(dc_save_dir,segment_dev_rasters,null_segment_dev_rasters,taste_intervals,tastant_spike_times)
+
 
 
 #%%
