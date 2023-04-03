@@ -7,7 +7,7 @@ Created on Mon Jan  2 11:04:51 2023
 
 This code is written to import sorted data and perform state-change analyses
 """
-import os, tables, tqdm, time, random
+import os, tables, tqdm, time, random, csv
 import tkinter as tk
 import tkinter.filedialog as fd
 file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
@@ -17,7 +17,8 @@ import functions.hdf5_handling as hf5
 import functions.data_processing as dp
 import functions.load_intan_rhd_format.load_intan_rhd_format as rhd
 import functions.plot_funcs as pf
-import functions.dev_calcs as dc
+import functions.dev_calcs as dev_calc
+import functions.dev_plots as dev_plot
 import functions.seg_compare as sc
 import functions.dev_corr_calcs as dcc
 import matplotlib.pyplot as plt
@@ -67,25 +68,55 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 	
 	#Grab digital inputs
 	print("\tGrabbing digital input times")
-	dig_in_node = blech_clust_h5.list_nodes('/digital_in')
-	dig_in_indices = np.array([d_i.name.split('_')[-1] for d_i in dig_in_node])
-	dig_in_ind = []
-	i = 0
-	for d_i in dig_in_indices:
+	start_dig_in_times_csv = fig_save_dir + 'start_dig_in_times.csv'
+	end_dig_in_times_csv = fig_save_dir + 'end_dig_in_times.csv'
+	if os.path.isfile(start_dig_in_times_csv):
+		print("\t\tImporting previously saved digital input times")
+		start_dig_in_times = []
+		with open(start_dig_in_times_csv, 'r') as file:
+		    csvreader = csv.reader(file)
+		    for row in csvreader:
+		        start_dig_in_times.append(list(np.array(row).astype('int')))
+		end_dig_in_times = []
+		with open(end_dig_in_times_csv, 'r') as file:
+		    csvreader = csv.reader(file)
+		    for row in csvreader:
+		        end_dig_in_times.append(list(np.array(row).astype('int')))
+		num_tastes = len(start_dig_in_times)
+	else:
+		dig_in_node = blech_clust_h5.list_nodes('/digital_in')
+		dig_in_indices = np.array([d_i.name.split('_')[-1] for d_i in dig_in_node])
+		dig_in_ind = []
+		i = 0
+		for d_i in dig_in_indices:
+			try:
+				int(d_i)
+				dig_in_ind.extend([i])
+			except:
+				"not an input - do nothing"
+			i += 1
+		del dig_in_indices
 		try:
-			int(d_i)
-			dig_in_ind.extend([i])
+			if len(dig_in_node[0][0]):
+				dig_in_data = [list(dig_in_node[d_i][0]) for d_i in dig_in_ind]
 		except:
-			"not an input - do nothing"
-		i += 1
-	del dig_in_indices
-	try:
-		if len(dig_in_node[0][0]):
-			dig_in_data = [list(dig_in_node[d_i][0]) for d_i in dig_in_ind]
-	except:
-		dig_in_data = [list(dig_in_node[d_i]) for d_i in dig_in_ind]
-	num_dig_in = len(dig_in_data)
-	del dig_in_node
+			dig_in_data = [list(dig_in_node[d_i]) for d_i in dig_in_ind]
+		num_dig_in = len(dig_in_data)
+		del dig_in_node
+		#_____Convert dig_in_data to indices of dig_in start and end times_____
+		print("\tConverting digital inputs to free memory")
+		#Again, all are converted to ms timescale
+		start_dig_in_times = [list(np.ceil((np.where(np.diff(np.array(dig_in_data[i])) == 1)[0] + 1)*ms_conversion).astype('int')) for i in range(len(dig_in_data))]	
+		end_dig_in_times = [list(np.ceil((np.where(np.diff(np.array(dig_in_data[i])) == -1)[0] + 1)*ms_conversion).astype('int')) for i in range(len(dig_in_data))]
+		num_tastes = len(start_dig_in_times)
+		del dig_in_data
+		#Store these into csv for import in future instead of full dig_in_data load which takes forever!
+		with open(start_dig_in_times_csv, 'w') as f:
+			write = csv.writer(f,delimiter=',')
+			write.writerows(start_dig_in_times)
+		with open(end_dig_in_times_csv, 'w') as f:
+			write = csv.writer(f,delimiter=',')
+			write.writerows(end_dig_in_times)
 	
 	#Grab dig in names
 	print("\tGrabbing digital input names")
@@ -143,17 +174,10 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 		segment_times = np.ceil(segment_times*ms_conversion)
 		
 	blech_clust_h5.close() #Always close the file
-
-	#_____Convert dig_in_data to indices of dig_in start and end times_____
-	print("\tConverting digital inputs to free memory")
-	#Again, all are converted to ms timescale
-	start_dig_in_times = [list(np.ceil((np.where(np.diff(np.array(dig_in_data[i])) == 1)[0] + 1)*ms_conversion).astype('int')) for i in range(len(dig_in_data))]	
-	end_dig_in_times = [list(np.ceil((np.where(np.diff(np.array(dig_in_data[i])) == -1)[0] + 1)*ms_conversion).astype('int')) for i in range(len(dig_in_data))]
-	num_tastes = len(start_dig_in_times)
-	del dig_in_data
+	
 	toc = time.time()
 	print("Time to import data = " + str(round((toc - tic)/60)) + " minutes \n")	
-	return num_neur, all_waveforms, spike_times, num_dig_in, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes
+	return num_neur, all_waveforms, spike_times, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes
 
 #%%_____Get the directory of the hdf5 file_____
 sorted_dir, segment_dir, cleaned_dir = hf5.sorted_data_import() #Program will automatically quit if file not found in given folder
@@ -163,7 +187,7 @@ print(fig_save_dir)
 
 #%%
 #_____Import data_____
-num_neur, all_waveforms, spike_times, num_dig_in, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes = import_data(sorted_dir, segment_dir, fig_save_dir)
+num_neur, all_waveforms, spike_times, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes = import_data(sorted_dir, segment_dir, fig_save_dir)
 
 #%%
 
@@ -184,7 +208,9 @@ PSTH_times, PSTH_taste_deliv_times, tastant_PSTH, avg_tastant_PSTH = pf.PSTH_plo
 																				   pre_taste_dt, post_taste_dt, 
 																				   segment_times, spike_times)
 
-#%% IN PROGRESS
+#%%
+#For future changes: add user input to asign parameters
+
 #_____Grab and plot firing rate deviations from local mean (by segment)_____
 local_bin_size = 30 #bin size for local interval to compute mean firing rate (in seconds)
 deviation_bin_size = 0.05 #bin size for which to compute deviation value (in seconds)
@@ -192,40 +218,23 @@ fig_buffer_size = 1; #How many seconds in either direction to plot for a deviati
 dev_thresh = 0.95 #Cutoff for high deviation bins to keep
 std_cutoff = 4 #Cutoff of number of standard deviations above mean a deviation must be to be considered a potential replay bin
 partic_neur_cutoff = 0.1 #Cutoff for minimum fraction of neurons present in a deviation
+num_null_sets = 20 #Number of null datasets to create
 
-#Calculator functions: THESE STILL THROW AN ERROR: USE THE BELOW CODE BLOCK IN THE MEANTIME
-segment_devs,segment_dev_frac_ind,segment_bouts,segment_bout_lengths,segment_ibis,\
-	mean_segment_bout_lengths,std_segment_bout_lengths,mean_segment_ibis,std_segment_ibis,\
-		num_dev_per_seg,dev_per_seg_freq,null_segment_dev_counts,null_segment_dev_ibis,\
-			null_segment_dev_bout_len = dc.FR_dev_calcs(fig_save_dir,segment_names,segment_times,\
+#Calculator functions
+dev_save_dir,segment_devs,segment_dev_frac_ind,segment_bouts,segment_bout_lengths,\
+segment_ibis,mean_segment_bout_lengths,std_segment_bout_lengths,mean_segment_ibis,\
+std_segment_ibis,num_dev_per_seg,dev_per_seg_freq,null_segment_dev_counts,\
+null_segment_dev_ibis,null_segment_dev_bout_len = dev_calc.FR_dev_calcs(fig_save_dir,segment_names,segment_times,\
 											   segment_spike_times,num_neur,num_tastes,local_bin_size,\
 												   deviation_bin_size,dev_thresh,std_cutoff,\
-													   fig_buffer_size,partic_neur_cutoff)
+													   fig_buffer_size,partic_neur_cutoff,num_null_sets)
 				
-#Plot functions [INSERT BELOW ONCE WRITTEN]
-
-#%%	
-#_____Grab and plot firing rate deviations from local mean (by segment)_____
-local_bin_size = 30 #bin size for local interval to compute mean firing rate (in seconds)
-deviation_bin_size = 0.05 #bin size for which to compute deviation value (in seconds)
-fig_buffer_size = 1; #How many seconds in either direction to plot for a deviation event raster
-dev_thresh = 0.95 #Cutoff for high deviation bins to keep
-std_cutoff = 4 #Cutoff of number of standard deviations above mean a deviation must be to be considered a potential replay bin
-partic_neur_cutoff = 0.1 #Cutoff for minimum fraction of neurons present in a deviation
-#Create results save directory
-dev_save_dir = fig_save_dir + 'deviations/'
-if os.path.isdir(dev_save_dir) == False:
-	os.mkdir(dev_save_dir)
-
-segment_devs, segment_bouts, segment_bout_lengths, segment_ibis, mean_segment_bout_lengths,\
-	 std_segment_bout_lengths, mean_segment_ibis, std_segment_ibis, null_segment_dev_counts,\
-		 null_segment_dev_ibis, null_segment_dev_bout_len, null_segment_dev_rasters = pf.FR_deviation_plots(dev_save_dir,\
-																		   segment_names,segment_times,\
-																			   segment_spike_times,num_neur,\
-																				   num_tastes,local_bin_size,\
-																					   deviation_bin_size,dev_thresh,\
-																						   std_cutoff,fig_buffer_size,\
-																							   partic_neur_cutoff)
+#Plot functions
+dev_plot.plot_deviations(dev_save_dir, num_neur, segment_names, segment_times, 
+					dev_thresh, segment_devs, segment_bouts, 
+					segment_bout_lengths, segment_ibis, segment_spike_times, 
+					num_null_sets, null_segment_dev_counts, null_segment_dev_ibis,
+					null_segment_dev_bout_len, fig_buffer_size)
 
 #%%
 #_____Grab and plot bins above a neuron count threshold by different count values_____
