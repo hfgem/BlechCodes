@@ -15,7 +15,7 @@ from joblib import Parallel, delayed
 
 def FR_dev_calcs(fig_save_dir,segment_names,segment_times,segment_spike_times,
 				 num_neur,num_tastes,local_bin_size,deviation_bin_size,dev_thresh,
-				 std_cutoff,fig_buffer_size,partic_neur_cutoff):
+				 std_cutoff,fig_buffer_size,partic_neur_cutoff,num_null_sets):
 	"""This is the master function that runs all the other calculator functions"""
 	print("\nBeginning firing rate deviation calculations.")
 	
@@ -44,10 +44,9 @@ def FR_dev_calcs(fig_save_dir,segment_names,segment_times,segment_spike_times,
 	mean_segment_bout_lengths,std_segment_bout_lengths,mean_segment_ibis,std_segment_ibis,num_dev_per_seg,dev_per_seg_freq = mean_std_bout_ibi_calc(num_segments,num_neur,segment_names,segment_times,dev_save_dir,segment_bout_lengths,segment_ibis)
 	
 	#Calculate null distribution deviation bins
-	num_null_sets = 100 #Number of null distribution sets to create for testing deviation significance
 	null_segment_dev_counts,null_segment_dev_ibis,null_segment_dev_bout_len = null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_null_sets,segment_spike_times,deviation_bin_size,local_bin_size,std_cutoff,dev_thresh,partic_neur_cutoff)
 	
-	return segment_devs,segment_dev_frac_ind,segment_bouts,segment_bout_lengths,segment_ibis,mean_segment_bout_lengths,std_segment_bout_lengths,mean_segment_ibis,std_segment_ibis,num_dev_per_seg,dev_per_seg_freq,null_segment_dev_counts,null_segment_dev_ibis,null_segment_dev_bout_len
+	return dev_save_dir,segment_devs,segment_dev_frac_ind,segment_bouts,segment_bout_lengths,segment_ibis,mean_segment_bout_lengths,std_segment_bout_lengths,mean_segment_ibis,std_segment_ibis,num_dev_per_seg,dev_per_seg_freq,null_segment_dev_counts,null_segment_dev_ibis,null_segment_dev_bout_len
 	
 def import_settings(hf5_dir,local_bin_size,deviation_bin_size,dev_thresh,std_cutoff,partic_neur_cutoff):
 	try:
@@ -441,31 +440,33 @@ def null_dev_calc(hf5_dir,num_segments,num_neur,segment_names,segment_times,num_
 		null_segment_dev_ibis.append(list(seg_dev_ibis))
 		null_segment_dev_bout_len.append(list(seg_dev_bout_lens))
 	
+	print("Done calculating null results - .h5 file not saved, code needs work.")
 	#Save results to .h5
-	print("Saving results to .h5")
+	#print("Saving results to .h5")
 	#Save to .h5
-	hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
-	atom = tables.FloatAtom()
-	for s_i in range(num_segments):
-		seg_name = ('_').join(segment_names[s_i].split('-'))
-		hf5.create_earray('/null_calcs',f'{seg_name}_counts',atom,(0,)+np.shape(null_segment_dev_counts[s_i][0]))
-		seg_dev_expand = np.expand_dims(null_segment_dev_counts[s_i][0],0)
-		exec("hf5.root.null_calcs."+f'{seg_name}_counts'+".append(seg_dev_expand)")
-		seg_dev = np.array(null_segment_dev_ibis[s_i])
-		hf5.create_earray('/null_calcs',f'{seg_name}_ibis',atom,(0,)+np.shape(seg_dev))
-		seg_dev_expand = np.expand_dims(seg_dev,0)
-		exec("hf5.root.null_calcs."+f'{seg_name}_ibis'+".append(seg_dev_expand)")
-		seg_dev = np.array(null_segment_dev_bout_len[s_i])
-		hf5.create_earray('/null_calcs',f'{seg_name}_lengths',atom,(0,)+np.shape(seg_dev))
-		seg_dev_expand = np.expand_dims(seg_dev,0)
-		exec("hf5.root.null_calcs."+f'{seg_name}_lengths'+".append(seg_dev_expand)")
-	hf5.close()
+	#hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+	#atom = tables.FloatAtom()
+	#for s_i in range(num_segments):
+	#	seg_name = ('_').join(segment_names[s_i].split('-'))
+	#	hf5.create_earray('/null_calcs',f'{seg_name}_counts',atom,(0,)+np.shape(null_segment_dev_counts[s_i][0]))
+	#	seg_dev_expand = np.expand_dims(null_segment_dev_counts[s_i][0],0)
+	#	exec("hf5.root.null_calcs."+f'{seg_name}_counts'+".append(seg_dev_expand)")
+	#	seg_dev = np.array(null_segment_dev_ibis[s_i])
+	#	hf5.create_earray('/null_calcs',f'{seg_name}_ibis',atom,(0,)+np.shape(seg_dev))
+	#	seg_dev_expand = np.expand_dims(seg_dev,0)
+	#	exec("hf5.root.null_calcs."+f'{seg_name}_ibis'+".append(seg_dev_expand)")
+	#	seg_dev = np.array(null_segment_dev_bout_len[s_i])
+	#	hf5.create_earray('/null_calcs',f'{seg_name}_lengths',atom,(0,)+np.shape(seg_dev))
+	#	seg_dev_expand = np.expand_dims(seg_dev,0)
+	#	exec("hf5.root.null_calcs."+f'{seg_name}_lengths'+".append(seg_dev_expand)")
+	#hf5.close()
 	
 	return [null_segment_dev_counts, null_segment_dev_ibis, null_segment_dev_bout_len]
 
 def shuffle_dev_func(segment_spikes,segment_start_time,segment_end_time,dev_bin_starts,half_dev_bin_dt,seg_len,deviation_bin_size,
 					 half_local_bin_dt,local_bin_dt,std_cutoff,partic_neur_cutoff,num_neur,dev_thresh):
 	
+	np.seterr(divide='ignore', invalid='ignore')
 	#Shuffle spike times
 	true_spike_counts = [len(segment_spikes[n_i]) for n_i in range(num_neur)]
 	#Create binary matrix
