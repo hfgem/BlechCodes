@@ -212,13 +212,13 @@ PSTH_times, PSTH_taste_deliv_times, tastant_PSTH, avg_tastant_PSTH = pf.PSTH_plo
 #For future changes: add user input to asign parameters
 
 #_____Grab and plot firing rate deviations from local mean (by segment)_____
-local_bin_size = 30 #bin size for local interval to compute mean firing rate (in seconds)
+local_bin_size = 20 #bin size for local interval to compute mean firing rate (in seconds)
 deviation_bin_size = 0.05 #bin size for which to compute deviation value (in seconds)
 fig_buffer_size = 1; #How many seconds in either direction to plot for a deviation event raster
 dev_thresh = 0.95 #Cutoff for high deviation bins to keep
 std_cutoff = 4 #Cutoff of number of standard deviations above mean a deviation must be to be considered a potential replay bin
-partic_neur_cutoff = 0.1 #Cutoff for minimum fraction of neurons present in a deviation
-num_null_sets = 20 #Number of null datasets to create
+partic_neur_cutoff = 1/3 #Cutoff for minimum fraction of neurons present in a deviation
+num_null_sets = 100 #Number of null datasets to create
 
 #Calculator functions
 dev_save_dir,segment_devs,segment_dev_frac_ind,segment_bouts,segment_bout_lengths,\
@@ -237,15 +237,25 @@ dev_plot.plot_deviations(dev_save_dir, num_neur, segment_names, segment_times,
 					null_segment_dev_bout_len, fig_buffer_size)
 
 #%%
-#_____Grab and plot bins above a neuron count threshold by different count values_____
-num_thresh = np.arange(2,num_neur)
-bin_size = 0.05 #size of test bin in seconds
+#_____Calculate cross-correlation between post-taste-delivery data and activity deviation bins_____
+#Set up parameters
+taste_intervals = [0,200,750,1500] #Must be in milliseconds = sampling rate of data
+taste_interval_names = ['Presence','Identity','Palatability']
+dc_save_dir = fig_save_dir + 'dev_correlations/'
+if os.path.isdir(dc_save_dir) == False:
+	os.mkdir(dc_save_dir)
 
-thresh_bin_save_dir = fig_save_dir + 'thresholded_deviations/'
-if os.path.isdir(thresh_bin_save_dir) == False:
-	os.mkdir(thresh_bin_save_dir)
+segment_bout_vals = [] #Resave in format of each segment has 2 numpy arrays - 0 index with start indices, 1 index with end indices
+for s_i in range(len(segment_names)):
+	seg_bout_starts = segment_bouts[s_i][:,0].astype('int')
+	seg_bout_ends = segment_bouts[s_i][:,1].astype('int')
+	segment_bout_vals.append([seg_bout_starts.flatten(),seg_bout_ends.flatten()])
 
-neur_bout_seg_thresh, neur_bout_seg = sc.bin_neur_spike_counts(thresh_bin_save_dir,segment_spike_times,segment_names,segment_times,num_thresh,bin_size)
+segment_names_short = segment_names[0:3] #Temporary: to only plot first 3 segments
+segment_times_short = segment_times[0:4] #Temporary: to only plot first 3 segments
+dcc.dev_corr(dc_save_dir,segment_spike_times,segment_names_short,segment_times_short,segment_bout_vals,
+			 tastant_spike_times, dig_in_names, start_dig_in_times, end_dig_in_times, 
+			 taste_intervals, taste_interval_names)
 
 #%%
 #_____Grab and plot firing rate distributions and comparisons (by segment)_____
@@ -257,6 +267,17 @@ sc.bin_spike_counts(sc_save_dir,segment_spike_times,segment_names,segment_times)
   
 
 #%%
+#_____Grab and plot bins above a neuron count threshold by different count values_____
+num_thresh = np.arange(2,num_neur)
+bin_size = 0.05 #size of test bin in seconds
+
+thresh_bin_save_dir = fig_save_dir + 'thresholded_deviations/'
+if os.path.isdir(thresh_bin_save_dir) == False:
+	os.mkdir(thresh_bin_save_dir)
+
+neur_bout_seg_thresh, neur_bout_seg = sc.bin_neur_spike_counts(thresh_bin_save_dir,segment_spike_times,segment_names,segment_times,num_thresh,bin_size)
+
+#%%
 #_____Calculate cross-correlation between post-taste-delivery data and threshold deviation bins_____
 #Set up parameters
 taste_intervals = [0,200,700,1500] #Must be in milliseconds = sampling rate of data
@@ -266,6 +287,7 @@ if os.path.isdir(dc_save_dir) == False:
 	os.mkdir(dc_save_dir)
 	
 #TEMPORARY WORKAROUND: Select which threshold value to use for this
+#NEED TO CHECK: segment_bout_vals should contain original indices, not within-bout indices.
 thresh_cutoff = int(np.ceil(0.5*num_neur))
 segment_bout_vals = []
 for s_i in range(len(segment_names)):
@@ -279,18 +301,6 @@ for s_i in range(len(segment_names)):
 dcc.dev_corr(dc_save_dir,segment_spike_times,segment_names,segment_times,segment_bout_vals,
 			 tastant_spike_times, dig_in_names, start_dig_in_times, end_dig_in_times, 
 			 taste_intervals, taste_interval_names)
-
-#%%
-#_____Calculate cross-correlation between post-taste-delivery data and activity deviation bins_____
-#Set up parameters
-taste_intervals = [0,200,700,1500] #Must be in milliseconds = sampling rate of data
-taste_interval_names = ['Presence','Identity','Palatability']
-dc_save_dir = fig_save_dir + 'Dev_Correlations/'
-if os.path.isdir(dc_save_dir) == False:
-	os.mkdir(dc_save_dir)
-
-
-
 
 #%%
 #_____Plot what the original recording looks like around times of deviation_____

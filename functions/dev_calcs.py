@@ -99,7 +99,7 @@ def import_settings(hf5_dir,local_bin_size,deviation_bin_size,dev_thresh,std_cut
 	
 def keep_func(val_name,import_val,set_val):
 	"""This function asks the user which value to keep out of two"""
-	change = 0
+	change = 1
 	if import_val != set_val:
 		import_loop = 1
 		while import_loop == 1:
@@ -112,7 +112,7 @@ def keep_func(val_name,import_val,set_val):
 				import_loop = 0
 		if keep_import == 'y':
 			set_val = import_val
-			change = 1
+			change = 0
 	return set_val, change
 
 def dev_calcs(hf5_dir,num_neur,num_segments,segment_names,segment_times,segment_spike_times,deviation_bin_size,local_bin_size,std_cutoff,partic_neur_cutoff,any_change):
@@ -237,24 +237,54 @@ def dev_calcs(hf5_dir,num_neur,num_segments,segment_names,segment_times,segment_
 		#Save to .h5
 		hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
 		atom = tables.FloatAtom()
-		hf5.create_group('/true_calcs', 'segment_devs')
+		try:
+			hf5.create_group('/true_calcs', 'segment_devs')
+		except:
+			print("\tGroup segment_devs already exists")
 		for s_i in range(num_segments):
 			seg_name = ('_').join(segment_names[s_i].split('-'))
-			hf5.create_earray('/true_calcs/segment_devs',f'{seg_name}_times',atom,(0,)+np.shape(segment_devs[s_i][0]))
-			seg_dev_expand = np.expand_dims(segment_devs[s_i][0],0)
-			exec("hf5.root.true_calcs.segment_devs."+f'{seg_name}'+"_times.append(seg_dev_expand)")
-			hf5.create_earray('/true_calcs/segment_devs',f'{seg_name}_devs',atom,(0,)+np.shape(segment_devs[s_i][1]))
-			seg_dev_expand = np.expand_dims(segment_devs[s_i][1],0)
-			exec("hf5.root.true_calcs.segment_devs."+f"{seg_name}"+"_devs.append(seg_dev_expand)")
-		hf5.create_group('/true_calcs', 'segment_dev_frac_ind')
+			try:
+				hf5.create_earray('/true_calcs/segment_devs',f'{seg_name}_times',atom,(0,)+np.shape(segment_devs[s_i][0]))
+				seg_dev_expand = np.expand_dims(segment_devs[s_i][0],0)
+				exec("hf5.root.true_calcs.segment_devs."+f'{seg_name}'+"_times.append(seg_dev_expand)")
+			except:
+				hf5.remove_node('/true_calcs/segment_devs',f'{seg_name}_times')
+				hf5.create_earray('/true_calcs/segment_devs',f'{seg_name}_times',atom,(0,)+np.shape(segment_devs[s_i][0]))
+				seg_dev_expand = np.expand_dims(segment_devs[s_i][0],0)
+				exec("hf5.root.true_calcs.segment_devs."+f'{seg_name}'+"_times.append(seg_dev_expand)")
+			try:
+				hf5.create_earray('/true_calcs/segment_devs',f'{seg_name}_devs',atom,(0,)+np.shape(segment_devs[s_i][1]))
+				seg_dev_expand = np.expand_dims(segment_devs[s_i][1],0)
+				exec("hf5.root.true_calcs.segment_devs."+f"{seg_name}"+"_devs.append(seg_dev_expand)")
+			except:
+				hf5.remove_node('/true_calcs/segment_devs',f'{seg_name}_devs')
+				hf5.create_earray('/true_calcs/segment_devs',f'{seg_name}_devs',atom,(0,)+np.shape(segment_devs[s_i][1]))
+				seg_dev_expand = np.expand_dims(segment_devs[s_i][1],0)
+				exec("hf5.root.true_calcs.segment_devs."+f"{seg_name}"+"_devs.append(seg_dev_expand)")
+		try:
+			hf5.create_group('/true_calcs', 'segment_dev_frac_ind')
+		except:
+			print("\tGroup segment_dev_frac_ind already exists")
 		for s_i in range(num_segments):
 			seg_name = ('_').join(segment_names[s_i].split('-'))
-			hf5.create_earray('/true_calcs/segment_dev_frac_ind',f'{seg_name}_fracs',atom,(0,)+np.shape(segment_dev_frac_ind[s_i][0]))
-			seg_dev_expand = np.expand_dims(segment_dev_frac_ind[s_i][0],0)
-			exec("hf5.root.true_calcs.segment_dev_frac_ind."+f'{seg_name}'+"_fracs.append(seg_dev_expand)")
-			hf5.create_earray('/true_calcs/segment_dev_frac_ind',f'{seg_name}_times',atom,(0,)+np.shape(segment_dev_frac_ind[s_i][1]))
-			seg_dev_expand = np.expand_dims(segment_dev_frac_ind[s_i][1],0)
-			exec("hf5.root.true_calcs.segment_dev_frac_ind."+f'{seg_name}'+"_times.append(seg_dev_expand)")
+			try:
+				hf5.create_earray('/true_calcs/segment_dev_frac_ind',f'{seg_name}_fracs',atom,(0,)+np.shape(segment_dev_frac_ind[s_i][0]))
+				seg_dev_expand = np.expand_dims(segment_dev_frac_ind[s_i][0],0)
+				exec("hf5.root.true_calcs.segment_dev_frac_ind."+f'{seg_name}'+"_fracs.append(seg_dev_expand)")
+			except:
+				hf5.remove_node('/true_calcs/segment_dev_frac_ind',f'{seg_name}_fracs')
+				hf5.create_earray('/true_calcs/segment_dev_frac_ind',f'{seg_name}_fracs',atom,(0,)+np.shape(segment_dev_frac_ind[s_i][0]))
+				seg_dev_expand = np.expand_dims(segment_dev_frac_ind[s_i][0],0)
+				exec("hf5.root.true_calcs.segment_dev_frac_ind."+f'{seg_name}'+"_fracs.append(seg_dev_expand)")
+			try:
+				hf5.create_earray('/true_calcs/segment_dev_frac_ind',f'{seg_name}_times',atom,(0,)+np.shape(segment_dev_frac_ind[s_i][1]))
+				seg_dev_expand = np.expand_dims(segment_dev_frac_ind[s_i][1],0)
+				exec("hf5.root.true_calcs.segment_dev_frac_ind."+f'{seg_name}'+"_times.append(seg_dev_expand)")
+			except:
+				hf5.remove_node('/true_calcs/segment_dev_frac_ind',f'{seg_name}_times')
+				hf5.create_earray('/true_calcs/segment_dev_frac_ind',f'{seg_name}_times',atom,(0,)+np.shape(segment_dev_frac_ind[s_i][1]))
+				seg_dev_expand = np.expand_dims(segment_dev_frac_ind[s_i][1],0)
+				exec("hf5.root.true_calcs.segment_dev_frac_ind."+f'{seg_name}'+"_times.append(seg_dev_expand)")	
 		hf5.close()
 	
 	return segment_devs, segment_dev_frac_ind
@@ -352,18 +382,39 @@ def deviation_bout_ibi_calc(hf5_dir,num_segments,segment_names,segment_times,num
 		#Save to .h5
 		hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
 		atom = tables.FloatAtom()
-		hf5.create_group('/true_calcs', 'segment_bouts')
+		try:
+			hf5.create_group('/true_calcs', 'segment_bouts')
+		except:
+			print("\tGroup segment_bouts already exists")
 		for s_i in range(num_segments):
 			seg_name = ('_').join(segment_names[s_i].split('-'))
-			hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_times',atom,(0,)+np.shape(segment_bouts[s_i]))
-			seg_bout_expand = np.expand_dims(segment_bouts[s_i],0)
-			exec("hf5.root.true_calcs.segment_bouts."+f'{seg_name}'+"_times.append(seg_bout_expand)")
-			hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_lengths',atom,(0,)+np.shape(segment_bout_lengths[s_i]))
-			seg_bout_expand = np.expand_dims(segment_bout_lengths[s_i],0)
-			exec("hf5.root.true_calcs.segment_bouts."+f"{seg_name}"+"_lengths.append(seg_bout_expand)")
-			hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_ibis',atom,(0,)+np.shape(segment_ibis[s_i]))
-			seg_bout_expand = np.expand_dims(segment_ibis[s_i],0)
-			exec("hf5.root.true_calcs.segment_bouts."+f"{seg_name}"+"_ibis.append(seg_bout_expand)")
+			try:
+				hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_times',atom,(0,)+np.shape(segment_bouts[s_i]))
+				seg_bout_expand = np.expand_dims(segment_bouts[s_i],0)
+				exec("hf5.root.true_calcs.segment_bouts."+f'{seg_name}'+"_times.append(seg_bout_expand)")
+			except:
+				hf5.remove_node('/true_calcs/segment_bouts',f'{seg_name}_times')
+				hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_times',atom,(0,)+np.shape(segment_bouts[s_i]))
+				seg_bout_expand = np.expand_dims(segment_bouts[s_i],0)
+				exec("hf5.root.true_calcs.segment_bouts."+f'{seg_name}'+"_times.append(seg_bout_expand)")
+			try:
+				hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_lengths',atom,(0,)+np.shape(segment_bout_lengths[s_i]))
+				seg_bout_expand = np.expand_dims(segment_bout_lengths[s_i],0)
+				exec("hf5.root.true_calcs.segment_bouts."+f"{seg_name}"+"_lengths.append(seg_bout_expand)")
+			except:
+				hf5.remove_node('/true_calcs/segment_bouts',f'{seg_name}_lengths')
+				hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_lengths',atom,(0,)+np.shape(segment_bout_lengths[s_i]))
+				seg_bout_expand = np.expand_dims(segment_bout_lengths[s_i],0)
+				exec("hf5.root.true_calcs.segment_bouts."+f"{seg_name}"+"_lengths.append(seg_bout_expand)")
+			try:
+				hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_ibis',atom,(0,)+np.shape(segment_ibis[s_i]))
+				seg_bout_expand = np.expand_dims(segment_ibis[s_i],0)
+				exec("hf5.root.true_calcs.segment_bouts."+f"{seg_name}"+"_ibis.append(seg_bout_expand)")
+			except:
+				hf5.remove_node('/true_calcs/segment_bouts',f'{seg_name}_ibis')
+				hf5.create_earray('/true_calcs/segment_bouts',f'{seg_name}_ibis',atom,(0,)+np.shape(segment_ibis[s_i]))
+				seg_bout_expand = np.expand_dims(segment_ibis[s_i],0)
+				exec("hf5.root.true_calcs.segment_bouts."+f"{seg_name}"+"_ibis.append(seg_bout_expand)")
 		hf5.close()
 	
 	return segment_bouts, segment_bout_lengths, segment_ibis
