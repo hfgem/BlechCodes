@@ -12,6 +12,7 @@ This is a collection of functions for plotting deviation bins
 import tqdm, os
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import cm
 
 def plot_deviations(dev_save_dir, num_neur, segment_names, segment_times, dev_thresh,
 					segment_devs, segment_bouts, segment_bout_lengths, 
@@ -154,7 +155,7 @@ def dev_bin_plots(fig_save_dir,segment_names,segment_times,
 	"""
 	print("\nBeginning individual deviation segment plots.")
 	#Create save directory
-	dev_save_dir = fig_save_dir + 'deviations/'
+	dev_save_dir = fig_save_dir
 	if os.path.isdir(dev_save_dir) == False:
 		os.mkdir(dev_save_dir)
 	#Convert the bin size from time to samples
@@ -199,7 +200,7 @@ def dev_bin_plots(fig_save_dir,segment_names,segment_times,
 			plt.savefig(seg_rast_save_dir + im_name + '.svg')
 			plt.close()
 
-def null_v_true_dev_plots(fig_save_dir,segment_names,segment_bouts,segment_bout_lengths,segment_ibis,num_null_sets,null_segment_dev_counts,null_segment_dev_ibis,null_segment_dev_bout_len):
+def null_v_true_dev_plots(dev_save_dir,segment_names,segment_bouts,segment_bout_lengths,segment_ibis,num_null_sets,null_segment_dev_counts,null_segment_dev_ibis,null_segment_dev_bout_len):
 	"""This function plots histograms of null distribution values and 95th percentile cutoffs against true deviation values
 	INPUTS:
 		- fig_save_dir
@@ -216,7 +217,6 @@ def null_v_true_dev_plots(fig_save_dir,segment_names,segment_bouts,segment_bout_
 	"""
 	num_segments = len(segment_names)
 	#Create save directory
-	dev_save_dir = fig_save_dir + 'deviations/'
 	if os.path.isdir(dev_save_dir) == False:
 		os.mkdir(dev_save_dir)
 	#Go through each segment
@@ -233,9 +233,12 @@ def null_v_true_dev_plots(fig_save_dir,segment_names,segment_bouts,segment_bout_
 		fig_i = plt.figure(figsize=(5,5))
 		seg_true_dev_bout_lens = segment_bout_lengths[s_i]
 		seg_null_dev_bout_lens = null_segment_dev_bout_len[s_i]
+		seg_null_dev_bout_lens_flat = []
+		for s_n_i in range(len(seg_null_dev_bout_lens)):
+			seg_null_dev_bout_lens_flat.extend(seg_null_dev_bout_lens[s_n_i])
 		im_name = (' ').join(segment_names[s_i].split('_'))
 		plt.subplot(1,2,1)
-		plt.hist(seg_null_dev_bout_lens,bins=20,alpha=0.5,color='blue',label='Null Data')
+		plt.hist(seg_null_dev_bout_lens_flat,bins=20,alpha=0.5,color='blue',label='Null Data')
 		plt.axvline(np.mean(seg_true_dev_bout_lens),color='orange',label='Mean of True Data')
 		plt.legend()
 		plt.title(im_name + ' Null Distribution')
@@ -258,9 +261,12 @@ def null_v_true_dev_plots(fig_save_dir,segment_names,segment_bouts,segment_bout_
 		fig_i = plt.figure(figsize=(5,5))
 		seg_true_dev_ibis = segment_ibis[s_i]
 		seg_null_dev_bout_ibis = null_segment_dev_ibis[s_i]
+		seg_null_dev_bout_ibis_flat = []
+		for s_n_i in range(len(seg_null_dev_bout_ibis)):
+			seg_null_dev_bout_lens_flat.extend(seg_null_dev_bout_ibis[s_n_i])
 		im_name = (' ').join(segment_names[s_i].split('_'))
 		plt.subplot(1,2,1)
-		plt.hist(seg_null_dev_bout_ibis,bins=20,alpha=0.5,color='blue',label='Null Data')
+		plt.hist(seg_null_dev_bout_ibis_flat,bins=20,alpha=0.5,color='blue',label='Null Data')
 		plt.axvline(np.mean(seg_true_dev_ibis),color='orange',label='Mean of True Data')
 		plt.legend()
 		plt.title(im_name + ' Null Distribution')
@@ -310,7 +316,10 @@ def null_v_true_dev_plots(fig_save_dir,segment_names,segment_bouts,segment_bout_
 		mean_true = np.mean(seg_true_dev_bout_lens)
 		mean_vals.extend([mean_true])
 		seg_null_dev_bout_lens = null_segment_dev_bout_len[s_i]
-		plt.hist(seg_null_dev_bout_lens,bins=20,color=cmap[s_i],alpha=0.5,label=segment_name + ' null')
+		seg_null_dev_bout_lens_flat = []
+		for s_n_i in range(len(seg_null_dev_bout_lens)):
+			seg_null_dev_bout_lens_flat.extend(seg_null_dev_bout_lens[s_n_i])
+		plt.hist(seg_null_dev_bout_lens_flat,bins=20,color=cmap[s_i],alpha=0.5,label=segment_name + ' null')
 		plt.axvline(mean_true,color=cmap[s_i],label=segment_name + ' mean')
 	plt.xlim((0,max(mean_vals) + 0.25))
 	plt.legend()
@@ -353,7 +362,10 @@ def null_v_true_dev_plots(fig_save_dir,segment_names,segment_bouts,segment_bout_
 		mean_true = np.mean(seg_true_dev_ibis)
 		mean_vals.extend([mean_true])
 		seg_null_dev_bout_ibis = null_segment_dev_ibis[s_i]
-		plt.hist(seg_null_dev_bout_ibis,bins=20,color=cmap[s_i],alpha=0.5,label=segment_name + ' null')
+		seg_null_dev_bout_ibis_flat = []
+		for s_n_i in range(len(seg_null_dev_bout_ibis)):
+			seg_null_dev_bout_lens_flat.extend(seg_null_dev_bout_ibis[s_n_i])
+		plt.hist(seg_null_dev_bout_ibis_flat,bins=20,color=cmap[s_i],alpha=0.5,label=segment_name + ' null')
 		plt.axvline(mean_true,color=cmap[s_i],label=segment_name + ' mean')
 	#plt.xlim((0,max(mean_vals) + 0.25))
 	plt.legend()
