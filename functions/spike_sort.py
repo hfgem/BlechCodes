@@ -112,26 +112,41 @@ def potential_spike_times(data,sampling_rate,dir_save,peak_thresh,clust_type):
 		#Perform a sweeping search using a local larger window bin to grab the 
 		#minimal mean and standard deviation values - use these for find_peaks
 		total_data_points = len(data)
-		window_size = 5*60*sampling_rate
+		window_size = int(5*60*sampling_rate)
 		window_starts = np.arange(0,total_data_points,window_size)
-		mean_val = np.inf
-		std_val = np.inf
+		#Taken from blech_clust.py function clustering.py
+		mean_vals = []
+		threshold_vals = []
 		for w_i in range(len(window_starts)):
 			w_ind = int(window_starts[w_i])
 			data_chunk = data[w_ind:min(w_ind+window_size,total_data_points)]
-			std_chunk = np.std(data_chunk)
-			mean_chunk = np.mean(data_chunk)
-			if std_chunk < std_val:
-				std_val = std_chunk
-			if mean_chunk < mean_val:
-				mean_val = mean_chunk
-		peak_ind = []
-		pos_inds = list(find_peaks(data_chunk,height=mean_val+peak_thresh*std_val)[0])
-		peak_ind.extend(pos_inds)
-		neg_inds = list(find_peaks(-1*data_chunk,height=-1*(mean_val-peak_thresh*std_val))[0])
-		peak_ind.extend(neg_inds)
-		#Reduce to only unique indices
+			m_clip = np.mean(data_chunk)
+			th_clip = peak_thresh*np.median(np.abs(data_chunk)/0.6745)
+			mean_vals.extend([m_clip])
+			threshold_vals.extend([th_clip])
+		m = min(mean_vals)
+		th = min(threshold_vals)	
+		negative = np.where(data <= m-th)[0] 
+		positive = np.where(data >= m+th)[0]
+		# Marking breaks in detected threshold crossings 
+		neg_changes = np.concatenate(([0],np.where(np.diff(negative) > 1)[0]+1))
+		pos_changes = np.concatenate(([0],np.where(np.diff(positive) > 1)[0]+1))
+		
+		# Mark indices to be extracted
+		neg_inds = [(negative[neg_changes[x]],negative[neg_changes[x+1]-1]) \
+				for x in range(len(neg_changes)-1)]
+		pos_inds = [(positive[pos_changes[x]],positive[pos_changes[x+1]-1]) \
+				for x in range(len(pos_changes)-1)]
+
+		# Mark the extremum of every threshold crossing
+		minima = [np.argmin(data[start:(end+1)]) + start \
+				for start,end in neg_inds]
+		maxima = [np.argmax(data[start:(end+1)]) + start \
+				for start,end in pos_inds]
+		# Combine into single vector of indices
+		peak_ind = np.concatenate((minima,maxima))
 		peak_ind = np.sort(np.unique(peak_ind))
+		
 		#Save results to .csv
 		with open(init_times_csv, 'w') as f:
 			# using csv.writer method from CSV package
@@ -174,24 +189,27 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	axis_labels = np.round(np.arange(-ms_left,ms_right,step_size),2)
 	axis_labels[num_pts_left] = 0
 	#total_pts = num_pts_left + num_pts_right
-	peak_thresh = 3 #Standard deviations from mean to cut off for peak finding
+	peak_thresh = 5 #Standard deviations from mean to cut off for peak finding
 	threshold_percentile = 50 #Percentile to cut off in template-matching
 	viol_1_percent = 1 #1 ms violations percent cutoff
 	viol_2_percent = 2 #2 ms violations percent cutoff
 	noise_clust = 5 #Set number of clusters for initial noise clustering
 	clust_min = 5 #Minimum number of clusters to test in automated clustering
 	clust_max = 9 #Maximum number of clusters to test + 1
-	pre_clust = 1 #Whether to do an initial clustering step (1) or not (0)
+	pre_clust = 0 #Whether to do an initial clustering step (1) or not (0)
 	do_template = 0 #Whether to template match (1 for yes) after initial clustering (if pre_clust = 1)
 	num_temp_repeats = 1 #Number of times to repeat template matching if no pre-clustering (pre_clust = 0)
 	user_input = 1 #Whether a user manually selects final clusters and combines them
 	
 	#Grab dig in times for each tastant separately - grabs last index of delivery
-	dig_in_times = [list(np.where(np.diff(np.array(dig_ins[i])) == -1)[0] + 1) for i in range(len(dig_ins))]
-	start_dig_in_times = [list(np.where(np.diff(np.array(dig_ins[i])) == 1)[0] + 1) for i in range(len(dig_ins))]
+	num_dig_ins = len(dig_ins)
+	dig_in_times = [list(np.where(np.diff(np.array(dig_ins[i])) == -1)[0] + 1) for i in range(num_dig_ins)]
+	start_dig_in_times = [list(np.where(np.diff(np.array(dig_ins[i])) == 1)[0] + 1) for i in range(num_dig_ins)]
 	#number of samples tastant delivery length
-	dig_in_lens = np.mean((np.array(dig_in_times) - np.array(start_dig_in_times))[:,2:-2],1)
-	
+	dig_in_lens = np.zeros(num_dig_ins)
+	for d_i in range(num_dig_ins):
+		dig_in_lens[d_i] = np.mean(np.array(dig_in_times[d_i])-np.array(start_dig_in_times[d_i]))
+		
 	#Create .csv file name for storage of completed units
 	sorted_units_csv = dir_save + 'sorted_units.csv'
 	
@@ -319,7 +337,7 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 								good_ind.extend([s_i])
 								good_all_spikes_ind.extend([p_i])
 					else:
-						if do_template == 1:
+						if do_template == 1 or num_temp_repeats > 0:
 							print("\n \t Performing Template Matching To Sort Data")
 							good_spikes = []
 							good_ind = [] #List of lists with good indices in groupings
