@@ -59,7 +59,7 @@ def file_names():
 
 def dig_ins(dat_files_list):
 	"""This function pulls dig-in information and prompts the user to assign names"""
-	dig_ins = [name for name in dat_files_list if name.startswith('board-DIN')]
+	dig_ins = [name for name in dat_files_list if name.startswith('board-DI')]
 	if len(dig_ins) > 0:
 		dig_in_names = list()
 		for i in range(len(dig_ins)):

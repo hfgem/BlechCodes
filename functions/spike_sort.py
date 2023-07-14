@@ -110,21 +110,26 @@ def potential_spike_times(data,sampling_rate,dir_save,peak_thresh,clust_type):
 	if get_ind == 'y':	
 		print("Searching for potential spike indices")
 		#Perform a sweeping search using a local larger window bin to grab the 
-		#mean and standard deviation - not smooth search, but overlapping
+		#minimal mean and standard deviation values - use these for find_peaks
 		total_data_points = len(data)
-		window_size = int(np.ceil(total_data_points/100))
-		window_starts = np.arange(0,total_data_points,int(np.ceil(window_size/2)))
-		peak_ind = []
-		#Grab mean and std
+		window_size = 5*60*sampling_rate
+		window_starts = np.arange(0,total_data_points,window_size)
+		mean_val = np.inf
+		std_val = np.inf
 		for w_i in range(len(window_starts)):
 			w_ind = int(window_starts[w_i])
 			data_chunk = data[w_ind:min(w_ind+window_size,total_data_points)]
-			std_dev = np.std(data_chunk)
+			std_chunk = np.std(data_chunk)
 			mean_chunk = np.mean(data_chunk)
-			chunk_inds = []
-			chunk_inds.extend(list(find_peaks(-1*data_chunk,height=-1*(mean_chunk-peak_thresh*std_dev))[0]))
-			chunk_inds.extend(list(find_peaks(data_chunk,height=mean_chunk+peak_thresh*std_dev)[0]))
-			peak_ind.extend(list(np.array(chunk_inds) + w_ind))
+			if std_chunk < std_val:
+				std_val = std_chunk
+			if mean_chunk < mean_val:
+				mean_val = mean_chunk
+		peak_ind = []
+		pos_inds = list(find_peaks(data_chunk,height=mean_val+peak_thresh*std_val)[0])
+		peak_ind.extend(pos_inds)
+		neg_inds = list(find_peaks(-1*data_chunk,height=-1*(mean_val-peak_thresh*std_val))[0])
+		peak_ind.extend(neg_inds)
 		#Reduce to only unique indices
 		peak_ind = np.sort(np.unique(peak_ind))
 		#Save results to .csv
