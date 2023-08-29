@@ -114,7 +114,8 @@ def potential_spike_times(data,sampling_rate,dir_save,peak_thresh,clust_type):
 		total_data_points = len(data)
 		window_size = int(5*60*sampling_rate)
 		window_starts = np.arange(0,total_data_points,window_size)
-		#Taken from blech_clust.py function clustering.py
+		
+		#Percentile mean and threshold values
 		mean_vals = []
 		threshold_vals = []
 		for w_i in range(len(window_starts)):
@@ -124,28 +125,12 @@ def potential_spike_times(data,sampling_rate,dir_save,peak_thresh,clust_type):
 			th_clip = peak_thresh*np.median(np.abs(data_chunk)/0.6745)
 			mean_vals.extend([m_clip])
 			threshold_vals.extend([th_clip])
-		m = min(mean_vals)
-		th = min(threshold_vals)	
-		negative = np.where(data <= m-th)[0] 
-		positive = np.where(data >= m+th)[0]
-		# Marking breaks in detected threshold crossings 
-		neg_changes = np.concatenate(([0],np.where(np.diff(negative) > 1)[0]+1))
-		pos_changes = np.concatenate(([0],np.where(np.diff(positive) > 1)[0]+1))
+		m = np.median(mean_vals)
+		th = np.median(threshold_vals)
+		all_peaks = np.array(find_peaks(np.abs(data-m),height=th,distance=(1/1000)*sampling_rate)[0])
 		
-		# Mark indices to be extracted
-		neg_inds = [(negative[neg_changes[x]],negative[neg_changes[x+1]-1]) \
-				for x in range(len(neg_changes)-1)]
-		pos_inds = [(positive[pos_changes[x]],positive[pos_changes[x+1]-1]) \
-				for x in range(len(pos_changes)-1)]
-
-		# Mark the extremum of every threshold crossing
-		minima = [np.argmin(data[start:(end+1)]) + start \
-				for start,end in neg_inds]
-		maxima = [np.argmax(data[start:(end+1)]) + start \
-				for start,end in pos_inds]
 		# Combine into single vector of indices
-		peak_ind = np.concatenate((minima,maxima))
-		peak_ind = np.sort(np.unique(peak_ind))
+		peak_ind = np.sort(np.unique(all_peaks))
 		
 		#Save results to .csv
 		with open(init_times_csv, 'w') as f:
@@ -197,8 +182,8 @@ def spike_sort(data,sampling_rate,dir_save,segment_times,segment_names,
 	clust_min = 5 #Minimum number of clusters to test in automated clustering
 	clust_max = 9 #Maximum number of clusters to test + 1
 	pre_clust = 0 #Whether to do an initial clustering step (1) or not (0)
-	do_template = 0 #Whether to template match (1 for yes) after initial clustering (if pre_clust = 1)
-	num_temp_repeats = 1 #Number of times to repeat template matching if no pre-clustering (pre_clust = 0)
+	do_template = 1 #Whether to template match (1 for yes)
+	num_temp_repeats = 1 #Number of times to repeat template matching
 	user_input = 1 #Whether a user manually selects final clusters and combines them
 	
 	#Grab dig in times for each tastant separately - grabs last index of delivery

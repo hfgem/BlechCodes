@@ -39,7 +39,7 @@ def bin_spike_counts(save_dir,segment_spike_times,segment_names,segment_times):
 	segment_isis = dict()
 	segment_fano_factors = dict()
 	#Get distributions for different bin sizes
-	bin_sizes = np.arange(0.005,1.05,0.005)
+	bin_sizes = np.arange(0.05,1.05,0.05)
 	print("\nCalculating distributions for different bin sizes.")
 	for s_i in tqdm.tqdm(range(len(segment_names))):
 		segment_spikes = segment_spike_times[s_i]
@@ -48,7 +48,7 @@ def bin_spike_counts(save_dir,segment_spike_times,segment_names,segment_times):
 		segment_end_time = segment_times[s_i+1]
 		segment_len = int(segment_end_time-segment_start_time)
 		#Convert to a binary spike matrix
-		bin_spike = np.zeros((num_neur,segment_len))
+		bin_spike = np.zeros((num_neur,segment_len+1))
 		for n_i in range(num_neur):
 			spike_indices = (np.array(segment_spikes[n_i]) - segment_start_time).astype('int')
 			bin_spike[n_i,spike_indices] = 1
@@ -81,7 +81,7 @@ def bin_spike_counts(save_dir,segment_spike_times,segment_names,segment_times):
 	#First calculating for spike counts
 	neur_count_save_dir = figure_save_dir + 'neur_spike_counts/'
 	dist_name = 'Neuron Spike Count'
-	segment_pair_count_calculations = KS_test_pipeline(neur_count_save_dir,dist_name,s_i_pairs,segment_counts)
+	segment_pair_count_calculations = KS_test_pipeline(neur_count_save_dir,dist_name,s_i_pairs,segment_neur_counts)
 	print("\tCount distributions:")
 	#First calculating for spike counts
 	count_save_dir = figure_save_dir + 'spike_counts/'
@@ -99,7 +99,6 @@ def bin_spike_counts(save_dir,segment_spike_times,segment_names,segment_times):
 		os.mkdir(isi_fano_save_dir)
 	single_trend_plots(segment_fano_factors,'Fano Factor',isi_fano_save_dir)
 	
-		
 @jit(forceobj=True)
 def calculate_spike_neuron_distribution(spike_times,bin_size):
 	"""This function calculates the spike count distribution for a given dataset
@@ -217,7 +216,7 @@ def KS_test_pipeline(ks_save_dir,dist_name,s_i_pairs,data_dict):
 	if os.path.isdir(ks_save_dir) == False:
 		os.mkdir(ks_save_dir)
 	segment_pair_calculations = dict()
-	for pair_i in s_i_pairs:
+	for pair_i in tqdm.tqdm(s_i_pairs):
 		seg_1 = pair_i[0]
 		seg_2 = pair_i[1]
 		print("\t\t" + seg_1 + " vs " + seg_2)
@@ -494,54 +493,62 @@ def bin_neur_spike_counts(save_dir,segment_spike_times,segment_names,segment_tim
 	return neur_bout_seg_thresh, neur_bout_seg
 
 @jit(forceobj=True)	
-def high_bins(segment_spike_times,segment_times,bin_size,num_thresh):
+def high_bins(bin_spikes,segment_start_time,segment_end_time,bin_size,num_thresh):
 	"""This function calculates bins of time that have the number of neurons 
 	spiking above some given threshold"""
 	bin_dt = int(np.ceil(bin_size*1000)) #Convert from seconds to ms = dt
-	num_seg = len(segment_spike_times)
-	seg_high_bins = []
-	for s_i in tqdm.tqdm(range(num_seg)):
-		segment_spikes = segment_spike_times[s_i]
-		num_neur = len(segment_spikes)
-		seg_len = int(segment_times[s_i+1]-segment_times[s_i])
-		#Create binary spike array
-		bin_spikes = np.zeros((num_neur,seg_len))
-		for n_i in range(num_neur):
-			neur_spike_times = list((np.array(segment_spikes[n_i]) - segment_times[s_i]).astype('int'))
-			bin_spikes[n_i,neur_spike_times] += 1
-		#Sweep array in bins searching for those with the number of neurons >= num_thresh
-		bin_counts = [np.sum(np.sum(bin_spikes[:,b_i:b_i+bin_dt],1)>0) for b_i in range(seg_len-bin_dt)]
-		high_bins = dict()
-		for t_i in num_thresh:
-			high_bins.update({str(t_i): (np.array(bin_counts) >= t_i).astype('int')})
-		seg_high_bins.append(high_bins)
+	#Sweep array in bins searching for those with the number of neurons >= num_thresh
+	bin_spike_counts = [np.sum(np.sum(bin_spikes[:,b_i:b_i+bin_dt],1)) for b_i in range(segment_end_time-segment_start_time-bin_dt)]
+	bin_neur_counts = [np.sum(np.sum(bin_spikes[:,b_i:b_i+bin_dt],1)>0) for b_i in range(segment_end_time-segment_start_time-bin_dt)]
+	high_neur_bins = dict()
+	for t_i in num_thresh:
+		high_neur_bins.update({str(t_i): np.sum((np.array(bin_neur_counts) >= t_i).astype('int'))})
+	high_spike_bins = dict()
+	num_spikes = np.arange(1,max(np.array(bin_spike_counts)),2)
+	for s_i in num_spikes:
+		high_spike_bins.update({str(s_i): np.sum((np.array(bin_neur_counts) >= s_i).astype('int'))})
 	
-	return seg_high_bins
+	return high_neur_bins, high_spike_bins
 
-@jit(forceobj=True)
-def null_high_bins(num_null,segment_spike_times,segment_times,bin_size,num_thresh):
-	"""This function calculates the numbers of high bins per high_bins() for 
-	shufled data to find null distribution calculation.
-	"""
-	num_seg = len(segment_times) - 1
-	null_results = []
-	for n_n in tqdm.tqdm(range(num_null)):
-		shuffled_spike_times = []
-		for s_i in range(num_seg):
-			num_neur = len(segment_spike_times[s_i])
-			segment_start_time = int(segment_times[s_i])
-			segment_end_time = int(segment_times[s_i+1])
-			true_spike_counts = [len(segment_spike_times[s_i][n_i]) for n_i in range(num_neur)]
-			fake_spike_times = [random.sample(range(segment_start_time,segment_end_time),true_spike_counts[n_i]) for n_i in range(num_neur)]
-			shuffled_spike_times.append(fake_spike_times)
-		#Now calculate the high bin counts
-		shuffled_count_results = high_bins(shuffled_spike_times,segment_times,bin_size,num_thresh)
-		null_results.append(shuffled_count_results)
-	del n_n, shuffled_spike_times, segment_start_time, segment_end_time, true_spike_counts, fake_spike_times, shuffled_count_results
-	
-	return null_results
+def plot_high_bins_truexnull(true_x_vals,null_x_vals,true_spike_counts,mean_null_spike_counts,
+							 std_null_spike_counts,segment_length,save_dir,
+							 plot_name,seg_name):
+	"""Plot the results of high_bins() run on true and null datasets"""
+	#True Counts
+	fig = plt.figure(figsize=(10,10))
+	plt.plot(true_x_vals,true_spike_counts,label='true bin counts',color='b')
+	plt.fill_between(null_x_vals, 
+			   (mean_null_spike_counts-std_null_spike_counts), 
+			  (mean_null_spike_counts+std_null_spike_counts),
+			  alpha=0.4,color='g',label='null bin counts std')
+	plt.plot(null_x_vals,mean_null_spike_counts,color='g',label='null bin counts mean')
+	plt.legend()
+	plt.xlabel(plot_name)
+	plt.ylabel('Number of Instances')
+	plt.title(plot_name)
+	plt.tight_layout()
+	im_name = plot_name.replace(' ','_') + '_truexnull'
+	fig.savefig(save_dir + im_name + '_' + seg_name + '.png')
+	fig.savefig(save_dir + im_name + '_' + seg_name + '.svg')
+	plt.close(fig)
+	#Normalized Counts
+	fig = plt.figure(figsize=(10,10))
+	plt.plot(true_x_vals,true_spike_counts/(segment_length/1000),label='true bin counts',color='b')
+	plt.fill_between(null_x_vals, 
+			   (mean_null_spike_counts-std_null_spike_counts)/(segment_length/1000), 
+			  (mean_null_spike_counts+std_null_spike_counts)/(segment_length/1000),
+			  alpha=0.4,color='g',label='null bin counts std')
+	plt.plot(null_x_vals,mean_null_spike_counts/(segment_length/1000),color='g',label='null bin counts mean')
+	plt.legend()
+	plt.xlabel(plot_name + ' per Second')
+	plt.ylabel('Number of Instances')
+	plt.title(plot_name + ' Normalized per Second')
+	plt.tight_layout()
+	im_name = plot_name.replace(' ','_') + '_truexnull_norm'
+	fig.savefig(save_dir + im_name + '_' + seg_name + '.png')
+	fig.savefig(save_dir + im_name + '_' + seg_name + '.svg')
+	plt.close(fig)
 
-@jit(forceobj=True)
 def null_results_recombined(null_results, segment_times):
 	#Reformat null results into same format as regular results
 	num_seg = len(segment_times) - 1

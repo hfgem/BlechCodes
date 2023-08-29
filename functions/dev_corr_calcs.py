@@ -20,7 +20,7 @@ from numba import jit
 
 def dev_corr(save_dir, segment_spike_times, segment_names, segment_times, dev_times,
 			 tastant_spike_times, dig_in_names, start_dig_in_times, end_dig_in_times,
-			 taste_intervals, taste_interval_names):
+			 taste_avg_cp_times, taste_interval_names):
 	"""This is a master function to call all other relevant functions for 
 	calculating correlations between taste responses and deviation bins
 	INPUTS:
@@ -33,8 +33,8 @@ def dev_corr(save_dir, segment_spike_times, segment_names, segment_times, dev_ti
 			- dig_in_names: the name of each tastant
 			- start_dig_in_times: times (in dt = ms) when taste deliveries start
 			- end_dig_in_times: times (in dt = ms) when taste deliveries end
-			- taste_intervals: times (in dt = ms) when different taste response 
-					epochs start/end
+			- taste_avg_cp_times: times (in dt = ms) when different taste response 
+					epochs start/end for each taste
 			- taste_interval_names: names of different taste response epochs
 	"""
 	# Define paramters
@@ -53,8 +53,8 @@ def dev_corr(save_dir, segment_spike_times, segment_names, segment_times, dev_ti
 	print("\nCreating Spike Templates")
 	taste_rasters = []
 	for t_i in range(len(dig_in_names)):
-		taste_rasters.append([spike_templates(end_dig_in_times[t_i][t_t], end_dig_in_times[t_i][t_t]+taste_intervals[-1],
-							 segment_spike_times[taste_index], num_neur) for t_t in range(len(start_dig_in_times[t_i]))])
+		taste_rasters.append([spike_templates(end_dig_in_times[t_i][t_t], end_dig_in_times[t_i][t_t]+taste_avg_cp_times[t_i][-1],
+							 segment_spike_times[taste_index], num_neur) for t_t in range(len(end_dig_in_times[t_i]))])
 	seg_dev_rasters = dev_spike_templates(
 		segment_names, segment_times, segment_spike_times, dev_times)
 
@@ -70,7 +70,7 @@ def dev_corr(save_dir, segment_spike_times, segment_names, segment_times, dev_ti
 			seg_name = segment_names[s_i]
 			# Calculate the true correlation values and store
 			taste_corr.update({seg_name: which_spiked_corr(
-				taste_name, seg_name, taste_rasters[t_i], seg_dev_rasters[s_i], taste_intervals, taste_interval_names, indiv_plot_save_dir)})
+				taste_name, seg_name, taste_rasters[t_i], seg_dev_rasters[s_i], taste_avg_cp_times[t_i], taste_interval_names, indiv_plot_save_dir)})
 		which_spiked_true_corr.update({taste_name: taste_corr})
 	# Plot histogram results on one set of axes!
 	plot_spiked_corr('Which Neuron Spiked',
@@ -89,7 +89,7 @@ def dev_corr(save_dir, segment_spike_times, segment_names, segment_times, dev_ti
 			seg_name = segment_names[s_i]
 			# Calculate the true correlation values and store
 			taste_corr.update({seg_name: num_spiked_corr(
-				taste_name, seg_name, taste_rasters[t_i], seg_dev_rasters[s_i], taste_intervals, taste_interval_names, indiv_plot_save_dir)})
+				taste_name, seg_name, taste_rasters[t_i], seg_dev_rasters[s_i], taste_avg_cp_times[t_i], taste_interval_names, indiv_plot_save_dir)})
 		num_spiked_true_corr.update({taste_name: taste_corr})
 	# Normalize by length
 	plot_spiked_corr('Number of Times a Neuron Spiked', num_spiked_true_corr,
@@ -107,7 +107,7 @@ def dev_corr(save_dir, segment_spike_times, segment_names, segment_times, dev_ti
 			seg_name = segment_names[s_i]
 			# Calculate the true correlation values and store
 			taste_corr.update({seg_name: when_spiked_corr(
-				taste_name, seg_name, taste_rasters[t_i], seg_dev_rasters[s_i], num_neur, taste_intervals, taste_interval_names, indiv_plot_save_dir)})
+				taste_name, seg_name, taste_rasters[t_i], seg_dev_rasters[s_i], num_neur, taste_avg_cp_times[t_i], taste_interval_names, indiv_plot_save_dir)})
 		when_spiked_true_corr.update({taste_name: taste_corr})
 	plot_spiked_corr('Binary Spike Matrix', when_spiked_true_corr,
 					 taste_interval_names, save_dir)  # Plot results on one set of axes!
@@ -125,7 +125,7 @@ def dev_corr(save_dir, segment_spike_times, segment_names, segment_times, dev_ti
 			seg_name = segment_names[s_i]
 			# Calculate the true correlation values and store
 			taste_corr.update({seg_name: inst_fr_corr(taste_name, seg_name, taste_rasters[t_i], seg_dev_rasters[
-							  s_i], conv_bin, conv_step, num_neur, taste_intervals, taste_interval_names, indiv_plot_save_dir)})
+							  s_i], conv_bin, conv_step, num_neur, taste_avg_cp_times[t_i], taste_interval_names, indiv_plot_save_dir)})
 		psth_spiked_true_corr.update({taste_name: taste_corr})
 	# Plot results on one set of axes!
 	plot_spiked_corr('PSTH ', when_spiked_true_corr,

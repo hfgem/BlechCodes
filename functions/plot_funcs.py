@@ -19,20 +19,20 @@ from numba import jit
 import time
 
 def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_times, 
-				 segment_names, segment_times, spike_times, num_neur, num_tastes):
+				 segment_names, segment_times, segment_spike_times, tastant_spike_times, 
+				 pre_taste_dt, post_taste_dt, num_neur, num_tastes):
 	
 	#_____Grab spike times (and rasters) for each segment separately_____
 	raster_save_dir = fig_save_dir + 'rasters/'
 	if os.path.isdir(raster_save_dir) == False:
 		os.mkdir(raster_save_dir)
-	segment_spike_times = []
 	for s_i in tqdm.tqdm(range(len(segment_names))):
 		print("\nGrabbing spike raster for segment " + segment_names[s_i])
 		min_time = segment_times[s_i] #in ms
 		max_time = segment_times[s_i+1] #in ms
 		max_time_min = (max_time-min_time)*(1/1000)*(1/60)
 		s_name = segment_names[s_i]
-		s_t = [list(np.array(spike_times[i])[np.where((np.array(spike_times[i]) >= min_time)*(np.array(spike_times[i]) <= max_time))[0]]) for i in range(num_neur)]
+		s_t = segment_spike_times[s_i]
 		s_t_time = [list((1/60)*np.array(s_t[i])*(1/1000)) for i in range(len(s_t))]
 		#Plot segment rasters and save
 		plt.figure(figsize=(max_time_min,num_neur))
@@ -44,14 +44,8 @@ def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_time
 		plt.savefig(raster_save_dir + im_name + '.png')
 		plt.savefig(raster_save_dir + im_name + '.svg')
 		plt.close()
-		segment_spike_times.append(s_t)
 
 	#_____Grab spike times for each taste delivery separately_____
-	pre_taste = 0.5 #Seconds before tastant delivery to store
-	pre_taste_dt = int(np.ceil(pre_taste*(1000/1))) #Convert to ms timescale
-	post_taste = 2 #Seconds after tastant delivery to store
-	post_taste_dt = int(np.ceil(post_taste*(1000/1))) #Convert to ms timescale
-	tastant_spike_times = []
 	for t_i in tqdm.tqdm(range(num_tastes)):
 		print("\nGrabbing spike rasters for tastant " + dig_in_names[t_i] + " deliveries")
 		rast_taste_save_dir = raster_save_dir + ('_').join((dig_in_names[t_i]).split(' ')) + '/'
@@ -60,13 +54,11 @@ def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_time
 		t_start = start_dig_in_times[t_i]
 		t_end = end_dig_in_times[t_i]
 		num_deliv = len(t_start)
-		t_st = []
+		t_st = tastant_spike_times[t_i]
 		t_fig = plt.figure(figsize=(10,num_deliv))
 		for t_d_i in range(len(t_start)):
-			start_i = int(max(t_start[t_d_i] - pre_taste_dt,0))
-			end_i = int(min(t_end[t_d_i] + post_taste_dt,segment_times[-1]))
 			#Grab spike times into one list
-			s_t = [list(np.array(spike_times[i])[np.where((np.array(spike_times[i]) >= start_i)*(np.array(spike_times[i]) <= end_i))[0]]) for i in range(num_neur)]
+			s_t = t_st[t_d_i]
 			s_t_time = [list(np.array(s_t[i])*(1/1000)) for i in range(len(s_t))]
 			t_st.append(s_t)
 			#Plot the raster
@@ -110,14 +102,12 @@ def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_time
 
 def PSTH_plots(fig_save_dir, num_tastes, num_neur, dig_in_names, 
 			   start_dig_in_times, end_dig_in_times, pre_taste_dt, post_taste_dt,
-			   segment_times, spike_times):
+			   segment_times, spike_times, bin_width, bin_step):
 	
 	PSTH_save_dir = fig_save_dir + 'PSTHs/'
 	if os.path.isdir(PSTH_save_dir) == False:
 		os.mkdir(PSTH_save_dir)
-	bin_width = 0.25 #Gaussian convolution kernel width in seconds
 	half_bin_width_dt = int(np.ceil(1000*bin_width/2)) #in ms
-	bin_step = 25 #Step size in dt to take in PSTH calculation
 	PSTH_times = [] #Storage of time bin true times (s) for each tastant
 	PSTH_taste_deliv_times = [] #Storage of tastant delivery true times (s) for each tastant [start,end]
 	tastant_PSTH = []
@@ -139,7 +129,7 @@ def PSTH_plots(fig_save_dir, num_tastes, num_neur, dig_in_names,
 		for t_d_i in range(len(t_start)):
 			start_i = int(max(t_start[t_d_i] - pre_taste_dt,0))
 			end_i = int(min(t_end[t_d_i] + post_taste_dt,segment_times[-1]))
-			bin_spikes = np.zeros((num_neur,dt_total))
+			bin_spikes = np.zeros((num_neur,dt_total+1))
 			#Convert spike times into a binary vector
 			for i in range(num_neur):
 				s_t = np.array((np.array(spike_times[i])[np.where((np.array(spike_times[i]) >= start_i)*(np.array(spike_times[i]) <= end_i))[0]]).astype('int'))
@@ -186,6 +176,25 @@ def PSTH_plots(fig_save_dir, num_tastes, num_neur, dig_in_names,
 	del t_i, t_start, t_end, dt_total, num_deliv, PSTH_start_times, PSTH_true_times, start_deliv_interval, end_deliv_interval, all_PSTH
 	del t_fig, tastant_name, im_name, avg_PSTH
 		
+	#_____Plot avg tastant PSTHs side-by-side
+	f_psth, ax = plt.subplots(1,num_tastes,figsize=(10,10),sharex=True,sharey=True)
+	for t_i in range(num_tastes):
+		tastant_name = dig_in_names[t_i]
+		PSTH_true_times = PSTH_times[t_i]
+		for i in range(num_neur):
+			ax[t_i].plot(PSTH_true_times,avg_tastant_PSTH[t_i][i])
+		ax[t_i].axvline(PSTH_taste_deliv_times[t_i][0],color='r',linestyle='dashed')
+		ax[t_i].axvline(PSTH_taste_deliv_times[t_i][1],color='r',linestyle='dashed')
+		ax[t_i].set_xlabel('Time (s)')
+		ax[t_i].set_ylabel('Firing Rate (Hz)')
+		ax[t_i].set_title(tastant_name)
+	im_name = 'combined_avg_PSTH'
+	f_psth.tight_layout()
+	f_psth.savefig(PSTH_save_dir + im_name + '.png')
+	f_psth.savefig(PSTH_save_dir + im_name + '.svg')
+	plt.close(f_psth)
+	
+	
 	#_____Plot avg PSTHs for Individual Neurons_____
 	neuron_PSTH_dir = PSTH_save_dir + 'neurons/'
 	if os.path.isdir(neuron_PSTH_dir) == False:

@@ -7,179 +7,22 @@ Created on Mon Jan  2 11:04:51 2023
 
 This code is written to import sorted data and perform state-change analyses
 """
-import os, tables, tqdm, time, random, csv
-import tkinter as tk
-import tkinter.filedialog as fd
+import os
 file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
 os.chdir(file_path)
 import numpy as np
+import functions.analysis_funcs as af
 import functions.hdf5_handling as hf5
-import functions.data_processing as dp
-import functions.load_intan_rhd_format.load_intan_rhd_format as rhd
 import functions.plot_funcs as pf
 import functions.dev_calcs as dev_calc
 import functions.dev_plots as dev_plot
 import functions.seg_compare as sc
 import functions.dev_corr_calcs as dcc
-import matplotlib.pyplot as plt
+import functions.changepoint_detection as cd
 
-def import_data(sorted_dir, segment_dir, fig_save_dir):
-	"""Import data from .h5 file and grab any missing data through user inputs.
-	Note, all spike times, digital input times, etc... are converted to the ms
-	timescale and returned as such.
-	"""
-	print("Beginning Data Import")
-	tic = time.time()
-	#_____Import spike times and waveforms_____
-	#Grab data from hdf5 file
-	blech_clust_h5 = tables.open_file(sorted_dir, 'r+', title = sorted_dir[-1])
 
-	#Grab sampling rate
-	print("\tGrabbing sampling rate")
-	try:
-		sampling_rate = blech_clust_h5.root.sampling_rate[0]
-	except:
-		#The old method doesn't currently store sampling_rate, so this picks it up
-		rhd_dict = rhd.import_data()
-		sampling_rate = int(rhd_dict["frequency_parameters"]["amplifier_sample_rate"])
-		atom = tables.IntAtom()
-		blech_clust_h5.create_earray('/','sampling_rate',atom,(0,))
-		blech_clust_h5.root.sampling_rate.append([sampling_rate])
-	#Calculate the conversion from samples to ms
-	ms_conversion = (1/sampling_rate)*(1000/1) #ms/samples units
-	
-	sorted_units_node = blech_clust_h5.get_node('/sorted_units')
-	num_neur = len([s_n for s_n in sorted_units_node])
-	#Grab waveforms
-	print("\tGrabbing waveforms")
-	all_waveforms = [sn.waveforms[0] for sn in sorted_units_node]
-	#Grab times
-	print("\tGrabbing spike times")
-	spike_times = []
-	i = 0
-	for s_n in sorted_units_node:
-		try:
-			spike_times.append(list(s_n.times[0]))
-		except:
-			spike_times.append(list(s_n.times))
-		i+= 1
-	#Converting spike times to ms timescale
-	spike_times = [np.ceil(np.array(spike_times[i])*ms_conversion) for i in range(len(spike_times))]
-	
-	#Grab digital inputs
-	print("\tGrabbing digital input times")
-	start_dig_in_times_csv = fig_save_dir + 'start_dig_in_times.csv'
-	end_dig_in_times_csv = fig_save_dir + 'end_dig_in_times.csv'
-	if os.path.isfile(start_dig_in_times_csv):
-		print("\t\tImporting previously saved digital input times")
-		start_dig_in_times = []
-		with open(start_dig_in_times_csv, 'r') as file:
-		    csvreader = csv.reader(file)
-		    for row in csvreader:
-		        start_dig_in_times.append(list(np.array(row).astype('int')))
-		end_dig_in_times = []
-		with open(end_dig_in_times_csv, 'r') as file:
-		    csvreader = csv.reader(file)
-		    for row in csvreader:
-		        end_dig_in_times.append(list(np.array(row).astype('int')))
-		num_tastes = len(start_dig_in_times)
-	else:
-		dig_in_node = blech_clust_h5.list_nodes('/digital_in')
-		dig_in_indices = np.array([d_i.name.split('_')[-1] for d_i in dig_in_node])
-		dig_in_ind = []
-		i = 0
-		for d_i in dig_in_indices:
-			try:
-				int(d_i)
-				dig_in_ind.extend([i])
-			except:
-				"not an input - do nothing"
-			i += 1
-		del dig_in_indices
-		try:
-			if len(dig_in_node[0][0]):
-				dig_in_data = [list(dig_in_node[d_i][0]) for d_i in dig_in_ind]
-		except:
-			dig_in_data = [list(dig_in_node[d_i]) for d_i in dig_in_ind]
-		num_dig_in = len(dig_in_data)
-		del dig_in_node
-		#_____Convert dig_in_data to indices of dig_in start and end times_____
-		print("\tConverting digital inputs to free memory")
-		#Again, all are converted to ms timescale
-		start_dig_in_times = [list(np.ceil((np.where(np.diff(np.array(dig_in_data[i])) == 1)[0] + 1)*ms_conversion).astype('int')) for i in range(len(dig_in_data))]	
-		end_dig_in_times = [list(np.ceil((np.where(np.diff(np.array(dig_in_data[i])) == -1)[0] + 1)*ms_conversion).astype('int')) for i in range(len(dig_in_data))]
-		num_tastes = len(start_dig_in_times)
-		del dig_in_data
-		#Store these into csv for import in future instead of full dig_in_data load which takes forever!
-		with open(start_dig_in_times_csv, 'w') as f:
-			write = csv.writer(f,delimiter=',')
-			write.writerows(start_dig_in_times)
-		with open(end_dig_in_times_csv, 'w') as f:
-			write = csv.writer(f,delimiter=',')
-			write.writerows(end_dig_in_times)
-	
-	#Grab dig in names
-	print("\tGrabbing digital input names")
-	try:
-		dig_in_names = [blech_clust_h5.root.digital_in.dig_in_names[i].decode('UTF-8') for i in range(len(blech_clust_h5.root.digital_in.dig_in_names))]
-	except:
-		#The old method doesn't currently store tastant names, so this probes the user
-		dig_in_names = list()
-		for i in range(num_dig_in):
-			d_loop = 1
-			while d_loop == 1:
-				d_name = input("\n INPUT REQUESTED: Enter single-word name for dig-in " + str(i) + ": ")
-				if len(d_name) < 2:
-					print("Error, entered name seems too short. Please try again.")
-				else:
-					d_loop = 0
-			dig_in_names.append(d_name)
-		#Save data for future use
-		atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
-		dig_names = blech_clust_h5.create_earray('/digital_in','dig_in_names',atom,(0,))
-		dig_names.append(np.array(dig_in_names))
 
-	#_____Import segment times - otherwise ask for user segment time input_____
-	print("\tGrabbing segment times and names")
-	try:
-		segment_times = blech_clust_h5.root.experiment_components.segment_times[:]
-		#Convert segment_times to ms timescale
-		segment_times = np.ceil(segment_times*ms_conversion)
-		segment_names = [blech_clust_h5.root.experiment_components.segment_names[i].decode('UTF-8') for i in range(len(blech_clust_h5.root.experiment_components.segment_names))]
-	except:
-		segment_names, segment_times = dp.get_experiment_components(sampling_rate, dig_in_data)
-		#Save data for future use
-		blech_clust_h5 = tables.open_file(sorted_dir, 'r+', title = sorted_dir[-1])
-		try:
-			blech_clust_h5.create_group('/','experiment_components')
-		except:
-			print("\n\tExperiment components group already exists in .h5 file")
-		atom = tables.IntAtom()
-		try:
-			blech_clust_h5.create_earray('/experiment_components','segment_times',atom,(0,))
-			exec("blech_clust_h5.root.experiment_components.segment_times.append(segment_times[:])")
-		except:
-			blech_clust_h5.remove_node('/experiment_components','segment_times')
-			blech_clust_h5.create_earray('/experiment_components','segment_times',atom,(0,))
-			exec("blech_clust_h5.root.experiment_components.segment_times.append(segment_times[:])")
-		atom = tables.Atom.from_dtype(np.dtype('U20'))
-		try:
-			blech_clust_h5.create_earray('/experiment_components','segment_names',atom,(0,))
-			exec("blech_clust_h5.root.experiment_components.segment_names.append(np.array(segment_names))")
-		except:
-			blech_clust_h5.remove_node('/experiment_components','segment_names')
-			blech_clust_h5.create_earray('/experiment_components','segment_names',atom,(0,))
-			exec("blech_clust_h5.root.experiment_components.segment_names.append(np.array(segment_names))")
-		#Convert segment times to ms timescale
-		segment_times = np.ceil(segment_times*ms_conversion)
-		
-	blech_clust_h5.close() #Always close the file
-	
-	toc = time.time()
-	print("Time to import data = " + str(round((toc - tic)/60)) + " minutes \n")	
-	return num_neur, all_waveforms, spike_times, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes
-
-#%%_____Get the directory of the hdf5 file_____
+#_____Get the directory of the hdf5 file_____
 sorted_dir, segment_dir, cleaned_dir = hf5.sorted_data_import() #Program will automatically quit if file not found in given folder
 fig_save_dir = ('/').join(sorted_dir.split('/')[0:-1]) + '/'
 print('\nData Directory:')
@@ -187,26 +30,138 @@ print(fig_save_dir)
 
 #%%
 #_____Import data_____
-num_neur, all_waveforms, spike_times, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes = import_data(sorted_dir, segment_dir, fig_save_dir)
+#todo: update intan rhd file import code to accept directory input
+num_neur, all_waveforms, spike_times, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes = af.import_data(sorted_dir, segment_dir, fig_save_dir)
+
+#%%
+#_____Calculate spike time datasets_____
+pre_taste = 0.5 #Seconds before tastant delivery to store
+post_taste = 2 #Seconds after tastant delivery to store
+
+segment_spike_times = af.calc_segment_spike_times(segment_times,spike_times,num_neur)
+tastant_spike_times = af.calc_tastant_spike_times(segment_times,spike_times,
+												  start_dig_in_times,end_dig_in_times,
+												  pre_taste,post_taste,num_tastes,num_neur)
+
+#todo: save these values to .npy files or something in the data folder and import if possible / deal with lists of lists in af
 
 #%%
 
-#_____Grab Spike Times + Generate Raster Plots_____
+#_____Generate Raster Plots_____
 #segment_spike_times is a list nested by segments x num_neur x num_time
 #tastant_spike_times is a list with only taste delivery data nested by tastant_delivery x num_neur x num_time
-segment_spike_times, tastant_spike_times, pre_taste_dt, post_taste_dt = pf.raster_plots(fig_save_dir, 
-														   dig_in_names, start_dig_in_times, 
-														   end_dig_in_times, segment_names, 
-														   segment_times, spike_times, num_neur, 
-														   num_tastes)
+pre_taste_dt = int(np.ceil(pre_taste*(1000/1))) #Convert to ms timescale
+post_taste_dt = int(np.ceil(post_taste*(1000/1))) #Convert to ms timescale
+bin_width = 0.25 #Gaussian convolution kernel width in seconds
+bin_step = 25 #Step size in ms to take in PSTH calculation
 
-#_____Grab and plot PSTHs for each taste separately_____
+data_group_name = 'PSTH_data'
+try:
+	PSTH_times = af.pull_data_from_hdf5(sorted_dir,data_group_name,'PSTH_times')
+	PSTH_taste_deliv_times = af.pull_data_from_hdf5(sorted_dir,data_group_name,'PSTH_taste_deliv_times')
+	avg_tastant_PSTH = af.pull_data_from_hdf5(sorted_dir,data_group_name,'avg_tastant_PSTH')
+except:
+	pf.raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_times, 
+					segment_names, segment_times, segment_spike_times, tastant_spike_times, 
+					pre_taste_dt, post_taste_dt, num_neur, num_tastes)
+	PSTH_times, PSTH_taste_deliv_times, tastant_PSTH, avg_tastant_PSTH = pf.PSTH_plots(fig_save_dir, num_tastes,
+																					   num_neur, dig_in_names, 
+																					   start_dig_in_times, end_dig_in_times, 
+																					   pre_taste_dt, post_taste_dt, 
+																					   segment_times, spike_times,
+																					   bin_width, bin_step)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'PSTH_times',PSTH_times)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'PSTH_taste_deliv_times',PSTH_taste_deliv_times)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'avg_tastant_PSTH',avg_tastant_PSTH)
 
-PSTH_times, PSTH_taste_deliv_times, tastant_PSTH, avg_tastant_PSTH = pf.PSTH_plots(fig_save_dir, num_tastes,
-																				   num_neur, dig_in_names, 
-																				   start_dig_in_times, end_dig_in_times, 
-																				   pre_taste_dt, post_taste_dt, 
-																				   segment_times, spike_times)
+#%%
+#____Calculate which neurons are taste responsive_____
+
+
+
+#%%
+#_____Grab and plot firing rate distributions and comparisons (by segment)_____
+sc_save_dir = fig_save_dir + 'Segment_Comparison/'
+if os.path.isdir(sc_save_dir) == False:
+	os.mkdir(sc_save_dir)
+		
+sc.bin_spike_counts(sc_save_dir,segment_spike_times,segment_names,segment_times)
+  
+#%%
+#_____Grab and plot bins above a neuron count threshold by different count values_____
+num_thresh = np.arange(2,num_neur)
+bin_size = 0.05 #size of test bin in seconds
+
+thresh_bin_save_dir = fig_save_dir + 'thresholded_deviations/'
+if os.path.isdir(thresh_bin_save_dir) == False:
+	os.mkdir(thresh_bin_save_dir)
+
+neur_bout_seg_thresh, neur_bout_seg = sc.bin_neur_spike_counts(thresh_bin_save_dir,segment_spike_times,segment_names,segment_times,num_thresh,bin_size)
+
+#%%
+#Quick and dirty changepoint detection algorithm based on percentile of bin fr 
+#difference. It finds the percentile of each bin difference for each neuron,  
+#then sums across neurons and uses find peaks to find potential changepoints. 
+#Peaks above the cutoff probability (fraction of neurons with changepoints) are
+#kept as changepoints.
+
+cp_bin = 250 #minimum state size in ms
+num_cp = 3 #number of changepoints to find
+before_taste = np.ceil(pre_taste*1000).astype('int') #Milliseconds before taste delivery to plot
+after_taste = np.ceil(post_taste*1000).astype('int') #Milliseconds after taste delivery to plot
+
+#Set storage directory
+cp_save_dir = fig_save_dir + 'Changepoint_Calculations/'
+if os.path.isdir(cp_save_dir) == False:
+	os.mkdir(cp_save_dir)
+taste_cp_save_dir = cp_save_dir + 'Taste_CPs/'
+if os.path.isdir(taste_cp_save_dir) == False:
+	os.mkdir(taste_cp_save_dir)
+
+data_group_name = 'changepoint_data'
+
+try:
+	taste_cp_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_inds')
+	taste_avg_cp_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_avg_cp_inds')
+	taste_avg_cp_times = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_avg_cp_times')
+except:
+	taste_cp_inds, taste_avg_cp_inds, taste_avg_cp_times = cd.calc_cp_taste_PSTH_ks_test(PSTH_times, 
+								PSTH_taste_deliv_times, tastant_PSTH, cp_bin, bin_step, dig_in_names,
+								num_cp, before_taste, after_taste, taste_cp_save_dir)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_cp_inds',taste_cp_inds)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_avg_cp_inds',taste_avg_cp_inds)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_avg_cp_times',taste_avg_cp_times)
+	
+#%%
+#_____Calculate cross-correlation between post-taste-delivery data and threshold deviation bins_____
+#uses taste_avg_cp_times from above
+#Set up parameters
+taste_interval_names = ['Presence','Identity','Palatability']
+dc_save_dir = fig_save_dir + 'Thresh_Dev_Correlations/'
+if os.path.isdir(dc_save_dir) == False:
+	os.mkdir(dc_save_dir)
+	
+#TEMPORARY WORKAROUND: Select which threshold value to use for this
+#NEED TO CHECK: segment_bout_vals should contain original indices, not within-bout indices.
+thresh_cutoff = int(np.ceil(0.5*num_neur))
+segment_bout_vals = []
+for s_i in range(len(segment_names)):
+	try:
+		ind_cutoff_data = np.where(np.array(neur_bout_seg_thresh[s_i]) == thresh_cutoff)[0][0]
+		segment_bout_vals.append(neur_bout_seg[s_i][ind_cutoff_data])
+	except:
+		print("Cutoff data doesn't exist for segment " + segment_names[s_i])
+		segment_bout_vals.append(np.empty(0))
+	
+dcc.dev_corr(dc_save_dir,segment_spike_times,segment_names,segment_times,segment_bout_vals,
+			 tastant_spike_times, dig_in_names, start_dig_in_times, end_dig_in_times, 
+			 taste_avg_cp_times, taste_interval_names)
+
+#%%
+
+
+
+
 
 #%%
 #For future changes: add user input to asign parameters
@@ -257,122 +212,3 @@ dcc.dev_corr(dc_save_dir,segment_spike_times,segment_names_short,segment_times_s
 			 tastant_spike_times, dig_in_names, start_dig_in_times, end_dig_in_times, 
 			 taste_intervals, taste_interval_names)
 
-#%%
-#_____Grab and plot firing rate distributions and comparisons (by segment)_____
-sc_save_dir = fig_save_dir + 'Segment_Comparison/'
-if os.path.isdir(sc_save_dir) == False:
-	os.mkdir(sc_save_dir)
-		
-sc.bin_spike_counts(sc_save_dir,segment_spike_times,segment_names,segment_times)
-  
-
-#%%
-#_____Grab and plot bins above a neuron count threshold by different count values_____
-num_thresh = np.arange(2,num_neur)
-bin_size = 0.05 #size of test bin in seconds
-
-thresh_bin_save_dir = fig_save_dir + 'thresholded_deviations/'
-if os.path.isdir(thresh_bin_save_dir) == False:
-	os.mkdir(thresh_bin_save_dir)
-
-neur_bout_seg_thresh, neur_bout_seg = sc.bin_neur_spike_counts(thresh_bin_save_dir,segment_spike_times,segment_names,segment_times,num_thresh,bin_size)
-
-#%%
-#_____Calculate cross-correlation between post-taste-delivery data and threshold deviation bins_____
-#Set up parameters
-taste_intervals = [0,200,700,1500] #Must be in milliseconds = sampling rate of data
-taste_interval_names = ['Presence','Identity','Palatability']
-dc_save_dir = fig_save_dir + 'Thresh_Dev_Correlations/'
-if os.path.isdir(dc_save_dir) == False:
-	os.mkdir(dc_save_dir)
-	
-#TEMPORARY WORKAROUND: Select which threshold value to use for this
-#NEED TO CHECK: segment_bout_vals should contain original indices, not within-bout indices.
-thresh_cutoff = int(np.ceil(0.5*num_neur))
-segment_bout_vals = []
-for s_i in range(len(segment_names)):
-	try:
-		ind_cutoff_data = np.where(np.array(neur_bout_seg_thresh[s_i]) == thresh_cutoff)[0][0]
-		segment_bout_vals.append(neur_bout_seg[s_i][ind_cutoff_data])
-	except:
-		print("Cutoff data doesn't exist for segment " + segment_names[s_i])
-		segment_bout_vals.append(np.empty(0))
-	
-dcc.dev_corr(dc_save_dir,segment_spike_times,segment_names,segment_times,segment_bout_vals,
-			 tastant_spike_times, dig_in_names, start_dig_in_times, end_dig_in_times, 
-			 taste_intervals, taste_interval_names)
-
-#%%
-#_____Plot what the original recording looks like around times of deviation_____
-if len(cleaned_dir) < 2: #First check if clean data actually exists for this analysis
-	print("No cleaned LFP data found in directory given.")
-	clean_loop = 0
-	while clean_loop == 0:
-		clean_exists = input("Does cleaned data exist elsewhere (y/n)? ")
-		if clean_exists != 'y' and clean_exists != 'n':
-			print("Incorrect response given. Try again.")
-		else:
-			clean_loop = 1
-	if clean_exists == 'y':
-		print("Please select the directory where the cleaned data exists.")
-		clean_loop = 0
-		while clean_loop == 0:
-			root = tk.Tk()
-			currdir = os.getcwd()
-			cleaned_folder_dir = fd.askdirectory(parent=root, initialdir=currdir, title='Please select the folder where data is stored.')
-			files_in_dir = os.listdir(cleaned_folder_dir)
-			for i in range(len(files_in_dir)): #Checks for repacked and downsampled .h5 in the directory
-				filename = files_in_dir[i]
-				if filename.split('_')[-1] == 'cleaned.h5':
-					cleaned_filename = filename
-					print(filename)
-					cleaned_dir = cleaned_folder_dir + '/' + cleaned_filename
-					clean_loop = 1
-			if clean_loop == 0:
-				print("Clean data not found in folder provided. LFP analysis will not proceed.")
-				clean_loop = 1
-else:
-	clean_exists = 'y'
-#Now perform the analysis
-if clean_exists == 'y':
-	#Import LFP data
-	clean_h5 = tables.open_file(cleaned_dir, 'r+', title = cleaned_dir[-1])
-	LFP_data = clean_h5.root.lfp_data[0]
-	wave_sampling_rate = clean_h5.root.sampling_rate[0]
-	#clean_data = clean_h5.root.clean_data[0]
-	clean_h5.close()
-	#time_bouts = np.arange(len(clean_data[0,:]),step=sampling_rate)
-	#combined_waveforms = np.zeros(np.shape(clean_data))
-	#print("Combining LFP and spike waveforms for full range of frequencies.")
-	#for t_i in tqdm.tqdm(range(len(time_bouts)-1)):
-	#	combined_waveforms[:,time_bouts[t_i]:time_bouts[t_i+1]] = LFP_data[:,time_bouts[t_i]:time_bouts[t_i+1]] + clean_data[:,time_bouts[t_i]:time_bouts[t_i+1]]
-	#del clean_data, LFP_data
-	pf.LFP_dev_plots(fig_save_dir,segment_names,segment_times,fig_buffer_size,segment_bouts,LFP_data,wave_sampling_rate)
-
-
-#NOTES TO SELF:
-#Normalize counts by length of segment as well
-#Add more bins to histograms
-
-#%%	
-#_____Perform changepoint detection on individual trial raster plots_____
-# for t_i in range(num_tastes): #By tastant
-# 	t_st = tastant_spike_times[t_i]
-# 	num_trials = len(t_st)
-# 	trial_times = []
-# 	for n_t in range(num_trials): #By delivery trial
-# 		n_st = t_st[n_t]
-# 		#Convert spike times to binary raster
-# 		max_index = 0
-# 		for i in range(num_neur):
-# 			try:
-# 				m_i = np.max(n_st[i])
-# 			except:
-# 				m_i = 0
-# 			if m_i > max_index:
-# 				max_index = m_i
-# 		binary_raster = np.zeros((num_neur,max_index + 1))
-# 		for i in range(num_neur):
-# 			binary_raster[i,n_st[i]] = 1
-# 		#Send binary raster to changepoint detection algorithm
-		
