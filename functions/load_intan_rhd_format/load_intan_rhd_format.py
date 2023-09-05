@@ -204,13 +204,12 @@ def plural(n):
     else:
         return 's'
 
-def import_data():
+def import_data(datadir):
 	print("Loading rhd file recording data - please select the folder where the data is stored.")
 	#Ask for user input of folder where data is stored
 	root = tk.Tk()
 	root.withdraw() #use to hide tkinter window
 	currdir = os.getcwd()
-	datadir = fd.askdirectory(parent=root, initialdir=currdir, title='Please select the folder where data is stored.')
 	file_list = os.listdir(datadir)
 	filenames = []
 	for name in file_list:

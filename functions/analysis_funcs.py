@@ -11,8 +11,11 @@ import time,tables,tqdm,os,csv
 import numpy as np
 import functions.load_intan_rhd_format.load_intan_rhd_format as rhd
 import functions.data_processing as dp
+import scipy.stats as stats
+import matplotlib.pyplot as plt
+from matplotlib import cm
 
-def import_data(sorted_dir, segment_dir, fig_save_dir):
+def import_data(sorted_dir, segment_dir, data_save_dir):
 	"""Import data from .h5 file and grab any missing data through user inputs.
 	Note, all spike times, digital input times, etc... are converted to the ms
 	timescale and returned as such.
@@ -29,7 +32,7 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 		sampling_rate = blech_clust_h5.root.sampling_rate[0]
 	except:
 		#The old method doesn't currently store sampling_rate, so this picks it up
-		rhd_dict = rhd.import_data()
+		rhd_dict = rhd.import_data(data_save_dir)
 		sampling_rate = int(rhd_dict["frequency_parameters"]["amplifier_sample_rate"])
 		atom = tables.IntAtom()
 		blech_clust_h5.create_earray('/','sampling_rate',atom,(0,))
@@ -61,8 +64,8 @@ def import_data(sorted_dir, segment_dir, fig_save_dir):
 	
 	#Grab digital inputs
 	print("\tGrabbing digital input times")
-	start_dig_in_times_csv = fig_save_dir + 'start_dig_in_times.csv'
-	end_dig_in_times_csv = fig_save_dir + 'end_dig_in_times.csv'
+	start_dig_in_times_csv = data_save_dir + 'start_dig_in_times.csv'
+	end_dig_in_times_csv = data_save_dir + 'end_dig_in_times.csv'
 	if os.path.isfile(start_dig_in_times_csv):
 		print("\t\tImporting previously saved digital input times")
 		start_dig_in_times = []
@@ -248,3 +251,68 @@ def pull_data_from_hdf5(sorted_dir,data_group_name,data_name):
 		data = data_list
 	
 	return data
+
+def taste_responsivity_PSTH(PSTH_times,PSTH_taste_deliv_times,tastant_PSTH):
+	"""A test of whether or not each neuron is taste responsive by looking at
+	PSTH activity before and after taste delivery and calculating if there is a 
+	significant change for each delivery - probability of taste responsivity 
+	is then the fraction of deliveries where there was a significant response"""
+	
+	num_tastes = len(PSTH_taste_deliv_times)
+	taste_responsivity_probability = []
+	for t_i in range(num_tastes):
+		[num_deliv, num_neur, len_PSTH] = np.shape(tastant_PSTH[t_i])
+		taste_responsive_neur = np.zeros((num_neur,num_deliv))
+		for n_i in range(num_neur):
+			start_taste_i = np.where(PSTH_times[t_i] == PSTH_taste_deliv_times[t_i][0])[0][0]
+			end_taste_i = np.where(PSTH_times[t_i] == PSTH_taste_deliv_times[t_i][1])[0][0]
+			for d_i in range(num_deliv):
+				pre_taste_PSTH_vals = tastant_PSTH[t_i][d_i,n_i,:start_taste_i]
+				post_taste_PSTH_vals = tastant_PSTH[t_i][d_i,n_i,end_taste_i:end_taste_i+start_taste_i]
+				p_val, _ = stats.ks_2samp(pre_taste_PSTH_vals,post_taste_PSTH_vals)
+				if p_val < 0.05:
+					taste_responsive_neur[n_i,d_i] = 1
+		taste_responsivity_probability.append(np.sum(taste_responsive_neur,1)/num_deliv)
+	#for t_i in range(num_tastes):
+	#    plt.plot(taste_responsivity_probability[t_i])
+	
+	return taste_responsivity_probability
+	
+def taste_responsivity_raster(tastant_spike_times,start_dig_in_times,end_dig_in_times,num_neur,pre_taste_dt):
+	"""A test of whether or not each neuron is taste responsive by looking at
+	spike activity before and after taste delivery and calculating if there is 
+	a significant change for each delivery - probability of taste responsivity 
+	is then the fraction of deliveries where there was a significant response"""
+	bin_sum_dt = 50 #in ms = dt
+	num_tastes = len(tastant_spike_times)
+	colors = cm.cool(np.arange(num_tastes)/num_tastes)
+	taste_responsivity_probability = []
+	taste_responsivity_binary = np.array([True for n_i in range(num_neur)])
+	for t_i in range(num_tastes):
+		num_deliv = len(tastant_spike_times[t_i])
+		taste_responsive_neur = np.zeros((num_neur,num_deliv))
+		for n_i in tqdm.tqdm(range(num_neur)):
+			for d_i in range(num_deliv):
+				raster_times = tastant_spike_times[t_i][d_i][n_i]
+				start_taste_i = start_dig_in_times[t_i][d_i]
+				end_taste_i = end_dig_in_times[t_i][d_i]
+				times_pre_taste = (np.array(raster_times)[np.where(raster_times < start_taste_i)[0]] - (start_taste_i - pre_taste_dt)).astype('int')
+				bin_pre_taste = np.zeros(pre_taste_dt)
+				bin_pre_taste[times_pre_taste] += 1
+				times_post_taste = (np.array(raster_times)[np.where((raster_times > end_taste_i)*(raster_times < end_taste_i + pre_taste_dt))[0]] - end_taste_i).astype('int')
+				bin_post_taste = np.zeros(pre_taste_dt)
+				bin_post_taste[times_post_taste] += 1
+				pre_taste_spike_nums = [sum(bin_pre_taste[b_i:b_i+bin_sum_dt]) for b_i in range(pre_taste_dt - bin_sum_dt)]
+				post_taste_spike_nums = [sum(bin_post_taste[b_i:b_i+bin_sum_dt]) for b_i in range(pre_taste_dt - bin_sum_dt)]
+				#Since these are stochastic samples, assuming a mean fr pre and post, we can use the Mann-Whitney-U Test
+				_, p_val = stats.mannwhitneyu(pre_taste_spike_nums,post_taste_spike_nums)
+				if p_val < 0.05:
+					taste_responsive_neur[n_i,d_i] = 1
+		taste_responsivity_probability.append(np.sum(taste_responsive_neur,1)/num_deliv)
+		taste_responsivity_binary *= (np.sum(taste_responsive_neur,1)/num_deliv > 1/2)
+	for t_i in range(num_tastes):
+		plt.plot(taste_responsivity_probability[t_i],color=colors[t_i])
+		plt.plot(taste_responsivity_binary[t_i],alpha=0.5,color=colors[t_i])
+	
+	return taste_responsivity_probability, taste_responsivity_binary
+

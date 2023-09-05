@@ -8,15 +8,10 @@ Created on Tue Jan 10 13:54:17 2023
 This is a collection of miscellaneous functions for plotting data
 """
 
-import os, tqdm, tables
+import os, tqdm
 import numpy as np
-import random
 import matplotlib.pyplot as plt
-from matplotlib import cm
 from scipy import signal
-from scipy.fft import fftshift
-from numba import jit
-import time
 
 def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_times, 
 				 segment_names, segment_times, segment_spike_times, tastant_spike_times, 

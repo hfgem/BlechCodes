@@ -492,63 +492,6 @@ def bin_neur_spike_counts(save_dir,segment_spike_times,segment_names,segment_tim
 
 	return neur_bout_seg_thresh, neur_bout_seg
 
-@jit(forceobj=True)	
-def high_bins(bin_spikes,segment_start_time,segment_end_time,bin_size,num_thresh):
-	"""This function calculates bins of time that have the number of neurons 
-	spiking above some given threshold"""
-	bin_dt = int(np.ceil(bin_size*1000)) #Convert from seconds to ms = dt
-	#Sweep array in bins searching for those with the number of neurons >= num_thresh
-	bin_spike_counts = [np.sum(np.sum(bin_spikes[:,b_i:b_i+bin_dt],1)) for b_i in range(segment_end_time-segment_start_time-bin_dt)]
-	bin_neur_counts = [np.sum(np.sum(bin_spikes[:,b_i:b_i+bin_dt],1)>0) for b_i in range(segment_end_time-segment_start_time-bin_dt)]
-	high_neur_bins = dict()
-	for t_i in num_thresh:
-		high_neur_bins.update({str(t_i): np.sum((np.array(bin_neur_counts) >= t_i).astype('int'))})
-	high_spike_bins = dict()
-	num_spikes = np.arange(1,max(np.array(bin_spike_counts)),2)
-	for s_i in num_spikes:
-		high_spike_bins.update({str(s_i): np.sum((np.array(bin_neur_counts) >= s_i).astype('int'))})
-	
-	return high_neur_bins, high_spike_bins
-
-def plot_high_bins_truexnull(true_x_vals,null_x_vals,true_spike_counts,mean_null_spike_counts,
-							 std_null_spike_counts,segment_length,save_dir,
-							 plot_name,seg_name):
-	"""Plot the results of high_bins() run on true and null datasets"""
-	#True Counts
-	fig = plt.figure(figsize=(10,10))
-	plt.plot(true_x_vals,true_spike_counts,label='true bin counts',color='b')
-	plt.fill_between(null_x_vals, 
-			   (mean_null_spike_counts-std_null_spike_counts), 
-			  (mean_null_spike_counts+std_null_spike_counts),
-			  alpha=0.4,color='g',label='null bin counts std')
-	plt.plot(null_x_vals,mean_null_spike_counts,color='g',label='null bin counts mean')
-	plt.legend()
-	plt.xlabel(plot_name)
-	plt.ylabel('Number of Instances')
-	plt.title(plot_name)
-	plt.tight_layout()
-	im_name = plot_name.replace(' ','_') + '_truexnull'
-	fig.savefig(save_dir + im_name + '_' + seg_name + '.png')
-	fig.savefig(save_dir + im_name + '_' + seg_name + '.svg')
-	plt.close(fig)
-	#Normalized Counts
-	fig = plt.figure(figsize=(10,10))
-	plt.plot(true_x_vals,true_spike_counts/(segment_length/1000),label='true bin counts',color='b')
-	plt.fill_between(null_x_vals, 
-			   (mean_null_spike_counts-std_null_spike_counts)/(segment_length/1000), 
-			  (mean_null_spike_counts+std_null_spike_counts)/(segment_length/1000),
-			  alpha=0.4,color='g',label='null bin counts std')
-	plt.plot(null_x_vals,mean_null_spike_counts/(segment_length/1000),color='g',label='null bin counts mean')
-	plt.legend()
-	plt.xlabel(plot_name + ' per Second')
-	plt.ylabel('Number of Instances')
-	plt.title(plot_name + ' Normalized per Second')
-	plt.tight_layout()
-	im_name = plot_name.replace(' ','_') + '_truexnull_norm'
-	fig.savefig(save_dir + im_name + '_' + seg_name + '.png')
-	fig.savefig(save_dir + im_name + '_' + seg_name + '.svg')
-	plt.close(fig)
-
 def null_results_recombined(null_results, segment_times):
 	#Reformat null results into same format as regular results
 	num_seg = len(segment_times) - 1
