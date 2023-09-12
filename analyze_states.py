@@ -60,7 +60,9 @@ try:
 	PSTH_times = af.pull_data_from_hdf5(sorted_dir,data_group_name,'PSTH_times')
 	PSTH_taste_deliv_times = af.pull_data_from_hdf5(sorted_dir,data_group_name,'PSTH_taste_deliv_times')
 	avg_tastant_PSTH = af.pull_data_from_hdf5(sorted_dir,data_group_name,'avg_tastant_PSTH')
+	print("PSTH data imported")
 except:
+	"Calculating and plotting raster and PSTH data"
 	pf.raster_plots(data_save_dir, dig_in_names, start_dig_in_times, end_dig_in_times, 
 					segment_names, segment_times, segment_spike_times, tastant_spike_times, 
 					pre_taste_dt, post_taste_dt, num_neur, num_tastes)
@@ -82,13 +84,14 @@ data_group_name = 'taste_responsivity'
 try:
 	taste_responsivity_probability = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability')
 	taste_responsivity_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary')
+	taste_responsive_ind = af.pull_data_from_hdf5(sorted_dir, data_group_name, 'taste_responsive_ind')
 except:	
 	taste_responsivity_probability, taste_responsivity_binary = af.taste_responsivity_raster(tastant_spike_times,start_dig_in_times,end_dig_in_times,num_neur,pre_taste_dt)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability',taste_responsivity_probability)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary',taste_responsivity_binary)
-
-#Pull out the taste responsive data only
-taste_responsive_ind = np.where(taste_responsivity_binary)[0]
+	#Pull out the taste responsive data only
+	taste_responsive_ind = np.where(taste_responsivity_binary == 1)[0]
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_responsive_ind',taste_responsive_ind)
 
 taste_responsive_segment_spike_times = []
 for s_i in range(len(segment_names)):
@@ -108,6 +111,8 @@ for t_i in range(len(dig_in_names)):
 	top_50_percentile = np.percentile(taste_responsivity_probability[t_i],50)
 	most_taste_responsivity_binary *= taste_responsivity_probability[t_i] >= top_50_percentile
 most_taste_responsive_ind = np.where(most_taste_responsivity_binary)[0]
+af.add_data_to_hdf5(sorted_dir,data_group_name,'most_taste_responsive_ind',most_taste_responsive_ind)
+
 most_taste_responsive_segment_spike_times = []
 for s_i in range(len(segment_names)):
 	most_taste_responsive_segment_spike_times.append([segment_spike_times[s_i][tri] for tri in most_taste_responsive_ind])
@@ -190,7 +195,6 @@ except:
 taste_resp_cp_save_dir = cp_save_dir + 'Taste_Responsive_CPs/'
 if os.path.isdir(taste_resp_cp_save_dir) == False:
 	os.mkdir(taste_resp_cp_save_dir)
-data_group_name = 'changepoint_data'
 #PSTH KS-Test CP Calcs
 try:
 	taste_resp_taste_cp_PSTH_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_PSTH_inds')
@@ -215,11 +219,10 @@ except:
 										taste_resp_cp_raster_save_dir)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_raster_inds',taste_resp_taste_cp_raster_inds)
 	
-#_____Taste responsive data_____
+#_____Most taste responsive data_____
 most_taste_resp_cp_save_dir = cp_save_dir + 'Most_Taste_Responsive_CPs/'
 if os.path.isdir(most_taste_resp_cp_save_dir) == False:
 	os.mkdir(most_taste_resp_cp_save_dir)
-data_group_name = 'changepoint_data'
 #PSTH KS-Test CP Calcs
 try:
 	most_taste_resp_taste_cp_PSTH_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_PSTH_inds')

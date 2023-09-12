@@ -6,7 +6,7 @@ Created on Tue Jul 19 19:12:11 2022
 @author: hannahgermaine
 A collection of functions to handle HDF5 data storage and imports
 """
-import tables, os, tqdm, sys
+import tables, os, tqdm, sys, easygui
 #If this file is not being run from the directory of .../BlechCodes/, uncomment the next two lines
 #file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
 #os.chdir(file_path)
@@ -318,9 +318,7 @@ def sorted_data_import():
 	stored (if it exists)"""
 	
 	print("\n INPUT REQUESTED: Select directory with the sorted .h5 file (name = '...._repacked.h5').")
-	root = tk.Tk()
-	currdir = os.getcwd()
-	blech_clust_datadir = fd.askdirectory(parent=root, initialdir=currdir, title='Please select the folder where data is stored.')
+	blech_clust_datadir = easygui.diropenbox(title='Please select the folder where data is stored.')
 	files_in_dir = os.listdir(blech_clust_datadir)
 	for i in range(len(files_in_dir)): #Checks for repacked and downsampled .h5 in the directory
 		filename = files_in_dir[i]
@@ -335,7 +333,7 @@ def sorted_data_import():
 		blech_clust_hf5_dir = blech_clust_datadir + '/' + blech_clust_hdf5_name
 	except:
 		print("Old .h5 file not found. Quitting program.")
-		sys.exit()
+		quit()
 	try:
 		downsampled_hf5_dir = blech_clust_datadir + '/' + downsampled_hf5_name
 	except:

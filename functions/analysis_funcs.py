@@ -147,8 +147,6 @@ def import_data(sorted_dir, segment_dir, data_save_dir):
 		#Convert segment times to ms timescale for saving
 		segment_times = np.ceil(segment_times*ms_conversion)
 	
-	#Save data for future use
-	blech_clust_h5 = tables.open_file(sorted_dir, 'r+', title = sorted_dir[-1])
 	try:
 		blech_clust_h5.create_group('/','experiment_components')
 	except:
@@ -245,10 +243,13 @@ def pull_data_from_hdf5(sorted_dir,data_group_name,data_name):
 		if datum.name[0:len(data_name)] == data_name:
 			data_list.append(datum[0][:])
 	blech_clust_h5.close()
-	if len(data_list) == 1:
-		data = np.array(data_list)
+	if len(data_list) >= 1:
+		if len(data_list) == 1:
+			data = np.array(data_list)
+		else:
+			data = data_list
 	else:
-		data = data_list
+		raise Exception(data_name + " does not exist in group " + data_group_name)
 	
 	return data
 

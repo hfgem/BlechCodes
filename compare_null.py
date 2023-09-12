@@ -122,7 +122,7 @@ if __name__ == '__main__':
 					spike_indices = (np.array(null_spikes[n_i]) - segment_start_time).astype('int')
 					null_bin_spike[n_i,spike_indices] = 1
 				null_bin_spikes.append(null_bin_spike)
-			print('\t Now calculating count, spike, and sutocorrelation distributions')
+			print('\t Now calculating count, spike, and autocorrelation distributions')
 			#_____Convert real data to a binary spike matrix_____
 			bin_spike = np.zeros((num_neur,segment_end_time-segment_start_time+1))
 			for n_i in range(num_neur):
@@ -295,3 +295,6 @@ if __name__ == '__main__':
 	#Plot all autocorrelation data
 	nd.plot_all_truexnull(neur_true_autocorr_x,neur_null_autocorr_x,neur_true_autocorr_vals,neur_null_autocorr_mean,
 									 neur_null_autocorr_std,norm_val,bin_dir,'Autocorrelation Lags',segment_names)
+	
+	
+	
