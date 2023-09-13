@@ -92,7 +92,6 @@ def deliv_dist_parallelized(inputs):
 	
 	return deliv_distance_storage
 
-@jit(nopython=True)
 def correlation_calcs(n_i, neur_deliv_cp_rast_binned, cp_vals, neur_dev_rast_binned, fr_bin):
 	"""
 	This set of code calculates binary vectors of where fr deviations occur in 
