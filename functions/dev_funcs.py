@@ -364,6 +364,68 @@ def plot_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_rast
 			plt.subplot(2,1,1)
 			for c_p in range(num_cp):
 				all_dist_cp = (neuron_distance_storage[:,:,:,c_p]).flatten()
+				plt.hist(all_dist_cp,density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Probability Mass Function - ' + dist_name)
+			plt.subplot(2,1,2)
+			for c_p in range(num_cp):
+				all_dist_cp = (neuron_distance_storage[:,:,:,c_p]).flatten()
+				plt.hist(all_dist_cp,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Cumulative Mass Function - ' + dist_name)
+			plt.suptitle(dist_name + ' distributions for segment ' + segment_names[s_i] + ', taste ' + dig_in_names[t_i])
+			plt.tight_layout()
+			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i]
+			f.savefig(filename + '.png')
+			f.savefig(filename + '.svg')
+			#Plot the distribution of distances for each changepoint index
+			f1 = plt.figure(figsize=(5,5))
+			plt.subplot(2,1,1)
+			for c_p in range(num_cp):
+				all_avg_dist_cp = (np.mean(neuron_distance_storage[:,:,:,c_p],2)).flatten()
+				plt.hist(all_avg_dist_cp,density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+			plt.xlabel('Average ' + dist_name)
+			plt.legend()
+			plt.title('Probability Mass Function - ' + dist_name)
+			plt.subplot(2,1,2)
+			for c_p in range(num_cp):
+				all_avg_dist_cp = (np.mean(neuron_distance_storage[:,:,:,c_p],2)).flatten()
+				plt.hist(all_avg_dist_cp,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+			plt.xlabel('Average ' + dist_name)
+			plt.legend()
+			plt.title('Cumulative Mass Function - ' + dist_name)
+			plt.suptitle(dist_name + ' avg population distributions for segment ' + segment_names[s_i] + ', taste ' + dig_in_names[t_i])
+			plt.tight_layout()
+			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_avg_pop'
+			f1.savefig(filename + '.png')
+			f1.savefig(filename + '.svg')
+			
+def plot_combined_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
+						   save_dir,dist_name):
+	"""This function takes in deviation rasters, tastant delivery spikes, and
+	changepoint indices to calculate correlations of each deviation to each 
+	changepoint interval. Outputs are saved .npy files with name indicating
+	segment and taste containing matrices of shape [num_dev, num_deliv, num_neur, num_cp]
+	with the distances stored."""
+	
+	#Grab parameters
+	num_tastes = len(dig_in_names)
+	num_segments = len(segment_names)
+	for s_i in range(num_segments):  #Loop through each segment
+		print("Beginning distance calcs for segment " + str(s_i))
+		for t_i in range(num_tastes):  #Loop through each taste
+			print("\tTaste #" + str(t_i + 1))
+			#Import distance numpy array
+			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
+			neuron_distance_storage = np.load(filename)
+			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_distance_storage)
+			#Plot the distribution of distances for each changepoint index
+			f = plt.figure(figsize=(5,5))
+			plt.subplot(2,1,1)
+			for c_p in range(num_cp):
+				all_dist_cp = (neuron_distance_storage[:,:,:,c_p]).flatten()
 				plt.hist(all_dist_cp[all_dist_cp!=0],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel(dist_name)
 			plt.legend()
