@@ -273,6 +273,7 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 					 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
 				pool = Pool(4)
 				deliv_corr_storage = pool.map(cdcp.deliv_corr_parallelized, inputs)
+				pool.close()
 				neuron_corr_storage[dev_i,:,:,:] = np.array(deliv_corr_storage)
 			
 			#Save to a numpy array
@@ -333,6 +334,7 @@ def calculate_distances(segment_dev_rasters, tastant_spike_times,
 					 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
 				pool = Pool(4)
 				deliv_distance_storage = pool.map(cdcp.deliv_dist_parallelized, inputs)
+				pool.close()
 				neuron_distance_storage[dev_i,:,:,:] = np.array(deliv_distance_storage)
 			#Save to a numpy array
 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
