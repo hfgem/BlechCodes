@@ -124,6 +124,9 @@ if __name__ == '__main__':
 	df.calculate_correlations(segment_dev_rasters, tastant_spike_times,
 							   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
 							   pre_taste, post_taste, taste_cp_raster_inds, corr_dir) #For all neurons in dataset
+	#Plot distance calculations
+	df.plot_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
+							   corr_dir, 'Correlation')
 	
 	#Calculate distance of true data deviation rasters from taste response rasters
 	dist_dir = comp_dir + 'dist/' #Create distance directory if doesn't exist
@@ -133,6 +136,10 @@ if __name__ == '__main__':
 							   start_dig_in_times, end_dig_in_times, segment_names,
 							   dig_in_names, pre_taste, post_taste, 
 							   taste_cp_raster_inds, dist_dir) #for all neurons in dataset
+	#Plot distance calculations
+	df.plot_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
+							   dist_dir, 'Distance')
+	
 	
 	#Import null datasets for deviation analyses
 	null_dir = fig_save_dir + 'null_data/' #This should exist from compare_null.py - make sure that was run before running this script or it'll throw an error!

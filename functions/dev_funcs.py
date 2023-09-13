@@ -273,15 +273,15 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 					 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
 				pool = Pool(4)
 				deliv_corr_storage = pool.map(cdcp.deliv_corr_parallelized, inputs)
-				neuron_corr_storage[dev_i,np.arange(num_deliv),:,:] = np.array(deliv_corr_storage)
+				neuron_corr_storage[dev_i,:,:,:] = np.array(deliv_corr_storage)
 			
 			#Save to a numpy array
 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
 			np.save(filename,neuron_corr_storage)
 		#segment_correlation_data.append(taste_correlation_data)	
 		segment_distance_data.append(taste_distance_data)
-		
-		
+	
+
 def calculate_distances(segment_dev_rasters, tastant_spike_times,
 						   start_dig_in_times, end_dig_in_times, segment_names,
 						   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
@@ -333,13 +333,13 @@ def calculate_distances(segment_dev_rasters, tastant_spike_times,
 					 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
 				pool = Pool(4)
 				deliv_distance_storage = pool.map(cdcp.deliv_dist_parallelized, inputs)
-				neuron_distance_storage[dev_i,np.arange(num_deliv),:,:] = np.array(deliv_distance_storage)
+				neuron_distance_storage[dev_i,:,:,:] = np.array(deliv_distance_storage)
 			#Save to a numpy array
 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
 			np.save(filename,neuron_distance_storage)
 
-def distance_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
-						   save_dir,neuron_keep_indices=[]):
+def plot_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
+						   save_dir,dist_name):
 	"""This function takes in deviation rasters, tastant delivery spikes, and
 	changepoint indices to calculate correlations of each deviation to each 
 	changepoint interval. Outputs are saved .npy files with name indicating
@@ -347,12 +347,8 @@ def distance_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_
 	with the distances stored."""
 	
 	#Grab parameters
-	fr_bin = 10 #ms to bin together for number of spikes 'fr'
 	num_tastes = len(dig_in_names)
 	num_segments = len(segment_names)
-	pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
-	post_taste_dt = np.ceil(post_taste*1000).astype('int')
-
 	for s_i in range(num_segments):  #Loop through each segment
 		print("Beginning distance calcs for segment " + str(s_i))
 		for t_i in range(num_tastes):  #Loop through each taste
@@ -362,4 +358,22 @@ def distance_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_
 			neuron_distance_storage = np.load(filename)
 			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_distance_storage)
 			#Plot the distribution of distances for each changepoint index
-			
+			f = plt.figure(figsize=(5,5))
+			plt.subplot(2,1,1)
+			for c_p in range(num_cp):
+				all_dist_cp = (neuron_distance_storage[:,:,:,c_p]).flatten()
+				plt.hist(all_dist_cp[all_dist_cp!=0],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Probability Mass Function - ' + dist_name)
+			plt.subplot(2,1,2)
+			for c_p in range(num_cp):
+				all_dist_cp = (neuron_distance_storage[:,:,:,c_p]).flatten()
+				plt.hist(all_dist_cp[all_dist_cp!=0],density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Cumulative Mass Function - ' + dist_name)
+			plt.suptitle(dist_name + ' distributions for segment ' + segment_names[s_i] + ' taste ' + dig_in_names[t_i])
+			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i]
+			plt.savefig(f,filename + '.png')
+			plt.savefig(f,filename + '.svg')
