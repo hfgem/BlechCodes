@@ -220,7 +220,7 @@ def plot_null_v_true_stats(true_data, null_data, data_name, save_dir, x_label=[]
 
 
 def calculate_correlations(segment_dev_rasters, tastant_spike_times,
-						   start_dig_in_times, end_dig_in_times, dig_in_names,
+						   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
 						   pre_taste, post_taste, taste_cp_raster_inds, save_dir,
 						   neuron_keep_indices=[]):
 	"""This function takes in deviation rasters, tastant delivery spikes, and
@@ -252,56 +252,32 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 			print("\tTaste #" + str(t_i + 1))
 			taste_cp = taste_cp_raster_inds[t_i][:, neuron_keep_indices, :]
 			taste_spikes = tastant_spike_times[t_i]
-			#Note, num_cp = num_cp+1 with the first the taste delivery index
+			#Note, num_cp = num_cp+1 with the first value the taste delivery index
+			num_deliv, _, num_cp = np.shape(taste_cp)
+			taste_deliv_len = [(end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i][deliv_i] + pre_taste_dt + post_taste_dt + 1) for deliv_i in range(num_deliv)]
+			deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
 			num_deliv, _, num_cp = np.shape(taste_cp)
 			#Store the correlation results in a numpy array
-			#population_correlation_storage = np.zeros((num_dev, num_deliv, num_cp-1))
-			#neuron_correlation_storage = np.zeros((num_dev, num_deliv, total_num_neur, num_cp-1))
-			neuron_distance_storage = np.zeros((num_dev, num_deliv, total_num_neur, num_cp-1))
+			neuron_corr_storage = np.zeros((num_dev, num_deliv, total_num_neur, num_cp-1))
 			for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
 				dev_rast = seg_rast[dev_i][neuron_keep_indices,:]
-				for deliv_i in range(num_deliv): #Loop through all taste deliveries
-					#Pull delivery raster
-					deliv_st = taste_spikes[deliv_i]
-					deliv_len = end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i][deliv_i]
-					deliv_rast = np.zeros((total_num_neur,pre_taste_dt+post_taste_dt+deliv_len+1))
-					for n_i in neuron_keep_indices:
-						neur_deliv_st = list(np.array(deliv_st[n_i]).astype('int') - start_dig_in_times[t_i][deliv_i] + pre_taste_dt)
-						deliv_rast[n_i,neur_deliv_st] = 1
-					#Calculate correlation with each cp segment
-					#last_cp = pre_taste_dt #keep track of the population average changepoint
-					for c_p in range(num_cp-1):
-						cp_vals = (taste_cp[deliv_i,neuron_keep_indices,c_p:c_p+2]).astype('int')
-						#Neuron rasters
-						for n_i in range(total_num_neur):
-							#Grab rasters
-							neur_deliv_cp_rast = deliv_rast[n_i,cp_vals[n_i,0]:cp_vals[n_i,1]]
-							neur_dev_rast = dev_rast[n_i,:]
-							len_deliv = len(neur_deliv_cp_rast)
-							len_dev = len(neur_dev_rast)
-							#Reshape the shorter raster
-							min_len = min(len_deliv,len_dev)
-							if min_len > fr_bin + 2:
-								max_len = max(len_deliv,len_dev)
-								max_ind = np.argmax((len_deliv,len_dev))
-								if max_ind == 0:
-									neur_dev_rast_interp = interp1d(np.linspace(0,len_deliv-1,len_dev),neur_dev_rast)
-									neur_dev_rast = neur_dev_rast_interp(np.arange(len_deliv))
-								else:
-									neur_deliv_cp_interp = interp1d(np.linspace(0,len_dev-1,len_deliv),neur_deliv_cp_rast)
-									neur_deliv_cp = neur_deliv_cp_interp(np.arange(len_dev))
-								#Convert rasters to binned spikes
-								neur_deliv_cp_binned = np.array([np.sum(neur_deliv_cp_rast[b_i:b_i+fr_bin]) for b_i in range(max_len - fr_bin)])
-								neur_dev_rast_binned = np.array([np.sum(neur_dev_rast[b_i:b_i+fr_bin]) for b_i in range(max_len - fr_bin)])
-								#Calculate correlation
-								#neuron_correlation_storage[dev_i,deliv_i,n_i,c_p] = pearsonr(neur_deliv_cp_binned,neur_dev_rast_binned)[1]
-								#Calculate distance
-								neuron_distance_storage[dev_i,deliv_i,n_i,c_p] = np.sqrt(np.sum(np.square(np.abs(neur_deliv_cp_binned - neur_dev_rast_binned))))
-							else:
-								#neuron_correlation_storage[dev_i,deliv_i,n_i,c_p] = np.nan
-								neuron_distance_storage[dev_i,deliv_i,n_i,c_p] = np.nan
-			#taste_correlation_data.append(neuron_correlation_storage)
-			taste_distance_data.append(neuron_distance_storage)
+				dev_len = np.shape(dev_rast)[1]
+				end_ind = np.arange(fr_bin,fr_bin+dev_len)
+				end_ind[end_ind > dev_len] = dev_len
+				dev_rast_binned = np.zeros(np.shape(dev_rast))
+				for start_ind in range(dev_len):
+					dev_rast_binned[:,start_ind] = np.sum(dev_rast[:,start_ind:end_ind[start_ind]],1)
+				
+				inputs = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
+				 itertools.repeat(neuron_keep_indices), itertools.repeat(taste_cp), \
+					 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
+				pool = Pool(4)
+				deliv_corr_storage = pool.map(cdcp.deliv_corr_parallelized, inputs)
+				neuron_corr_storage[dev_i,np.arange(num_deliv),:,:] = np.array(deliv_corr_storage)
+			
+			#Save to a numpy array
+			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
+			np.save(filename,neuron_corr_storage)
 		#segment_correlation_data.append(taste_correlation_data)	
 		segment_distance_data.append(taste_distance_data)
 		
@@ -317,7 +293,7 @@ def calculate_distances(segment_dev_rasters, tastant_spike_times,
 	with the distances stored."""
 	
 	#Grab parameters
-	fr_bin = 50 #ms to bin together for number of spikes 'fr'
+	fr_bin = 10 #ms to bin together for number of spikes 'fr'
 	num_tastes = len(start_dig_in_times)
 	num_segments = len(segment_dev_rasters)
 	pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
@@ -339,56 +315,51 @@ def calculate_distances(segment_dev_rasters, tastant_spike_times,
 			taste_spikes = tastant_spike_times[t_i]
 			#Note, num_cp = num_cp+1 with the first value the taste delivery index
 			num_deliv, _, num_cp = np.shape(taste_cp)
+			taste_deliv_len = [(end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i][deliv_i] + pre_taste_dt + post_taste_dt + 1) for deliv_i in range(num_deliv)]
+			deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
 			#Store the correlation results in a numpy array
 			neuron_distance_storage = np.zeros((num_dev, num_deliv, total_num_neur, num_cp-1))
 			for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
 				dev_rast = seg_rast[dev_i][neuron_keep_indices,:]
-				for deliv_i in range(num_deliv): #Loop through all taste deliveries
-					#Pull delivery raster
-					deliv_st = taste_spikes[deliv_i]
-					deliv_len = end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i][deliv_i]
-					deliv_rast = np.zeros((total_num_neur,pre_taste_dt+post_taste_dt+deliv_len+1))
-					for n_i in neuron_keep_indices:
-						neur_deliv_st = list(np.array(deliv_st[n_i]).astype('int') - start_dig_in_times[t_i][deliv_i] + pre_taste_dt)
-						deliv_rast[n_i,neur_deliv_st] = 1
-					#Calculate correlation with each cp segment
-					for c_p in range(num_cp-1):
-						cp_vals = (taste_cp[deliv_i,neuron_keep_indices,c_p:c_p+2]).astype('int')
-						#Calculate by neuron using the parallelized code
-						inputs = zip(range(total_num_neur),itertools.repeat(deliv_rast),itertools.repeat(cp_vals),itertools.repeat(dev_rast),itertools.repeat(fr_bin))
-						pool = Pool(4)
-						neur_dists = pool.map(cdcp.distance_parallelized, inputs)
- 
-						
-						
-						
-						for n_i in range(total_num_neur):
-							#Grab rasters
-							neur_deliv_cp_rast = deliv_rast[n_i,cp_vals[n_i,0]:cp_vals[n_i,1]]
-							neur_dev_rast = dev_rast[n_i,:]
-							len_deliv = len(neur_deliv_cp_rast)
-							len_dev = len(neur_dev_rast)
-							#Reshape the shorter raster
-							min_len = min(len_deliv,len_dev)
-							if min_len > fr_bin + 2:
-								max_len = max(len_deliv,len_dev)
-								max_ind = np.argmax((len_deliv,len_dev))
-								if max_ind == 0:
-									neur_dev_rast_interp = interp1d(np.linspace(0,len_deliv-1,len_dev),neur_dev_rast)
-									neur_dev_rast = neur_dev_rast_interp(np.arange(len_deliv))
-								else:
-									neur_deliv_cp_interp = interp1d(np.linspace(0,len_dev-1,len_deliv),neur_deliv_cp_rast)
-									neur_deliv_cp = neur_deliv_cp_interp(np.arange(len_dev))
-								#Convert rasters to binned spikes
-								neur_deliv_cp_binned = np.array([np.sum(neur_deliv_cp_rast[b_i:b_i+fr_bin]) for b_i in range(max_len - fr_bin)])
-								neur_dev_rast_binned = np.array([np.sum(neur_dev_rast[b_i:b_i+fr_bin]) for b_i in range(max_len - fr_bin)])
-								#Calculate distance
-								neuron_distance_storage[dev_i,deliv_i,n_i,c_p] = np.sqrt(np.sum(np.square(np.abs(neur_deliv_cp_binned - neur_dev_rast_binned))))
-							else:
-								neuron_distance_storage[dev_i,deliv_i,n_i,c_p] = np.nan
+				dev_len = np.shape(dev_rast)[1]
+				end_ind = np.arange(fr_bin,fr_bin+dev_len)
+				end_ind[end_ind > dev_len] = dev_len
+				dev_rast_binned = np.zeros(np.shape(dev_rast))
+				for start_ind in range(dev_len):
+					dev_rast_binned[:,start_ind] = np.sum(dev_rast[:,start_ind:end_ind[start_ind]],1)
+				
+				inputs = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
+				 itertools.repeat(neuron_keep_indices), itertools.repeat(taste_cp), \
+					 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
+				pool = Pool(4)
+				deliv_distance_storage = pool.map(cdcp.deliv_dist_parallelized, inputs)
+				neuron_distance_storage[dev_i,np.arange(num_deliv),:,:] = np.array(deliv_distance_storage)
 			#Save to a numpy array
 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
 			np.save(filename,neuron_distance_storage)
+
+def distance_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
+						   save_dir,neuron_keep_indices=[]):
+	"""This function takes in deviation rasters, tastant delivery spikes, and
+	changepoint indices to calculate correlations of each deviation to each 
+	changepoint interval. Outputs are saved .npy files with name indicating
+	segment and taste containing matrices of shape [num_dev, num_deliv, num_neur, num_cp]
+	with the distances stored."""
+	
+	#Grab parameters
+	fr_bin = 10 #ms to bin together for number of spikes 'fr'
+	num_tastes = len(dig_in_names)
+	num_segments = len(segment_names)
+	pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
+	post_taste_dt = np.ceil(post_taste*1000).astype('int')
+
+	for s_i in range(num_segments):  #Loop through each segment
+		print("Beginning distance calcs for segment " + str(s_i))
+		for t_i in range(num_tastes):  #Loop through each taste
+			print("\tTaste #" + str(t_i + 1))
+			#Import distance numpy array
+			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
+			neuron_distance_storage = np.load(filename)
+			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_distance_storage)
+			#Plot the distribution of distances for each changepoint index
 			
-
-

@@ -74,9 +74,9 @@ if __name__ == '__main__':
 				os.mkdir(seg_dir)
 			seg_dirs.append(seg_dir)
 		print("Now calculating deviations")
-		with Pool(processes=4) as pool: # start 4 worker processes
-			pool.map(df.run_dev_pull_parallelized,zip(segment_spike_times, 
-											 itertools.repeat(local_size), 
+		with Pool(processes=4) as pool:  # start 4 worker processes
+			pool.map(df.run_dev_pull_parallelized, zip(segment_spike_times,
+											 itertools.repeat(local_size),
 											 itertools.repeat(min_dev_size),
 											 segment_times_reshaped,
 											 seg_dirs))
@@ -103,27 +103,26 @@ if __name__ == '__main__':
 	data_group_name = 'taste_responsivity'
 	taste_responsivity_probability = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability')
 	taste_responsivity_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary')
-	
-	#Next import changepoint times
-	data_group_name = 'changepoint_data'
 	taste_responsive_ind = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsive_ind')[0]
 	most_taste_responsive_ind = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_responsive_ind')[0]
-	#taste_cp_PSTH_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_PSTH_inds')
+	
+	#Import changepoint data
+	data_group_name = 'changepoint_data'
 	taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_raster_inds')
-	#taste_resp_taste_cp_PSTH_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_PSTH_inds')
 	taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_raster_inds')
-	#most_taste_resp_taste_cp_PSTH_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_PSTH_inds')
 	most_taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_raster_inds')
 	
+	#Create directory to store analysis results
 	comp_dir = fig_save_dir + 'dev_x_taste/'
 	if os.path.isdir(comp_dir) == False:
 		os.mkdir(comp_dir)
+		
 	#Calculate correlation of true data deviation rasters with taste response rasters
 	corr_dir = comp_dir + 'corr/'
 	if os.path.isdir(corr_dir) == False:
 		os.mkdir(corr_dir)
 	df.calculate_correlations(segment_dev_rasters, tastant_spike_times,
-							   start_dig_in_times, end_dig_in_times, dig_in_names,
+							   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
 							   pre_taste, post_taste, taste_cp_raster_inds, corr_dir) #For all neurons in dataset
 	
 	#Calculate distance of true data deviation rasters from taste response rasters
