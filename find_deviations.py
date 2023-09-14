@@ -124,7 +124,7 @@ if __name__ == '__main__':
 	df.calculate_correlations(segment_dev_rasters, tastant_spike_times,
 							   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
 							   pre_taste, post_taste, taste_cp_raster_inds, corr_dir) #For all neurons in dataset
-	#Plot distance calculations
+	#Plot correlation calculations
 	df.plot_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
 							   corr_dir, 'Correlation')
 	

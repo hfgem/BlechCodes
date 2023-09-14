@@ -39,17 +39,31 @@ def run_dev_pull_parallelized(inputs):
 	spike_sum = np.sum(spikes_bin, 0)
 	half_min_dev_size = int(np.ceil(min_dev_size/2))
 	half_local_size = int(np.ceil(local_size/2))
+	# Find where the firing rate is above 3std from the mean
 	fr_calc = np.array([np.sum(spike_sum[i_s - half_min_dev_size:i_s + half_min_dev_size]) /
-					   min_dev_size for i_s in np.arange(half_local_size, num_dt-half_local_size)])  # in spikes per min_dev_size
-	local_fr_calc = np.array([np.sum(spike_sum[l_s - half_local_size:l_s + half_local_size]) /
-							 local_size for l_s in np.arange(half_local_size, num_dt-half_local_size)])  # in spikes per min_dev_size
-	peak_fr_ind = find_peaks(fr_calc - local_fr_calc, height=0)[0]
+					   min_dev_size for i_s in np.arange(half_min_dev_size, num_dt-half_min_dev_size)])  # in spikes per min_dev_size
+	local_fr_mean = []
+	local_fr_std = []
+	for i_s in np.arange(half_min_dev_size,num_dt-half_min_dev_size):
+		min_ind = max(i_s - half_local_size,0)
+		max_ind = min(num_dt-half_min_dev_size,i_s+half_local_size)
+		local_fr_mean.append(np.mean(fr_calc[min_ind:max_ind]))
+		local_fr_std.append(np.std(fr_calc[min_ind:max_ind]))
+	local_fr_mean = np.array(local_fr_mean)
+	local_fr_std = np.array(local_fr_std)
+	peak_fr_ind = np.where(fr_calc >= local_fr_mean + 3*local_fr_std)[0]
+	true_ind = peak_fr_ind + half_min_dev_size
 	# Find where the prominence is above the 90th percentile of prominence values
-	peak_fr_prominence = fr_calc[peak_fr_ind] - local_fr_calc[peak_fr_ind]
-	top_90_prominence = np.percentile(peak_fr_prominence, 90)
-	top_90_prominence_ind = peak_fr_ind[np.where(
-		peak_fr_prominence >= top_90_prominence)[0]]
-	true_ind = top_90_prominence_ind + half_local_size
+	#fr_calc = np.array([np.sum(spike_sum[i_s - half_min_dev_size:i_s + half_min_dev_size]) /
+	#				   min_dev_size for i_s in np.arange(half_local_size, num_dt-half_local_size)])  # in spikes per min_dev_size
+	#local_fr_calc = np.array([np.sum(spike_sum[l_s - half_local_size:l_s + half_local_size]) /
+	#						 local_size for l_s in np.arange(half_local_size, num_dt-half_local_size)])  # in spikes per min_dev_size
+	#peak_fr_ind = find_peaks(fr_calc - local_fr_calc, height=0)[0]
+	#peak_fr_prominence = fr_calc[peak_fr_ind] - local_fr_calc[peak_fr_ind]
+	#top_90_prominence = np.percentile(peak_fr_prominence, 90)
+	#top_90_prominence_ind = peak_fr_ind[np.where(
+	#	peak_fr_prominence >= top_90_prominence)[0]]
+	#true_ind = top_90_prominence_ind + half_local_size
 	deviations = np.zeros(num_dt)
 	for t_i in true_ind:
 		deviations[t_i - half_min_dev_size:t_i + half_min_dev_size] = 1
@@ -357,21 +371,23 @@ def plot_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_rast
 			print("\tTaste #" + str(t_i + 1))
 			#Import distance numpy array
 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
-			neuron_distance_storage = np.load(filename)
-			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_distance_storage)
+			neuron_data_storage = np.load(filename)
+			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
 			#Plot the distribution of distances for each changepoint index
 			f = plt.figure(figsize=(5,5))
+			cp_data = []
 			plt.subplot(2,1,1)
 			for c_p in range(num_cp):
-				all_dist_cp = (neuron_distance_storage[:,:,:,c_p]).flatten()
-				plt.hist(all_dist_cp,density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+				all_dist_cp = (neuron_data_storage[:,:,:,c_p]).flatten()
+				cp_data.append(all_dist_cp)
+				plt.hist(all_dist_cp[~np.isnan(all_dist_cp)],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel(dist_name)
 			plt.legend()
 			plt.title('Probability Mass Function - ' + dist_name)
 			plt.subplot(2,1,2)
 			for c_p in range(num_cp):
-				all_dist_cp = (neuron_distance_storage[:,:,:,c_p]).flatten()
-				plt.hist(all_dist_cp,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+				all_dist_cp = cp_data[c_p]
+				plt.hist(all_dist_cp[~np.isnan(all_dist_cp)],density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel(dist_name)
 			plt.legend()
 			plt.title('Cumulative Mass Function - ' + dist_name)
@@ -383,16 +399,18 @@ def plot_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_rast
 			#Plot the distribution of distances for each changepoint index
 			f1 = plt.figure(figsize=(5,5))
 			plt.subplot(2,1,1)
+			avg_cp_data = []
 			for c_p in range(num_cp):
-				all_avg_dist_cp = (np.mean(neuron_distance_storage[:,:,:,c_p],2)).flatten()
-				plt.hist(all_avg_dist_cp,density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+				all_avg_dist_cp = (np.nanmean(neuron_data_storage[:,:,:,c_p],2)).flatten()
+				avg_cp_data.append(all_avg_dist_cp)
+				plt.hist(all_avg_dist_cp[~np.isnan(all_avg_dist_cp)],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel('Average ' + dist_name)
 			plt.legend()
 			plt.title('Probability Mass Function - ' + dist_name)
 			plt.subplot(2,1,2)
 			for c_p in range(num_cp):
-				all_avg_dist_cp = (np.mean(neuron_distance_storage[:,:,:,c_p],2)).flatten()
-				plt.hist(all_avg_dist_cp,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+				all_avg_dist_cp = avg_cp_data[c_p]
+				plt.hist(all_avg_dist_cp[~np.isnan(all_avg_dist_cp)],density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel('Average ' + dist_name)
 			plt.legend()
 			plt.title('Cumulative Mass Function - ' + dist_name)
@@ -415,29 +433,36 @@ def plot_combined_stats(segment_names, dig_in_names, pre_taste, post_taste, tast
 	num_segments = len(segment_names)
 	for s_i in range(num_segments):  #Loop through each segment
 		print("Beginning distance calcs for segment " + str(s_i))
+		taste_data = []
 		for t_i in range(num_tastes):  #Loop through each taste
 			print("\tTaste #" + str(t_i + 1))
 			#Import distance numpy array
 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
-			neuron_distance_storage = np.load(filename)
-			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_distance_storage)
+			neuron_data_storage = np.load(filename)
+			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
 			#Plot the distribution of distances for each changepoint index
 			f = plt.figure(figsize=(5,5))
 			plt.subplot(2,1,1)
+			cp_data = []
 			for c_p in range(num_cp):
-				all_dist_cp = (neuron_distance_storage[:,:,:,c_p]).flatten()
-				plt.hist(all_dist_cp[all_dist_cp!=0],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+				all_dist_cp = (neuron_data_storage[:,:,:,c_p]).flatten()
+				cp_data.append(all_dist_cp)
+			taste_data.append(cp_data)
+		#Plot taste data against each other
+		for c_p in range(num_cp):
+			f1 = plt.figure(figsize=(5,5))
+			plt.subplot(2,1,1)
+			for t_i in range(num_tastes):
+				plt.hist(taste_data[t_i][c_p],density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
 			plt.xlabel(dist_name)
 			plt.legend()
 			plt.title('Probability Mass Function - ' + dist_name)
 			plt.subplot(2,1,2)
-			for c_p in range(num_cp):
-				all_dist_cp = (neuron_distance_storage[:,:,:,c_p]).flatten()
-				plt.hist(all_dist_cp[all_dist_cp!=0],density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+			for t_i in range(num_tastes):
+				plt.hist(taste_data[t_i][c_p],density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
 			plt.xlabel(dist_name)
 			plt.legend()
 			plt.title('Cumulative Mass Function - ' + dist_name)
-			plt.suptitle(dist_name + ' distributions for segment ' + segment_names[s_i] + ' taste ' + dig_in_names[t_i])
-			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i]
-			plt.savefig(f,filename + '.png')
-			plt.savefig(f,filename + '.svg')
+			
+			
+			
