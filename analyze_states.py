@@ -84,7 +84,7 @@ data_group_name = 'taste_responsivity'
 try:
 	taste_responsivity_probability = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability')
 	taste_responsivity_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary')
-	taste_responsive_ind = af.pull_data_from_hdf5(sorted_dir, data_group_name, 'taste_responsive_ind')
+	taste_responsive_ind = (af.pull_data_from_hdf5(sorted_dir, data_group_name, 'taste_responsive_ind')[0]).astype('int')
 except:	
 	taste_responsivity_probability, taste_responsivity_binary = af.taste_responsivity_raster(tastant_spike_times,start_dig_in_times,end_dig_in_times,num_neur,pre_taste_dt)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability',taste_responsivity_probability)

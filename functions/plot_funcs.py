@@ -46,10 +46,29 @@ def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_time
 		rast_taste_save_dir = raster_save_dir + ('_').join((dig_in_names[t_i]).split(' ')) + '/'
 		if os.path.isdir(rast_taste_save_dir) == False:
 			os.mkdir(rast_taste_save_dir)
+		rast_taste_deliv_save_dir = rast_taste_save_dir + 'deliveries/'
+		if os.path.isdir(rast_taste_deliv_save_dir) == False:
+			os.mkdir(rast_taste_deliv_save_dir)
 		t_start = start_dig_in_times[t_i]
 		t_end = end_dig_in_times[t_i]
 		num_deliv = len(t_start)
 		t_st = tastant_spike_times[t_i]
+		for t_d_i in range(len(t_start)):
+			deliv_fig = plt.figure(figsize=(5,5))
+			s_t = t_st[t_d_i]
+			s_t_time = [list(np.array(s_t[i])*(1/1000)) for i in range(len(s_t))]
+			t_st.append(s_t)
+			#Plot the raster
+			plt.plot(num_deliv,1,t_d_i+1)
+			plt.eventplot(s_t_time,colors='k')
+			plt.xlabel('Time (s)')
+			plt.axvline(t_start[t_d_i]/1000,color='r')
+			plt.axvline(t_end[t_d_i]/1000,color='r')
+			im_name = ('_').join((dig_in_names[t_i]).split(' ')) + '_raster_' + str(t_d_i)
+			deliv_fig.tight_layout()
+			deliv_fig.savefig(rast_taste_deliv_save_dir + im_name + '.png')
+			deliv_fig.savefig(rast_taste_deliv_save_dir + im_name + '.svg')
+			plt.close(deliv_fig)
 		t_fig = plt.figure(figsize=(10,num_deliv))
 		for t_d_i in range(len(t_start)):
 			#Grab spike times into one list

@@ -13,9 +13,11 @@ from scipy.interpolate import interp1d
 import itertools
 from multiprocessing import Pool
 from numba import jit
+import warnings
 
 def deliv_corr_parallelized(inputs):
 	"""Parallelizes the distance calculation for deliveries"""
+	warnings.filterwarnings('ignore')
 	
 	#Grab parameters/data
 	deliv_i = inputs[0]
@@ -55,6 +57,7 @@ def deliv_corr_parallelized(inputs):
 
 def deliv_dist_parallelized(inputs):
 	"""Parallelizes the distance calculation for deliveries"""
+	warnings.filterwarnings('ignore')
 	
 	#Grab parameters/data
 	deliv_i = inputs[0]
@@ -97,6 +100,7 @@ def correlation_calcs(n_i, neur_deliv_cp_rast_binned, cp_vals, neur_dev_rast_bin
 	This set of code calculates binary vectors of where fr deviations occur in 
 	the activity compared to a local mean and standard deviation of fr.
 	"""
+	warnings.filterwarnings('ignore')
 	#Grab rasters
 	len_deliv = len(neur_deliv_cp_rast_binned)
 	len_dev = len(neur_dev_rast_binned)
@@ -133,6 +137,7 @@ def distance_calcs(n_i, neur_deliv_cp_rast_binned, cp_vals, neur_dev_rast_binned
 	This set of code calculates binary vectors of where fr deviations occur in 
 	the activity compared to a local mean and standard deviation of fr.
 	"""
+	warnings.filterwarnings('ignore')
 	
 	#Grab rasters
 	len_deliv = len(neur_deliv_cp_rast_binned)

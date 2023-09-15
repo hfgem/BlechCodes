@@ -138,8 +138,8 @@ def calc_cp_bayes(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 					N_2 = np.sum(deliv_bin[time_i:time_i+cp_bin])
 					cp_likelihood_d_i[time_i] = (((N_1/cp_bin)**N_1)*((N_2/cp_bin)**N_2))#/((N_1+N_2)/(2*cp_bin))**(N_1+N_2)
 					#cp_likelihood_d_i[time_i] = (((N_1/time_i)**N_1)*((N_2/(bin_length-time_i))**N_2))#/((N_1+N_2)/(2*bin_length))**(N_1+N_2)
-				peak_inds = find_peaks(cp_likelihood_d_i,distance=cp_bin)[0]
-				peak_inds = peak_inds[peak_inds>before_taste]
+				peak_inds = find_peaks(cp_likelihood_d_i[cp_bin:],distance=cp_bin)[0]
+				peak_inds = peak_inds[peak_inds>before_taste] + cp_bin
 				ordered_peak_ind = np.argsort(cp_likelihood_d_i[peak_inds])
 				best_peak_inds = np.zeros(num_cp+1)
 				best_peak_inds[0] = before_taste
@@ -205,9 +205,9 @@ def plot_cp_rasters_deliv(deliv_st,neur_deliv_cp,before_taste,dig_in_name,taste_
 	num_deliv, num_neur, num_cp = np.shape(neur_deliv_cp)
 	for d_i in range(num_deliv):
 		#Delivery aligned
-		fig = plt.figure(figsize=(5,10))
+		fig = plt.figure(figsize=(5,5))
 		spike_times = deliv_st[d_i]
-		plt.eventplot(spike_times,colors='k',alpha=0.5)
+		plt.eventplot(spike_times,colors='b',alpha=0.5)
 		plt.eventplot(neur_deliv_cp[d_i,:,:],colors='r')
 		plt.title(dig_in_name + ' delivery '+ str(d_i))
 		plt.xlabel('Time (ms)')

@@ -27,12 +27,6 @@ if __name__ == '__main__':
 	#todo: update intan rhd file import code to accept directory input
 	num_neur, all_waveforms, spike_times, dig_in_names, segment_times, segment_names, start_dig_in_times, end_dig_in_times, num_tastes = af.import_data(sorted_dir, segment_dir, fig_save_dir)
 	
-	data_group_name = 'PSTH_data'
-	tastant_PSTH = af.pull_data_from_hdf5(sorted_dir,data_group_name,'tastant_PSTH')
-	PSTH_times = af.pull_data_from_hdf5(sorted_dir,data_group_name,'PSTH_times')
-	PSTH_taste_deliv_times = af.pull_data_from_hdf5(sorted_dir,data_group_name,'PSTH_taste_deliv_times')
-	avg_tastant_PSTH = af.pull_data_from_hdf5(sorted_dir,data_group_name,'avg_tastant_PSTH')
-	
 	#_____Calculate spike time datasets_____
 	pre_taste = 0.5 #Seconds before tastant delivery to store
 	post_taste = 2 #Seconds after tastant delivery to store
@@ -95,6 +89,10 @@ if __name__ == '__main__':
 	segment_dev_rasters, segment_dev_times = df.create_dev_rasters(num_segments, segment_spike_times, 
 						   np.array(segment_times_reshaped), segment_deviations)
 		
+	#Plot deviations
+	print("Now plotting deviations")
+	df.plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,segment_times_reshaped,pre_taste,post_taste,segment_names,dev_dir)
+	
 	#Calculate segment deviation statistics - length,IDI
 	print("Now calculating true deviation statistics")
 	segment_length_dict, segment_IDI_dict, segment_num_spike_dict, segment_num_neur_dict = df.calculate_dev_stats(segment_dev_rasters,segment_dev_times,segment_names,dev_dir)
@@ -125,21 +123,28 @@ if __name__ == '__main__':
 							   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
 							   pre_taste, post_taste, taste_cp_raster_inds, corr_dir) #For all neurons in dataset
 	#Plot correlation calculations
-	df.plot_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
-							   corr_dir, 'Correlation')
+	corr_dev_stats = df.pull_corr_dev_stats(segment_names, dig_in_names, corr_dir)
+	df.plot_stats(corr_dev_stats, segment_names, dig_in_names, corr_dir, 'Correlation')
+	segment_corr_data, segment_corr_data_avg = df.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, corr_dir, 'Correlation')
+	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,corr_dir)
+	#Calculate pairwise significance
+	df.stat_significance(segment_corr_data, segment_names, dig_in_names, corr_dir, 'neuron_correlation')
+	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, corr_dir, 'population_avg_correlation')
+
 	
 	#Calculate distance of true data deviation rasters from taste response rasters
-	dist_dir = comp_dir + 'dist/' #Create distance directory if doesn't exist
-	if os.path.isdir(dist_dir) == False:
-		os.mkdir(dist_dir)
-	df.calculate_distances(segment_dev_rasters, tastant_spike_times,
-							   start_dig_in_times, end_dig_in_times, segment_names,
-							   dig_in_names, pre_taste, post_taste, 
-							   taste_cp_raster_inds, dist_dir) #for all neurons in dataset
+	#dist_dir = comp_dir + 'dist/' #Create distance directory if doesn't exist
+	#if os.path.isdir(dist_dir) == False:
+	#	os.mkdir(dist_dir)
+	#df.calculate_distances(segment_dev_rasters, tastant_spike_times,
+	#						   start_dig_in_times, end_dig_in_times, segment_names,
+	#						   dig_in_names, pre_taste, post_taste, 
+	#						   taste_cp_raster_inds, dist_dir) #for all neurons in dataset
 	#Plot distance calculations
-	df.plot_stats(segment_names, dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
-							   dist_dir, 'Distance')
-	
+	#dist_dev_stats = df.pull_corr_dev_stats(segment_names, dig_in_names, dist_dir)
+	#df.plot_stats(dist_dev_stats, segment_names, dig_in_names, dist_dir, 'Distance')
+	#segment_dist_data = df.plot_combined_stats(dist_dev_stats, segment_names, dig_in_names, dist_dir, 'Distance')
+	#df.stat_significance(segment_corr_data, segment_names, dig_in_names, dist_dir, 'Distance')
 	
 	#Import null datasets for deviation analyses
 	null_dir = fig_save_dir + 'null_data/' #This should exist from compare_null.py - make sure that was run before running this script or it'll throw an error!
