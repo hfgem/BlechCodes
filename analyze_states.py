@@ -83,7 +83,7 @@ except:
 data_group_name = 'taste_responsivity'
 try:
 	taste_responsivity_probability = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability')
-	taste_responsivity_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary')
+	taste_responsivity_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary')[0]
 	taste_responsive_ind = (af.pull_data_from_hdf5(sorted_dir, data_group_name, 'taste_responsive_ind')[0]).astype('int')
 except:	
 	taste_responsivity_probability, taste_responsivity_binary = af.taste_responsivity_raster(tastant_spike_times,start_dig_in_times,end_dig_in_times,num_neur,pre_taste_dt)
@@ -247,4 +247,87 @@ except:
 				  dig_in_names,most_taste_resp_cp_raster_save_dir)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_raster_inds',most_taste_resp_taste_cp_raster_inds)
 
+#%% Plot changepoint statistics
+
+#TODO: move to plot_funcs document
+
+import matplotlib.pyplot as plt
+from matplotlib import cm
+
+colors = cm.cool(np.arange(num_cp)/(num_cp))
+
+#Full population
+taste_diff_vals = []
+for t_i in range(num_tastes):
+	num_deliv,_,_ = np.shape(taste_cp_raster_inds[t_i])
+	diff_vals = np.zeros((num_deliv*num_neur,num_cp-1))
+	for d_i in range(num_deliv):
+		diff_vals[d_i*num_neur:(d_i+1)*num_neur,:] = np.diff(taste_cp_raster_inds[t_i][d_i,:,:],1)
+	taste_diff_vals.append(diff_vals)
+
+f0 = plt.figure(figsize=(5,5))
+for t_i in range(num_tastes):
+	plt.subplot(num_tastes,1,t_i + 1)
+	for c_p in range(num_cp-1):
+		plt.hist(taste_diff_vals[t_i][:,c_p],color=colors[c_p],density='True',cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+		plt.axvline(np.median(taste_diff_vals[t_i][:,c_p]),color=colors[c_p],label='Epoch ' + str(c_p) + ' median')
+	plt.legend()
+	plt.title('Epoch length PDF: ' + dig_in_names[t_i])
+	plt.xlabel('Epoch Length (ms)')
+plt.suptitle('Epoch length distribution')
+plt.tight_layout()
+filename = cp_save_dir + 'all_tastes_epoch_length'
+f0.savefig(filename + '.png')
+f0.savefig(filename + '.svg')
+plt.close(f0)
+
+#Taste resp population
+taste_diff_vals = []
+for t_i in range(num_tastes):
+	num_deliv,taste_resp_num_neur,_ = np.shape(taste_resp_taste_cp_raster_inds[t_i])
+	diff_vals = np.zeros((num_deliv*taste_resp_num_neur,num_cp-1))
+	for d_i in range(num_deliv):
+		diff_vals[d_i*taste_resp_num_neur:(d_i+1)*taste_resp_num_neur,:] = np.diff(taste_resp_taste_cp_raster_inds[t_i][d_i,:,:],1)
+	taste_diff_vals.append(diff_vals)
+
+f1 = plt.figure(figsize=(5,5))
+for t_i in range(num_tastes):
+	plt.subplot(num_tastes,1,t_i + 1)
+	for c_p in range(num_cp-1):
+		plt.hist(taste_diff_vals[t_i][:,c_p],color=colors[c_p],density='True',cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+		plt.axvline(np.median(taste_diff_vals[t_i][:,c_p]),color=colors[c_p],label='Epoch ' + str(c_p) + ' median')
+	plt.legend()
+	plt.title('Epoch length PDF: ' + dig_in_names[t_i])
+	plt.xlabel('Epoch Length (ms)')
+plt.suptitle('Epoch length distribution')
+plt.tight_layout()
+filename = cp_save_dir + 'taste_responsive_epoch_length'
+f1.savefig(filename + '.png')
+f1.savefig(filename + '.svg')
+plt.close(f1)
+
+#Most resp population
+taste_diff_vals = []
+for t_i in range(num_tastes):
+	num_deliv,most_taste_resp_num_neur,_ = np.shape(most_taste_resp_taste_cp_raster_inds[t_i])
+	diff_vals = np.zeros((num_deliv*most_taste_resp_num_neur,num_cp-1))
+	for d_i in range(num_deliv):
+		diff_vals[d_i*most_taste_resp_num_neur:(d_i+1)*most_taste_resp_num_neur,:] = np.diff(most_taste_resp_taste_cp_raster_inds[t_i][d_i,:,:],1)
+	taste_diff_vals.append(diff_vals)
+
+f2 = plt.figure(figsize=(5,5))
+for t_i in range(num_tastes):
+	plt.subplot(num_tastes,1,t_i + 1)
+	for c_p in range(num_cp-1):
+		plt.hist(taste_diff_vals[t_i][:,c_p],color=colors[c_p],density='True',cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+		plt.axvline(np.median(taste_diff_vals[t_i][:,c_p]),color=colors[c_p],label='Epoch ' + str(c_p) + ' median')
+	plt.legend()
+	plt.title('Epoch length PDF: ' + dig_in_names[t_i])
+	plt.xlabel('Epoch Length (ms)')
+plt.suptitle('Epoch length distribution')
+plt.tight_layout()
+filename = cp_save_dir + 'most_taste_responsive_epoch_length'
+f2.savefig(filename + '.png')
+f2.savefig(filename + '.svg')
+plt.close(f2)
 	

@@ -127,7 +127,7 @@ def correlation_calcs(n_i, neur_deliv_cp_rast_binned, cp_vals, neur_dev_rast_bin
 		#Calculate correlation
 		corr_val = pearsonr(neur_deliv_cp_rast_binned,neur_dev_rast_binned)[1]
 	else:
-		corr_val = np.nan
+		corr_val = 0
 	
 	return corr_val
 	

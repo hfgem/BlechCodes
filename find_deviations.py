@@ -47,7 +47,7 @@ if __name__ == '__main__':
 	if os.path.isdir(dev_dir) == False:
 		os.mkdir(dev_dir)
 	
-	#First import or calculate deviations for all segments
+	#_____Import or calculate deviations for all segments_____
 	"""Deviations are calculated by (1) finding the prominence of min_dev_size 
 	bin firing rates compared to firing rates from a local window of size local_size,
 	(2) calculating the 90th percentile of positive prominence values, and (3) 
@@ -84,6 +84,7 @@ if __name__ == '__main__':
 			data = json.loads(json_str) 
 			segment_deviations.append(data)
 	
+	#_____Pull rasters of deviations and plot_____
 	#Calculate segment deviation spikes
 	print("Now pulling true deviation rasters")
 	segment_dev_rasters, segment_dev_times = df.create_dev_rasters(num_segments, segment_spike_times, 
@@ -93,16 +94,15 @@ if __name__ == '__main__':
 	print("Now plotting deviations")
 	df.plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,segment_times_reshaped,pre_taste,post_taste,segment_names,dev_dir)
 	
-	#Calculate segment deviation statistics - length,IDI
+	#_____Calculate segment deviation statistics - length,IDI_____
 	print("Now calculating true deviation statistics")
 	segment_length_dict, segment_IDI_dict, segment_num_spike_dict, segment_num_neur_dict = df.calculate_dev_stats(segment_dev_rasters,segment_dev_times,segment_names,dev_dir)
 	
+	#_____Import supporting data for analyses_____
 	#Import taste responsivity data
 	data_group_name = 'taste_responsivity'
-	taste_responsivity_probability = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability')
-	taste_responsivity_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary')
-	taste_responsive_ind = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsive_ind')[0]
-	most_taste_responsive_ind = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_responsive_ind')[0]
+	taste_responsive_ind = (af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsive_ind')[0]).astype('int')
+	most_taste_responsive_ind = (af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_responsive_ind')[0]).astype('int')
 	
 	#Import changepoint data
 	data_group_name = 'changepoint_data'
@@ -110,6 +110,7 @@ if __name__ == '__main__':
 	taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_raster_inds')
 	most_taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_raster_inds')
 	
+	#_____Calculate correlation between taste and deviation rasters_____
 	#Create directory to store analysis results
 	comp_dir = fig_save_dir + 'dev_x_taste/'
 	if os.path.isdir(comp_dir) == False:
@@ -122,16 +123,41 @@ if __name__ == '__main__':
 	df.calculate_correlations(segment_dev_rasters, tastant_spike_times,
 							   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
 							   pre_taste, post_taste, taste_cp_raster_inds, corr_dir) #For all neurons in dataset
-	#Plot correlation calculations
 	corr_dev_stats = df.pull_corr_dev_stats(segment_names, dig_in_names, corr_dir)
-	df.plot_stats(corr_dev_stats, segment_names, dig_in_names, corr_dir, 'Correlation')
-	segment_corr_data, segment_corr_data_avg = df.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, corr_dir, 'Correlation')
-	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,corr_dir)
-	#Calculate pairwise significance
-	df.stat_significance(segment_corr_data, segment_names, dig_in_names, corr_dir, 'neuron_correlation')
-	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, corr_dir, 'population_avg_correlation')
-
 	
+	#_____Plot and statistically evaluate data_____
+	#__________For all neurons__________
+	all_neur_corr_dir = corr_dir + 'all_neur/'
+	if os.path.isdir(all_neur_corr_dir) == False:
+		os.mkdir(all_neur_corr_dir)
+	df.plot_stats(corr_dev_stats, segment_names, dig_in_names, all_neur_corr_dir, 'Correlation',np.arange(num_neur))
+	segment_corr_data, segment_corr_data_avg = df.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, all_neur_corr_dir, 'Correlation',np.arange(num_neur))
+	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,all_neur_corr_dir)
+	#Calculate pairwise significance
+	df.stat_significance(segment_corr_data, segment_names, dig_in_names, all_neur_corr_dir, 'neuron_correlation')
+	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, all_neur_corr_dir, 'population_avg_correlation')
+	#__________For taste responsive neurons__________
+	taste_neur_corr_dir = corr_dir + 'taste_resp_neur/'
+	if os.path.isdir(taste_neur_corr_dir) == False:
+		os.mkdir(taste_neur_corr_dir)
+	df.plot_stats(corr_dev_stats, segment_names, dig_in_names, taste_neur_corr_dir, 'Correlation',taste_responsive_ind)
+	segment_corr_data, segment_corr_data_avg = df.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, taste_neur_corr_dir, 'Correlation',taste_responsive_ind)
+	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,taste_neur_corr_dir)
+	#Calculate pairwise significance
+	df.stat_significance(segment_corr_data, segment_names, dig_in_names, taste_neur_corr_dir, 'neuron_correlation')
+	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, taste_neur_corr_dir, 'population_avg_correlation')
+	#__________For most taste responsive neurons__________
+	most_taste_neur_corr_dir = corr_dir + 'most_taste_resp_neur/'
+	if os.path.isdir(most_taste_neur_corr_dir) == False:
+		os.mkdir(most_taste_neur_corr_dir)
+	df.plot_stats(corr_dev_stats, segment_names, dig_in_names, most_taste_neur_corr_dir, 'Correlation',most_taste_responsive_ind)
+	segment_corr_data, segment_corr_data_avg = df.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, most_taste_neur_corr_dir, 'Correlation',most_taste_responsive_ind)
+	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,most_taste_neur_corr_dir)
+	#Calculate pairwise significance
+	df.stat_significance(segment_corr_data, segment_names, dig_in_names, most_taste_neur_corr_dir, 'neuron_correlation')
+	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, most_taste_neur_corr_dir, 'population_avg_correlation')
+
+#%%
 	#Calculate distance of true data deviation rasters from taste response rasters
 	#dist_dir = comp_dir + 'dist/' #Create distance directory if doesn't exist
 	#if os.path.isdir(dist_dir) == False:
@@ -147,80 +173,80 @@ if __name__ == '__main__':
 	#df.stat_significance(segment_corr_data, segment_names, dig_in_names, dist_dir, 'Distance')
 	
 	#Import null datasets for deviation analyses
-	null_dir = fig_save_dir + 'null_data/' #This should exist from compare_null.py - make sure that was run before running this script or it'll throw an error!
-	null_dev_dir = dev_dir + 'null_data/' #Create null deviation storage directory
-	if os.path.isdir(null_dev_dir) == False:
-		os.mkdir(null_dev_dir)
-	for s_i in range(num_segments):
-		print(segment_names[s_i] + ' TruexNull Statistics:')
-		print("\tCalculating null distribution deviations for segment " + segment_names[s_i])
-		seg_null_dir = null_dir + segment_names[s_i] + '/'
-		null_files = os.listdir(seg_null_dir)
-		num_null = 0
-		null_names = []
-		null_dev_save_dirs = []
-		for n_f in null_files:
-			if n_f[-4:] == 'json':
-				num_null += 1
-			null_names.append(str(num_null-1))
-			seg_dirs = []
-			null_dev_save_dir = null_dev_dir + segment_names[s_i]
-			if os.path.isdir(null_dev_save_dir) == False:
-				os.mkdir(null_dev_save_dir)
-			null_dev_save_dirs.append(null_dev_save_dir + '/null_' + str(num_null-1) + '_')	
-		null_segment_spikes = []
-		for n_i in range(num_null):
-			filepath = seg_null_dir + 'null_' + str(n_i) + '.json'
-			with gzip.GzipFile(filepath, mode="r") as f:
-				json_bytes = f.read()
-				json_str = json_bytes.decode('utf-8')            
-				data = json.loads(json_str) 
-				null_segment_spikes.append(data)
-		try:
-			filepath = null_dev_save_dirs[-1] + 'deviations.json'
-			with gzip.GzipFile(filepath, mode="r") as f:
-				json_bytes = f.read()
-				json_str = json_bytes.decode('utf-8')            
-				data = json.loads(json_str)
-		except:
-			with Pool(processes=4) as pool: # start 4 worker processes
-				pool.map(df.run_dev_pull_parallelized,zip(null_segment_spikes, 
-												 itertools.repeat(local_size), 
-												 itertools.repeat(min_dev_size),
-												 itertools.repeat(segment_times_reshaped[s_i]),
-												 null_dev_save_dirs))
-		null_deviations = []
-		for n_i in tqdm.tqdm(range(num_null)):
-			filepath = null_dev_save_dirs[n_i] + 'deviations.json'
-			with gzip.GzipFile(filepath, mode="r") as f:
-				json_bytes = f.read()
-				json_str = json_bytes.decode('utf-8')            
-				data = json.loads(json_str) 
-				null_deviations.append(data)
-				
-		null_segment_times = segment_times[s_i:s_i+2] * np.ones((num_null,2))
-				
-		#Calculate segment deviation spikes
-		print("\tNow pulling null deviation rasters for segment " + segment_names[s_i])
-		null_dev_rasters, null_dev_times = df.create_dev_rasters(num_null, null_segment_spikes, 
-							   null_segment_times, null_deviations)
-			
-		#Calculate segment deviation statistics - length,IDI,counts
-		print("\tNow calculating null deviation statistics for segment " + segment_names[s_i])
-		null_length_dict, null_IDI_dict, null_num_spike_dict, null_num_neur_dict = df.calculate_dev_stats(null_dev_rasters,null_dev_times,null_names,null_dev_dir)
-		
-		#Plot null vs true statistics
-		print("\tNow plotting true x null statistics for segment " + segment_names[s_i])
-		df.plot_null_v_true_stats(segment_length_dict[s_i],null_length_dict,
-							segment_names[s_i] + ' deviation lengths',dev_dir,x_label='length (ms)')
-		df.plot_null_v_true_stats(segment_IDI_dict[s_i],null_IDI_dict,
-							segment_names[s_i] + ' inter-deviation-intervals (IDIs)',dev_dir,x_label='time (ms)')
-		df.plot_null_v_true_stats(segment_num_spike_dict[s_i],null_num_spike_dict,
-							segment_names[s_i] + ' deviation spike counts',dev_dir,x_label='spike count')
-		df.plot_null_v_true_stats(segment_num_neur_dict[s_i],null_num_neur_dict,
-							segment_names[s_i] + ' deviation neuron counts',dev_dir,x_label='neuron count')
-		
-		#Calculate null correlations with taste responses
+	#null_dir = fig_save_dir + 'null_data/' #This should exist from compare_null.py - make sure that was run before running this script or it'll throw an error!
+	#null_dev_dir = dev_dir + 'null_data/' #Create null deviation storage directory
+	#if os.path.isdir(null_dev_dir) == False:
+	#	os.mkdir(null_dev_dir)
+	#for s_i in range(num_segments):
+	#	print(segment_names[s_i] + ' TruexNull Statistics:')
+	#	print("\tCalculating null distribution deviations for segment " + segment_names[s_i])
+	#	seg_null_dir = null_dir + segment_names[s_i] + '/'
+	#	null_files = os.listdir(seg_null_dir)
+	#	num_null = 0
+	#	null_names = []
+	#	null_dev_save_dirs = []
+	#	for n_f in null_files:
+	#		if n_f[-4:] == 'json':
+	#			num_null += 1
+	#		null_names.append(str(num_null-1))
+	#		seg_dirs = []
+	#		null_dev_save_dir = null_dev_dir + segment_names[s_i]
+	#		if os.path.isdir(null_dev_save_dir) == False:
+	#			os.mkdir(null_dev_save_dir)
+	#		null_dev_save_dirs.append(null_dev_save_dir + '/null_' + str(num_null-1) + '_')	
+	#	null_segment_spikes = []
+	#	for n_i in range(num_null):
+	#		filepath = seg_null_dir + 'null_' + str(n_i) + '.json'
+	#		with gzip.GzipFile(filepath, mode="r") as f:
+	#			json_bytes = f.read()
+	#			json_str = json_bytes.decode('utf-8')            
+	#			data = json.loads(json_str) 
+	#			null_segment_spikes.append(data)
+	#	try:
+	#		filepath = null_dev_save_dirs[-1] + 'deviations.json'
+	#		with gzip.GzipFile(filepath, mode="r") as f:
+	#			json_bytes = f.read()
+	#			json_str = json_bytes.decode('utf-8')            
+	#			data = json.loads(json_str)
+	#	except:
+	#		with Pool(processes=4) as pool: # start 4 worker processes
+	#			pool.map(df.run_dev_pull_parallelized,zip(null_segment_spikes, 
+	#											 itertools.repeat(local_size), 
+	#											 itertools.repeat(min_dev_size),
+	#											 itertools.repeat(segment_times_reshaped[s_i]),
+	#											 null_dev_save_dirs))
+	#	null_deviations = []
+	#	for n_i in tqdm.tqdm(range(num_null)):
+	#		filepath = null_dev_save_dirs[n_i] + 'deviations.json'
+	#		with gzip.GzipFile(filepath, mode="r") as f:
+	#			json_bytes = f.read()
+	#			json_str = json_bytes.decode('utf-8')            
+	#			data = json.loads(json_str) 
+	#			null_deviations.append(data)
+	#			
+	#	null_segment_times = segment_times[s_i:s_i+2] * np.ones((num_null,2))
+	#			
+	#	#Calculate segment deviation spikes
+	#	print("\tNow pulling null deviation rasters for segment " + segment_names[s_i])
+	#	null_dev_rasters, null_dev_times = df.create_dev_rasters(num_null, null_segment_spikes, 
+	#						   null_segment_times, null_deviations)
+	#		
+	#	#Calculate segment deviation statistics - length,IDI,counts
+	#	print("\tNow calculating null deviation statistics for segment " + segment_names[s_i])
+	#	null_length_dict, null_IDI_dict, null_num_spike_dict, null_num_neur_dict = df.calculate_dev_stats(null_dev_rasters,null_dev_times,null_names,null_dev_dir)
+	#	
+	#	#Plot null vs true statistics
+	#	print("\tNow plotting true x null statistics for segment " + segment_names[s_i])
+	#	df.plot_null_v_true_stats(segment_length_dict[s_i],null_length_dict,
+	#						segment_names[s_i] + ' deviation lengths',dev_dir,x_label='length (ms)')
+	#	df.plot_null_v_true_stats(segment_IDI_dict[s_i],null_IDI_dict,
+	#						segment_names[s_i] + ' inter-deviation-intervals (IDIs)',dev_dir,x_label='time (ms)')
+	#	df.plot_null_v_true_stats(segment_num_spike_dict[s_i],null_num_spike_dict,
+	#						segment_names[s_i] + ' deviation spike counts',dev_dir,x_label='spike count')
+	#	df.plot_null_v_true_stats(segment_num_neur_dict[s_i],null_num_neur_dict,
+	#						segment_names[s_i] + ' deviation neuron counts',dev_dir,x_label='neuron count')
+	#	
+	#	#Calculate null correlations with taste responses
 		
 		
 	#For each set of changepoint options calculate the correlation of segment devs with each epoch
