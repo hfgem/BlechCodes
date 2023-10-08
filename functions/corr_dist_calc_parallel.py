@@ -16,7 +16,7 @@ from numba import jit
 import warnings
 
 def deliv_corr_parallelized(inputs):
-	"""Parallelizes the distance calculation for deliveries"""
+	"""Parallelizes the correlation calculation for deliveries"""
 	warnings.filterwarnings('ignore')
 	
 	#Grab parameters/data
@@ -50,13 +50,117 @@ def deliv_corr_parallelized(inputs):
 		for n_i in range(total_num_neur):
 			neur_deliv_cp_rast_binned = deliv_rast_binned[n_i,cp_vals[n_i,0]:cp_vals[n_i,1]]
 			neur_dev_rast_binned = dev_rast_binned[n_i,:]
-			neur_corrs[n_i] = correlation_calcs(n_i, neur_deliv_cp_rast_binned, cp_vals, neur_dev_rast_binned, fr_bin)
+			neur_deliv_cp_rast_binned,neur_dev_rast_binned = interp_vecs(neur_deliv_cp_rast_binned,neur_dev_rast_binned)
+			neur_corrs[n_i] = correlation_calcs(n_i, neur_deliv_cp_rast_binned, cp_vals, neur_dev_rast_binned)
 		deliv_corr_storage[:,c_p] = neur_corrs
 	
 	return deliv_corr_storage
 
+def deliv_corr_vec_parallelized(inputs):
+	"""Parallelizes the correlation calculation for deliveries"""
+	warnings.filterwarnings('ignore')
+	#TODO: Needs taste_cp to be population changepoints, aka num_deliv x num_cp in shape
+	#Grab parameters/data
+	deliv_i = inputs[0]
+	deliv_st = inputs[1]
+	deliv_len = inputs[2] #deliv_rast = np.zeros((total_num_neur,deliv_len))
+	neuron_keep_indices = inputs[3]
+	taste_cp = inputs[4] 
+	deliv_adjustment = inputs[5]
+	neur_dev_vec = inputs[6]
+	fr_bin = inputs[7]
+	total_num_neur = len(neuron_keep_indices)
+	num_cp = np.shape(taste_cp)[2]
+	#Pull delivery raster
+	deliv_rast = np.zeros((total_num_neur,deliv_len))
+	for n_i in neuron_keep_indices:
+		neur_deliv_st = list(np.array(deliv_st[n_i]).astype('int') - deliv_adjustment)
+		deliv_rast[n_i,neur_deliv_st] = 1
+	deliv_corr_storage = np.zeros(num_cp-1)
+	#Calculate correlation with each cp segment
+	for c_p in range(num_cp-1):
+		cp_vals = (taste_cp[deliv_i,c_p:c_p+2]).astype('int')
+		deliv_cp_vec = np.sum(deliv_rast[:,cp_vals[0]:cp_vals[1]],1)/((cp_vals[1] - cp_vals[0])/1000) #In Hz
+		#Calculate population correlation using the parallelized code
+		vec_corrs = correlation_vec_calcs(deliv_cp_vec, neur_dev_vec)
+		deliv_corr_storage[c_p] = vec_corrs
+	
+	return deliv_corr_storage
+
+def interp_vecs(neur_deliv_cp_rast_binned,neur_dev_rast_binned):
+	#Grab rasters
+	len_deliv = len(neur_deliv_cp_rast_binned)
+	len_dev = len(neur_dev_rast_binned)
+	#Reshape the shorter raster
+	min_len = min(len_deliv,len_dev)
+	if min_len > 2:
+		len_vec = [len_deliv,len_dev]
+		max_len = max(len_vec)
+		y_interp_vals = (np.linspace(0,max_len-1,min_len)).astype('int')
+		if max_len == len_vec[0]:
+			interp_mat = np.zeros((len_dev,len_deliv))
+			x_interp_vals = np.arange(len_dev)
+			for x_interp_val, y_interp_val in zip(x_interp_vals,y_interp_vals):
+				interp_mat[x_interp_val,y_interp_val] = 1
+			neur_dev_rast_interp = neur_dev_rast_binned@interp_mat
+			neur_dev_rast_binned = neur_dev_rast_interp
+		else:
+			interp_mat = np.zeros((len_deliv,len_dev))
+			x_interp_vals = np.arange(len_deliv)
+			for x_interp_val, y_interp_val in zip(x_interp_vals,y_interp_vals):
+				interp_mat[x_interp_val,y_interp_val] = 1
+			neur_deliv_cp_interp = neur_deliv_cp_rast_binned@interp_mat
+			neur_deliv_cp_rast_binned = neur_deliv_cp_interp
+	else:
+		neur_deliv_cp_rast_binned = []
+		neur_dev_rast_binned = []
+	return neur_deliv_cp_rast_binned, neur_dev_rast_binned
+
+def correlation_calcs(n_i, neur_deliv_cp_rast_binned, neur_dev_rast_binned):
+	"""
+	This set of code calculates binary vectors of where fr deviations occur in 
+	the activity compared to a local mean and standard deviation of fr.
+	The binned rasters should be the same size.
+	"""
+	warnings.filterwarnings('ignore')
+	#Grab rasters
+	len_deliv = len(neur_deliv_cp_rast_binned)
+	len_dev = len(neur_dev_rast_binned)
+	#Reshape the shorter raster
+	min_len = min(len_deliv,len_dev)
+	if min_len >  2:
+		#Calculate correlation
+		corr_val = pearsonr(neur_deliv_cp_rast_binned,neur_dev_rast_binned)[1]
+	else:
+		corr_val = 0
+	
+	return corr_val
+	
+
+def correlation_vec_calcs(neur_deliv_cp_vec, neur_dev_vec):
+	"""
+	This set of code calculates binary vectors of where fr deviations occur in 
+	the activity compared to a local mean and standard deviation of fr.
+	The binned rasters should be the same size.
+	"""
+	warnings.filterwarnings('ignore')
+	#Grab rasters
+	len_deliv = len(neur_deliv_cp_vec)
+	len_dev = len(neur_dev_vec)
+	#Reshape the shorter raster
+	min_len = min(len_deliv,len_dev)
+	if min_len >  2:
+		#Calculate correlation
+		corr_val = pearsonr(neur_deliv_cp_vec,neur_dev_vec)[1]
+	else:
+		corr_val = 0
+	
+	return corr_val
+	
+
+"""DEPRECATED FUNCTION
 def deliv_dist_parallelized(inputs):
-	"""Parallelizes the distance calculation for deliveries"""
+	#Parallelizes the distance calculation for deliveries
 	warnings.filterwarnings('ignore')
 	
 	#Grab parameters/data
@@ -94,49 +198,13 @@ def deliv_dist_parallelized(inputs):
 		deliv_distance_storage[:,c_p] = neur_dists
 	
 	return deliv_distance_storage
+"""
 
-def correlation_calcs(n_i, neur_deliv_cp_rast_binned, cp_vals, neur_dev_rast_binned, fr_bin):
-	"""
-	This set of code calculates binary vectors of where fr deviations occur in 
-	the activity compared to a local mean and standard deviation of fr.
-	"""
-	warnings.filterwarnings('ignore')
-	#Grab rasters
-	len_deliv = len(neur_deliv_cp_rast_binned)
-	len_dev = len(neur_dev_rast_binned)
-	#Reshape the shorter raster
-	min_len = min(len_deliv,len_dev)
-	if min_len > fr_bin + 2:
-		len_vec = [len_deliv,len_dev]
-		max_len = max(len_vec)
-		y_interp_vals = (np.linspace(0,max_len-1,min_len)).astype('int')
-		if max_len == len_vec[0]:
-			interp_mat = np.zeros((len_dev,len_deliv))
-			x_interp_vals = np.arange(len_dev)
-			for x_interp_val, y_interp_val in zip(x_interp_vals,y_interp_vals):
-				interp_mat[x_interp_val,y_interp_val] = 1
-			neur_dev_rast_interp = neur_dev_rast_binned@interp_mat
-			neur_dev_rast_binned = neur_dev_rast_interp
-		else:
-			interp_mat = np.zeros((len_deliv,len_dev))
-			x_interp_vals = np.arange(len_deliv)
-			for x_interp_val, y_interp_val in zip(x_interp_vals,y_interp_vals):
-				interp_mat[x_interp_val,y_interp_val] = 1
-			neur_deliv_cp_interp = neur_deliv_cp_rast_binned@interp_mat
-			neur_deliv_cp_rast_binned = neur_deliv_cp_interp
-		#Calculate correlation
-		corr_val = pearsonr(neur_deliv_cp_rast_binned,neur_dev_rast_binned)[1]
-	else:
-		corr_val = 0
-	
-	return corr_val
-	
+"""DEPRECATED FUNCTION
 @jit(nopython=True)
 def distance_calcs(n_i, neur_deliv_cp_rast_binned, cp_vals, neur_dev_rast_binned, fr_bin):
-	"""
-	This set of code calculates binary vectors of where fr deviations occur in 
-	the activity compared to a local mean and standard deviation of fr.
-	"""
+	#This set of code calculates binary vectors of where fr deviations occur in 
+	#the activity compared to a local mean and standard deviation of fr.
 	warnings.filterwarnings('ignore')
 	
 	#Grab rasters
@@ -168,5 +236,5 @@ def distance_calcs(n_i, neur_deliv_cp_rast_binned, cp_vals, neur_dev_rast_binned
 		dist_val = np.nan
 	
 	return dist_val
-
+"""
 

@@ -267,3 +267,87 @@ def avg_cp_PSTH(num_cp,deliv_cp_inds,PSTH_taste_times,taste_start_deliv_ind,num_
 	fig.savefig(taste_cp_save_dir + fig_name + '.png')
 	fig.savefig(taste_cp_save_dir + fig_name + '.svg')
 	plt.close(fig)
+	
+	
+#TODO: Use the below framework to write an HMM approach that outputs the same data structure as other cp calc functions
+def calc_cp_HMM(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
+				  end_dig_in_times,before_taste,after_taste,
+				  dig_in_names,taste_cp_save_dir):
+	neur_save_dir = taste_cp_save_dir + 'neur/'
+	if os.path.isdir(neur_save_dir) == False:
+		os.mkdir(neur_save_dir)
+	deliv_save_dir = taste_cp_save_dir + 'deliv/'
+	if os.path.isdir(deliv_save_dir) == False:
+		os.mkdir(deliv_save_dir)
+	num_tastes = len(tastant_spike_times)
+	num_deliv = len(tastant_spike_times[0])
+	num_neur = len(tastant_spike_times[0][0])
+	taste_cp = []
+	for t_i in range(num_tastes):
+		print('Calculating changepoints for taste ' + dig_in_names[t_i])
+		neur_deliv_cp = np.zeros((num_deliv,num_neur,num_cp+1))
+		deliv_st = dict()
+		#Calculate changepoints for each neuron for each tastant delivery
+		for n_i in tqdm.tqdm(range(num_neur)):
+			neur_deliv_st = []
+			neur_cp_likelihood = dict() #Collects for 1 neuron the cp likelihood for each delivery index
+			bin_length_collect = []
+			for d_i in range(num_deliv):
+				start_deliv = start_dig_in_times[t_i][d_i]
+				end_deliv = end_dig_in_times[t_i][d_i]
+				taste_deliv_len = end_deliv-start_deliv
+				spike_ind = tastant_spike_times[t_i][d_i][n_i]
+				bin_length = before_taste+taste_deliv_len+after_taste+1
+				bin_length_collect.extend([bin_length])
+				#Create the binary spike matrix
+				deliv_bin = np.zeros(bin_length)
+				converted_ind = list((np.array(spike_ind) - start_deliv + before_taste).astype('int'))
+				try:
+					cur_st = deliv_st[d_i]
+					cur_st.append(converted_ind)
+					deliv_st[d_i] = cur_st
+				except:
+					deliv_st[d_i] = [converted_ind]
+				neur_deliv_st.append(converted_ind)
+				deliv_bin[converted_ind] = 1		
+				#Run through each timepoint starting at the minimum changepoint bin 
+				#size to the length of the segment - the changepoint bin size and
+				#calculate the proxy for a changepoint between two Poisson processes
+				cp_likelihood_d_i = np.zeros(bin_length)
+				for time_i in np.arange(cp_bin,bin_length-cp_bin):
+					#N_1 = np.sum(deliv_bin[:time_i]) 
+					N_1 = np.sum(deliv_bin[time_i-cp_bin:time_i])
+					#N_2 = np.sum(deliv_bin[time_i:])
+					N_2 = np.sum(deliv_bin[time_i:time_i+cp_bin])
+					cp_likelihood_d_i[time_i] = (((N_1/cp_bin)**N_1)*((N_2/cp_bin)**N_2))#/((N_1+N_2)/(2*cp_bin))**(N_1+N_2)
+					#cp_likelihood_d_i[time_i] = (((N_1/time_i)**N_1)*((N_2/(bin_length-time_i))**N_2))#/((N_1+N_2)/(2*bin_length))**(N_1+N_2)
+				peak_inds = find_peaks(cp_likelihood_d_i[cp_bin:],distance=cp_bin)[0]
+				peak_inds = peak_inds[peak_inds>before_taste] + cp_bin
+				ordered_peak_ind = np.argsort(cp_likelihood_d_i[peak_inds])
+				best_peak_inds = np.zeros(num_cp+1)
+				best_peak_inds[0] = before_taste
+				found_inds = peak_inds[np.sort(ordered_peak_ind[0:num_cp])]
+				if len(found_inds) < num_cp:
+					diff_len_cp = num_cp - len(found_inds)
+					best_peak_inds[1:len(found_inds)+1] = found_inds
+					best_peak_inds[len(found_inds)+1:] = (bin_length-1)*np.ones(diff_len_cp)
+				else:
+					best_peak_inds[1:num_cp+1] = found_inds
+				neur_cp_likelihood[d_i] = list(best_peak_inds.astype('int'))
+			#_____Look at the average cp likelihood for this one neuron across deliveries_____
+			neur_cp_likelihood_list = []
+			neur_cp_likelihood_bin = np.zeros((num_deliv,np.max(bin_length_collect)))
+			for key in neur_cp_likelihood.keys():
+				neur_cp_likelihood_list.append(list(neur_cp_likelihood[key]))
+				neur_cp_likelihood_bin[int(key),list(neur_cp_likelihood[key])] = 1
+			#_____Plot changepoints across deliveries for one neuron_____
+			plot_cp_rasters_neur(neur_deliv_st,neur_cp_likelihood_list,before_taste,
+				   dig_in_names[t_i],n_i,num_deliv,num_cp,neur_save_dir)
+			for key in neur_cp_likelihood.keys():
+				neur_deliv_cp[int(key),n_i,:] = neur_cp_likelihood[key]
+		#_____Plot changepoints for each delivery across the population_____
+		plot_cp_rasters_deliv(deliv_st,neur_deliv_cp,before_taste,dig_in_names[t_i],deliv_save_dir)
+		#Store results for tastant
+		taste_cp.append(neur_deliv_cp)
+		
+	return taste_cp

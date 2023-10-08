@@ -57,7 +57,7 @@ if __name__ == '__main__':
 		filepath = dev_dir + segment_names[-1] + '/deviations.json'
 		with gzip.GzipFile(filepath, mode="r") as f:
 			json_bytes = f.read()
-			json_str = json_bytes.decode('utf-8')            
+			json_str = json_bytes.decode('utf-8')
 			data = json.loads(json_str)
 	except:
 		seg_dirs = []
@@ -95,14 +95,14 @@ if __name__ == '__main__':
 	df.plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,segment_times_reshaped,pre_taste,post_taste,segment_names,dev_dir)
 	
 	#_____Calculate segment deviation statistics - length,IDI_____
-	print("Now calculating true deviation statistics")
+	print("Now calculating and plotting true deviation statistics")
 	segment_length_dict, segment_IDI_dict, segment_num_spike_dict, segment_num_neur_dict = df.calculate_dev_stats(segment_dev_rasters,segment_dev_times,segment_names,dev_dir)
 	
 	#_____Import supporting data for analyses_____
 	#Import taste responsivity data
-	data_group_name = 'taste_responsivity'
-	taste_responsive_ind = (af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsive_ind')[0]).astype('int')
-	most_taste_responsive_ind = (af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_responsive_ind')[0]).astype('int')
+	#data_group_name = 'taste_responsivity'
+	#taste_responsive_ind = (af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsive_ind')[0]).astype('int')
+	#most_taste_responsive_ind = (af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_responsive_ind')[0]).astype('int')	
 	
 	#Import changepoint data
 	data_group_name = 'changepoint_data'
@@ -110,7 +110,17 @@ if __name__ == '__main__':
 	taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_raster_inds')
 	most_taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_raster_inds')
 	
-	#_____Calculate correlation between taste and deviation rasters_____
+	#Import taste selectivity data
+	data_group_name = 'taste_selectivity'
+	most_taste_selective_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_selective_binary')[0]
+	#Generate comparable binary matrix for regular data
+	num_cp = np.shape(taste_cp_raster_inds[0])[-1] - 1
+	for t_i in range(num_tastes-1):
+		if np.shape(taste_cp_raster_inds[t_i+1])[-1] - 1 < num_cp:
+			num_cp = np.shape(taste_cp_raster_inds[t_i+1])[-1] - 1
+	all_neur_binary = np.ones((num_neur,num_cp))
+	
+	#_____Calculate correlation between taste and deviation rasters for individual neurons_____
 	#Create directory to store analysis results
 	comp_dir = fig_save_dir + 'dev_x_taste/'
 	if os.path.isdir(comp_dir) == False:
@@ -125,38 +135,62 @@ if __name__ == '__main__':
 							   pre_taste, post_taste, taste_cp_raster_inds, corr_dir) #For all neurons in dataset
 	corr_dev_stats = df.pull_corr_dev_stats(segment_names, dig_in_names, corr_dir)
 	
-	#_____Plot and statistically evaluate data_____
+	#_____Plot and statistically evaluate individual neuron correlation data_____
 	#__________For all neurons__________
 	all_neur_corr_dir = corr_dir + 'all_neur/'
 	if os.path.isdir(all_neur_corr_dir) == False:
 		os.mkdir(all_neur_corr_dir)
-	df.plot_stats(corr_dev_stats, segment_names, dig_in_names, all_neur_corr_dir, 'Correlation',np.arange(num_neur))
-	segment_corr_data, segment_corr_data_avg = df.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, all_neur_corr_dir, 'Correlation',np.arange(num_neur))
-	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,all_neur_corr_dir)
+	df.plot_stats(corr_dev_stats, segment_names, dig_in_names, all_neur_corr_dir, 'Correlation',all_neur_binary)
+	segment_corr_data, segment_corr_data_avg = df.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, all_neur_corr_dir, 'Correlation',all_neur_binary)
+	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,all_neur_corr_dir,all_neur_binary)
 	#Calculate pairwise significance
+	#KS-test
 	df.stat_significance(segment_corr_data, segment_names, dig_in_names, all_neur_corr_dir, 'neuron_correlation')
 	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, all_neur_corr_dir, 'population_avg_correlation')
-	#__________For taste responsive neurons__________
-	taste_neur_corr_dir = corr_dir + 'taste_resp_neur/'
-	if os.path.isdir(taste_neur_corr_dir) == False:
-		os.mkdir(taste_neur_corr_dir)
-	df.plot_stats(corr_dev_stats, segment_names, dig_in_names, taste_neur_corr_dir, 'Correlation',taste_responsive_ind)
-	segment_corr_data, segment_corr_data_avg = df.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, taste_neur_corr_dir, 'Correlation',taste_responsive_ind)
-	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,taste_neur_corr_dir)
+	#T-test
+	df.stat_significance_ttest(segment_corr_data, segment_names, dig_in_names, all_neur_corr_dir, 'neuron_correlation_ttest_less')
+	df.stat_significance_ttest(segment_corr_data_avg, segment_names, dig_in_names, all_neur_corr_dir, 'population_avg_correlation_ttest_less')
+	#Mean compare
+	df.mean_compare(segment_corr_data, segment_names, dig_in_names, all_neur_corr_dir, 'neuron_mean_difference')
+	df.mean_compare(segment_corr_data_avg, segment_names, dig_in_names, all_neur_corr_dir, 'population_avg_mean_difference')
+	
+	#__________For taste selective neurons__________
+	taste_select_corr_dir = corr_dir + 'taste_select_neur/'
+	if os.path.isdir(taste_select_corr_dir) == False:
+		os.mkdir(taste_select_corr_dir)
+	df.plot_stats(corr_dev_stats,segment_names,dig_in_names,taste_select_corr_dir,'Correlation',most_taste_selective_binary)
+	segment_corr_data, segment_corr_data_avg = df.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, taste_select_corr_dir, 'Correlation',most_taste_selective_binary)
+	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,taste_select_corr_dir,most_taste_selective_binary)
 	#Calculate pairwise significance
-	df.stat_significance(segment_corr_data, segment_names, dig_in_names, taste_neur_corr_dir, 'neuron_correlation')
-	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, taste_neur_corr_dir, 'population_avg_correlation')
-	#__________For most taste responsive neurons__________
-	most_taste_neur_corr_dir = corr_dir + 'most_taste_resp_neur/'
-	if os.path.isdir(most_taste_neur_corr_dir) == False:
-		os.mkdir(most_taste_neur_corr_dir)
-	df.plot_stats(corr_dev_stats, segment_names, dig_in_names, most_taste_neur_corr_dir, 'Correlation',most_taste_responsive_ind)
-	segment_corr_data, segment_corr_data_avg = df.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, most_taste_neur_corr_dir, 'Correlation',most_taste_responsive_ind)
-	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,most_taste_neur_corr_dir)
-	#Calculate pairwise significance
-	df.stat_significance(segment_corr_data, segment_names, dig_in_names, most_taste_neur_corr_dir, 'neuron_correlation')
-	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, most_taste_neur_corr_dir, 'population_avg_correlation')
-
+	#KS-test
+	df.stat_significance(segment_corr_data, segment_names, dig_in_names, taste_select_corr_dir, 'neuron_correlation')
+	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, taste_select_corr_dir, 'population_avg_correlation')
+	#T-test
+	df.stat_significance_ttest(segment_corr_data, segment_names, dig_in_names, taste_select_corr_dir, 'neuron_correlation_ttest')
+	df.stat_significance_ttest(segment_corr_data_avg, segment_names, dig_in_names, taste_select_corr_dir, 'population_avg_correlation_ttest')
+	#Mean compare
+	df.mean_compare(segment_corr_data, segment_names, dig_in_names, taste_select_corr_dir, 'neuron_mean_difference')
+	df.mean_compare(segment_corr_data_avg, segment_names, dig_in_names, taste_select_corr_dir, 'population_avg_mean_difference')
+	
+	#_____Calculate correlation between taste and deviation rasters for population_____
+	#Calculate population correlation of true data deviation rasters with taste response rasters'
+	corr_pop_dir = comp_dir + 'corr_pop/'
+	if os.path.isdir(corr_pop_dir) == False:
+		os.mkdir(corr_pop_dir)
+	df.calculate_correlations_pop(segment_dev_rasters, tastant_spike_times,
+							   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
+							   pre_taste, post_taste, taste_cp_raster_inds, corr_pop_dir,
+							   neuron_keep_indices=[])
+	all_neur_pop_corr_dir = corr_dir + 'all_neur/'
+	if os.path.isdir(all_neur_pop_corr_dir) == False:
+		os.mkdir(all_neur_pop_corr_dir)
+	corr_dev_stats_pop = df.pull_corr_dev_stats_pop(segment_names, dig_in_names, corr_pop_dir)
+	segment_pop_corr_data, segment_pop_corr_data_avg = df.plot_combined_stats_pop(corr_dev_stats_pop, segment_names, dig_in_names, all_neur_pop_corr_dir, 
+							'Correlation')
+	
+	
+	df.stat_significance(segment_corr_data, segment_names, dig_in_names, taste_select_corr_dir, 'neuron_correlation')
+	
 #%%
 	#Calculate distance of true data deviation rasters from taste response rasters
 	#dist_dir = comp_dir + 'dist/' #Create distance directory if doesn't exist

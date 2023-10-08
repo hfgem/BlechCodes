@@ -7,7 +7,7 @@ Created on Mon Jan  2 11:04:51 2023
 
 This code is written to import sorted data and perform state-change analyses
 """
-import os
+import os, tqdm
 file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
 os.chdir(file_path)
 import numpy as np
@@ -19,7 +19,7 @@ import functions.dev_plots as dev_plot
 import functions.seg_compare as sc
 import functions.dev_corr_calcs as dcc
 import functions.changepoint_detection as cd
-
+import functions.decoding_funcs as df
 
 
 #_____Get the directory of the hdf5 file_____
@@ -34,9 +34,14 @@ num_neur, all_waveforms, spike_times, dig_in_names, segment_times, segment_names
 
 #%%
 #_____Calculate spike time datasets_____
+#NOTE: make sure the pre_taste value is never more than the post_taste value
 pre_taste = 0.5 #Seconds before tastant delivery to store
 post_taste = 2 #Seconds after tastant delivery to store
 
+#_____Add "no taste" control segments to the dataset_____
+dig_in_names, start_dig_in_times, end_dig_in_times, num_tastes = af.add_no_taste(start_dig_in_times, end_dig_in_times, post_taste, dig_in_names)
+
+#_____Pull out spike times for all tastes (and no taste)_____
 segment_spike_times = af.calc_segment_spike_times(segment_times,spike_times,num_neur)
 tastant_spike_times = af.calc_tastant_spike_times(segment_times,spike_times,
 												  start_dig_in_times,end_dig_in_times,
@@ -70,7 +75,7 @@ except:
 																					   num_neur, dig_in_names, 
 																					   start_dig_in_times, end_dig_in_times, 
 																					   pre_taste_dt, post_taste_dt, 
-																					   segment_times, spike_times,
+																					   segment_times, segment_spike_times,
 																					   bin_width, bin_step)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'tastant_PSTH',tastant_PSTH)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'PSTH_times',PSTH_times)
@@ -137,15 +142,15 @@ if os.path.isdir(all_sc_save_dir) == False:
 	os.mkdir(all_sc_save_dir)
 sc.bin_spike_counts(all_sc_save_dir,segment_spike_times,segment_names,segment_times)
 #Taste responsive data
-taste_resp_sc_save_dir = sc_save_dir + 'Taste_Responsive/'
-if os.path.isdir(taste_resp_sc_save_dir) == False:
-	os.mkdir(taste_resp_sc_save_dir)
-sc.bin_spike_counts(taste_resp_sc_save_dir,taste_responsive_tastant_spike_times,segment_names,segment_times)
-#Most taste responsive data
-most_taste_resp_sc_save_dir = sc_save_dir + 'Most_Taste_Responsive/'
-if os.path.isdir(most_taste_resp_sc_save_dir) == False:
-	os.mkdir(most_taste_resp_sc_save_dir)
-sc.bin_spike_counts(most_taste_resp_sc_save_dir,most_taste_responsive_tastant_spike_times,segment_names,segment_times)
+# taste_resp_sc_save_dir = sc_save_dir + 'Taste_Responsive/'
+# if os.path.isdir(taste_resp_sc_save_dir) == False:
+# 	os.mkdir(taste_resp_sc_save_dir)
+# sc.bin_spike_counts(taste_resp_sc_save_dir,taste_responsive_tastant_spike_times,segment_names,segment_times)
+# #Most taste responsive data
+# most_taste_resp_sc_save_dir = sc_save_dir + 'Most_Taste_Responsive/'
+# if os.path.isdir(most_taste_resp_sc_save_dir) == False:
+# 	os.mkdir(most_taste_resp_sc_save_dir)
+# sc.bin_spike_counts(most_taste_resp_sc_save_dir,most_taste_responsive_tastant_spike_times,segment_names,segment_times)
   
 #%%
 #A couple changepoint detection calculations: first using a KS-Test statistic, 
@@ -191,61 +196,62 @@ except:
 				  dig_in_names,taste_cp_raster_save_dir)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_cp_raster_inds',taste_cp_raster_inds)
 
-#_____Taste responsive data_____
-taste_resp_cp_save_dir = cp_save_dir + 'Taste_Responsive_CPs/'
-if os.path.isdir(taste_resp_cp_save_dir) == False:
-	os.mkdir(taste_resp_cp_save_dir)
-#PSTH KS-Test CP Calcs
-try:
-	taste_resp_taste_cp_PSTH_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_PSTH_inds')
-except:
-	taste_resp_cp_PSTH_save_dir = taste_resp_cp_save_dir + 'PSTH/'
-	if os.path.isdir(taste_resp_cp_PSTH_save_dir) == False:
-		os.mkdir(taste_resp_cp_PSTH_save_dir)
-	taste_resp_taste_cp_PSTH_inds = cd.calc_cp_taste_PSTH_ks_test(PSTH_times,PSTH_taste_deliv_times, 
-											   taste_responsive_tastant_PSTH, cp_bin, bin_step, dig_in_names,
-											   num_cp, before_taste, after_taste, taste_resp_cp_PSTH_save_dir)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_PSTH_inds',taste_resp_taste_cp_PSTH_inds)
-#Raster Poisson Bayes Changepoint Calcs
-try:
-	taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_raster_inds')
-except:	
-	taste_resp_cp_raster_save_dir = taste_resp_cp_save_dir + 'raster/'
-	if os.path.isdir(taste_resp_cp_raster_save_dir) == False:
-		os.mkdir(taste_resp_cp_raster_save_dir)
-	taste_resp_taste_cp_raster_inds = cd.calc_cp_bayes(taste_responsive_tastant_spike_times,cp_bin,
-										num_cp,start_dig_in_times,end_dig_in_times,
-										before_taste,after_taste,dig_in_names,
-										taste_resp_cp_raster_save_dir)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_raster_inds',taste_resp_taste_cp_raster_inds)
+#%%
+#TEMPORARY Population changepoint calculation based on density of individual neuron changepoint calcs
+taste_pop_cp_raster_inds = []
+for t_i in range(num_tastes):
 	
-#_____Most taste responsive data_____
-most_taste_resp_cp_save_dir = cp_save_dir + 'Most_Taste_Responsive_CPs/'
-if os.path.isdir(most_taste_resp_cp_save_dir) == False:
-	os.mkdir(most_taste_resp_cp_save_dir)
-#PSTH KS-Test CP Calcs
+
+
+
+
+#%%
+#NOTE: Credit to Dan Svedberg for the Bayesian approach / calculation
+
+#____Calculate which neurons are taste selective by bin size_____
+
+data_group_name = 'taste_selectivity'
+
+tastant_binned_frs = af.taste_cp_frs(taste_cp_raster_inds,tastant_spike_times,start_dig_in_times,end_dig_in_times,dig_in_names,num_neur,pre_taste_dt,post_taste_dt)
+
+decoding_save_dir = data_save_dir + 'Taste_Selectivity/'
+if os.path.isdir(decoding_save_dir) == False:
+	os.mkdir(decoding_save_dir)
+	
+loo_distribution_save_dir = decoding_save_dir + 'LOO_Distributions/'
+if os.path.isdir(loo_distribution_save_dir) == False:
+	os.mkdir(loo_distribution_save_dir)
+	
+#____Calculate which neurons are taste selective by epoch_____
+print("Using changepoint indices to calculate by epoch.")
 try:
-	most_taste_resp_taste_cp_PSTH_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_PSTH_inds')
+	taste_select_prob_joint = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint')[0]
+	taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
+	prob_taste_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'prob_taste_epoch')[0]
 except:
-	most_taste_resp_cp_PSTH_save_dir = most_taste_resp_cp_save_dir + 'PSTH/'
-	if os.path.isdir(most_taste_resp_cp_PSTH_save_dir) == False:
-		os.mkdir(most_taste_resp_cp_PSTH_save_dir)
-	most_taste_resp_taste_cp_PSTH_inds = cd.calc_cp_taste_PSTH_ks_test(PSTH_times,PSTH_taste_deliv_times, 
-											   most_taste_responsive_tastant_PSTH,cp_bin,
-											   bin_step,dig_in_names,num_cp,before_taste,
-											   after_taste,most_taste_resp_cp_PSTH_save_dir)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_PSTH_inds',most_taste_resp_taste_cp_PSTH_inds)
-#Raster Poisson Bayes Changepoint Calcs
-try:
-	most_taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_raster_inds')
-except:	
-	most_taste_resp_cp_raster_save_dir = most_taste_resp_cp_save_dir + 'raster/'
-	if os.path.isdir(most_taste_resp_cp_raster_save_dir) == False:
-		os.mkdir(most_taste_resp_cp_raster_save_dir)
-	most_taste_resp_taste_cp_raster_inds = cd.calc_cp_bayes(most_taste_responsive_tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
-				  end_dig_in_times,before_taste,after_taste,
-				  dig_in_names,most_taste_resp_cp_raster_save_dir)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_raster_inds',most_taste_resp_taste_cp_raster_inds)
+	#taste_select_prob_joint = Fraction of deliveries that are successfully decoded by neuron,taste - multiplying across epochs
+	#taste_select_prob_epoch = Fraction of deliveries that are successfully decoded by neuron,taste,epoch
+	taste_select_prob_joint, taste_select_prob_epoch, prob_taste_epoch = df.taste_decoding_cp(tastant_spike_times, \
+												 taste_cp_raster_inds,num_cp,start_dig_in_times, \
+												 end_dig_in_times,dig_in_names,num_neur,pre_taste_dt, \
+												 post_taste_dt,loo_distribution_save_dir)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint',taste_select_prob_joint)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch',taste_select_prob_epoch)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'prob_taste_epoch',prob_taste_epoch)
+
+#Plot the decoding - * denotes statitical significance in KW nonparametric multiple-comparisons test
+pf.epoch_taste_select_plot(prob_taste_epoch, dig_in_names, decoding_save_dir)
+epoch_max_decoding, epoch_select_neur = pf.taste_select_plot(taste_select_prob_epoch, np.arange(num_cp), 'epoch', 'taste_selectivity_by_epoch', decoding_save_dir)
+
+#_____All Epochs Included_____
+#Select the taste responsive neurons using taste_select_prob_joint (matrix num_neur x num_tastes)
+taste_response_prob = ((np.sum(taste_select_prob_joint,1)/3 >= 1/num_tastes).astype('int'))*np.ones((num_neur,num_tastes))
+#Select the taste selective neurons using taste_select_prob_joint
+taste_select_prob = ((taste_select_prob_joint >= 1/num_tastes).astype('int'))*np.ones((num_neur,num_tastes))
+
+#_____Using Highest Probability Epoch_____
+
+
 
 #%% Plot changepoint statistics
 
@@ -255,79 +261,3 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 
 colors = cm.cool(np.arange(num_cp)/(num_cp))
-
-#Full population
-taste_diff_vals = []
-for t_i in range(num_tastes):
-	num_deliv,_,_ = np.shape(taste_cp_raster_inds[t_i])
-	diff_vals = np.zeros((num_deliv*num_neur,num_cp-1))
-	for d_i in range(num_deliv):
-		diff_vals[d_i*num_neur:(d_i+1)*num_neur,:] = np.diff(taste_cp_raster_inds[t_i][d_i,:,:],1)
-	taste_diff_vals.append(diff_vals)
-
-f0 = plt.figure(figsize=(5,5))
-for t_i in range(num_tastes):
-	plt.subplot(num_tastes,1,t_i + 1)
-	for c_p in range(num_cp-1):
-		plt.hist(taste_diff_vals[t_i][:,c_p],color=colors[c_p],density='True',cumulative=False,histtype='step',label='Epoch ' + str(c_p))
-		plt.axvline(np.median(taste_diff_vals[t_i][:,c_p]),color=colors[c_p],label='Epoch ' + str(c_p) + ' median')
-	plt.legend()
-	plt.title('Epoch length PDF: ' + dig_in_names[t_i])
-	plt.xlabel('Epoch Length (ms)')
-plt.suptitle('Epoch length distribution')
-plt.tight_layout()
-filename = cp_save_dir + 'all_tastes_epoch_length'
-f0.savefig(filename + '.png')
-f0.savefig(filename + '.svg')
-plt.close(f0)
-
-#Taste resp population
-taste_diff_vals = []
-for t_i in range(num_tastes):
-	num_deliv,taste_resp_num_neur,_ = np.shape(taste_resp_taste_cp_raster_inds[t_i])
-	diff_vals = np.zeros((num_deliv*taste_resp_num_neur,num_cp-1))
-	for d_i in range(num_deliv):
-		diff_vals[d_i*taste_resp_num_neur:(d_i+1)*taste_resp_num_neur,:] = np.diff(taste_resp_taste_cp_raster_inds[t_i][d_i,:,:],1)
-	taste_diff_vals.append(diff_vals)
-
-f1 = plt.figure(figsize=(5,5))
-for t_i in range(num_tastes):
-	plt.subplot(num_tastes,1,t_i + 1)
-	for c_p in range(num_cp-1):
-		plt.hist(taste_diff_vals[t_i][:,c_p],color=colors[c_p],density='True',cumulative=False,histtype='step',label='Epoch ' + str(c_p))
-		plt.axvline(np.median(taste_diff_vals[t_i][:,c_p]),color=colors[c_p],label='Epoch ' + str(c_p) + ' median')
-	plt.legend()
-	plt.title('Epoch length PDF: ' + dig_in_names[t_i])
-	plt.xlabel('Epoch Length (ms)')
-plt.suptitle('Epoch length distribution')
-plt.tight_layout()
-filename = cp_save_dir + 'taste_responsive_epoch_length'
-f1.savefig(filename + '.png')
-f1.savefig(filename + '.svg')
-plt.close(f1)
-
-#Most resp population
-taste_diff_vals = []
-for t_i in range(num_tastes):
-	num_deliv,most_taste_resp_num_neur,_ = np.shape(most_taste_resp_taste_cp_raster_inds[t_i])
-	diff_vals = np.zeros((num_deliv*most_taste_resp_num_neur,num_cp-1))
-	for d_i in range(num_deliv):
-		diff_vals[d_i*most_taste_resp_num_neur:(d_i+1)*most_taste_resp_num_neur,:] = np.diff(most_taste_resp_taste_cp_raster_inds[t_i][d_i,:,:],1)
-	taste_diff_vals.append(diff_vals)
-
-f2 = plt.figure(figsize=(5,5))
-for t_i in range(num_tastes):
-	plt.subplot(num_tastes,1,t_i + 1)
-	for c_p in range(num_cp-1):
-		plt.hist(taste_diff_vals[t_i][:,c_p],color=colors[c_p],density='True',cumulative=False,histtype='step',label='Epoch ' + str(c_p))
-		plt.axvline(np.median(taste_diff_vals[t_i][:,c_p]),color=colors[c_p],label='Epoch ' + str(c_p) + ' median')
-	plt.legend()
-	plt.title('Epoch length PDF: ' + dig_in_names[t_i])
-	plt.xlabel('Epoch Length (ms)')
-plt.suptitle('Epoch length distribution')
-plt.tight_layout()
-filename = cp_save_dir + 'most_taste_responsive_epoch_length'
-f2.savefig(filename + '.png')
-f2.savefig(filename + '.svg')
-plt.close(f2)
-	

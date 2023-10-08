@@ -10,10 +10,10 @@ null and true datasets
 
 import os, random, json, gzip, tqdm
 os.environ["OMP_NUM_THREADS"] = "4"
-from numba import jit
 import matplotlib.pyplot as plt
 import numpy as np
 import multiprocessing
+import warnings
 
 def run_null_create_parallelized(inputs):
 	"""
@@ -32,10 +32,10 @@ def run_null_create_parallelized(inputs):
 	with gzip.GzipFile(filepath, mode="w") as f:
 		f.write(json_bytes)
 		
-@jit(forceobj=True)	
 def high_bins(inputs):
 	"""This function calculates bins of time that have the number of neurons 
 	spiking above some given threshold. It's optimized for multiprocessing."""
+	warnings.filterwarnings('ignore')
 	bin_spikes = inputs[0]
 	segment_start_time = inputs[1]
 	segment_end_time = inputs[2]

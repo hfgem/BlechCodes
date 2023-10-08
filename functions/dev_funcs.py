@@ -14,8 +14,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 from scipy.interpolate import interp1d
-from scipy.stats import pearsonr, ks_2samp
+from scipy.stats import pearsonr, ks_2samp, ttest_ind
 import functions.corr_dist_calc_parallel as cdcp
+import functions.corr_dist_calc_parallel_pop as cdcpp
 from multiprocessing import Pool
 from sklearn.decomposition import PCA
 
@@ -207,6 +208,12 @@ def calculate_dev_stats(rasters, times, iteration_names, save_dir):
 		data_name = iter_name + ' total neuron count'
 		plot_dev_stats(seg_neur_num, data_name, save_dir,
 					   x_label='deviation index', y_label='# neurons')
+		
+	#Now plot stats across iterations
+	plot_dev_stats_dict(length_dict, iteration_names, 'Deviation Lengths', save_dir, 'Segment', 'Length (ms)')
+	plot_dev_stats_dict(IDI_dict, iteration_names, 'Inter-Deviation-Intervals', save_dir, 'Segment', 'Length (ms)')
+	plot_dev_stats_dict(num_spike_dict, iteration_names, 'Total Spike Count', save_dir, 'Segment', '# Spikes')
+	plot_dev_stats_dict(num_spike_dict, iteration_names, 'Total Neuron Count', save_dir, 'Segment', '# Neurons')
 
 	return length_dict, IDI_dict, num_spike_dict, num_neur_dict
 
@@ -235,6 +242,22 @@ def plot_dev_stats(data, data_name, save_dir, x_label=[], y_label=[]):
 		plt.xlabel(data_name)
 	plt.ylabel('Number of Occurrences')
 	plt.title(data_name + ' histogram')
+	plt.tight_layout()
+	im_name = ('_').join(data_name.split(' '))
+	plt.savefig(save_dir + im_name + '.png')
+	plt.savefig(save_dir + im_name + '.svg')
+	plt.close()
+
+
+def plot_dev_stats_dict(dict_data, iteration_names, data_name, save_dir, x_label, y_label):
+	#Plot distributions as box and whisker plots comparing across iterations
+	len_fig = plt.figure(figsize=(8,8))
+	labels, data = [*zip(*dict_data.items())]
+	plt.boxplot(data)
+	plt.xticks(range(1,len(labels)),labels=iteration_names)
+	plt.title(data_name)
+	plt.xlabel(x_label)
+	plt.ylabel(y_label)
 	plt.tight_layout()
 	im_name = ('_').join(data_name.split(' '))
 	plt.savefig(save_dir + im_name + '.png')
@@ -275,10 +298,14 @@ def plot_null_v_true_stats(true_data, null_data, data_name, save_dir, x_label=[]
 	plt.title(data_name + ' PDF')
 	# Plot the cumulative distribution functions
 	plt.subplot(3, 1, 3)
-	plt.hist(true_data, bins=25, density=True, cumulative=True,
-			 histtype='step', color='b', label='True')
-	plt.hist(null_vals, bins=25, density=True, cumulative=True,
-			 histtype='step', color='g', label='Null')
+	true_sort = np.sort(true_data)
+	true_unique = np.unique(true_sort)
+	cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+	null_sort = np.sort(null_vals)
+	null_unique = np.unique(null_sort)
+	cmf_null = np.array([np.sum((null_sort <= u_val).astype('int'))/len(null_sort) for u_val in null_unique])
+	plt.plot(true_unique,cmf_true, color='b', label='True')
+	plt.plot(null_unique,cmf_null, color='g', label='Null')
 	plt.legend()
 	plt.xlabel(x_label)
 	plt.ylabel('CDF')
@@ -333,23 +360,26 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 				num_deliv, _, num_cp = np.shape(taste_cp)
 				#Store the correlation results in a numpy array
 				neuron_corr_storage = np.zeros((num_dev, num_deliv, total_num_neur, num_cp-1))
+				neuron_vec_corr_storage = np.zeros((num_dev, num_deliv, total_num_neur, num_cp-1))
 				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
 					dev_rast = seg_rast[dev_i][neuron_keep_indices,:]
 					dev_len = np.shape(dev_rast)[1]
 					end_ind = np.arange(fr_bin,fr_bin+dev_len)
 					end_ind[end_ind > dev_len] = dev_len
-					dev_rast_binned = np.zeros(np.shape(dev_rast))
+					#TODO: test gaussian convolution instead of binning
+					dev_rast_binned = np.zeros(np.shape(dev_rast)) #timeseries information kept
 					for start_ind in range(dev_len):
 						dev_rast_binned[:,start_ind] = np.sum(dev_rast[:,start_ind:end_ind[start_ind]],1)
-					
+					dev_rast_vec = np.sum(dev_rast,1)/(dev_len/1000) #Converted to Hz
 					inputs = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
 					 itertools.repeat(neuron_keep_indices), itertools.repeat(taste_cp), \
 						 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
 					pool = Pool(4)
 					deliv_corr_storage = pool.map(cdcp.deliv_corr_parallelized, inputs)
+					deliv_vec_corr_storage = pool.map(cdcp.deliv_corr_vec_parallelized, inputs)
 					pool.close()
 					neuron_corr_storage[dev_i,:,:,:] = np.array(deliv_corr_storage)
-				
+					neuron_vec_corr_storage[dev_i,:,:,:] = np.array(deliv_vec_corr_storage)
 				#Save to a numpy array
 				filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
 				np.save(filename,neuron_corr_storage)
@@ -444,32 +474,46 @@ def pull_corr_dev_stats(segment_names, dig_in_names, save_dir):
 
 	return dev_stats
 
+
 def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name, 
 			   neuron_indices):
 	"""This function takes in deviation rasters, tastant delivery spikes, and
 	changepoint indices to calculate correlations of each deviation to each 
 	changepoint interval. Outputs are saved .npy files with name indicating
 	segment and taste containing matrices of shape [num_dev, num_deliv, num_neur, num_cp]
-	with the distances stored."""
+	with the distances stored.
+	
+	neuron_indices should be binary and shaped num_neur x num_cp
+	"""
 	
 	#Grab parameters
 	num_tastes = len(dig_in_names)
 	num_segments = len(segment_names)
 	for s_i in range(num_segments):  #Loop through each segment
-		print("Beginning distance calcs for segment " + str(s_i))
+		print("Beginning plot calcs for segment " + str(s_i))
 		seg_stats = dev_stats[s_i]
 		for t_i in range(num_tastes):  #Loop through each taste
 			print("\tTaste #" + str(t_i + 1))
 			taste_stats = seg_stats[t_i]
 			#Import distance numpy array
 			neuron_data_storage = taste_stats['neuron_data_storage']
-			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
+			data_shape = np.shape(neuron_data_storage)
+			if len(data_shape) == 4:
+				num_dev = data_shape[0]
+				num_deliv = data_shape[1]
+				total_num_neur = data_shape[2]
+				num_cp = data_shape[3]
+			elif len(data_shape) == 3:
+				num_dev = data_shape[0]
+				num_deliv = data_shape[1]
+				num_cp = data_shape[2]
+			
 			#Plot the individual neuron distribution for each changepoint index
 			f = plt.figure(figsize=(5,5))
 			cp_data = []
 			plt.subplot(2,1,1)
 			for c_p in range(num_cp):
-				all_dist_cp = (neuron_data_storage[:,:,neuron_indices,c_p]).flatten()
+				all_dist_cp = (neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p]).flatten()
 				cp_data.append(all_dist_cp)
 				plt.hist(all_dist_cp[all_dist_cp != 0],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel(dist_name)
@@ -478,7 +522,12 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 			plt.subplot(2,1,2)
 			for c_p in range(num_cp):
 				all_dist_cp = cp_data[c_p]
-				plt.hist(all_dist_cp[all_dist_cp != 0],density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+				#plt.ecdf(all_dist_cp,label='Epoch ' + str(c_p))
+				#true_sort = np.sort(all_dist_cp)
+				#true_unique = np.unique(true_sort)
+				#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in tqdm.tqdm(true_unique)])
+				#plt.plot(true_unique,cmf_true,label='Epoch ' + str(c_p))
+				plt.hist(all_dist_cp[all_dist_cp != 0],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel(dist_name)
 			plt.legend()
 			plt.title('Cumulative Mass Function - ' + dist_name)
@@ -494,7 +543,7 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				cp_data = []
 				plt.subplot(2,1,1)
 				for c_p in range(num_cp):
-					all_dist_cp = (neuron_data_storage[:,:,neuron_indices,c_p]).flatten()
+					all_dist_cp = (neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p]).flatten()
 					cp_data.append(all_dist_cp)
 					plt.hist(all_dist_cp[all_dist_cp >= 0.5],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 				plt.xlabel(dist_name)
@@ -504,7 +553,12 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.subplot(2,1,2)
 				for c_p in range(num_cp):
 					all_dist_cp = cp_data[c_p]
-					plt.hist(all_dist_cp[all_dist_cp >= 0.5],density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					plt.hist(all_dist_cp[all_dist_cp >= 0.5],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					#plt.ecdf(all_dist_cp[all_dist_cp >= 0.5],label='Epoch ' + str(c_p))
+					#true_sort = np.sort(all_dist_cp)
+					#true_unique = np.unique(true_sort)
+					#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+					#plt.plot(true_unique[cmf_true >= 0.5],cmf_true[cmf_true >= 0.5],label='Epoch ' + str(c_p))
 				plt.xlabel(dist_name)
 				plt.xlim([0.5,1])
 				plt.legend()
@@ -520,7 +574,7 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				cp_data = []
 				plt.subplot(2,1,1)
 				for c_p in range(num_cp):
-					all_dist_cp = (neuron_data_storage[:,:,neuron_indices,c_p]).flatten()
+					all_dist_cp = (neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p]).flatten()
 					cp_data.append(all_dist_cp)
 					plt.hist(all_dist_cp[all_dist_cp >= 0.5],density=True,log=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 				plt.xlabel(dist_name)
@@ -530,7 +584,12 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.subplot(2,1,2)
 				for c_p in range(num_cp):
 					all_dist_cp = cp_data[c_p]
-					plt.hist(all_dist_cp[all_dist_cp >= 0.5],density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					plt.hist(all_dist_cp[all_dist_cp >= 0.5],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					#plt.ecdf(all_dist_cp[all_dist_cp >= 0.5],label='Epoch ' + str(c_p))
+					#true_sort = np.sort(all_dist_cp)
+					#true_unique = np.unique(true_sort)
+					#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+					#plt.plot(true_unique[cmf_true >= 0.5],cmf_true[cmf_true >= 0.5],label='Epoch ' + str(c_p))
 				plt.xlabel(dist_name)
 				plt.xlim([0.5,1])
 				plt.legend()
@@ -546,7 +605,7 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 			plt.subplot(2,1,1)
 			avg_cp_data = []
 			for c_p in range(num_cp):
-				all_avg_dist_cp = (np.nanmean(neuron_data_storage[:,:,neuron_indices,c_p],2)).flatten()
+				all_avg_dist_cp = (np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2)).flatten()
 				avg_cp_data.append(all_avg_dist_cp)
 				plt.hist(all_avg_dist_cp[all_avg_dist_cp != 0],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel('Average ' + dist_name)
@@ -555,7 +614,12 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 			plt.subplot(2,1,2)
 			for c_p in range(num_cp):
 				all_avg_dist_cp = avg_cp_data[c_p]
-				plt.hist(all_avg_dist_cp[all_avg_dist_cp != 0],density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+				plt.hist(all_avg_dist_cp[all_avg_dist_cp != 0],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+				#plt.ecdf(all_avg_dist_cp,label='Epoch ' + str(c_p))
+				#true_sort = np.sort(all_avg_dist_cp)
+				#true_unique = np.unique(true_sort)
+				#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+				#plt.plot(true_unique,cmf_true,label='Epoch ' + str(c_p))
 			plt.xlabel('Average ' + dist_name)
 			plt.legend()
 			plt.title('Cumulative Mass Function - ' + dist_name)
@@ -571,7 +635,7 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.subplot(2,1,1)
 				avg_cp_data = []
 				for c_p in range(num_cp):
-					all_avg_dist_cp = (np.nanmean(neuron_data_storage[:,:,neuron_indices,c_p],2)).flatten()
+					all_avg_dist_cp = (np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2)).flatten()
 					avg_cp_data.append(all_avg_dist_cp)
 					plt.hist(all_avg_dist_cp[all_avg_dist_cp >= 0.5],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 				plt.xlabel('Average ' + dist_name)
@@ -581,7 +645,12 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.subplot(2,1,2)
 				for c_p in range(num_cp):
 					all_avg_dist_cp = avg_cp_data[c_p]
-					plt.hist(all_avg_dist_cp[all_avg_dist_cp >= 0.5],density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					plt.hist(all_avg_dist_cp[all_avg_dist_cp >= 0.5],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					#plt.ecdf(all_avg_dist_cp[all_avg_dist_cp >= 0.5],label='Epoch ' + str(c_p))
+					#true_sort = np.sort(all_avg_dist_cp)
+					#true_unique = np.unique(true_sort)
+					#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+					#plt.plot(true_unique[cmf_true >= 0.5],cmf_true[cmf_true >= 0.5],label='Epoch ' + str(c_p))
 				plt.xlabel('Average ' + dist_name)
 				plt.xlim([0.5,1])
 				plt.legend()
@@ -597,7 +666,7 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.subplot(2,1,1)
 				avg_cp_data = []
 				for c_p in range(num_cp):
-					all_avg_dist_cp = (np.nanmean(neuron_data_storage[:,:,neuron_indices,c_p],2)).flatten()
+					all_avg_dist_cp = (np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2)).flatten()
 					avg_cp_data.append(all_avg_dist_cp)
 					plt.hist(all_avg_dist_cp[all_avg_dist_cp >= 0.5],density=True,log=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 				plt.xlabel('Average ' + dist_name)
@@ -607,7 +676,12 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.subplot(2,1,2)
 				for c_p in range(num_cp):
 					all_avg_dist_cp = avg_cp_data[c_p]
-					plt.hist(all_avg_dist_cp[all_avg_dist_cp >= 0.5],density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					plt.hist(all_avg_dist_cp[all_avg_dist_cp >= 0.5],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					#plt.ecdf(all_avg_dist_cp[all_avg_dist_cp >= 0.5],label='Epoch ' + str(c_p))
+					#true_sort = np.sort(all_avg_dist_cp)
+					#true_unique = np.unique(true_sort)
+					#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+					#plt.plot(true_unique[cmf_true >= 0.5],cmf_true[cmf_true >= 0.5],label='Epoch ' + str(c_p))
 				plt.xlabel('Average ' + dist_name)
 				plt.xlim([0.5,1])
 				plt.legend()
@@ -626,7 +700,10 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 	changepoint indices to calculate correlations of each deviation to each 
 	changepoint interval. Outputs are saved .npy files with name indicating
 	segment and taste containing matrices of shape [num_dev, num_deliv, num_neur, num_cp]
-	with the distances stored."""
+	with the distances stored.
+	
+	neuron_indices should be binary and shaped num_neur x num_cp
+	"""
 	
 	#Grab parameters
 	num_tastes = len(dig_in_names)
@@ -637,7 +714,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 	segment_data_avg = [] #segments x tastes x cp avged across neurons in the deviation
 	for s_i in range(num_segments):  #Loop through each segment
 		seg_stats = dev_stats[s_i]
-		print("Beginning calcs for segment " + str(s_i))
+		print("Beginning combined plot calcs for segment " + str(s_i))
 		taste_data = [] #tastes x cp
 		taste_data_avg = []
 		for t_i in range(num_tastes):  #Loop through each taste
@@ -649,9 +726,9 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 			cp_data = []
 			cp_data_avg = []
 			for c_p in range(num_cp):
-				all_dist_cp = (neuron_data_storage[:,:,neuron_indices,c_p]).flatten()
+				all_dist_cp = (neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p]).flatten()
 				cp_data.append(all_dist_cp)
-				avg_dist_cp = np.nanmean(neuron_data_storage[:,:,neuron_indices,c_p],2).flatten()
+				avg_dist_cp = np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2).flatten()
 				cp_data_avg.append(avg_dist_cp)
 			taste_data.append(cp_data)
 			taste_data_avg.append(cp_data_avg)
@@ -675,7 +752,11 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 			for t_i in range(num_tastes):
 				try:
 					data = taste_data[t_i][c_p]
-					plt.hist(data[data != 0],density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+					plt.hist(data[data != 0],bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+					#true_sort = np.sort(data)
+					#true_unique = np.unique(true_sort)
+					#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+					#plt.plot(true_unique,cmf_true,label='Taste ' + dig_in_names[t_i])
 				except:
 					pass
 			plt.xlabel(dist_name)
@@ -706,7 +787,11 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data[t_i][c_p]
-						plt.hist(data[data >= 0.5],density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						plt.hist(data[data >= 0.5],bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						#true_sort = np.sort(data)
+						#true_unique = np.unique(true_sort)
+						#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+						#plt.plot(true_unique[cmf_true >= 0.5],cmf_true[cmf_true >= 0.5],label='Taste ' + dig_in_names[t_i])
 					except:
 						pass
 				plt.xlabel(dist_name)
@@ -736,7 +821,11 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data[t_i][c_p]
-						plt.hist(data[data >= 0.5],density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						plt.hist(data[data >= 0.5],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						#true_sort = np.sort(data)
+						#true_unique = np.unique(true_sort)
+						#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+						#plt.plot(true_unique[cmf_true >= 0.5],cmf_true[cmf_true >= 0.5],label='Taste ' + dig_in_names[t_i])
 					except:
 						pass
 				plt.xlabel(dist_name)
@@ -757,7 +846,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 			for t_i in range(num_tastes):
 				try:
 					data = taste_data_avg[t_i][c_p]
-					plt.hist(data[data != 0],density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+					plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
 				except:
 					pass
 			plt.xlabel(dist_name)
@@ -767,7 +856,11 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 			for t_i in range(num_tastes):
 				try:
 					data = taste_data_avg[t_i][c_p]
-					plt.hist(data[data != 0],density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+					plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+					#true_sort = np.sort(data)
+					#true_unique = np.unique(true_sort)
+					#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+					#plt.plot(true_unique,cmf_true,label='Taste ' + dig_in_names[t_i])
 				except:
 					pass
 			plt.xlabel(dist_name)
@@ -798,7 +891,11 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data_avg[t_i][c_p]
-						plt.hist(data[data >= 0.5],density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						plt.hist(data[data >= 0.5],bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						#true_sort = np.sort(data)
+						#true_unique = np.unique(true_sort)
+						#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+						#plt.plot(true_unique[cmf_true >= 0.5],cmf_true[cmf_true >= 0.5],label='Taste ' + dig_in_names[t_i])
 					except:
 						pass
 				plt.xlabel(dist_name)
@@ -828,7 +925,11 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data_avg[t_i][c_p]
-						plt.hist(data[data >= 0.5],density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						plt.hist(data[data >= 0.5],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						#true_sort = np.sort(data)
+						#true_unique = np.unique(true_sort)
+						#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+						#plt.plot(true_unique[cmf_true >= 0.5],cmf_true[cmf_true >= 0.5],label='Taste ' + dig_in_names[t_i])
 					except:
 						pass
 				plt.xlabel(dist_name)
@@ -860,7 +961,11 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 			for s_i in range(num_segments):
 				try:
 					data = segment_data_avg[s_i][t_i][c_p]
-					plt.hist(data[data != 0],density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+					plt.hist(data[data != 0],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+					#true_sort = np.sort(data)
+					#true_unique = np.unique(true_sort)
+					#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+					#plt.plot(true_unique,cmf_true,label='Segment ' + segment_names[s_i])
 				except:
 					pass
 			plt.xlabel(dist_name)
@@ -890,7 +995,11 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for s_i in range(num_segments):
 					try:
 						data = segment_data_avg[s_i][t_i][c_p]
-						plt.hist(data[data > 0.5],density=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						plt.hist(data[data > 0.5],bins=1000,density=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						#true_sort = np.sort(data)
+						#true_unique = np.unique(true_sort)
+						#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+						#plt.plot(true_unique[cmf_true >= 0.5],cmf_true[cmf_true >= 0.5],label='Segment ' + segment_names[s_i])
 					except:
 						pass
 				plt.xlabel(dist_name)
@@ -920,7 +1029,11 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for s_i in range(num_segments):
 					try:
 						data = segment_data_avg[s_i][t_i][c_p]
-						plt.hist(data[data > 0.5],density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						plt.hist(data[data > 0.5],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						#true_sort = np.sort(data)
+						#true_unique = np.unique(true_sort)
+						#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
+						#plt.plot(true_unique[cmf_true >= 0.5],cmf_true[cmf_true >= 0.5],label='Segment ' + segment_names[s_i])
 					except:
 						pass
 				plt.xlabel(dist_name)
@@ -985,10 +1098,101 @@ def stat_significance(segment_data, segment_names, dig_in_names, save_dir, dist_
 			f.write(line)
 			f.write('\n')
 			
+def stat_significance_ttest(segment_data, segment_names, dig_in_names, save_dir, dist_name):
+	
+	#Grab parameters
+	#segment_data shape = segments x tastes x cp
+	num_segments = len(segment_data)
+	num_tastes = len(segment_data[0])
+	num_cp = len(segment_data[0][0])
+	
+	#Calculate statistical significance of pairs
+	#Are the correlation distributions significantly different across pairs?
+	
+	#All pair combinations
+	a = [list(np.arange(num_segments)),list(np.arange(num_tastes)),list(np.arange(num_cp))]
+	data_combinations = list(itertools.product(*a))
+	pair_combinations = list(itertools.combinations(data_combinations,2))
+	
+	#Pair combination significance storage
+	save_file = save_dir + dist_name + '_significance.txt'
+	pair_significance_statements = []
+	
+	print("Calculating Significance for All Combinations")
+	for p_i in tqdm.tqdm(range(len(pair_combinations))):
+		try:
+			ind_1 = pair_combinations[p_i][0]
+			ind_2 = pair_combinations[p_i][1]
+			data_1 = segment_data[ind_1[0]][ind_1[1]][ind_1[2]]
+			data_2 = segment_data[ind_2[0]][ind_2[1]][ind_2[2]]
+			result = ttest_ind(data_1,data_2,nan_policy='omit',alternative='less')
+			if result[1] < 0.05:
+				statement = segment_names[ind_1[0]] + '_' + dig_in_names[ind_1[1]] + '_epoch' + str(ind_1[2]) + \
+					' vs ' + segment_names[ind_2[0]] + '_' + dig_in_names[ind_2[1]] + '_epoch' + str(ind_2[2]) + \
+						' = significantly different with p-val = ' + str(result[1])
+			else:
+				statement = segment_names[ind_1[0]] + '_' + dig_in_names[ind_1[1]] + '_epoch' + str(ind_1[2]) + \
+					' vs ' + segment_names[ind_2[0]] + '_' + dig_in_names[ind_2[1]] + '_epoch' + str(ind_2[2]) + \
+						' = not significantly different with p-val = ' + str(result[1])
+			pair_significance_statements.append(statement)
+		except:
+			pass
+		
+	with open(save_file, 'w') as f:
+		for line in pair_significance_statements:
+			f.write(line)
+			f.write('\n')
 			
-def top_dev_corr_bins(dev_stats,segment_names,dig_in_names,save_dir):
+def mean_compare(segment_data, segment_names, dig_in_names, save_dir, dist_name):
+	
+	#Grab parameters
+	#segment_data shape = segments x tastes x cp
+	num_segments = len(segment_data)
+	num_tastes = len(segment_data[0])
+	num_cp = len(segment_data[0][0])
+	
+	#Calculate mean comparison of pairs
+	
+	#All pair combinations
+	a = [list(np.arange(num_segments)),list(np.arange(num_tastes)),list(np.arange(num_cp))]
+	data_combinations = list(itertools.product(*a))
+	pair_combinations = list(itertools.combinations(data_combinations,2))
+	
+	#Pair combination significance storage
+	save_file = save_dir + dist_name + '.txt'
+	pair_mean_statements = []
+	
+	print("Calculating Significance for All Combinations")
+	for p_i in tqdm.tqdm(range(len(pair_combinations))):
+		try:
+			ind_1 = pair_combinations[p_i][0]
+			ind_2 = pair_combinations[p_i][1]
+			data_1 = segment_data[ind_1[0]][ind_1[1]][ind_1[2]]
+			data_2 = segment_data[ind_2[0]][ind_2[1]][ind_2[2]]
+			result =  (np.nanmean(data_1) < np.nanmean(data_2)).astype('int') #ttest_ind(data_1,data_2,nan_policy='omit',alternative='less')
+			if result == 1:
+				statement = segment_names[ind_1[0]] + '_' + dig_in_names[ind_1[1]] + '_epoch' + str(ind_1[2]) + \
+						' < ' + segment_names[ind_2[0]] + '_' + dig_in_names[ind_2[1]] + '_epoch' + str(ind_2[2])
+			if result == 0:
+				statement = segment_names[ind_1[0]] + '_' + dig_in_names[ind_1[1]] + '_epoch' + str(ind_1[2]) + \
+						' > ' + segment_names[ind_2[0]] + '_' + dig_in_names[ind_2[1]] + '_epoch' + str(ind_2[2])
+
+			pair_mean_statements.append(statement)
+		except:
+			pass
+		
+	with open(save_file, 'w') as f:
+		for line in pair_mean_statements:
+			f.write(line)
+			f.write('\n')
+
+			
+def top_dev_corr_bins(dev_stats,segment_names,dig_in_names,save_dir,neuron_indices):
 	"""Calculate which deviation index is most correlated with which taste 
-	delivery and which epoch and store to a text file."""
+	delivery and which epoch and store to a text file.
+	
+	neuron_indices should be binary and shaped num_neur x num_cp
+	"""
 	
 	#Grab parameters
 	num_tastes = len(dig_in_names)
@@ -1008,7 +1212,9 @@ def top_dev_corr_bins(dev_stats,segment_names,dig_in_names,save_dir):
 			neuron_data_storage = taste_stats['neuron_data_storage']
 			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
 			#Calculate, for each deviation bin, which taste delivery and cp it correlates with most
-			all_dev_data = np.nanmean(neuron_data_storage,2) #num_dev x num_deliv x num_cp 
+			all_dev_data = np.zeros((num_dev,num_deliv,num_cp))
+			for c_p in range(num_cp):
+				all_dev_data[:,:,c_p] = np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2) #num_dev x num_deliv x num_cp 
 			top_99_percentile = np.percentile(all_dev_data[~np.isnan(all_dev_data)].flatten(),99)
 			for dev_i in range(num_dev):
 				dev_data = all_dev_data[dev_i,:,:]  #num_deliv x num_cp
@@ -1024,6 +1230,7 @@ def top_dev_corr_bins(dev_stats,segment_names,dig_in_names,save_dir):
 					f.write(line)
 					f.write('\n')
 	
+
 
 
 

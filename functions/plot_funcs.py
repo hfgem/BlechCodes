@@ -8,10 +8,12 @@ Created on Tue Jan 10 13:54:17 2023
 This is a collection of miscellaneous functions for plotting data
 """
 
-import os, tqdm
+import os, tqdm, itertools
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
+import scipy.stats as stats
+import matplotlib.cm as cm
 
 def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_times, 
 				 segment_names, segment_times, segment_spike_times, tastant_spike_times, 
@@ -49,21 +51,20 @@ def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_time
 		rast_taste_deliv_save_dir = rast_taste_save_dir + 'deliveries/'
 		if os.path.isdir(rast_taste_deliv_save_dir) == False:
 			os.mkdir(rast_taste_deliv_save_dir)
-		t_start = start_dig_in_times[t_i]
-		t_end = end_dig_in_times[t_i]
+		t_start = np.array(start_dig_in_times[t_i])*(1/1000) #Convert to seconds
+		t_end = np.array(end_dig_in_times[t_i])*(1/1000) #Convert to seconds
 		num_deliv = len(t_start)
 		t_st = tastant_spike_times[t_i]
 		for t_d_i in range(len(t_start)):
 			deliv_fig = plt.figure(figsize=(5,5))
 			s_t = t_st[t_d_i]
-			s_t_time = [list(np.array(s_t[i])*(1/1000)) for i in range(len(s_t))]
+			s_t_time = [list(np.array(s_t[i])*(1/1000)) for i in range(len(s_t))] #Convert to seconds
 			t_st.append(s_t)
 			#Plot the raster
-			plt.plot(num_deliv,1,t_d_i+1)
 			plt.eventplot(s_t_time,colors='k')
 			plt.xlabel('Time (s)')
-			plt.axvline(t_start[t_d_i]/1000,color='r')
-			plt.axvline(t_end[t_d_i]/1000,color='r')
+			plt.axvline(t_start[t_d_i],color='r')
+			plt.axvline(t_end[t_d_i],color='r')
 			im_name = ('_').join((dig_in_names[t_i]).split(' ')) + '_raster_' + str(t_d_i)
 			deliv_fig.tight_layout()
 			deliv_fig.savefig(rast_taste_deliv_save_dir + im_name + '.png')
@@ -97,10 +98,10 @@ def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_time
 		if os.path.isdir(rast_neur_save_dir) == False:
 			os.mkdir(rast_neur_save_dir)
 		for n_i in range(num_neur):
-			n_st = [t_st[t_d_i][n_i] - t_start[t_d_i] for t_d_i in range(len(t_start))]
+			#n_st = [t_st[t_d_i][n_i] - t_start[t_d_i] for t_d_i in range(len(t_start))]
+			n_st = [t_st[t_d_i][n_i] - t_start[t_d_i]*1000 for t_d_i in range(len(t_start))]
 			n_st_time = [list(np.array(n_st[i])*(1/1000)) for i in range(len(n_st))]
-			raster_len_max = (max(t_end) - min(t_start))*(1/1000)*(1/60)
-			t_fig = plt.figure(figsize=(raster_len_max,len(t_start)))
+			t_fig = plt.figure(figsize=(10,10))
 			plt.eventplot(n_st_time,colors='k')
 			plt.xlabel('Time (s)')
 			plt.ylabel('Trial')
@@ -116,7 +117,7 @@ def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_time
 
 def PSTH_plots(fig_save_dir, num_tastes, num_neur, dig_in_names, 
 			   start_dig_in_times, end_dig_in_times, pre_taste_dt, post_taste_dt,
-			   segment_times, spike_times, bin_width, bin_step):
+			   segment_times, segment_spike_times, bin_width, bin_step):
 	
 	PSTH_save_dir = fig_save_dir + 'PSTHs/'
 	if os.path.isdir(PSTH_save_dir) == False:
@@ -124,15 +125,44 @@ def PSTH_plots(fig_save_dir, num_tastes, num_neur, dig_in_names,
 	half_bin_width_dt = int(np.ceil(1000*bin_width/2)) #in ms
 	PSTH_times = [] #Storage of time bin true times (s) for each tastant
 	PSTH_taste_deliv_times = [] #Storage of tastant delivery true times (s) for each tastant [start,end]
-	tastant_PSTH = []
-	avg_tastant_PSTH = []
+	
+	#First determine the minimal start delivery and maximal end delivery
+	all_start_dig_in_times = []
+	for sdit in range(len(start_dig_in_times)):
+		all_start_dig_in_times.extend(start_dig_in_times[sdit])
+	min_start_dig_in_time = np.min(np.array(all_start_dig_in_times))
+	
+	all_end_dig_in_times = []
+	for edit in range(len(end_dig_in_times)):
+		all_end_dig_in_times.extend(end_dig_in_times[edit])
+	
+	#Next determine which segment encapsulates these as the taste segment
+	#Note: this assumes all taste deliveries fall within one segment (and they should!!)
+	closest_seg_start = np.argmin(np.abs(segment_times - min_start_dig_in_time))
+	segment_start = segment_times[closest_seg_start]
+	raster_start = segment_start - pre_taste_dt - 1
+	raster_end = segment_times[closest_seg_start + 1] + post_taste_dt + 1 #Expand just in case
+	raster_len = raster_end - raster_start
+	raster_array = np.zeros((num_neur,raster_len)) #Create binary storage array
+	segment_spikes = segment_spike_times[closest_seg_start] #Grab spike times
+	for n_i in range(num_neur):
+		neur_segment_spikes = np.array(segment_spikes[n_i]).astype('int') - raster_start
+		raster_array[n_i,neur_segment_spikes] = 1 #Store to binary array
+		
+	#Generate PSTH of the binary array for the full taste segment
+	print("Grabbing taste interval firing rates")
+	firing_rate_array = np.array([(np.sum(raster_array[:,max(t_i-half_bin_width_dt,0):min(t_i+half_bin_width_dt,raster_len)],1)/bin_width).T for t_i in tqdm.tqdm(range(raster_len))]).T
+	
+	print("Pulling firing rate arrays for each tastant delivery")	
+	tastant_PSTH = [] #List of numpy arrays of num_deliv x num_neur x length
+	avg_tastant_PSTH = [] #List of numpy arrays of num_neur x length
 	for t_i in tqdm.tqdm(range(num_tastes)):
 		print("\nGrabbing PSTHs for tastant " + dig_in_names[t_i] + " deliveries")
 		t_start = np.array(start_dig_in_times[t_i])
 		t_end = np.array(end_dig_in_times[t_i])
 		dt_total = int(np.max(t_end-t_start) + pre_taste_dt + post_taste_dt)
 		num_deliv = len(t_start)
-		PSTH_start_times = np.arange(0,dt_total,bin_step)
+		PSTH_start_times = np.arange(0,dt_total)
 		PSTH_true_times = np.round(PSTH_start_times/1000,3)
 		PSTH_times.append(PSTH_true_times)
 		start_deliv_interval = PSTH_true_times[np.where(PSTH_start_times > pre_taste_dt)[0][0]]
@@ -141,20 +171,10 @@ def PSTH_plots(fig_save_dir, num_tastes, num_neur, dig_in_names,
 		all_PSTH = np.zeros((num_deliv,num_neur,len(PSTH_start_times)))
 		t_fig = plt.figure(figsize=(10,num_deliv))
 		for t_d_i in range(len(t_start)):
-			start_i = int(max(t_start[t_d_i] - pre_taste_dt,0))
-			end_i = int(min(t_end[t_d_i] + post_taste_dt,segment_times[-1]))
-			bin_spikes = np.zeros((num_neur,dt_total+1))
-			#Convert spike times into a binary vector
-			for i in range(num_neur):
-				s_t = np.array((np.array(spike_times[i])[np.where((np.array(spike_times[i]) >= start_i)*(np.array(spike_times[i]) <= end_i))[0]]).astype('int'))
-				s_t -= start_i
-				bin_spikes[i,s_t] = 1
-			del i, s_t
+			start_i = max(int(t_start[t_d_i] - pre_taste_dt) - raster_start,0)
+			end_i = start_i + dt_total
 			#Perform Gaussian convolution
-			PSTH_spikes = np.zeros((num_neur,len(PSTH_start_times)))
-			for i in range(len(PSTH_start_times)):
-				PSTH_spikes[:,i] = (np.sum(bin_spikes[:,max(PSTH_start_times[i]-half_bin_width_dt,0):min(PSTH_start_times[i]+half_bin_width_dt,dt_total)],1)/bin_width).T
-			del i
+			PSTH_spikes = firing_rate_array[:,start_i:end_i]
 			plt.subplot(num_deliv,1,t_d_i+1)
 			#Update to have x-axis in time
 			for i in range(num_neur):
@@ -163,7 +183,7 @@ def PSTH_plots(fig_save_dir, num_tastes, num_neur, dig_in_names,
 			plt.axvline(start_deliv_interval,color='r')
 			plt.axvline(end_deliv_interval,color='r')
 			all_PSTH[t_d_i,:,:] = PSTH_spikes
-		del t_d_i, start_i, end_i, bin_spikes, PSTH_spikes
+		del t_d_i, start_i, end_i, PSTH_spikes
 		tastant_name = dig_in_names[t_i]
 		im_name = ('_').join((tastant_name).split(' ')) + '_PSTHs'
 		t_fig.tight_layout()
@@ -207,7 +227,6 @@ def PSTH_plots(fig_save_dir, num_tastes, num_neur, dig_in_names,
 	f_psth.savefig(PSTH_save_dir + im_name + '.png')
 	f_psth.savefig(PSTH_save_dir + im_name + '.svg')
 	plt.close(f_psth)
-	
 	
 	#_____Plot avg PSTHs for Individual Neurons_____
 	neuron_PSTH_dir = PSTH_save_dir + 'neurons/'
@@ -352,5 +371,127 @@ def LFP_dev_plots(fig_save_dir,segment_names,segment_times,fig_buffer_size,segme
 		plt.savefig(seg_spect_save_dir + im_name + '.svg')
 		plt.close()
 	
-
+def taste_select_plot(taste_select_by_bin, x_vals, x_label, name, save_dir):
+	#Calculate the fraction of successful decoding by neuron by taste
+	num_bins, num_neur, num_tastes = np.shape(taste_select_by_bin)
+	chance = 1/num_tastes
+	above_chance_all = (taste_select_by_bin > chance).astype('int')
+	num_tastes_above_chance = np.sum(above_chance_all,2)
+	#Plot the successful decoding taste count
+	plt.figure(figsize=(8,8))
+	plt.imshow(num_tastes_above_chance.T)
+	plt.xticks(np.arange(len(x_vals)),labels=x_vals,rotation=90)
+	plt.yticks(np.arange(num_neur))
+	plt.xlabel(x_label)
+	plt.ylabel('Neuron Index')
+	plt.colorbar()
+	plt.tight_layout()
+	plt.savefig(save_dir + name + '.png')
+	plt.savefig(save_dir + name + '.svg')
+	plt.close()
+	#Plot the summed successful decoding to show where the most occurs
+	plt.figure(figsize=(8,8))
+	summed_val = np.sum(num_tastes_above_chance.T,0)
+	max_ind = np.argmax(summed_val)
+	max_val = x_vals[max_ind]
+	plt.plot(x_vals,summed_val,label='summed data')
+	plt.axvline(max_val,label=max_val,linestyle='dashed',color='r')
+	plt.legend()
+	plt.xlabel(x_label)
+	plt.ylabel('Summed Decoding')
+	plt.tight_layout()
+	plt.savefig(save_dir + name + '_summed.png')
+	plt.savefig(save_dir + name + '_summed.svg')
+	plt.close()
 	
+	max_neur = np.where(num_tastes_above_chance[max_ind,:] > 1)[0]
+	
+	return max_val, max_neur
+
+def epoch_taste_select_plot(prob_taste_epoch, dig_in_names, save_dir):
+	num_neur, num_tastes, num_deliv, num_cp = np.shape(prob_taste_epoch)
+	colors_taste = cm.cool(np.arange(num_tastes)/(num_tastes))
+	colors_cp = cm.summer(np.arange(num_cp)/(num_cp))
+	#Plot all trial and all taste successful decoding probability
+	for t_i in range(num_tastes):
+		fig_t, axes = plt.subplots(nrows=1,ncols=num_cp+1,figsize=(15,5),gridspec_kw=dict(width_ratios=[5,5,5,1]))
+		for e_i in range(num_cp):
+			im = axes[e_i].imshow(prob_taste_epoch[:,t_i,:,e_i])
+			axes[e_i].set_title('Taste ' + str(dig_in_names[t_i]) + ' Epoch ' + str(e_i))
+		#fig_t.subplots_adjust(left = 0.05, right = 0.9)
+		fig_t.colorbar(im, cax = axes[num_cp])
+		fig_t.savefig(save_dir + 'epoch_taste_selectivity.png')
+		fig_t.savefig(save_dir + 'epoch_taste_selectivity.svg')
+		plt.close(fig_t)
+	#Plot distributions of decoding probability for each taste for each neuron
+	cross_epoch_dir = save_dir + 'epoch_prob_dist/'
+	if os.path.isdir(cross_epoch_dir) == False:
+		os.mkdir(cross_epoch_dir)
+	for n_i in range(num_neur):
+		for t_i in range(num_tastes):
+			fig_1 = plt.figure(figsize=(5,5))
+			dist_collect = []
+			pairs = list(itertools.combinations(np.arange(num_cp),2))
+			for c_p in range(num_cp):
+				dist_collect.append(prob_taste_epoch[n_i,t_i,:,c_p])
+				plt.hist(prob_taste_epoch[n_i,t_i,:,c_p],bins=num_deliv,density = True,histtype='step',cumulative=True,color=colors_cp[c_p],label='Epoch ' + str(c_p))
+			args = [d for d in dist_collect]
+			x_ticks = plt.xticks()[0]
+			x_tick_diff = np.mean(np.diff(x_ticks))
+			y_ticks = plt.yticks()[0]
+			y_tick_diff = np.mean(np.diff(y_ticks))
+			#cross-group stat sig
+			try:
+				kw_stat, kw_p_val = stats.kruskal(*args,nan_policy='omit')
+			except:
+				kw_p_val = 1
+			if kw_p_val <= 0.05:
+				plt.scatter(np.mean(x_ticks),np.max(y_ticks),marker='*',color='k',s=100)
+			#pairwise stat sig
+			for pair_i in range(len(pairs)):
+				pair = pairs[pair_i]
+				ks_pval = stats.ks_2samp(dist_collect[pair[0]],dist_collect[pair[1]])[1]
+				if ks_pval < 0.05:
+					plt.scatter(np.mean(x_ticks) + (pair_i-(len(pairs)/2))*x_tick_diff/3,np.max(y_ticks) - y_tick_diff/3,marker='*',color=colors_cp[pair[0]],edgecolors=colors_cp[pair[1]],s=100)
+			plt.legend()
+			plt.xlabel('Decoding Probability')
+			plt.ylabel('Cumulative Density of Occurrence')
+			fig_1.savefig(cross_epoch_dir + 'neuron_' + str(n_i) + '_taste_' + str(t_i) + '.png')
+			fig_1.savefig(cross_epoch_dir + 'neuron_' + str(n_i) + '_taste_' + str(t_i) + '.svg')
+			plt.close(fig_1)
+		for c_p in range(num_cp):
+			fig_2 = plt.figure(figsize=(5,5))
+			dist_collect = []
+			pairs = list(itertools.combinations(np.arange(num_tastes),2))
+			for t_i in range(num_tastes):
+				dist_collect.append(prob_taste_epoch[n_i,t_i,:,c_p])
+				plt.hist(prob_taste_epoch[n_i,t_i,:,c_p],bins=num_deliv,density = True,histtype='step',cumulative=True,color=colors_taste[t_i],label=dig_in_names[t_i])
+			args = [d for d in dist_collect]
+			x_ticks = plt.xticks()[0]
+			x_tick_diff = np.mean(np.diff(x_ticks))
+			y_ticks = plt.yticks()[0]
+			y_tick_diff = np.mean(np.diff(y_ticks))
+			#cross-group stat sig
+			try:
+				kw_stat, kw_p_val = stats.kruskal(*args,nan_policy='omit')
+			except:
+				kw_p_val = 1
+			if kw_p_val <= 0.05:
+				plt.scatter(np.mean(x_ticks),np.max(y_ticks),marker='*',color='k',s=100)
+			#pairwise stat sig
+			for pair_i in range(len(pairs)):
+				pair = pairs[pair_i]
+				ks_pval = stats.ks_2samp(dist_collect[pair[0]],dist_collect[pair[1]])[1]
+				if ks_pval < 0.05:
+					plt.scatter(np.mean(x_ticks) + (pair_i-(len(pairs)/2))*x_tick_diff/3,np.max(y_ticks) - y_tick_diff/3,marker='*',color=colors_taste[pair[0]],edgecolors=colors_taste[pair[1]],s=100)
+			plt.legend()
+			plt.xlabel('Decoding Probability')
+			plt.ylabel('Cumulative Density of Occurrence')
+			fig_2.savefig(cross_epoch_dir + 'neuron_' + str(n_i) + '_epoch_' + str(c_p) + '.png')
+			fig_2.savefig(cross_epoch_dir + 'neuron_' + str(n_i) + '_epoch_' + str(c_p) + '.svg')
+			plt.close(fig_2)
+			
+			
+			
+		
+
