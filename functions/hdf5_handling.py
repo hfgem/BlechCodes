@@ -6,7 +6,7 @@ Created on Tue Jul 19 19:12:11 2022
 @author: hannahgermaine
 A collection of functions to handle HDF5 data storage and imports
 """
-import tables, os, tqdm, sys
+import tables, os, tqdm, sys, easygui
 #If this file is not being run from the directory of .../BlechCodes/, uncomment the next two lines
 #file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
 #os.chdir(file_path)
@@ -58,6 +58,11 @@ def file_import(datadir, dat_files_list, electrodes_list, emg_ind, dig_in_list, 
 	# look at Intan's website for structure of header files
 	info_file = np.fromfile(datadir + '/' + 'info.rhd', dtype = np.dtype('float32'))
 	sampling_rate = int(info_file[2])
+	hf5 = tables.open_file(hf5_dir, 'r+', title = hdf5_name[-1])
+	atom = tables.FloatAtom()
+	hf5.create_earray('/','sampling_rate',atom,(0,))
+	hf5.root.sampling_rate.append([sampling_rate])
+	hf5.close()
 	
 	# Read the time.dat file
 	num_recorded_samples = len(np.fromfile(datadir + '/' + 'time.dat', dtype = np.dtype('float32')))
@@ -150,29 +155,32 @@ def file_import(datadir, dat_files_list, electrodes_list, emg_ind, dig_in_list, 
 	
 	return hf5_dir
 
-def downsampled_electrode_data_import(hf5_dir):
+def downsampled_electrode_data_handling(hf5_dir):
 	"""This function imports data from the HDF5 file and stores only electrode 
 	signals into an array"""
 	folder_dir = hf5_dir.split('/')[:-1]
 	folder_dir = '/'.join(folder_dir) + '/'
-	new_hf5_dir = hf5_dir.split('.h5')[0] + '_downsampled.h5'
 	
 	#Has the electrode data already been stored in the hdf5 file?
 	print("Checking for downsampled data.")
-	if os.path.exists(new_hf5_dir):
-		hf5_new = tables.open_file(new_hf5_dir, 'r', title = hf5_dir[-1])
-		print("Downsampled data was previously stored in HDF5 file and is being imported. \n \n")
-		e_data = hf5_new.root.electrode_array.data[0,:,:]
-		dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
-		unit_nums = hf5_new.root.electrode_array.unit_nums[:]
-		segment_names = hf5_new.root.experiment_components.segment_names[:]
-		segment_times = hf5_new.root.experiment_components.segment_times[:]
-		hf5_new.close()
-	else:
+	hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+	try:
+		new_rate = hf5.root.downsampled_sampling_rate[0]
+		print("Downsampled sampling rate = " + str(new_rate))
+		print("If you downsampled by mistake, I'm sorry but you'll need to delete the .h5 and start over.")
+		print("Downsampling overwrites the original data in the h5 file.")
+	except:
 		print("Downsampled data was not previously stored in hf5. \n")
 		#Ask about subsampling data
-		sampling_rate = np.fromfile(folder_dir + 'info.rhd', dtype = np.dtype('float32'))
-		sampling_rate = int(sampling_rate[2])
+		try:
+			sampling_rate = hf5.root.sampling_rate[0]
+		except:	
+			sampling_rate = np.fromfile(folder_dir + 'info.rhd', dtype = np.dtype('float32'))
+			sampling_rate = int(sampling_rate[2])
+			atom = tables.FloatAtom()
+			hf5.create_earray('/','sampling_rate',atom,(0,))
+			hf5.root.sampling_rate.append([sampling_rate])
+		hf5.close()
 		sub_loop = 1
 		sub_amount = 0
 		while sub_loop == 1:
@@ -195,79 +203,83 @@ def downsampled_electrode_data_import(hf5_dir):
 					sub_loop = 1
 			del sub_loop
 		
-		#Perform downsampling / regular data import
-		e_data, dig_in_data, dig_in_names = dp.data_to_list(sub_amount,sampling_rate,hf5_dir)
-			
-        #Save data to hdf5
-		e_data, unit_nums, dig_ins, segment_names, segment_times = save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data,dig_in_names)
-	
-	return e_data, unit_nums, dig_ins, segment_names, segment_times, new_hf5_dir
-
-def save_downsampled_data(hf5_dir,e_data,sub_amount,sampling_rate,dig_in_data,dig_in_names):
-	"""This function creates a new .h5 file to store only downsampled data arrays"""
-	print("Saving Electrode Data to New HF5")
-	atom = tables.FloatAtom()
-	new_hf5_dir = hf5_dir.split('.h5')[0] + '_downsampled.h5'
-	hf5 = tables.open_file(hf5_dir, 'r', title = hf5_dir[-1])
-	hf5_new = tables.open_file(new_hf5_dir, 'w', title = new_hf5_dir[-1])
-	units = hf5.list_nodes('/raw')
-	unit_nums = np.array([str(unit).split('_')[-1] for unit in units])
-	unit_nums = np.array([int(unit.split(' (')[0]) for unit in unit_nums])
-	hf5_new.create_group('/','electrode_array')
-	np_e_data = np.array(e_data)
-	data = hf5_new.create_earray('/electrode_array','data',atom,(0,)+np.shape(np_e_data))
-	np_e_data = np.expand_dims(np_e_data,0)
-	data.append(np_e_data)
-	del np_e_data, e_data
-	atom = tables.IntAtom()
-	hf5_new.create_earray('/electrode_array','unit_nums',atom,(0,))
-	exec("hf5_new.root.electrode_array.unit_nums.append(unit_nums[:])")
-	if sub_amount > 0:
-		new_rate = [round(sampling_rate*sub_amount)]
-		hf5_new.create_earray('/','sampling_rate',atom,(0,))
-		hf5_new.root.sampling_rate.append(new_rate)
-	else:
-		hf5_new.create_earray('/','sampling_rate',atom,(0,))
-		hf5_new.root.sampling_rate.append([sampling_rate])
-	print("Saving Dig Ins to New HF5")
-	np_dig_ins = np.array(dig_in_data)
-	atom = tables.FloatAtom()
-	hf5_new.create_group('/','dig_ins')
-	data_digs = hf5_new.create_earray('/dig_ins','dig_ins',atom,(0,)+np.shape(np_dig_ins))
-	np_dig_ins = np.expand_dims(np_dig_ins,0)
-	data_digs.append(np_dig_ins)
-	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
-	dig_names = hf5_new.create_earray('/dig_ins','dig_in_names',atom,(0,))
-	dig_names.append(np.array(dig_in_names))
-       #Close HDF5 file
+			#Grab electrode info
+			units = hf5.list_nodes('/raw')
+			time_points = len(units[0])
+			unit_nums = np.array([str(unit).split('_')[-1] for unit in units])
+			unit_nums = np.array([int(unit.split(' (')[0]) for unit in unit_nums])
+			dig_ins = hf5.list_nodes('/digital_in')
+			dig_in_names = [(dig_ins[d_i].name).split('_')[-1] for d_i in range(len(dig_ins))]
+			emgs = hf5.list_nodes('/raw_emg')
+			emg_nums = np.array([str(emg).split('_')[-1] for emg in emgs])
+			emg_nums = np.array([int(emg).split(' (')[0] for emg in emg_nums])
+			emg_names = [(emgs[e_i].name).split('_')[-1] for e_i in range(len(emgs))]
+			print('Total Number of Units = ' + str(len(unit_nums)))
+				
+			if sub_amount > 0:
+				new_rate = round(sampling_rate*sub_amount)
+				num_avg = round(sampling_rate/new_rate)
+				print("New sampling rate = " + str(new_rate))
+				hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+				atom = tables.FloatAtom()
+				hf5.create_earray('/','downsampled_sampling_rate',atom,(0,))
+				hf5.root.downsampled_sampling_rate.append(new_rate)
+				hf5.close()
+				#Electrode data
+				arg_instances = [[hf5_dir, unit, num_avg, time_points] for unit in unit_nums]
+				for hf5_dir, unit, num_avg, time_points in tqdm.tqdm(arg_instances):
+					e_data = dp.downsample_unit(hf5_dir, unit, num_avg, time_points)
+					save_downsampled_electrode_data(hf5_dir,e_data,unit)
+				#Digin data
+				arg_instances = [[hf5_dir, dig_in, num_avg, time_points] for dig_in in dig_ins]
+				for hf5_dir, dig_in, num_avg, time_points in tqdm.tqdm(arg_instances):
+					d_data = dp.downsample_dig_ins(hf5_dir,dig_in,num_avg,time_points)
+					save_downsampled_digin_data(hf5_dir,d_data,dig_in_names[dig_in])
+				#EMG data
+				arg_instances = [[hf5_dir, unit, num_avg, time_points] for emg in emg_nums]
+				for hf5_dir, unit, num_avg, time_points in tqdm.tqdm(arg_instances):
+					emg_data = dp.downsample_emg(hf5_dir, unit, num_avg, time_points)
+					save_downsampled_emg_data(hf5_dir,emg_data,emg_names[unit])
+					
 	hf5.close()
-	hf5_new.close()
-	print("Getting Experiment Components")
-	segment_names, segment_times = dp.get_experiment_components(sampling_rate, dig_in_data)
-	hf5_new = tables.open_file(new_hf5_dir, 'r+', title = new_hf5_dir[-1])
-	hf5_new.create_group('/','experiment_components')
-	atom = tables.IntAtom()
-	hf5_new.create_earray('/experiment_components','segment_times',atom,(0,))
-	exec("hf5_new.root.experiment_components.segment_times.append(segment_times[:])")
-	atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
-	hf5_new.create_earray('/experiment_components','segment_names',atom,(0,))
-	exec("hf5_new.root.experiment_components.segment_names.append(np.array(segment_names))")
-	e_data = hf5_new.root.electrode_array.data[0,:,:]
-	dig_ins = hf5_new.root.dig_ins.dig_ins[0,:,:]
-	hf5_new.close()
-	del hf5, units, sub_amount
-	
-	return e_data, unit_nums, dig_ins, segment_names, segment_times
 
-def check_ICA_data(hf5_dir):
-	ica_data_dir = ('/').join(hf5_dir.split('/')[:-1]) + '/ica_results/'
-	ica_hf5_name = hf5_dir.split('/')[-1].split('.')[0] + '_ica.h5'
-	ica_hf5_dir = ica_data_dir + ica_hf5_name
-	if os.path.exists(ica_hf5_dir):
-		exists = 1
-	else:
-		exists = 0
-	return exists, ica_data_dir
+def save_downsampled_electrode_data(hf5_dir,e_data,e_ind):
+	"""This function overwrites raw data with downsampled data."""
+	print("Saving Electrode Data to HF5")
+	atom = tables.FloatAtom()
+	hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+	# First remove the node with this electrode's data
+	e_name = str(i)
+	hf5.remove_node(f'/raw/electrode_{e_name}',)
+	# Now make a new array replacing the node removed above with the referenced data
+	hf5.create_earray('/raw',f'electrode_{e_name}',atom,(0,))
+	exec("hf5.root.raw.electrode_"+str(e_name)+".append(e_data)")
+	hf5.close()
+	
+def save_downsampled_digin_data(hf5_dir,d_data,d_name):
+	"""This function overwrites raw digin data with downsampled data.
+	d_name = dig_in_names[i]"""
+	print("Saving Digin Data to HF5")
+	atom = tables.FloatAtom()
+	hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+	# First remove the node with this electrode's data
+	hf5.remove_node(f'/digital_in/digin_{d_name}')
+	#Now make a new array replacing the above with new data
+	hf5.create_earray('/digital_in',f'digin_{d_name}',atom,(0,))	
+	exec("hf5.root.digital_in.digin_"+str(d_name)+".append(d_data)")
+	hf5.close()
+	
+def save_downsampled_emg_data(hf5_dir,emg_data,emg_name):
+	"""This functionoverwrites raw emg data with downsampled data"""
+	print("Saving Electrode Data to HF5")
+	atom = tables.FloatAtom()
+	hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
+	# First remove the node with this electrode's data
+	hf5.remove_node(f'/raw_emg/emg_{emg_name}')
+	# Now make a new array replacing the node removed above with the referenced data
+	hf5.create_earray('/raw_emg',f'emg_{emg_name}',atom,(0,))	
+	exec("hf5.root.raw_emg.emg_"+emg_name+".append(emg_data)")
+	hf5.close()
 	
 def save_sorted_spikes(final_h5_dir,spike_raster,sort_stats,sampling_rate,
 				   segment_times,segment_names,dig_ins,dig_in_names):
@@ -306,25 +318,31 @@ def sorted_data_import():
 	stored (if it exists)"""
 	
 	print("\n INPUT REQUESTED: Select directory with the sorted .h5 file (name = '...._repacked.h5').")
-	root = tk.Tk()
-	currdir = os.getcwd()
-	blech_clust_datadir = fd.askdirectory(parent=root, initialdir=currdir, title='Please select the folder where data is stored.')
+	blech_clust_datadir = easygui.diropenbox(title='Please select the folder where data is stored.')
 	files_in_dir = os.listdir(blech_clust_datadir)
-	for i in range(len(files_in_dir)): #Assumes the correct file is the only .h5 in the directory
+	for i in range(len(files_in_dir)): #Checks for repacked and downsampled .h5 in the directory
 		filename = files_in_dir[i]
 		if filename.split('_')[-1] == 'repacked.h5':
 			blech_clust_hdf5_name = filename
 		elif filename.split('_')[-1] == 'downsampled.h5':
 			downsampled_hf5_name = filename
+		elif filename.split('_')[-1] == 'cleaned.h5':
+			cleaned_hf5_name = filename
 			
 	try:
 		blech_clust_hf5_dir = blech_clust_datadir + '/' + blech_clust_hdf5_name
 	except:
 		print("Old .h5 file not found. Quitting program.")
-		sys.exit()
+		quit()
 	try:
 		downsampled_hf5_dir = blech_clust_datadir + '/' + downsampled_hf5_name
 	except:
 		downsampled_hf5_dir = ''
 		
-	return blech_clust_hf5_dir, downsampled_hf5_dir
+	try:
+		cleaned_hf5_dir = blech_clust_datadir + '/' + cleaned_hf5_name
+	except:
+		cleaned_hf5_dir = ''
+		
+	return blech_clust_hf5_dir, downsampled_hf5_dir, cleaned_hf5_dir
+

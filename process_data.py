@@ -20,6 +20,7 @@ import functions.hdf5_handling as h5
 import functions.postsort as ps
 
 
+
 #Ask if data has already been stored as hdf5
 cont_prompt = 'y'
 h_exists = h5.hdf5_exists()
@@ -55,6 +56,8 @@ else:
 	#root.mainloop() #The Tkinter window will now show a button "Quit" to close the window.
 	#^ This only works when run from terminal. In Spyder a window will stay open - don't close it, just press Quit!!
 	del hdf5_name, currdir, root, h_exists
+	
+#NOTE: Add handling of separate regions
 
 if cont_prompt == 'y':
 	cont_prompt_2 = 'y'
@@ -75,3 +78,4 @@ if cont_prompt == 'y':
 				print("Now beginning post-sorting.")
 				cont_loop = 0
 				ps.run_postsort(datadir)
+

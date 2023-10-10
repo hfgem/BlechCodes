@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 from scipy.fftpack import rfft, fftfreq
 from scipy.signal import find_peaks
 from sklearn.metrics import silhouette_samples
-import umap
 from numba import jit
 
 def cluster(spikes, peak_indices, e_i, sort_data_dir, axis_labels, type_spike, 

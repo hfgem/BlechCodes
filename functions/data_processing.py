@@ -59,7 +59,7 @@ def file_names():
 
 def dig_ins(dat_files_list):
 	"""This function pulls dig-in information and prompts the user to assign names"""
-	dig_ins = [name for name in dat_files_list if name.startswith('board-DIN')]
+	dig_ins = [name for name in dat_files_list if name.startswith('board-DI')]
 	if len(dig_ins) > 0:
 		dig_in_names = list()
 		for i in range(len(dig_ins)):
@@ -126,52 +126,21 @@ def electrodes(dat_files_list):
 		e_list = ['amplifier.dat']
 	return e_list
 
-def data_to_list(sub_amount,sampling_rate,hf5_dir):
-	"""This function pulls data from an HDF5 file and downsamples before
-	storing it to a list"""
-	
-	"""FIX THIS: Passing units does not mean it can access the hdf5 file.
-	Need to pass the directory to the file and then perform operations..."""
-	
-	print("Opening HDF5 file.")
-	hf5 = tables.open_file(hf5_dir, 'r', title = hf5_dir[-1])
-	
-	#Grab electrode info
-	print("Grabbing electrode information.")
-	units = hf5.list_nodes('/raw')
-	unit_nums = np.array([str(unit).split('_')[-1] for unit in units])
-	unit_nums = np.array([int(unit.split(' (')[0]) for unit in unit_nums])
-	dig_ins = hf5.list_nodes('/digital_in')
-	dig_in_names = [(dig_ins[d_i].name).split('_')[-1] for d_i in range(len(dig_ins))]
-	print('Total Number of Units = ' + str(len(unit_nums)))
-	
-	if sub_amount > 0:
-		new_rate = round(sampling_rate*sub_amount)
-		print("New sampling rate = " + str(new_rate))
-		time_points = len(units[0])
-		num_avg = round(sampling_rate/new_rate)
-		#Pull one electrode's worth of data at a time into a list
-		#mp.set_start_method('spawn')
-		print('Pulling electrode data into array')
-		arg_instances = [[hf5_dir, unit, num_avg, time_points] for unit in range(len(unit_nums))]
-		hf5.close()
-		e_data = [downsample_unit(hf5_dir, unit, num_avg, time_points) for hf5_dir, unit, num_avg, time_points in tqdm.tqdm(arg_instances)]
-		arg_instances = [[hf5_dir, dig_in, num_avg, time_points] for dig_in in range(len(dig_ins))]
-		dig_in_data = [downsample_dig_ins(hf5_dir,dig_in,num_avg,time_points) for hf5_dir, dig_in, num_avg, time_points in tqdm.tqdm(arg_instances)]
-		del time_points, num_avg
-	else:
-		print('Pulling electrode data into array')
-		arg_instances = [[hf5_dir, unit] for unit in range(len(unit_nums))]
-		hf5.close()
-		e_data = [import_units(hf5_dir,unit) for hf5_dir, unit in tqdm.tqdm(arg_instances)]
-		arg_instances = [[hf5_dir, dig_in] for dig_in in range(len(dig_ins))]
-		dig_in_data = [import_dig_ins(hf5_dir,dig_in) for hf5_dir, dig_in in tqdm.tqdm(arg_instances)]
-	return e_data, dig_in_data, dig_in_names
-
 def downsample_unit(hf5_dir,unit,num_avg,time_points):
 	"""This function downsamples data that is being imported from a .h5 file"""
 	hf5 = tables.open_file(hf5_dir, 'r', title = hf5_dir[-1])
 	units = hf5.list_nodes('/raw')
+	sub_data = np.zeros(int(time_points/num_avg))
+	for i in range(round(num_avg)):
+		sub_data = np.add(sub_data,units[unit][i::num_avg])
+	hf5.close()
+	sub_data = np.divide(sub_data,num_avg)
+	return sub_data
+
+def downsample_emg(hf5_dir,unit,num_avg,time_points):
+	"""This function downsamples data that is being imported from a .h5 file"""
+	hf5 = tables.open_file(hf5_dir, 'r', title = hf5_dir[-1])
+	units = hf5.list_nodes('/raw_emg')
 	sub_data = np.zeros(int(time_points/num_avg))
 	for i in range(round(num_avg)):
 		sub_data = np.add(sub_data,units[unit][i::num_avg])
@@ -221,7 +190,7 @@ def electrode_data_removal(hf5_dir):
 	hf5.close()
 	print("Removal complete")
 	
-def get_experiment_components(sampling_rate, dig_ins):
+def get_experiment_components(sampling_rate, dig_ins=None, dig_in_ind_range=np.zeros((2)), len_rec=0):
 	"""This function asks for timings of experiment components, and 
 	breaks up the data into chunks accordingly"""
 	
@@ -252,21 +221,24 @@ def get_experiment_components(sampling_rate, dig_ins):
 	segment_times = np.zeros((num_segments + 1))
 	
 	#Grab dig in times to separate out taste delivery interval
-	print("Pulling taste delivery interval times from digital inputs.")
-	num_dig_ins = len(dig_ins)
-	dig_in_ind_range = np.zeros((2))
-	for i in tqdm.tqdm(range(num_dig_ins)):
-		dig_in_data = np.array(dig_ins[i])
-		dig_in_delivered = np.where(dig_in_data == 1)
-		if len(dig_in_delivered[0] > 0):
-			min_dig_in = min(dig_in_delivered[0])
-			max_dig_in = max(dig_in_delivered[0])
-			if dig_in_ind_range[0] == 0:
-				dig_in_ind_range[0] = min_dig_in
-			elif dig_in_ind_range[0] > min_dig_in:
-				dig_in_ind_range[0] = min_dig_in
-			if dig_in_ind_range[1] < max_dig_in:
-				dig_in_ind_range[1] = max_dig_in
+	if dig_in_ind_range[0] > 0:
+		print("Using given taste delivery interval values.")
+	else:
+		print("Pulling taste delivery interval times from digital inputs.")
+		num_dig_ins = len(dig_ins)
+		dig_in_ind_range = np.zeros((2))
+		for i in tqdm.tqdm(range(num_dig_ins)):
+			dig_in_data = np.array(dig_ins[i])
+			dig_in_delivered = np.where(dig_in_data == 1)
+			if len(dig_in_delivered[0] > 0):
+				min_dig_in = min(dig_in_delivered[0])
+				max_dig_in = max(dig_in_delivered[0])
+				if dig_in_ind_range[0] == 0:
+					dig_in_ind_range[0] = min_dig_in
+				elif dig_in_ind_range[0] > min_dig_in:
+					dig_in_ind_range[0] = min_dig_in
+				if dig_in_ind_range[1] < max_dig_in:
+					dig_in_ind_range[1] = max_dig_in
 	taste_loop = 1
 	while taste_loop == 1:
 		try:
@@ -279,7 +251,10 @@ def get_experiment_components(sampling_rate, dig_ins):
 			print("Please enter a valid integer index.")
 	
 	#Store end time as last index
-	segment_times[num_segments] = len(dig_in_data)
+	if len_rec > 0:
+		segment_times[-1] = len_rec
+	else:
+		segment_times[-1] = len(dig_ins[0])
 	
 	#Grab times of other segments
 	remaining_indices = np.setdiff1d(np.arange(num_segments),np.array([0,taste_ind,num_segments-1]))
