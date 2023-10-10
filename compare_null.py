@@ -60,13 +60,13 @@ if __name__ == '__main__':
 		neur_count_dict = np.load(filepath, allow_pickle=True).item()
 		filepath = bin_dir + 'neur_spike_dict.npy'
 		neur_spike_dict = np.load(filepath, allow_pickle=True).item()
-		filepath = bin_dir + 'neur_autocorr_dict.npy'
-		neur_autocorr_dict = np.load(filepath, allow_pickle=True).item()
+		#filepath = bin_dir + 'neur_autocorr_dict.npy'
+		#neur_autocorr_dict = np.load(filepath, allow_pickle=True).item()
 		print('\t Imported thresholded datasets into memory')
 	except: #Calculate dictionaries
 		neur_count_dict = dict()
 		neur_spike_dict = dict()
-		neur_autocorr_dict = dict()
+		#neur_autocorr_dict = dict()
 		#For each segment separately
 		for s_i in tqdm.tqdm(range(num_segments)):
 			#Gather data / parameters
@@ -122,7 +122,7 @@ if __name__ == '__main__':
 					spike_indices = (np.array(null_spikes[n_i]) - segment_start_time).astype('int')
 					null_bin_spike[n_i,spike_indices] = 1
 				null_bin_spikes.append(null_bin_spike)
-			print('\t Now calculating count, spike, and sutocorrelation distributions')
+			print('\t Now calculating count, spike, and autocorrelation distributions')
 			#_____Convert real data to a binary spike matrix_____
 			bin_spike = np.zeros((num_neur,segment_end_time-segment_start_time+1))
 			for n_i in range(num_neur):
@@ -133,24 +133,30 @@ if __name__ == '__main__':
 			true_autocorr = nd.auto_corr([bin_spike,segment_start_time,segment_end_time,lag_vals])
 			null_neur_counts = dict()
 			null_spike_counts = dict()
-			null_autocorrs = dict()
+			#null_autocorrs = dict()
 			#Run nd.high_bins() to get null neuron counts and spike counts
-			with Pool(processes=4) as pool: # start 4 worker processes
-				results_counts = pool.map(nd.high_bins,zip(null_bin_spikes, 
-												 itertools.repeat(segment_start_time), 
-												 itertools.repeat(segment_end_time), 
-												 itertools.repeat(bin_size), 
-												 itertools.repeat(count_cutoff)))
+			chunk_inds = np.linspace(0,num_null,10).astype('int') #chunk it to keep memory usage lower
+			results_counts = []
+			print('\t\tCalculating bins for null distributions')
+			for c_i in tqdm.tqdm(range(len(chunk_inds)-1)):
+				null_bin_spike_chunk = null_bin_spikes[chunk_inds[c_i]:chunk_inds[c_i+1]]
+				with Pool(processes=4) as pool: # start 4 worker processes
+					results_chunk_counts = pool.map(nd.high_bins,zip(null_bin_spike_chunk, 
+													 itertools.repeat(segment_start_time), 
+													 itertools.repeat(segment_end_time), 
+													 itertools.repeat(bin_size), 
+													 itertools.repeat(count_cutoff)))
+					results_counts.extend(results_chunk_counts)
 			#Run nd.auto_corr() to get null autocorrelations
-			with Pool(processes=4) as pool: # start 4 worker processes
-				results_autocorr = pool.map(nd.auto_corr,zip(null_bin_spikes,
-												 itertools.repeat(segment_start_time),
-												 itertools.repeat(segment_end_time),
-												itertools.repeat(lag_vals)))
+			#with Pool(processes=4) as pool: # start 4 worker processes
+			#	results_autocorr = pool.map(nd.auto_corr,zip(null_bin_spikes,
+			#									 itertools.repeat(segment_start_time),
+			#									 itertools.repeat(segment_end_time),
+			#									itertools.repeat(lag_vals)))
 			for n_n in range(num_null):
 				null_neur_count = results_counts[n_n][0]
 				null_spike_count = results_counts[n_n][1]
-				null_autocorr = results_autocorr[n_n]
+			#	null_autocorr = results_autocorr[n_n]
 				for key in null_neur_count.keys():
 					if key in null_neur_counts.keys():
 						null_neur_counts[key].append(null_neur_count[key])
@@ -161,12 +167,12 @@ if __name__ == '__main__':
 						null_spike_counts[key].append(null_spike_count[key])
 					else:
 						null_spike_counts[key] = [null_spike_count[key]]
-				for lag_i in range(len(lag_vals)): #key in null_autocorr.keys():
-					lag_val = int(lag_vals[lag_i])
-					if lag_val in null_autocorrs.keys():
-						null_autocorrs[lag_val].append(null_autocorr[lag_i])
-					else:
-						null_autocorrs[lag_val] = [null_autocorr[lag_i]]
+			#	for lag_i in range(len(lag_vals)): #key in null_autocorr.keys():
+			#		lag_val = int(lag_vals[lag_i])
+			#		if lag_val in null_autocorrs.keys():
+			#			null_autocorrs[lag_val].append(null_autocorr[lag_i])
+			#		else:
+			#			null_autocorrs[lag_val] = [null_autocorr[lag_i]]
 			#_____Savethe neuron count data_____
 			true_x_vals = np.array([(np.ceil(float(key))).astype('int') for key in true_neur_counts.keys()])
 			true_neur_count_array = np.array([true_neur_counts[key] for key in true_neur_counts.keys()])
@@ -204,23 +210,23 @@ if __name__ == '__main__':
 					percentiles.extend([100])
 			neur_spike_dict[seg_name + '_percentile'] =  [list(true_x_vals),percentiles]
 			#_____Save autocorrelation data_____
-			true_x_vals = np.array([(np.ceil(float(key))).astype('int') for key in true_autocorr.keys()])
-			true_autocorr_array = np.array([true_autocorr[key] for key in true_autocorr.keys()])
-			neur_autocorr_dict[seg_name + '_true'] =  [list(true_x_vals),
-										   list(true_autocorr_array)]
-			null_x_vals = np.array([(np.ceil(float(key))).astype('int') for key in null_autocorrs.keys()])
-			mean_null_autocorrs = np.array([np.mean(null_autocorrs[key]) for key in null_autocorrs.keys()])
-			std_null_autocorrs = np.array([np.std(null_autocorrs[key]) for key in null_autocorrs.keys()])
-			neur_autocorr_dict[seg_name + '_null'] =  [list(null_x_vals),
-										   list(mean_null_autocorrs),
-										   list(std_null_autocorrs)]
-			percentiles = [] #Calculate percentile of true data point in null data distribution
-			for key in true_autocorr.keys():
-				try:
-					percentiles.extend([round(stats.percentileofscore(null_autocorrs[key],true_autocorr[key]),2)])
-				except:
-					percentiles.extend([100])
-			neur_autocorr_dict[seg_name + '_percentile'] =  [list(true_x_vals),percentiles]
+			#true_x_vals = np.array([(np.ceil(float(key))).astype('int') for key in true_autocorr.keys()])
+			#true_autocorr_array = np.array([true_autocorr[key] for key in true_autocorr.keys()])
+			#neur_autocorr_dict[seg_name + '_true'] =  [list(true_x_vals),
+			#							   list(true_autocorr_array)]
+			#null_x_vals = np.array([(np.ceil(float(key))).astype('int') for key in null_autocorrs.keys()])
+			#mean_null_autocorrs = np.array([np.mean(null_autocorrs[key]) for key in null_autocorrs.keys()])
+			#std_null_autocorrs = np.array([np.std(null_autocorrs[key]) for key in null_autocorrs.keys()])
+			#neur_autocorr_dict[seg_name + '_null'] =  [list(null_x_vals),
+			#							   list(mean_null_autocorrs),
+			#							   list(std_null_autocorrs)]
+			#percentiles = [] #Calculate percentile of true data point in null data distribution
+			#for key in true_autocorr.keys():
+			#	try:
+			#		percentiles.extend([round(stats.percentileofscore(null_autocorrs[key],true_autocorr[key]),2)])
+			#	except:
+			#		percentiles.extend([100])
+			#neur_autocorr_dict[seg_name + '_percentile'] =  [list(true_x_vals),percentiles]
 			
 		
 		#Save the dictionaries
@@ -228,8 +234,8 @@ if __name__ == '__main__':
 		np.save(filepath, neur_count_dict)
 		filepath = bin_dir + 'neur_spike_dict.npy'
 		np.save(filepath, neur_spike_dict) 
-		filepath = bin_dir + 'neur_autocorr_dict.npy'
-		np.save(filepath, neur_autocorr_dict)
+		#filepath = bin_dir + 'neur_autocorr_dict.npy'
+		#np.save(filepath, neur_autocorr_dict)
 
 	#_____Plotting_____
 	neur_true_count_x = []
@@ -242,11 +248,11 @@ if __name__ == '__main__':
 	neur_null_spike_x = []
 	neur_null_spike_mean = []
 	neur_null_spike_std = []
-	neur_true_autocorr_x = []
-	neur_true_autocorr_vals = []
-	neur_null_autocorr_x = []
-	neur_null_autocorr_mean = []
-	neur_null_autocorr_std = []
+	#neur_true_autocorr_x = []
+	#neur_true_autocorr_vals = []
+	#neur_null_autocorr_x = []
+	#neur_null_autocorr_mean = []
+	#neur_null_autocorr_std = []
 	for s_i in tqdm.tqdm(range(num_segments)):
 		seg_name = segment_names[s_i]
 		segment_start_time = segment_times[s_i]
@@ -258,9 +264,9 @@ if __name__ == '__main__':
 		neur_true_spike_data = neur_spike_dict[seg_name + '_true']
 		neur_null_spike_data = neur_spike_dict[seg_name + '_null']
 		percentile_spike_data = neur_spike_dict[seg_name + '_percentile']
-		neur_true_autocorr_data = neur_autocorr_dict[seg_name + '_true']
-		neur_null_autocorr_data = neur_autocorr_dict[seg_name + '_null']
-		percentile_autocorr_data = neur_autocorr_dict[seg_name + '_percentile']
+		#neur_true_autocorr_data = neur_autocorr_dict[seg_name + '_true']
+		#neur_null_autocorr_data = neur_autocorr_dict[seg_name + '_null']
+		#percentile_autocorr_data = neur_autocorr_dict[seg_name + '_percentile']
 		#Plot the neuron count data
 		norm_val = segment_length/1000 #Normalizing the number of bins to number of bins / second
 		nd.plot_indiv_truexnull(np.array(neur_true_count_data[0]),np.array(neur_null_count_data[0]),np.array(neur_true_count_data[1]),np.array(neur_null_count_data[1]),
@@ -279,13 +285,13 @@ if __name__ == '__main__':
 		neur_null_spike_mean.append(np.array(neur_null_spike_data[1]))
 		neur_null_spike_std.append(np.array(neur_null_spike_data[2]))
 		#Plot the autocorrelation data
-		nd.plot_indiv_truexnull(np.array(neur_true_autocorr_data[0]),np.array(neur_null_autocorr_data[0]),np.array(neur_true_autocorr_data[1]),np.array(neur_null_autocorr_data[1]),
-						   np.array(neur_null_autocorr_data[2]),np.array(segment_length),norm_val,bin_dir,'Autocorrelation',seg_name,np.array(percentile_autocorr_data[1]))
-		neur_true_autocorr_x.append(np.array(neur_true_autocorr_data[0]))
-		neur_null_autocorr_x.append(np.array(neur_null_autocorr_data[0]))
-		neur_true_autocorr_vals.append(np.array(neur_true_autocorr_data[1]))
-		neur_null_autocorr_mean.append(np.array(neur_null_autocorr_data[1]))
-		neur_null_autocorr_std.append(np.array(neur_null_autocorr_data[2]))
+		#nd.plot_indiv_truexnull(np.array(neur_true_autocorr_data[0]),np.array(neur_null_autocorr_data[0]),np.array(neur_true_autocorr_data[1]),np.array(neur_null_autocorr_data[1]),
+		#				   np.array(neur_null_autocorr_data[2]),np.array(segment_length),norm_val,bin_dir,'Autocorrelation',seg_name,np.array(percentile_autocorr_data[1]))
+		#neur_true_autocorr_x.append(np.array(neur_true_autocorr_data[0]))
+		#neur_null_autocorr_x.append(np.array(neur_null_autocorr_data[0]))
+		#neur_true_autocorr_vals.append(np.array(neur_true_autocorr_data[1]))
+		#neur_null_autocorr_mean.append(np.array(neur_null_autocorr_data[1]))
+		#neur_null_autocorr_std.append(np.array(neur_null_autocorr_data[2]))
 	#Plot all neuron count data
 	nd.plot_all_truexnull(neur_true_count_x,neur_null_count_x,neur_true_count_vals,neur_null_count_mean,
 									 neur_null_count_std,norm_val,bin_dir,'Neuron Counts',segment_names)
@@ -293,5 +299,8 @@ if __name__ == '__main__':
 	nd.plot_all_truexnull(neur_true_spike_x,neur_null_spike_x,neur_true_spike_vals,neur_null_spike_mean,
 									 neur_null_spike_std,norm_val,bin_dir,'Spike Counts',segment_names)
 	#Plot all autocorrelation data
-	nd.plot_all_truexnull(neur_true_autocorr_x,neur_null_autocorr_x,neur_true_autocorr_vals,neur_null_autocorr_mean,
-									 neur_null_autocorr_std,norm_val,bin_dir,'Autocorrelation Lags',segment_names)
+	#nd.plot_all_truexnull(neur_true_autocorr_x,neur_null_autocorr_x,neur_true_autocorr_vals,neur_null_autocorr_mean,
+	#								 neur_null_autocorr_std,norm_val,bin_dir,'Autocorrelation Lags',segment_names)
+	
+	
+	

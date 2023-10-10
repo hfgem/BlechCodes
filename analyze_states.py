@@ -7,7 +7,7 @@ Created on Mon Jan  2 11:04:51 2023
 
 This code is written to import sorted data and perform state-change analyses
 """
-import os
+import os, tqdm
 file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
 os.chdir(file_path)
 import numpy as np
@@ -19,7 +19,7 @@ import functions.dev_plots as dev_plot
 import functions.seg_compare as sc
 import functions.dev_corr_calcs as dcc
 import functions.changepoint_detection as cd
-
+import functions.decoding_funcs as df
 
 
 #_____Get the directory of the hdf5 file_____
@@ -34,9 +34,14 @@ num_neur, all_waveforms, spike_times, dig_in_names, segment_times, segment_names
 
 #%%
 #_____Calculate spike time datasets_____
+#NOTE: make sure the pre_taste value is never more than the post_taste value
 pre_taste = 0.5 #Seconds before tastant delivery to store
 post_taste = 2 #Seconds after tastant delivery to store
 
+#_____Add "no taste" control segments to the dataset_____
+dig_in_names, start_dig_in_times, end_dig_in_times, num_tastes = af.add_no_taste(start_dig_in_times, end_dig_in_times, post_taste, dig_in_names)
+
+#_____Pull out spike times for all tastes (and no taste)_____
 segment_spike_times = af.calc_segment_spike_times(segment_times,spike_times,num_neur)
 tastant_spike_times = af.calc_tastant_spike_times(segment_times,spike_times,
 												  start_dig_in_times,end_dig_in_times,
@@ -60,7 +65,9 @@ try:
 	PSTH_times = af.pull_data_from_hdf5(sorted_dir,data_group_name,'PSTH_times')
 	PSTH_taste_deliv_times = af.pull_data_from_hdf5(sorted_dir,data_group_name,'PSTH_taste_deliv_times')
 	avg_tastant_PSTH = af.pull_data_from_hdf5(sorted_dir,data_group_name,'avg_tastant_PSTH')
+	print("PSTH data imported")
 except:
+	"Calculating and plotting raster and PSTH data"
 	pf.raster_plots(data_save_dir, dig_in_names, start_dig_in_times, end_dig_in_times, 
 					segment_names, segment_times, segment_spike_times, tastant_spike_times, 
 					pre_taste_dt, post_taste_dt, num_neur, num_tastes)
@@ -68,7 +75,7 @@ except:
 																					   num_neur, dig_in_names, 
 																					   start_dig_in_times, end_dig_in_times, 
 																					   pre_taste_dt, post_taste_dt, 
-																					   segment_times, spike_times,
+																					   segment_times, segment_spike_times,
 																					   bin_width, bin_step)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'tastant_PSTH',tastant_PSTH)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'PSTH_times',PSTH_times)
@@ -81,14 +88,15 @@ except:
 data_group_name = 'taste_responsivity'
 try:
 	taste_responsivity_probability = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability')
-	taste_responsivity_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary')
+	taste_responsivity_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary')[0]
+	taste_responsive_ind = (af.pull_data_from_hdf5(sorted_dir, data_group_name, 'taste_responsive_ind')[0]).astype('int')
 except:	
 	taste_responsivity_probability, taste_responsivity_binary = af.taste_responsivity_raster(tastant_spike_times,start_dig_in_times,end_dig_in_times,num_neur,pre_taste_dt)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability',taste_responsivity_probability)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary',taste_responsivity_binary)
-
-#Pull out the taste responsive data only
-taste_responsive_ind = np.where(taste_responsivity_binary)[0]
+	#Pull out the taste responsive data only
+	taste_responsive_ind = np.where(taste_responsivity_binary == 1)[0]
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_responsive_ind',taste_responsive_ind)
 
 taste_responsive_segment_spike_times = []
 for s_i in range(len(segment_names)):
@@ -108,6 +116,8 @@ for t_i in range(len(dig_in_names)):
 	top_50_percentile = np.percentile(taste_responsivity_probability[t_i],50)
 	most_taste_responsivity_binary *= taste_responsivity_probability[t_i] >= top_50_percentile
 most_taste_responsive_ind = np.where(most_taste_responsivity_binary)[0]
+af.add_data_to_hdf5(sorted_dir,data_group_name,'most_taste_responsive_ind',most_taste_responsive_ind)
+
 most_taste_responsive_segment_spike_times = []
 for s_i in range(len(segment_names)):
 	most_taste_responsive_segment_spike_times.append([segment_spike_times[s_i][tri] for tri in most_taste_responsive_ind])
@@ -132,15 +142,15 @@ if os.path.isdir(all_sc_save_dir) == False:
 	os.mkdir(all_sc_save_dir)
 sc.bin_spike_counts(all_sc_save_dir,segment_spike_times,segment_names,segment_times)
 #Taste responsive data
-taste_resp_sc_save_dir = sc_save_dir + 'Taste_Responsive/'
-if os.path.isdir(taste_resp_sc_save_dir) == False:
-	os.mkdir(taste_resp_sc_save_dir)
-sc.bin_spike_counts(taste_resp_sc_save_dir,taste_responsive_tastant_spike_times,segment_names,segment_times)
-#Most taste responsive data
-most_taste_resp_sc_save_dir = sc_save_dir + 'Most_Taste_Responsive/'
-if os.path.isdir(most_taste_resp_sc_save_dir) == False:
-	os.mkdir(most_taste_resp_sc_save_dir)
-sc.bin_spike_counts(most_taste_resp_sc_save_dir,most_taste_responsive_tastant_spike_times,segment_names,segment_times)
+# taste_resp_sc_save_dir = sc_save_dir + 'Taste_Responsive/'
+# if os.path.isdir(taste_resp_sc_save_dir) == False:
+# 	os.mkdir(taste_resp_sc_save_dir)
+# sc.bin_spike_counts(taste_resp_sc_save_dir,taste_responsive_tastant_spike_times,segment_names,segment_times)
+# #Most taste responsive data
+# most_taste_resp_sc_save_dir = sc_save_dir + 'Most_Taste_Responsive/'
+# if os.path.isdir(most_taste_resp_sc_save_dir) == False:
+# 	os.mkdir(most_taste_resp_sc_save_dir)
+# sc.bin_spike_counts(most_taste_resp_sc_save_dir,most_taste_responsive_tastant_spike_times,segment_names,segment_times)
   
 #%%
 #A couple changepoint detection calculations: first using a KS-Test statistic, 
@@ -186,62 +196,68 @@ except:
 				  dig_in_names,taste_cp_raster_save_dir)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_cp_raster_inds',taste_cp_raster_inds)
 
-#_____Taste responsive data_____
-taste_resp_cp_save_dir = cp_save_dir + 'Taste_Responsive_CPs/'
-if os.path.isdir(taste_resp_cp_save_dir) == False:
-	os.mkdir(taste_resp_cp_save_dir)
-data_group_name = 'changepoint_data'
-#PSTH KS-Test CP Calcs
-try:
-	taste_resp_taste_cp_PSTH_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_PSTH_inds')
-except:
-	taste_resp_cp_PSTH_save_dir = taste_resp_cp_save_dir + 'PSTH/'
-	if os.path.isdir(taste_resp_cp_PSTH_save_dir) == False:
-		os.mkdir(taste_resp_cp_PSTH_save_dir)
-	taste_resp_taste_cp_PSTH_inds = cd.calc_cp_taste_PSTH_ks_test(PSTH_times,PSTH_taste_deliv_times, 
-											   taste_responsive_tastant_PSTH, cp_bin, bin_step, dig_in_names,
-											   num_cp, before_taste, after_taste, taste_resp_cp_PSTH_save_dir)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_PSTH_inds',taste_resp_taste_cp_PSTH_inds)
-#Raster Poisson Bayes Changepoint Calcs
-try:
-	taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_raster_inds')
-except:	
-	taste_resp_cp_raster_save_dir = taste_resp_cp_save_dir + 'raster/'
-	if os.path.isdir(taste_resp_cp_raster_save_dir) == False:
-		os.mkdir(taste_resp_cp_raster_save_dir)
-	taste_resp_taste_cp_raster_inds = cd.calc_cp_bayes(taste_responsive_tastant_spike_times,cp_bin,
-										num_cp,start_dig_in_times,end_dig_in_times,
-										before_taste,after_taste,dig_in_names,
-										taste_resp_cp_raster_save_dir)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_raster_inds',taste_resp_taste_cp_raster_inds)
+#%%
+#TEMPORARY Population changepoint calculation based on density of individual neuron changepoint calcs
+taste_pop_cp_raster_inds = []
+for t_i in range(num_tastes):
 	
-#_____Taste responsive data_____
-most_taste_resp_cp_save_dir = cp_save_dir + 'Most_Taste_Responsive_CPs/'
-if os.path.isdir(most_taste_resp_cp_save_dir) == False:
-	os.mkdir(most_taste_resp_cp_save_dir)
-data_group_name = 'changepoint_data'
-#PSTH KS-Test CP Calcs
-try:
-	most_taste_resp_taste_cp_PSTH_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_PSTH_inds')
-except:
-	most_taste_resp_cp_PSTH_save_dir = most_taste_resp_cp_save_dir + 'PSTH/'
-	if os.path.isdir(most_taste_resp_cp_PSTH_save_dir) == False:
-		os.mkdir(most_taste_resp_cp_PSTH_save_dir)
-	most_taste_resp_taste_cp_PSTH_inds = cd.calc_cp_taste_PSTH_ks_test(PSTH_times,PSTH_taste_deliv_times, 
-											   most_taste_responsive_tastant_PSTH,cp_bin,
-											   bin_step,dig_in_names,num_cp,before_taste,
-											   after_taste,most_taste_resp_cp_PSTH_save_dir)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_PSTH_inds',most_taste_resp_taste_cp_PSTH_inds)
-#Raster Poisson Bayes Changepoint Calcs
-try:
-	most_taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_raster_inds')
-except:	
-	most_taste_resp_cp_raster_save_dir = most_taste_resp_cp_save_dir + 'raster/'
-	if os.path.isdir(most_taste_resp_cp_raster_save_dir) == False:
-		os.mkdir(most_taste_resp_cp_raster_save_dir)
-	most_taste_resp_taste_cp_raster_inds = cd.calc_cp_bayes(most_taste_responsive_tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
-				  end_dig_in_times,before_taste,after_taste,
-				  dig_in_names,most_taste_resp_cp_raster_save_dir)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_raster_inds',most_taste_resp_taste_cp_raster_inds)
 
+
+
+
+#%%
+#NOTE: Credit to Dan Svedberg for the Bayesian approach / calculation
+
+#____Calculate which neurons are taste selective by bin size_____
+
+data_group_name = 'taste_selectivity'
+
+tastant_binned_frs = af.taste_cp_frs(taste_cp_raster_inds,tastant_spike_times,start_dig_in_times,end_dig_in_times,dig_in_names,num_neur,pre_taste_dt,post_taste_dt)
+
+decoding_save_dir = data_save_dir + 'Taste_Selectivity/'
+if os.path.isdir(decoding_save_dir) == False:
+	os.mkdir(decoding_save_dir)
 	
+loo_distribution_save_dir = decoding_save_dir + 'LOO_Distributions/'
+if os.path.isdir(loo_distribution_save_dir) == False:
+	os.mkdir(loo_distribution_save_dir)
+	
+#____Calculate which neurons are taste selective by epoch_____
+print("Using changepoint indices to calculate by epoch.")
+try:
+	taste_select_prob_joint = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint')[0]
+	taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
+	prob_taste_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'prob_taste_epoch')[0]
+except:
+	#taste_select_prob_joint = Fraction of deliveries that are successfully decoded by neuron,taste - multiplying across epochs
+	#taste_select_prob_epoch = Fraction of deliveries that are successfully decoded by neuron,taste,epoch
+	taste_select_prob_joint, taste_select_prob_epoch, prob_taste_epoch = df.taste_decoding_cp(tastant_spike_times, \
+												 taste_cp_raster_inds,num_cp,start_dig_in_times, \
+												 end_dig_in_times,dig_in_names,num_neur,pre_taste_dt, \
+												 post_taste_dt,loo_distribution_save_dir)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint',taste_select_prob_joint)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch',taste_select_prob_epoch)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'prob_taste_epoch',prob_taste_epoch)
+
+#Plot the decoding - * denotes statitical significance in KW nonparametric multiple-comparisons test
+pf.epoch_taste_select_plot(prob_taste_epoch, dig_in_names, decoding_save_dir)
+epoch_max_decoding, epoch_select_neur = pf.taste_select_plot(taste_select_prob_epoch, np.arange(num_cp), 'epoch', 'taste_selectivity_by_epoch', decoding_save_dir)
+
+#_____All Epochs Included_____
+#Select the taste responsive neurons using taste_select_prob_joint (matrix num_neur x num_tastes)
+taste_response_prob = ((np.sum(taste_select_prob_joint,1)/3 >= 1/num_tastes).astype('int'))*np.ones((num_neur,num_tastes))
+#Select the taste selective neurons using taste_select_prob_joint
+taste_select_prob = ((taste_select_prob_joint >= 1/num_tastes).astype('int'))*np.ones((num_neur,num_tastes))
+
+#_____Using Highest Probability Epoch_____
+
+
+
+#%% Plot changepoint statistics
+
+#TODO: move to plot_funcs document
+
+import matplotlib.pyplot as plt
+from matplotlib import cm
+
+colors = cm.cool(np.arange(num_cp)/(num_cp))
