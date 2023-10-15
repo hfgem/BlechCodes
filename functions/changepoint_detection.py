@@ -268,7 +268,8 @@ def calc_cp_iter_pop(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 								N_2 = np.sum(deliv_bin[n_i,time_i+1:sub_bins[b_i+1]])
 								T_1 = time_i - sub_bins[b_i]
 								T_2 = sub_bins[b_i+1] - time_i
-								cp_likelihood_bin_pop[n_i,time_i] = (((N_1/T_1)**N_1)*((N_2/T_2)**N_2))/(((N_1+N_2)/(T_1+T_2))**(N_1+N_2))
+								cp_like_calc = (((N_1/T_1)**N_1)*((N_2/T_2)**N_2))/(((N_1+N_2)/(T_1+T_2))**(N_1+N_2))
+								cp_likelihood_bin_pop[n_i,time_i] = cp_like_calc#/np.max(cp_like_calc)
 						cp_likelihood_bin = np.prod(cp_likelihood_bin_pop,axis=0)
 						bin_peak_inds = find_peaks(cp_likelihood_bin[cp_bin:],distance=cp_bin)[0] + cp_bin
 						bin_peak_inds = bin_peak_inds[bin_peak_inds > before_taste]

@@ -30,6 +30,10 @@ if __name__ == '__main__':
 	#_____Calculate spike time datasets_____
 	pre_taste = 0.5 #Seconds before tastant delivery to store
 	post_taste = 2 #Seconds after tastant delivery to store
+	
+	#_____Add "no taste" control segments to the dataset_____
+	if dig_in_names[-1] != 'none':
+		dig_in_names, start_dig_in_times, end_dig_in_times, num_tastes = af.add_no_taste(start_dig_in_times, end_dig_in_times, post_taste, dig_in_names)
 
 	segment_spike_times = af.calc_segment_spike_times(segment_times,spike_times,num_neur)
 	tastant_spike_times = af.calc_tastant_spike_times(segment_times,spike_times,
@@ -107,17 +111,8 @@ if __name__ == '__main__':
 	#Import changepoint data
 	data_group_name = 'changepoint_data'
 	taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_raster_inds')
-	taste_cp_raster_pop_save_dir = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_raster_pop_save_dir')
+	pop_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'pop_taste_cp_raster_inds')
 	
-	#Import taste selectivity data
-	data_group_name = 'taste_selectivity'
-	taste_select_prob_joint = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint')[0]
-	taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
-	
-	
-	
-	data_group_name = 'taste_selectivity'
-	most_taste_selective_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_selective_binary')[0]
 	#Generate comparable binary matrix for regular data
 	num_cp = np.shape(taste_cp_raster_inds[0])[-1] - 1
 	for t_i in range(num_tastes-1):
@@ -136,8 +131,9 @@ if __name__ == '__main__':
 	if os.path.isdir(corr_dir) == False:
 		os.mkdir(corr_dir)
 	df.calculate_correlations(segment_dev_rasters, tastant_spike_times,
-							   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
-							   pre_taste, post_taste, taste_cp_raster_inds, corr_dir) #For all neurons in dataset
+							   start_dig_in_times, end_dig_in_times, segment_names, 
+							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
+							   pop_taste_cp_raster_inds, corr_dir) #For all neurons in dataset
 	corr_dev_stats = df.pull_corr_dev_stats(segment_names, dig_in_names, corr_dir)
 	
 	#_____Plot and statistically evaluate individual neuron correlation data_____
@@ -160,6 +156,14 @@ if __name__ == '__main__':
 	df.mean_compare(segment_corr_data_avg, segment_names, dig_in_names, all_neur_corr_dir, 'population_avg_mean_difference')
 	
 	#__________For taste selective neurons__________
+	
+	#Import taste selectivity data
+	data_group_name = 'taste_selectivity'
+	taste_response_prob = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_response_prob')[0]
+	taste_select_prob = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob')[0]
+	taste_response_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_response_prob_epoch')[0]
+	taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
+	
 	taste_select_corr_dir = corr_dir + 'taste_select_neur/'
 	if os.path.isdir(taste_select_corr_dir) == False:
 		os.mkdir(taste_select_corr_dir)

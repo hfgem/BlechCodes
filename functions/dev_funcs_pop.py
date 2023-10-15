@@ -15,7 +15,7 @@ import functions.corr_dist_calc_parallel_pop as cdcpp
 
 def calculate_correlations_pop(segment_dev_rasters, tastant_spike_times,
 						   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
-						   pre_taste, post_taste, taste_cp_raster_inds, save_dir,
+						   pre_taste, post_taste, taste_cp_raster_inds_pop, save_dir,
 						   neuron_keep_indices=[]):
 	"""This function takes in deviation rasters, tastant delivery spikes, and
 	changepoint indices to calculate correlations of each deviation to each 
@@ -47,13 +47,12 @@ def calculate_correlations_pop(segment_dev_rasters, tastant_spike_times,
 				print("\tTaste #" + str(t_i + 1) + 'previously calculated')
 			except:
 				print("\tCalculating Taste #" + str(t_i + 1))
-				taste_cp = taste_cp_raster_inds[t_i][:, neuron_keep_indices, :]
+				taste_cp = taste_cp_raster_inds_pop[t_i]
 				taste_spikes = tastant_spike_times[t_i]
 				#Note, num_cp = num_cp+1 with the first value the taste delivery index
-				num_deliv, _, num_cp = np.shape(taste_cp)
+				num_deliv, num_cp = np.shape(taste_cp)
 				taste_deliv_len = [(end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i][deliv_i] + pre_taste_dt + post_taste_dt + 1) for deliv_i in range(num_deliv)]
 				deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
-				num_deliv, _, num_cp = np.shape(taste_cp)
 				#Store the correlation results in a numpy array
 				neuron_corr_storage = np.zeros((num_dev, num_deliv, num_cp-1))
 				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations

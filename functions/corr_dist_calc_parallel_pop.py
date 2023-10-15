@@ -23,7 +23,7 @@ def deliv_corr_population_parallelized(inputs):
 	dev_rast_binned = inputs[6]
 	fr_bin = inputs[7]
 	total_num_neur = len(neuron_keep_indices)
-	num_cp = np.shape(taste_cp)[2]
+	num_cp = np.shape(taste_cp)[1]
 	#Pull delivery raster
 	deliv_rast = np.zeros((total_num_neur,deliv_len))
 	for n_i in neuron_keep_indices:
@@ -43,11 +43,11 @@ def deliv_corr_population_parallelized(inputs):
 	deliv_corr_storage = np.zeros(num_cp-1)
 	#Calculate correlation with each cp segment
 	for c_p in range(num_cp-1):
-		cp_vals = (taste_cp[deliv_i,neuron_keep_indices,c_p:c_p+2]).astype('int')
+		cp_vals = (taste_cp[deliv_i,c_p:c_p+2]).astype('int')
 		#Calculate by neuron using the parallelized code
 		max_bin_length = 0
 		for n_i in range(total_num_neur):
-			neur_deliv_cp_rast_binned = deliv_rast_binned[n_i,cp_vals[n_i,0]:cp_vals[n_i,1]]
+			neur_deliv_cp_rast_binned = deliv_rast_binned[n_i,cp_vals[0]:cp_vals[1]]
 			if len(neur_deliv_cp_rast_binned) > max_bin_length:
 				max_bin_length = len(neur_deliv_cp_rast_binned)
 			neur_dev_rast_binned = dev_rast_binned[n_i,:]
@@ -58,7 +58,7 @@ def deliv_corr_population_parallelized(inputs):
 		neur_deliv_cp_rast_pop = np.zeros((total_num_neur,max_bin_length))
 		neur_dev_rast_pop = np.zeros((total_num_neur,max_bin_length))
 		for n_i in range(total_num_neur):
-			neur_deliv_cp_rast_binned = deliv_rast_binned[n_i,cp_vals[n_i,0]:cp_vals[n_i,1]]
+			neur_deliv_cp_rast_binned = deliv_rast_binned[n_i,cp_vals[0]:cp_vals[1]]
 			neur_dev_rast_binned = dev_rast_binned[n_i,:]
 			neur_deliv_cp_rast_binned, neur_dev_rast_binned = interp_vecs_pop(neur_deliv_cp_rast_binned,neur_dev_rast_binned,max_bin_length)
 			neur_deliv_cp_rast_pop[n_i,:] = neur_deliv_cp_rast_binned
