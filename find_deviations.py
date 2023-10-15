@@ -107,10 +107,15 @@ if __name__ == '__main__':
 	#Import changepoint data
 	data_group_name = 'changepoint_data'
 	taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_raster_inds')
-	taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_resp_taste_cp_raster_inds')
-	most_taste_resp_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_resp_taste_cp_raster_inds')
+	taste_cp_raster_pop_save_dir = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_raster_pop_save_dir')
 	
 	#Import taste selectivity data
+	data_group_name = 'taste_selectivity'
+	taste_select_prob_joint = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint')[0]
+	taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
+	
+	
+	
 	data_group_name = 'taste_selectivity'
 	most_taste_selective_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'most_taste_selective_binary')[0]
 	#Generate comparable binary matrix for regular data
@@ -287,6 +292,5 @@ if __name__ == '__main__':
 	
 	
 	#For each set of changepoint options calculate the correlation of null segment devs with each epoch
-	
 	
 	
