@@ -142,14 +142,16 @@ def plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
 		num_deviations = len(segment_times[0,:])
 		for dev_i in tqdm.tqdm(range(num_deviations)):
 			dev_times = segment_times[:,dev_i]
-			dev_len = dev_times[1] - dev_times[0]
+			dev_start = int(dev_times[0])
+			dev_len = dev_times[1] - dev_start
 			dev_rast_ind = []
 			raster_len = 2*dev_buffer + dev_len
 			dev_binary = np.zeros((num_neur,raster_len))
 			for n_i in range(num_neur):
-				seg_dev_ind = np.where((segment_rasters[n_i] > dev_times[0] - dev_buffer)*(segment_rasters[n_i] < dev_times[1] + dev_buffer))[0]
-				seg_dev_rast_ind = np.array(segment_rasters[n_i])[seg_dev_ind]
-				seg_dev_rast_ind_shift = (seg_dev_rast_ind - dev_times[0] + dev_buffer).astype('int')
+				segment_neur_rast = np.array(segment_rasters[n_i])
+				seg_dev_ind = np.where((segment_neur_rast > dev_start - dev_buffer)*(segment_neur_rast < dev_times[1] + dev_buffer))[0]
+				seg_dev_rast_ind = segment_neur_rast[seg_dev_ind]
+				seg_dev_rast_ind_shift = (seg_dev_rast_ind - dev_start + dev_buffer).astype('int')
 				dev_binary[n_i,seg_dev_rast_ind_shift] = 1
 				dev_rast_ind.append(seg_dev_rast_ind)
 			#Create firing rates matrix
@@ -162,7 +164,8 @@ def plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
 			#Now plot the rasters with firing rate deviations
 			f1, ax1 = plt.subplots(nrows=2,ncols=1,figsize=(5,5),gridspec_kw=dict(height_ratios=[2,1]))
 			#Deviation Raster Plot
-			ax1[0].eventplot(dev_rast_ind - dev_times[0],colors='b',alpha=0.5)
+			adjusted_dev_rast_ind = [list(np.array(dev_rast_ind[n_i]) - dev_start) for n_i in range(num_neur)]
+			ax1[0].eventplot(adjusted_dev_rast_ind,colors='b',alpha=0.5)
 			ax1[0].axvline(0)
 			ax1[0].axvline(dev_len)
 			ax1[0].set_ylabel('Neuron Index')
@@ -432,23 +435,119 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 	post_taste_dt = np.ceil(post_taste*1000).astype('int')
 
 	for s_i in range(num_segments):  #Loop through each segment
-		print("Beginning correlation calcs for segment " + str(s_i))
+		print("Beginning timeseries correlation calcs for segment " + str(s_i))
 		#Gather segment data
 		seg_rast = segment_dev_rasters[s_i]
 		num_dev = len(seg_rast)
-		if len(neuron_keep_indices) == 0:
-			total_num_neur = np.shape(seg_rast[0])[0]
-			neuron_keep_indices = np.arange(total_num_neur)
-		else:
-			total_num_neur = len(neuron_keep_indices)
 			
 		for t_i in range(num_tastes):  #Loop through each taste
-		
+			#Find the number of neurons
+			if np.shape(neuron_keep_indices)[0] == 0:
+				total_num_neur = np.shape(seg_rast[0])[0]
+				neuron_keep_indices = np.arange(total_num_neur)
+			else:
+				total_num_neur = np.sum(neuron_keep_indices[:,t_i]).astype('int')
+			#Try to import previously stored data if exists
 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
+			filename_loaded = 0
+			filename_pop = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop.npy'
+			filename_pop_loaded = 0
 			try:
 				neuron_corr_storage = np.load(filename)
-				print("\tTaste #" + str(t_i + 1) + 'previously calculated')
+				filename_loaded = 1
 			except:
+				print("Individual Neuron Timeseries Correlations Need to Be Calculated")
+			try:
+				neuron_vec_corr_storage = np.load(filename_pop)
+				filename_pop_loaded = 1
+			except:
+				print("Population Timeseries Correlations Need to Be Calculated")
+			if filename_loaded*filename_pop_loaded == 0:
+				print("\tCalculating Taste #" + str(t_i + 1))
+				taste_neuron_keep_indices = np.where(neuron_keep_indices[:,t_i])[0]
+				taste_cp = taste_cp_raster_inds[t_i][:, taste_neuron_keep_indices, :]
+				taste_cp_pop = pop_taste_cp_raster_inds[t_i]
+				taste_spikes = tastant_spike_times[t_i]
+				#Note, num_cp = num_cp+1 with the first value the taste delivery index
+				num_deliv, _, num_cp = np.shape(taste_cp)
+				taste_deliv_len = [(end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i][deliv_i] + pre_taste_dt + post_taste_dt + 1) for deliv_i in range(num_deliv)]
+				deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
+				num_deliv, _, num_cp = np.shape(taste_cp)
+				#Store the correlation results in a numpy array
+				neuron_corr_storage = np.nan*np.ones((num_dev, num_deliv, total_num_neur, num_cp-1))
+				neuron_pop_corr_storage = np.nan*np.ones((num_dev, num_deliv, num_cp-1))
+				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
+					dev_rast = seg_rast[dev_i][taste_neuron_keep_indices,:]
+					dev_len = np.shape(dev_rast)[1]
+					end_ind = np.arange(fr_bin,fr_bin+dev_len)
+					end_ind[end_ind > dev_len] = dev_len
+					#TODO: test gaussian convolution instead of binning
+					dev_rast_binned = np.zeros(np.shape(dev_rast)) #timeseries information kept
+					for start_ind in range(dev_len):
+						dev_rast_binned[:,start_ind] = np.sum(dev_rast[:,start_ind:end_ind[start_ind]],1)
+					dev_rast_vec = np.sum(dev_rast,1)/(dev_len/1000) #Converted to Hz
+					#Individual neuron changepoints
+					if filename_loaded == 0:
+						inputs = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
+						 itertools.repeat(np.arange(0,len(taste_neuron_keep_indices))), itertools.repeat(taste_cp), \
+							 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
+						pool = Pool(4)
+						deliv_corr_storage = pool.map(cdcp.deliv_corr_parallelized, inputs)
+						pool.close()
+						neuron_corr_storage[dev_i,:,:,:] = np.array(deliv_corr_storage)
+					#Population changepoints
+					if filename_pop_loaded == 0:
+						pool = Pool(4)
+						inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
+							itertools.repeat(np.arange(0,len(taste_neuron_keep_indices))), itertools.repeat(taste_cp_pop), \
+							deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
+						deliv_vec_corr_storage = pool.map(cdcpp.deliv_corr_population_parallelized, inputs_pop)
+						pool.close()
+						neuron_pop_corr_storage[dev_i,:,:] = np.array(deliv_vec_corr_storage)
+				#Save to a numpy array
+				if filename_loaded == 0:
+					np.save(filename,neuron_corr_storage)
+				if filename_pop_loaded == 0:
+					np.save(filename_pop,neuron_pop_corr_storage)
+
+
+def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
+						   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
+						   pre_taste, post_taste, taste_cp_raster_inds, pop_taste_cp_raster_inds,
+						   save_dir, neuron_keep_indices=[]):
+	"""This function takes in deviation rasters, tastant delivery spikes, and
+	changepoint indices to calculate correlations of each deviation to each 
+	changepoint interval"""
+
+	#Grab parameters
+	num_tastes = len(start_dig_in_times)
+	num_segments = len(segment_dev_rasters)
+	pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
+	post_taste_dt = np.ceil(post_taste*1000).astype('int')
+
+	for s_i in range(num_segments):  #Loop through each segment
+		print("Beginning population vector correlation calcs for segment " + str(s_i))
+		#Gather segment data
+		seg_rast = segment_dev_rasters[s_i]
+		num_dev = len(seg_rast)
+			
+		for t_i in range(num_tastes):  #Loop through each taste
+			#Find the number of neurons
+			if np.shape(neuron_keep_indices)[0] == 0:
+				total_num_neur = np.shape(seg_rast[0])[0]
+				neuron_keep_indices = np.arange(total_num_neur)
+			else:
+				total_num_neur = np.sum(neuron_keep_indices[:,t_i]).astype('int')
+		
+			#Set storage directory and check if data previously stored
+			filename_pop_vec = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec.npy'
+			filename_pop_vec_loaded = 0
+			try:
+				neuron_pop_vec_corr_storage = np.load(filename_pop_vec_loaded)
+				filename_pop_vec_loaded = 1
+			except:
+				pass
+			if filename_pop_vec_loaded == 0:
 				print("\tCalculating Taste #" + str(t_i + 1))
 				taste_cp = taste_cp_raster_inds[t_i][:, neuron_keep_indices, :]
 				taste_cp_pop = pop_taste_cp_raster_inds[t_i]
@@ -459,37 +558,21 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 				deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
 				num_deliv, _, num_cp = np.shape(taste_cp)
 				#Store the correlation results in a numpy array
-				neuron_corr_storage = np.zeros((num_dev, num_deliv, total_num_neur, num_cp-1))
-				neuron_vec_corr_storage = np.zeros((num_dev, num_deliv, total_num_neur, num_cp-1))
+				neuron_pop_vec_corr_storage = np.nan*np.ones((num_dev, num_deliv, num_cp-1))
 				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
 					dev_rast = seg_rast[dev_i][neuron_keep_indices,:]
 					dev_len = np.shape(dev_rast)[1]
-					end_ind = np.arange(fr_bin,fr_bin+dev_len)
-					end_ind[end_ind > dev_len] = dev_len
-					#TODO: test gaussian convolution instead of binning
-					dev_rast_binned = np.zeros(np.shape(dev_rast)) #timeseries information kept
-					for start_ind in range(dev_len):
-						dev_rast_binned[:,start_ind] = np.sum(dev_rast[:,start_ind:end_ind[start_ind]],1)
-					dev_rast_vec = np.sum(dev_rast,1)/(dev_len/1000) #Converted to Hz
-					inputs = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
-					 itertools.repeat(neuron_keep_indices), itertools.repeat(taste_cp), \
-						 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
+					dev_vec = np.sum(dev_rast,1)/(dev_len/1000) #in Hz
+					#Population fr vector changepoints
 					pool = Pool(4)
-					deliv_corr_storage = pool.map(cdcp.deliv_corr_parallelized, inputs)
+					inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
+						itertools.repeat(neuron_keep_indices), itertools.repeat(taste_cp_pop), \
+						deliv_adjustment, itertools.repeat(dev_vec))
+					deliv_vec_corr_storage = pool.map(cdcpp.deliv_corr_population_vec_parallelized, inputs_pop)
 					pool.close()
-					
-					#pool = Pool(4)
-					#inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
-					# itertools.repeat(neuron_keep_indices), itertools.repeat(taste_cp_pop), \
-					#	 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
-					#deliv_vec_corr_storage = pool.map(cdcp.deliv_corr_vec_parallelized, inputs_pop)
-					#pool.close()
-					
-					neuron_corr_storage[dev_i,:,:,:] = np.array(deliv_corr_storage)
-					#neuron_vec_corr_storage[dev_i,:,:,:] = np.array(deliv_vec_corr_storage)
-				#Save to a numpy array
-				filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
-				np.save(filename,neuron_corr_storage)
+					neuron_pop_vec_corr_storage[dev_i,:,:] = np.array(deliv_vec_corr_storage)
+				np.save(filename_pop_vec,neuron_pop_vec_corr_storage)
+
 
 def pull_corr_dev_stats(segment_names, dig_in_names, save_dir):
 	"""For each epoch and each segment pull out the top 10 most correlated deviation 
@@ -504,7 +587,11 @@ def pull_corr_dev_stats(segment_names, dig_in_names, save_dir):
 		for t_i in range(num_tastes):  #Loop through each taste
 			#Import distance numpy array
 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
+			filename_pop = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop.npy'
+			filename_pop_vec = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec.npy'
 			neuron_data_storage = np.load(filename)
+			population_data_storage = np.load(filename_pop)
+			population_vec_data_storage = np.load(filename_pop_vec)
 			#Calculate statistics
 			data_dict = dict()
 			data_dict['segment'] = segment_names[s_i]
@@ -512,6 +599,8 @@ def pull_corr_dev_stats(segment_names, dig_in_names, save_dir):
 			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
 			data_dict['num_dev'] = num_dev
 			data_dict['neuron_data_storage'] = neuron_data_storage
+			data_dict['pop_data_storage'] = population_data_storage
+			data_dict['pop_vec_data_storage'] = population_vec_data_storage
 			segment_stats[t_i] = data_dict
 		dev_stats[s_i] = segment_stats
 
@@ -538,7 +627,8 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 		for t_i in range(num_tastes):  #Loop through each taste
 			print("\tTaste #" + str(t_i + 1))
 			taste_stats = seg_stats[t_i]
-			#Import distance numpy array
+			#_____Individual Neuron CP Calculations_____
+			#Import correlation numpy array
 			neuron_data_storage = taste_stats['neuron_data_storage']
 			data_shape = np.shape(neuron_data_storage)
 			if len(data_shape) == 4:
@@ -558,19 +648,14 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 			for c_p in range(num_cp):
 				all_dist_cp = (neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p]).flatten()
 				cp_data.append(all_dist_cp)
-				plt.hist(all_dist_cp[all_dist_cp != 0],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+				plt.hist(all_dist_cp[~np.isnan(all_dist_cp)],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel(dist_name)
 			plt.legend()
 			plt.title('Probability Mass Function - ' + dist_name)
 			plt.subplot(2,1,2)
 			for c_p in range(num_cp):
 				all_dist_cp = cp_data[c_p]
-				#plt.ecdf(all_dist_cp,label='Epoch ' + str(c_p))
-				#true_sort = np.sort(all_dist_cp)
-				#true_unique = np.unique(true_sort)
-				#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in tqdm.tqdm(true_unique)])
-				#plt.plot(true_unique,cmf_true,label='Epoch ' + str(c_p))
-				plt.hist(all_dist_cp[all_dist_cp != 0],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+				plt.hist(all_dist_cp[~np.isnan(all_dist_cp)],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel(dist_name)
 			plt.legend()
 			plt.title('Cumulative Mass Function - ' + dist_name)
@@ -658,14 +743,14 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 			for c_p in range(num_cp):
 				all_avg_dist_cp = (np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2)).flatten()
 				avg_cp_data.append(all_avg_dist_cp)
-				plt.hist(all_avg_dist_cp[all_avg_dist_cp != 0],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+				plt.hist(all_avg_dist_cp[~np.isnan(all_avg_dist_cp)],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel('Average ' + dist_name)
 			plt.legend()
 			plt.title('Probability Mass Function - ' + dist_name)
 			plt.subplot(2,1,2)
 			for c_p in range(num_cp):
 				all_avg_dist_cp = avg_cp_data[c_p]
-				plt.hist(all_avg_dist_cp[all_avg_dist_cp != 0],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+				plt.hist(all_avg_dist_cp[~np.isnan(all_avg_dist_cp)],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
 				#plt.ecdf(all_avg_dist_cp,label='Epoch ' + str(c_p))
 				#true_sort = np.sort(all_avg_dist_cp)
 				#true_unique = np.unique(true_sort)
@@ -745,7 +830,216 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				f1.savefig(filename + '.svg')
 				plt.close(f1)
 			
+			#_____Population CP Calculations_____
+			#Import correlation numpy array
+			pop_data_storage = taste_stats['pop_data_storage']
+			data_shape = np.shape(pop_data_storage)
+			if len(data_shape) == 3:
+				num_dev = data_shape[0]
+				num_deliv = data_shape[1]
+				num_cp = data_shape[2]
 			
+			#Plot the individual neuron distribution for each changepoint index
+			f = plt.figure(figsize=(5,5))
+			cp_data = []
+			plt.subplot(2,1,1)
+			for c_p in range(num_cp):
+				all_dist_cp = (pop_data_storage[:,:,c_p]).flatten()
+				cp_data.append(all_dist_cp)
+				plt.hist(all_dist_cp[~np.isnan(all_dist_cp)],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Probability Mass Function - ' + dist_name)
+			plt.subplot(2,1,2)
+			for c_p in range(num_cp):
+				all_dist_cp = cp_data[c_p]
+				plt.hist(all_dist_cp[~np.isnan(all_dist_cp)],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Cumulative Mass Function - ' + dist_name)
+			plt.suptitle(dist_name + ' distributions for \nsegment ' + segment_names[s_i] + ', taste ' + dig_in_names[t_i])
+			plt.tight_layout()
+			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop'
+			f.savefig(filename + '.png')
+			f.savefig(filename + '.svg')
+			plt.close(f)
+			if dist_name == 'Correlation':
+				#Plot the individual neuron distribution for each changepoint index
+				f = plt.figure(figsize=(5,5))
+				cp_data = []
+				plt.subplot(2,1,1)
+				min_y = 1
+				for c_p in range(num_cp):
+					all_dist_cp = (pop_data_storage[:,:,c_p]).flatten()
+					cp_data.append(all_dist_cp)
+					hist_vals = plt.hist(all_dist_cp,density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+					if bin_min_y < min_y:
+						min_y = bin_min_y 
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for c_p in range(num_cp):
+					all_dist_cp = cp_data[c_p]
+					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+					if bin_min_y < min_y:
+						min_y = bin_min_y 
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle(dist_name + ' distributions for \nsegment ' + segment_names[s_i] + ', taste ' + dig_in_names[t_i])
+				plt.tight_layout()
+				filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_zoom'
+				f.savefig(filename + '.png')
+				f.savefig(filename + '.svg')
+				plt.close(f)
+				#Plot the individual neuron distribution for each changepoint index
+				f = plt.figure(figsize=(5,5))
+				cp_data = []
+				plt.subplot(2,1,1)
+				for c_p in range(num_cp):
+					all_dist_cp = (pop_data_storage[:,:,c_p]).flatten()
+					cp_data.append(all_dist_cp)
+					plt.hist(all_dist_cp,density=True,log=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for c_p in range(num_cp):
+					all_dist_cp = cp_data[c_p]
+					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+					if bin_min_y < min_y:
+						min_y = bin_min_y 
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle(dist_name + ' distributions for \nsegment ' + segment_names[s_i] + ', taste ' + dig_in_names[t_i])
+				plt.tight_layout()
+				filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_log_zoom'
+				f.savefig(filename + '.png')
+				f.savefig(filename + '.svg')
+				plt.close(f)
+				
+			#_____Population Vector CP Calculations_____
+			#Import correlation numpy array
+			pop_vec_data_storage = taste_stats['pop_vec_data_storage']
+			data_shape = np.shape(pop_vec_data_storage)
+			if len(data_shape) == 3:
+				num_dev = data_shape[0]
+				num_deliv = data_shape[1]
+				num_cp = data_shape[2]
+			#Plot the individual neuron distribution for each changepoint index
+			f = plt.figure(figsize=(5,5))
+			cp_data = []
+			plt.subplot(2,1,1)
+			for c_p in range(num_cp):
+				all_dist_cp = (pop_vec_data_storage[:,:,c_p]).flatten()
+				cp_data.append(all_dist_cp)
+				plt.hist(all_dist_cp[~np.isnan(all_dist_cp)],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Probability Mass Function - ' + dist_name)
+			plt.subplot(2,1,2)
+			for c_p in range(num_cp):
+				all_dist_cp = cp_data[c_p]
+				plt.hist(all_dist_cp[~np.isnan(all_dist_cp)],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Cumulative Mass Function - ' + dist_name)
+			plt.suptitle(dist_name + ' distributions for \nsegment ' + segment_names[s_i] + ', taste ' + dig_in_names[t_i])
+			plt.tight_layout()
+			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec'
+			f.savefig(filename + '.png')
+			f.savefig(filename + '.svg')
+			plt.close(f)
+			if dist_name == 'Correlation':
+				#Plot the individual neuron distribution for each changepoint index
+				f = plt.figure(figsize=(5,5))
+				cp_data = []
+				plt.subplot(2,1,1)
+				min_y = 1
+				for c_p in range(num_cp):
+					all_dist_cp = (pop_data_storage[:,:,c_p]).flatten()
+					cp_data.append(all_dist_cp)
+					hist_vals = plt.hist(all_dist_cp,density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+					if bin_min_y < min_y:
+						min_y = bin_min_y 
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for c_p in range(num_cp):
+					all_dist_cp = cp_data[c_p]
+					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+					if bin_min_y < min_y:
+						min_y = bin_min_y 
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle(dist_name + ' distributions for \nsegment ' + segment_names[s_i] + ', taste ' + dig_in_names[t_i])
+				plt.tight_layout()
+				filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec_zoom'
+				f.savefig(filename + '.png')
+				f.savefig(filename + '.svg')
+				plt.close(f)
+				#Plot the individual neuron distribution for each changepoint index
+				f = plt.figure(figsize=(5,5))
+				cp_data = []
+				plt.subplot(2,1,1)
+				for c_p in range(num_cp):
+					all_dist_cp = (pop_data_storage[:,:,c_p]).flatten()
+					cp_data.append(all_dist_cp)
+					plt.hist(all_dist_cp,density=True,log=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for c_p in range(num_cp):
+					all_dist_cp = cp_data[c_p]
+					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+					if bin_min_y < min_y:
+						min_y = bin_min_y 
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle(dist_name + ' distributions for \nsegment ' + segment_names[s_i] + ', taste ' + dig_in_names[t_i])
+				plt.tight_layout()
+				filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec_log_zoom'
+				f.savefig(filename + '.png')
+				f.savefig(filename + '.svg')
+				plt.close(f)
+			
+
 def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir, 
 						dist_name, neuron_indices):
 	"""This function takes in deviation rasters, tastant delivery spikes, and
@@ -763,38 +1057,55 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 	
 	#Define storage
 	segment_data = [] #segments x tastes x cp
+	segment_pop_data = [] #segments x tastes x cp from fr population matrix
 	segment_data_avg = [] #segments x tastes x cp avged across neurons in the deviation
+	segment_pop_vec_data = [] #segments x tastes x cp from fr population vector
 	for s_i in range(num_segments):  #Loop through each segment
 		seg_stats = dev_stats[s_i]
 		print("Beginning combined plot calcs for segment " + str(s_i))
 		taste_data = [] #tastes x cp
+		taste_pop_data = [] #tastes x cp
 		taste_data_avg = []
+		taste_pop_vec_data = []
 		for t_i in range(num_tastes):  #Loop through each taste
 			print("\tTaste #" + str(t_i + 1))
 			taste_stats = seg_stats[t_i]
 			#Import distance numpy array
 			neuron_data_storage = taste_stats['neuron_data_storage']
+			pop_data_storage = taste_stats['pop_data_storage']
+			pop_vec_data_storage = taste_stats['pop_vec_data_storage']
 			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
 			cp_data = []
+			cp_data_pop = []
 			cp_data_avg = []
+			cp_data_pop_vec = []
 			for c_p in range(num_cp):
 				all_dist_cp = (neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p]).flatten()
+				all_pop_dist_cp = (pop_data_storage[:,:,c_p]).flatten()
 				cp_data.append(all_dist_cp)
+				cp_data_pop.append(all_pop_dist_cp)
 				avg_dist_cp = np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2).flatten()
 				cp_data_avg.append(avg_dist_cp)
+				all_pop_vec_cp = (pop_vec_data_storage[:,:,c_p]).flatten()
+				cp_data_pop_vec.append(all_pop_vec_cp)
 			taste_data.append(cp_data)
+			taste_pop_data.append(cp_data_pop)
 			taste_data_avg.append(cp_data_avg)
+			taste_pop_vec_data.append(cp_data_pop_vec)
 		segment_data.append(taste_data)
+		segment_pop_data.append(taste_pop_data)
 		segment_data_avg.append(taste_data_avg)
+		segment_pop_vec_data.append(taste_pop_vec_data)
 		#Plot taste data against each other
 		for c_p in range(num_cp):
+			#_____Individual Neurons_____
 			#Plot data across all neurons
 			f0 = plt.figure(figsize=(5,5))
 			plt.subplot(2,1,1)
 			for t_i in range(num_tastes):
 				try:
 					data = taste_data[t_i][c_p]
-					plt.hist(data[data != 0],density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+					plt.hist(data[~np.isnan(data)],density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
 				except:
 					pass
 			plt.xlabel(dist_name)
@@ -804,7 +1115,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 			for t_i in range(num_tastes):
 				try:
 					data = taste_data[t_i][c_p]
-					plt.hist(data[data != 0],bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+					plt.hist(data[~np.isnan(data)],bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
 					#true_sort = np.sort(data)
 					#true_unique = np.unique(true_sort)
 					#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
@@ -906,7 +1217,237 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f1.savefig(filename + '.png')
 				f1.savefig(filename + '.svg')
 				plt.close(f1)
-		#Now plot population averages
+			#_____Population Data_____
+			#Plot data across all neurons
+			f0 = plt.figure(figsize=(5,5))
+			plt.subplot(2,1,1)
+			for t_i in range(num_tastes):
+				try:
+					data = taste_pop_data[t_i][c_p]
+					plt.hist(data[~np.isnan(data)],density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+				except:
+					pass
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Probability Mass Function - ' + dist_name)
+			plt.subplot(2,1,2)
+			for t_i in range(num_tastes):
+				try:
+					data = taste_pop_data[t_i][c_p]
+					plt.hist(data[~np.isnan(data)],bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+				except:
+					pass
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Cumulative Mass Function - ' + dist_name)
+			plt.suptitle('Population Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+			plt.tight_layout()
+			filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p) + '_pop'
+			f0.savefig(filename + '.png')
+			f0.savefig(filename + '.svg')
+			plt.close(f0)
+			#Zoom to correlations > 0.5
+			if dist_name == 'Correlation':
+				#Plot data across all neurons
+				f1 = plt.figure(figsize=(5,5))
+				plt.subplot(2,1,1)
+				min_y = 1
+				for t_i in range(num_tastes):
+					try:
+						data = taste_pop_data[t_i][c_p]
+						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for t_i in range(num_tastes):
+					try:
+						data = taste_pop_data[t_i][c_p]
+						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle('Population Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+				plt.tight_layout()
+				filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p) + '_zoom_pop'
+				f1.savefig(filename + '.png')
+				f1.savefig(filename + '.svg')
+				plt.close(f1)
+				#Plot data across all neurons with log
+				f1 = plt.figure(figsize=(5,5))
+				plt.subplot(2,1,1)
+				min_y = 1
+				for t_i in range(num_tastes):
+					try:
+						data = taste_pop_data[t_i][c_p]
+						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for t_i in range(num_tastes):
+					try:
+						data = taste_pop_data[t_i][c_p]
+						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle('Population Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+				plt.tight_layout()
+				filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p) + '_log_zoom_pop'
+				f1.savefig(filename + '.png')
+				f1.savefig(filename + '.svg')
+				plt.close(f1)
+			#_____Population Vector Data
+			#Plot data across all neurons
+			f0 = plt.figure(figsize=(5,5))
+			plt.subplot(2,1,1)
+			for t_i in range(num_tastes):
+				try:
+					data = taste_pop_vec_data[t_i][c_p]
+					plt.hist(data[~np.isnan(data)],density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+				except:
+					pass
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Probability Mass Function - ' + dist_name)
+			plt.subplot(2,1,2)
+			for t_i in range(num_tastes):
+				try:
+					data = taste_pop_vec_data[t_i][c_p]
+					plt.hist(data[~np.isnan(data)],bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+				except:
+					pass
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Cumulative Mass Function - ' + dist_name)
+			plt.suptitle('Population Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+			plt.tight_layout()
+			filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p) + '_pop_vec'
+			f0.savefig(filename + '.png')
+			f0.savefig(filename + '.svg')
+			plt.close(f0)
+			#Zoom to correlations > 0.5
+			if dist_name == 'Correlation':
+				#Plot data across all neurons
+				f1 = plt.figure(figsize=(5,5))
+				plt.subplot(2,1,1)
+				min_y = 1
+				for t_i in range(num_tastes):
+					try:
+						data = taste_pop_vec_data[t_i][c_p]
+						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for t_i in range(num_tastes):
+					try:
+						data = taste_pop_vec_data[t_i][c_p]
+						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle('Population Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+				plt.tight_layout()
+				filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p) + '_zoom_pop_vec'
+				f1.savefig(filename + '.png')
+				f1.savefig(filename + '.svg')
+				plt.close(f1)
+				#Plot data across all neurons with log
+				f1 = plt.figure(figsize=(5,5))
+				plt.subplot(2,1,1)
+				min_y = 1
+				for t_i in range(num_tastes):
+					try:
+						data = taste_pop_vec_data[t_i][c_p]
+						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for t_i in range(num_tastes):
+					try:
+						data = taste_pop_vec_data[t_i][c_p]
+						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle('Population Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+				plt.tight_layout()
+				filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p) + '_log_zoom_pop_vec'
+				f1.savefig(filename + '.png')
+				f1.savefig(filename + '.svg')
+				plt.close(f1)
+		#Now plot individual neuron data population averages
 		for c_p in range(num_cp):
 			#Plot data across all neurons
 			f0 = plt.figure(figsize=(5,5))
@@ -925,18 +1466,14 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				try:
 					data = taste_data_avg[t_i][c_p]
 					plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
-					#true_sort = np.sort(data)
-					#true_unique = np.unique(true_sort)
-					#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
-					#plt.plot(true_unique,cmf_true,label='Taste ' + dig_in_names[t_i])
 				except:
 					pass
 			plt.xlabel(dist_name)
 			plt.legend()
 			plt.title('Cumulative Mass Function - ' + dist_name)
-			plt.suptitle('Neuron Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+			plt.suptitle('Averaged Neuron Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
 			plt.tight_layout()
-			filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p) + '_avg_pop'
+			filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p) + '_avg_neur'
 			f0.savefig(filename + '.png')
 			f0.savefig(filename + '.svg')
 			plt.close(f0)
@@ -978,9 +1515,9 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
-				plt.suptitle('Neuron Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+				plt.suptitle('Averaged Neuron Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
 				plt.tight_layout()
-				filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p)  + '_avg_pop' + '_zoom'
+				filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p)  + '_avg_neur_zoom'
 				f1.savefig(filename + '.png')
 				f1.savefig(filename + '.svg')
 				plt.close(f1)
@@ -1020,22 +1557,23 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
-				plt.suptitle('Neuron Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+				plt.suptitle('Averaged Neuron Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
 				plt.tight_layout()
-				filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p)  + '_avg_pop' + '_log_zoom'
+				filename = save_dir + segment_names[s_i] + '_epoch' + str(c_p)  + '_avg_neur_log_zoom'
 				f1.savefig(filename + '.png')
 				f1.savefig(filename + '.svg')
 				plt.close(f1)
 			
 	for t_i in range(num_tastes): #Loop through each taste
 		#Plot segment data against each other by epoch
+		#_____Individual Neuron Averages_____
 		for c_p in range(num_cp):
 			f2 = plt.figure(figsize=(5,5))
 			plt.subplot(2,1,1)
 			for s_i in range(num_segments):
 				try:
 					data = segment_data_avg[s_i][t_i][c_p]
-					plt.hist(data[data != 0],density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+					plt.hist(data[~np.isnan(data)],density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
 				except:
 					pass
 			plt.xlabel(dist_name)
@@ -1045,11 +1583,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 			for s_i in range(num_segments):
 				try:
 					data = segment_data_avg[s_i][t_i][c_p]
-					plt.hist(data[data != 0],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
-					#true_sort = np.sort(data)
-					#true_unique = np.unique(true_sort)
-					#cmf_true = np.array([np.sum((true_sort <= u_val).astype('int'))/len(true_sort) for u_val in true_unique])
-					#plt.plot(true_unique,cmf_true,label='Segment ' + segment_names[s_i])
+					plt.hist(data[~np.isnan(data)],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
 				except:
 					pass
 			plt.xlabel(dist_name)
@@ -1057,7 +1591,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 			plt.title('Cumulative Mass Function - ' + dist_name)
 			plt.suptitle('Population Avg Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
 			plt.tight_layout()
-			filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_pop_avg'
+			filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_neur_avg'
 			f2.savefig(filename + '.png')
 			f2.savefig(filename + '.svg')
 			plt.close(f2)
@@ -1100,7 +1634,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				plt.title('Cumulative Mass Function - ' + dist_name)
 				plt.suptitle('Population Avg Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
 				plt.tight_layout()
-				filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_pop_avg_zoom'
+				filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_neur_avg_zoom'
 				f3.savefig(filename + '.png')
 				f3.savefig(filename + '.svg')
 				plt.close(f3)	
@@ -1142,13 +1676,242 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				plt.title('Cumulative Mass Function - ' + dist_name)
 				plt.suptitle('Population Avg Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
 				plt.tight_layout()
-				filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_pop_avg_log_zoom'
+				filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_neur_avg_log_zoom'
 				f3.savefig(filename + '.png')
 				f3.savefig(filename + '.svg')
 				plt.close(f3)	
-	
+				
+		#_____Population Data_____
+		for c_p in range(num_cp):
+			f2 = plt.figure(figsize=(5,5))
+			plt.subplot(2,1,1)
+			for s_i in range(num_segments):
+				try:
+					data = segment_pop_data[s_i][t_i][c_p]
+					plt.hist(data[~np.isnan(data)],density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+				except:
+					pass
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Probability Mass Function - ' + dist_name)
+			plt.subplot(2,1,2)
+			for s_i in range(num_segments):
+				try:
+					data = segment_pop_data[s_i][t_i][c_p]
+					plt.hist(data[~np.isnan(data)],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+				except:
+					pass
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Cumulative Mass Function - ' + dist_name)
+			plt.suptitle('Population Avg Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+			plt.tight_layout()
+			filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_pop'
+			f2.savefig(filename + '.png')
+			f2.savefig(filename + '.svg')
+			plt.close(f2)
+			#Zoom to correlations > 0.5
+			if dist_name == 'Correlation':
+				f3 = plt.figure(figsize=(5,5))
+				plt.subplot(2,1,1)
+				min_y = 1
+				for s_i in range(num_segments):
+					try:
+						data = segment_pop_data[s_i][t_i][c_p]
+						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for s_i in range(num_segments):
+					try:
+						data = segment_pop_data[s_i][t_i][c_p]
+						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle('Population Avg Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+				plt.tight_layout()
+				filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_pop_zoom'
+				f3.savefig(filename + '.png')
+				f3.savefig(filename + '.svg')
+				plt.close(f3)	
+				#Log
+				f3 = plt.figure(figsize=(5,5))
+				plt.subplot(2,1,1)
+				min_y = 1
+				for s_i in range(num_segments):
+					try:
+						data = segment_pop_data[s_i][t_i][c_p]
+						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for s_i in range(num_segments):
+					try:
+						data = segment_pop_data[s_i][t_i][c_p]
+						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle('Population Avg Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+				plt.tight_layout()
+				filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_pop_log_zoom'
+				f3.savefig(filename + '.png')
+				f3.savefig(filename + '.svg')
+				plt.close(f3)	
 		
-	return segment_data, segment_data_avg
+		#_____Population Vec Data_____
+		for c_p in range(num_cp):
+			f2 = plt.figure(figsize=(5,5))
+			plt.subplot(2,1,1)
+			for s_i in range(num_segments):
+				try:
+					data = segment_pop_vec_data[s_i][t_i][c_p]
+					plt.hist(data[~np.isnan(data)],density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+				except:
+					pass
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Probability Mass Function - ' + dist_name)
+			plt.subplot(2,1,2)
+			for s_i in range(num_segments):
+				try:
+					data = segment_pop_vec_data[s_i][t_i][c_p]
+					plt.hist(data[~np.isnan(data)],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+				except:
+					pass
+			plt.xlabel(dist_name)
+			plt.legend()
+			plt.title('Cumulative Mass Function - ' + dist_name)
+			plt.suptitle('Population Avg Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+			plt.tight_layout()
+			filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_pop_vec'
+			f2.savefig(filename + '.png')
+			f2.savefig(filename + '.svg')
+			plt.close(f2)
+			#Zoom to correlations > 0.5
+			if dist_name == 'Correlation':
+				f3 = plt.figure(figsize=(5,5))
+				plt.subplot(2,1,1)
+				min_y = 1
+				for s_i in range(num_segments):
+					try:
+						data = segment_pop_vec_data[s_i][t_i][c_p]
+						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for s_i in range(num_segments):
+					try:
+						data = segment_pop_vec_data[s_i][t_i][c_p]
+						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle('Population Avg Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+				plt.tight_layout()
+				filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_pop_vec_zoom'
+				f3.savefig(filename + '.png')
+				f3.savefig(filename + '.svg')
+				plt.close(f3)	
+				#Log
+				f3 = plt.figure(figsize=(5,5))
+				plt.subplot(2,1,1)
+				min_y = 1
+				for s_i in range(num_segments):
+					try:
+						data = segment_pop_vec_data[s_i][t_i][c_p]
+						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Probability Mass Function - ' + dist_name)
+				plt.subplot(2,1,2)
+				min_y = 1
+				for s_i in range(num_segments):
+					try:
+						data = segment_pop_vec_data[s_i][t_i][c_p]
+						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
+						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
+						if bin_min_y < min_y:
+							min_y = bin_min_y 
+					except:
+						pass
+				plt.xlabel(dist_name)
+				plt.xlim([0.5,1])
+				plt.ylim([min_y,1])
+				plt.legend()
+				plt.title('Cumulative Mass Function - ' + dist_name)
+				plt.suptitle('Population Avg Distributions for \n' + segment_names[s_i] + ' Epoch = ' + str(c_p + 1))
+				plt.tight_layout()
+				filename = save_dir + dig_in_names[t_i] + '_epoch' + str(c_p) + '_pop_vec_log_zoom'
+				f3.savefig(filename + '.png')
+				f3.savefig(filename + '.svg')
+				plt.close(f3)
+		
+	return segment_data, segment_data_avg, segment_pop_data, segment_pop_vec_data
 		
 
 def stat_significance(segment_data, segment_names, dig_in_names, save_dir, dist_name):
@@ -1179,7 +1942,7 @@ def stat_significance(segment_data, segment_names, dig_in_names, save_dir, dist_
 			ind_2 = pair_combinations[p_i][1]
 			data_1 = segment_data[ind_1[0]][ind_1[1]][ind_1[2]]
 			data_2 = segment_data[ind_2[0]][ind_2[1]][ind_2[2]]
-			result = ks_2samp(data_1,data_2)
+			result = ks_2samp(data_1[~np.isnan(data_1)],data_2[~np.isnan(data_2)])
 			if result[1] < 0.05:
 				pair_significances[p_i] = 1
 				statement = segment_names[ind_1[0]] + '_' + dig_in_names[ind_1[1]] + '_epoch' + str(ind_1[2]) + \
@@ -1199,7 +1962,7 @@ def stat_significance(segment_data, segment_names, dig_in_names, save_dir, dist_
 			f.write('\n')
 			
 
-def stat_significance_ttest(segment_data, segment_names, dig_in_names, save_dir, dist_name):
+def stat_significance_ttest_less(segment_data, segment_names, dig_in_names, save_dir, dist_name):
 	
 	#Grab parameters
 	#segment_data shape = segments x tastes x cp
@@ -1244,7 +2007,52 @@ def stat_significance_ttest(segment_data, segment_names, dig_in_names, save_dir,
 			f.write(line)
 			f.write('\n')
 			
+def stat_significance_ttest_more(segment_data, segment_names, dig_in_names, save_dir, dist_name):
+	
+	#Grab parameters
+	#segment_data shape = segments x tastes x cp
+	num_segments = len(segment_data)
+	num_tastes = len(segment_data[0])
+	num_cp = len(segment_data[0][0])
+	
+	#Calculate statistical significance of pairs
+	#Are the correlation distributions significantly different across pairs?
+	
+	#All pair combinations
+	a = [list(np.arange(num_segments)),list(np.arange(num_tastes)),list(np.arange(num_cp))]
+	data_combinations = list(itertools.product(*a))
+	pair_combinations = list(itertools.combinations(data_combinations,2))
+	
+	#Pair combination significance storage
+	save_file = save_dir + dist_name + '_significance.txt'
+	pair_significance_statements = []
+	
+	print("Calculating Significance for All Combinations")
+	for p_i in tqdm.tqdm(range(len(pair_combinations))):
+		try:
+			ind_1 = pair_combinations[p_i][0]
+			ind_2 = pair_combinations[p_i][1]
+			data_1 = segment_data[ind_1[0]][ind_1[1]][ind_1[2]]
+			data_2 = segment_data[ind_2[0]][ind_2[1]][ind_2[2]]
+			result = ttest_ind(data_1,data_2,nan_policy='omit',alternative='more')
+			if result[1] < 0.05:
+				statement = segment_names[ind_1[0]] + '_' + dig_in_names[ind_1[1]] + '_epoch' + str(ind_1[2]) + \
+					' vs ' + segment_names[ind_2[0]] + '_' + dig_in_names[ind_2[1]] + '_epoch' + str(ind_2[2]) + \
+						' = significantly different with p-val = ' + str(result[1])
+			else:
+				statement = segment_names[ind_1[0]] + '_' + dig_in_names[ind_1[1]] + '_epoch' + str(ind_1[2]) + \
+					' vs ' + segment_names[ind_2[0]] + '_' + dig_in_names[ind_2[1]] + '_epoch' + str(ind_2[2]) + \
+						' = not significantly different with p-val = ' + str(result[1])
+			pair_significance_statements.append(statement)
+		except:
+			pass
+		
+	with open(save_file, 'w') as f:
+		for line in pair_significance_statements:
+			f.write(line)
+			f.write('\n')
 
+			
 def mean_compare(segment_data, segment_names, dig_in_names, save_dir, dist_name):
 	
 	#Grab parameters
@@ -1300,39 +2108,69 @@ def top_dev_corr_bins(dev_stats,segment_names,dig_in_names,save_dir,neuron_indic
 	num_tastes = len(dig_in_names)
 	num_segments = len(segment_names)
 	
-	
 	#Define storage
 	for s_i in range(num_segments):  #Loop through each segment
 		seg_stats = dev_stats[s_i]
 		print("Beginning calcs for segment " + str(s_i))
 		for t_i in range(num_tastes):  #Loop through each taste
-			save_file = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_top_corr_combos.txt'
+			save_file = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_top_corr_combos_neur_avg.txt'
+			pop_save_file = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_top_corr_combos_pop.txt'
+			pop_vec_save_file = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_top_corr_combos_pop_vec.txt'
 			corr_data = []
+			corr_pop_data = []
+			corr_pop_vec_data = []
 			print("\tTaste #" + str(t_i + 1))
 			taste_stats = seg_stats[t_i]
 			#Import distance numpy array
 			neuron_data_storage = taste_stats['neuron_data_storage']
+			pop_data_storage = taste_stats['pop_data_storage']
+			pop_vec_data_storage = taste_stats['pop_vec_data_storage']
 			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
 			#Calculate, for each deviation bin, which taste delivery and cp it correlates with most
 			all_dev_data = np.zeros((num_dev,num_deliv,num_cp))
 			for c_p in range(num_cp):
 				all_dev_data[:,:,c_p] = np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2) #num_dev x num_deliv x num_cp 
 			top_99_percentile = np.percentile(all_dev_data[~np.isnan(all_dev_data)].flatten(),99)
+			top_99_percentile_pop = np.percentile(pop_data_storage[~np.isnan(pop_data_storage)][:,:,c_p].flatten(),99)
+			top_99_percentile_pop_vec = np.percentile(pop_vec_data_storage[~np.isnan(pop_vec_data_storage)][:,:,c_p].flatten(),99)
 			for dev_i in range(num_dev):
 				dev_data = all_dev_data[dev_i,:,:]  #num_deliv x num_cp
 				[deliv_i,cp_i] = np.where(dev_data >= top_99_percentile)
+				pop_dev_data = pop_data_storage[dev_i,:,:]
+				[pop_deliv_i,pop_cp_i] = np.where(pop_dev_data >= top_99_percentile_pop)
+				pop_vec_data = pop_vec_data_storage[dev_i,:,:]
+				[pop_vec_deliv_i,pop_vec_cp_i] = np.where(pop_vec_data >= top_99_percentile_pop_vec)
 				if len(deliv_i) > 0:
 					for d_i in range(len(deliv_i)):
 						dev_cp_corr_val = dev_data[deliv_i[d_i],cp_i[d_i]]
 						statement = 'dev-' + str(dev_i) + '; epoch-' + str(cp_i[d_i]) + '; deliv-' + str(deliv_i[d_i]) + '; corr-' + str(dev_cp_corr_val)
 						corr_data.append(statement)
-			#Save to file
+				if len(pop_deliv_i) > 0:
+					for d_i in range(len(pop_deliv_i)):
+						dev_pop_cp_corr_val = pop_dev_data[pop_deliv_i[d_i],pop_cp_i[d_i]]
+						statement = 'dev-' + str(dev_i) + '; epoch-' + str(cp_i[d_i]) + '; deliv-' + str(deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
+						corr_pop_data.append(statement)
+				if len(pop_vec_deliv_i) > 0:
+					for d_i in range(len(pop_deliv_i)):
+						dev_pop_cp_corr_val = pop_dev_data[pop_vec_deliv_i[d_i],pop_vec_cp_i[d_i]]
+						statement = 'dev-' + str(dev_i) + '; epoch-' + str(cp_i[d_i]) + '; deliv-' + str(deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
+						corr_pop_vec_data.append(statement)
+			#Save to file neuron average statements
 			with open(save_file, 'w') as f:
 				for line in corr_data:
 					f.write(line)
 					f.write('\n')
-	
-
+			#Save to file population statements
+			with open(pop_save_file, 'w') as f:
+				for line in corr_pop_data:
+					f.write(line)
+					f.write('\n')
+			#Save to file population vector statements
+			with open(pop_vec_save_file, 'w') as f:
+				for line in corr_pop_vec_data:
+					f.write(line)
+					f.write('\n')
+			
 
 
 

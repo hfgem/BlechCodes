@@ -56,45 +56,6 @@ def deliv_corr_parallelized(inputs):
 	
 	return deliv_corr_storage
 
-def deliv_corr_vec_parallelized(inputs):
-	"""Parallelizes the correlation calculation for deliveries"""
-	warnings.filterwarnings('ignore')
-	#TODO: Needs taste_cp to be population changepoints, aka num_deliv x num_cp in shape
-	#Grab parameters/data
-	deliv_i = inputs[0]
-	deliv_st = inputs[1]
-	deliv_len = inputs[2] #deliv_rast = np.zeros((total_num_neur,deliv_len))
-	neuron_keep_indices = inputs[3]
-	taste_cp = inputs[4] 
-	deliv_adjustment = inputs[5]
-	neur_dev_mat = inputs[6]
-	fr_bin = inputs[7]
-	total_num_neur = len(neuron_keep_indices)
-	_, dev_len = np.shape(neur_dev_vec)
-	num_cp = np.shape(taste_cp)[1]
-	#Pull delivery raster
-	deliv_rast = np.zeros((total_num_neur,deliv_len))
-	for n_i in neuron_keep_indices:
-		neur_deliv_st = list(np.array(deliv_st[n_i]).astype('int') - deliv_adjustment)
-		deliv_rast[n_i,neur_deliv_st] = 1
-	deliv_corr_storage = np.zeros(num_cp-1)
-	#Calculate correlation with each cp segment
-	for c_p in range(num_cp-1):
-		cp_vals = (taste_cp[deliv_i,c_p:c_p+2]).astype('int')
-		deliv_len = cp_vals[1] - cp_vals[0]
-		max_len = np.max(deliv_len,dev_len)
-		interp_deliv_mat = np.zeros((len(neuron_keep_indices),deliv_len))
-		interp_dev_mat = np.zeros((len(neuron_keep_indices),deliv_len))
-		for n_i in neuron_keep_indices:
-			
-			deliv_cp_vec = np.sum(deliv_rast[n_i,cp_vals[0]:cp_vals[1]],1)/((cp_vals[1] - cp_vals[0])/1000) #In Hz
-			neur_deliv_cp_rast_binned,neur_dev_rast_binned = interp_vecs(neur_deliv_cp_rast_binned,neur_dev_rast_binned)
-		#Calculate population correlation using the parallelized code
-		vec_corrs = correlation_vec_calcs(deliv_cp_vec, neur_dev_vec)
-		deliv_corr_storage[c_p] = vec_corrs
-	
-	return deliv_corr_storage
-
 def interp_vecs(neur_deliv_cp_rast_binned,neur_dev_rast_binned):
 	#Grab rasters
 	len_deliv = len(neur_deliv_cp_rast_binned)

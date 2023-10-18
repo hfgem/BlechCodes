@@ -70,6 +70,43 @@ def deliv_corr_population_parallelized(inputs):
 	
 	return deliv_corr_storage
 
+def deliv_corr_population_vec_parallelized(inputs):
+	"""Parallelizes the correlation calculation for deliveries"""
+	warnings.filterwarnings('ignore')
+	
+	#Grab parameters/data
+	deliv_i = inputs[0]
+	deliv_st = inputs[1]
+	deliv_len = inputs[2] #deliv_rast = np.zeros((total_num_neur,deliv_len))
+	neuron_keep_indices = inputs[3]
+	taste_cp = inputs[4] 
+	deliv_adjustment = inputs[5]
+	dev_vec = inputs[6]
+	total_num_neur = len(neuron_keep_indices)
+	num_cp = np.shape(taste_cp)[1]
+	#Pull delivery raster
+	deliv_rast = np.zeros((total_num_neur,deliv_len))
+	for n_i in neuron_keep_indices:
+		n_st = deliv_st[n_i]
+		if len(n_st) >= 1:
+			if len(n_st) > 1:
+				neur_deliv_st = list(np.array(n_st).astype('int') - deliv_adjustment)
+			else:
+				neur_deliv_st = int(n_st[0]) - deliv_adjustment
+			deliv_rast[n_i,neur_deliv_st] = 1
+	deliv_corr_storage = np.zeros(num_cp-1)
+	#Calculate correlation with each cp segment
+	for c_p in range(num_cp-1):
+		cp_vals = (taste_cp[deliv_i,c_p:c_p+2]).astype('int')
+		epoch_len = cp_vals[1] - cp_vals[0]
+		#Pull out the delivery cp fr vector
+		deliv_vec = np.sum(deliv_rast[:,cp_vals[0]:cp_vals[1]],1)/(epoch_len/1000) #in Hz
+		#Calculate population correlation
+		pop_vec_corr = correlation_calc_vec(deliv_vec, dev_vec)
+		deliv_corr_storage[c_p] = pop_vec_corr
+	
+	return deliv_corr_storage
+
 def interp_vecs_pop(neur_deliv_cp_rast_binned,neur_dev_rast_binned,bin_length):
 	#Grab rasters
 	len_deliv = len(neur_deliv_cp_rast_binned)
@@ -110,5 +147,17 @@ def correlation_calc_pop(neur_deliv_cp_rast_pop, neur_dev_rast_pop):
 	warnings.filterwarnings('ignore')
 	
 	corr_val = np.corrcoef(neur_deliv_cp_rast_pop.flatten(),neur_dev_rast_pop.flatten())[0,1]
+	
+	return corr_val
+
+def correlation_calc_vec(neur_deliv_cp_vec, neur_dev_vec):
+	"""
+	This set of code calculates binary vectors of where fr deviations occur in 
+	the activity compared to a local mean and standard deviation of fr.
+	The binned rasters should be the same size.
+	"""
+	warnings.filterwarnings('ignore')
+	
+	corr_val = np.corrcoef(neur_deliv_cp_vec,neur_dev_vec)[0,1]
 	
 	return corr_val
