@@ -19,6 +19,7 @@ import functions.corr_dist_calc_parallel as cdcp
 import functions.corr_dist_calc_parallel_pop as cdcpp
 from multiprocessing import Pool
 from sklearn.decomposition import PCA
+import warnings
 
 def run_dev_pull_parallelized(inputs):
 	"""
@@ -444,9 +445,10 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 			#Find the number of neurons
 			if np.shape(neuron_keep_indices)[0] == 0:
 				total_num_neur = np.shape(seg_rast[0])[0]
-				neuron_keep_indices = np.arange(total_num_neur)
+				taste_keep_ind = np.arange(total_num_neur)
 			else:
 				total_num_neur = np.sum(neuron_keep_indices[:,t_i]).astype('int')
+				taste_keep_ind = (np.where(((neuron_keep_indices[:,t_i]).astype('int')).flatten())[0]).astype('int')
 			#Try to import previously stored data if exists
 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
 			filename_loaded = 0
@@ -464,20 +466,18 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 				print("Population Timeseries Correlations Need to Be Calculated")
 			if filename_loaded*filename_pop_loaded == 0:
 				print("\tCalculating Taste #" + str(t_i + 1))
-				taste_neuron_keep_indices = np.where(neuron_keep_indices[:,t_i])[0]
-				taste_cp = taste_cp_raster_inds[t_i][:, taste_neuron_keep_indices, :]
+				taste_cp = taste_cp_raster_inds[t_i][:, taste_keep_ind, :]
 				taste_cp_pop = pop_taste_cp_raster_inds[t_i]
 				taste_spikes = tastant_spike_times[t_i]
 				#Note, num_cp = num_cp+1 with the first value the taste delivery index
 				num_deliv, _, num_cp = np.shape(taste_cp)
 				taste_deliv_len = [(end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i][deliv_i] + pre_taste_dt + post_taste_dt + 1) for deliv_i in range(num_deliv)]
 				deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
-				num_deliv, _, num_cp = np.shape(taste_cp)
 				#Store the correlation results in a numpy array
 				neuron_corr_storage = np.nan*np.ones((num_dev, num_deliv, total_num_neur, num_cp-1))
 				neuron_pop_corr_storage = np.nan*np.ones((num_dev, num_deliv, num_cp-1))
 				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
-					dev_rast = seg_rast[dev_i][taste_neuron_keep_indices,:]
+					dev_rast = seg_rast[dev_i][taste_keep_ind,:]
 					dev_len = np.shape(dev_rast)[1]
 					end_ind = np.arange(fr_bin,fr_bin+dev_len)
 					end_ind[end_ind > dev_len] = dev_len
@@ -485,11 +485,10 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 					dev_rast_binned = np.zeros(np.shape(dev_rast)) #timeseries information kept
 					for start_ind in range(dev_len):
 						dev_rast_binned[:,start_ind] = np.sum(dev_rast[:,start_ind:end_ind[start_ind]],1)
-					dev_rast_vec = np.sum(dev_rast,1)/(dev_len/1000) #Converted to Hz
 					#Individual neuron changepoints
 					if filename_loaded == 0:
 						inputs = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
-						 itertools.repeat(np.arange(0,len(taste_neuron_keep_indices))), itertools.repeat(taste_cp), \
+						 itertools.repeat(np.arange(0,total_num_neur)), itertools.repeat(taste_cp), \
 							 deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
 						pool = Pool(4)
 						deliv_corr_storage = pool.map(cdcp.deliv_corr_parallelized, inputs)
@@ -499,7 +498,7 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 					if filename_pop_loaded == 0:
 						pool = Pool(4)
 						inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
-							itertools.repeat(np.arange(0,len(taste_neuron_keep_indices))), itertools.repeat(taste_cp_pop), \
+							itertools.repeat(np.arange(0,total_num_neur)), itertools.repeat(taste_cp_pop), \
 							deliv_adjustment, itertools.repeat(dev_rast_binned), itertools.repeat(fr_bin))
 						deliv_vec_corr_storage = pool.map(cdcpp.deliv_corr_population_parallelized, inputs_pop)
 						pool.close()
@@ -518,7 +517,6 @@ def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 	"""This function takes in deviation rasters, tastant delivery spikes, and
 	changepoint indices to calculate correlations of each deviation to each 
 	changepoint interval"""
-
 	#Grab parameters
 	num_tastes = len(start_dig_in_times)
 	num_segments = len(segment_dev_rasters)
@@ -535,38 +533,37 @@ def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 			#Find the number of neurons
 			if np.shape(neuron_keep_indices)[0] == 0:
 				total_num_neur = np.shape(seg_rast[0])[0]
-				neuron_keep_indices = np.arange(total_num_neur)
+				taste_keep_ind = np.arange(total_num_neur)
 			else:
 				total_num_neur = np.sum(neuron_keep_indices[:,t_i]).astype('int')
+				taste_keep_ind = (np.where(((neuron_keep_indices[:,t_i]).astype('int')).flatten())[0]).astype('int')
 		
 			#Set storage directory and check if data previously stored
 			filename_pop_vec = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec.npy'
 			filename_pop_vec_loaded = 0
 			try:
-				neuron_pop_vec_corr_storage = np.load(filename_pop_vec_loaded)
+				neuron_pop_vec_corr_storage = np.load(filename_pop_vec)
 				filename_pop_vec_loaded = 1
 			except:
-				pass
+				print("Vector correlations not calculated for taste " + str(t_i))
 			if filename_pop_vec_loaded == 0:
 				print("\tCalculating Taste #" + str(t_i + 1))
-				taste_cp = taste_cp_raster_inds[t_i][:, neuron_keep_indices, :]
 				taste_cp_pop = pop_taste_cp_raster_inds[t_i]
 				taste_spikes = tastant_spike_times[t_i]
 				#Note, num_cp = num_cp+1 with the first value the taste delivery index
-				num_deliv, _, num_cp = np.shape(taste_cp)
+				num_deliv, num_cp = np.shape(taste_cp_pop)
 				taste_deliv_len = [(end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i][deliv_i] + pre_taste_dt + post_taste_dt + 1) for deliv_i in range(num_deliv)]
 				deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
-				num_deliv, _, num_cp = np.shape(taste_cp)
 				#Store the correlation results in a numpy array
 				neuron_pop_vec_corr_storage = np.nan*np.ones((num_dev, num_deliv, num_cp-1))
 				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
-					dev_rast = seg_rast[dev_i][neuron_keep_indices,:]
+					dev_rast = seg_rast[dev_i][taste_keep_ind,:]
 					dev_len = np.shape(dev_rast)[1]
 					dev_vec = np.sum(dev_rast,1)/(dev_len/1000) #in Hz
 					#Population fr vector changepoints
 					pool = Pool(4)
 					inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
-						itertools.repeat(neuron_keep_indices), itertools.repeat(taste_cp_pop), \
+						itertools.repeat(np.arange(0,total_num_neur)), itertools.repeat(taste_cp_pop), \
 						deliv_adjustment, itertools.repeat(dev_vec))
 					deliv_vec_corr_storage = pool.map(cdcpp.deliv_corr_population_vec_parallelized, inputs_pop)
 					pool.close()
@@ -598,9 +595,9 @@ def pull_corr_dev_stats(segment_names, dig_in_names, save_dir):
 			data_dict['taste'] = dig_in_names[t_i]
 			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
 			data_dict['num_dev'] = num_dev
-			data_dict['neuron_data_storage'] = neuron_data_storage
-			data_dict['pop_data_storage'] = population_data_storage
-			data_dict['pop_vec_data_storage'] = population_vec_data_storage
+			data_dict['neuron_data_storage'] = np.abs(neuron_data_storage)
+			data_dict['pop_data_storage'] = np.abs(population_data_storage)
+			data_dict['pop_vec_data_storage'] = np.abs(population_vec_data_storage)
 			segment_stats[t_i] = data_dict
 		dev_stats[s_i] = segment_stats
 
@@ -613,11 +610,11 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 	changepoint indices to calculate correlations of each deviation to each 
 	changepoint interval. Outputs are saved .npy files with name indicating
 	segment and taste containing matrices of shape [num_dev, num_deliv, num_neur, num_cp]
-	with the distances stored.
+	with the correlations stored.
 	
 	neuron_indices should be binary and shaped num_neur x num_cp
 	"""
-	
+	warnings.filterwarnings('ignore')
 	#Grab parameters
 	num_tastes = len(dig_in_names)
 	num_segments = len(segment_names)
@@ -629,7 +626,7 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 			taste_stats = seg_stats[t_i]
 			#_____Individual Neuron CP Calculations_____
 			#Import correlation numpy array
-			neuron_data_storage = taste_stats['neuron_data_storage']
+			neuron_data_storage = np.abs(taste_stats['neuron_data_storage'])
 			data_shape = np.shape(neuron_data_storage)
 			if len(data_shape) == 4:
 				num_dev = data_shape[0]
@@ -640,7 +637,8 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				num_dev = data_shape[0]
 				num_deliv = data_shape[1]
 				num_cp = data_shape[2]
-			
+			if total_num_neur != np.shape(neuron_indices)[0]: #accounts for sub-population calculation case
+				neuron_indices = np.ones((total_num_neur,num_cp))
 			#Plot the individual neuron distribution for each changepoint index
 			f = plt.figure(figsize=(5,5))
 			cp_data = []
@@ -679,6 +677,8 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
 						min_y = bin_min_y 
+				if min_y == 1:
+					min_y = 0.5
 				plt.xlabel(dist_name)
 				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
@@ -686,15 +686,28 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = cp_data[c_p]
 					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					max_x_val = np.max(np.abs(hist_vals[1]))
+					half_max_x = np.floor(max_x_val/2)
 					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
-						min_y = bin_min_y 
+						min_y = bin_min_y
+					if half_max_x < min_x:
+						min_x = half_max_x
+					if max_x_val > max_x:
+						max_x = max_x_val
+				if min_y == 1:
+					min_y = 0.5
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -718,15 +731,28 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = cp_data[c_p]
 					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					max_x_val = np.max(np.abs(hist_vals[1]))
+					half_max_x = np.floor(max_x_val/2)
 					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
 						min_y = bin_min_y 
+					if half_max_x < min_x:
+						min_x = half_max_x
+					if max_x_val > max_x:
+						max_x = max_x_val
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -779,16 +805,30 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
+				min_y = 1
+				min_x = 1
+				max_x = 0
 				for c_p in range(num_cp):
 					all_avg_dist_cp = avg_cp_data[c_p]
 					hist_vals = plt.hist(all_avg_dist_cp,bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					max_x_val = np.max(np.abs(hist_vals[1]))
+					half_max_x = np.floor(max_x_val/2)
 					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
-						min_y = bin_min_y 
+						min_y = bin_min_y
+					if half_max_x < min_x:
+						min_x = half_max_x
+					if max_x_val > max_x:
+						max_x = max_x_val
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.xlabel('Average ' + dist_name)
-				plt.xlim([0.5,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
 				plt.suptitle(dist_name + ' avg population distributions for \nsegment ' + segment_names[s_i] + ', taste ' + dig_in_names[t_i])
@@ -811,16 +851,29 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for c_p in range(num_cp):
 					all_avg_dist_cp = avg_cp_data[c_p]
 					hist_vals = plt.hist(all_avg_dist_cp,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					max_x_val = np.max(np.abs(hist_vals[1]))
+					half_max_x = np.floor(max_x_val/2)
 					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
 						min_y = bin_min_y 
+					if half_max_x < min_x:
+						min_x = half_max_x
+					if max_x_val > max_x:
+						max_x = max_x_val
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.xlabel('Average ' + dist_name)
-				plt.xlim([0.5,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
 				plt.suptitle(dist_name + ' avg population distributions for \nsegment ' + segment_names[s_i] + ', taste ' + dig_in_names[t_i])
@@ -869,30 +922,56 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				cp_data = []
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = (pop_data_storage[:,:,c_p]).flatten()
 					cp_data.append(all_dist_cp)
 					hist_vals = plt.hist(all_dist_cp,density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+					max_x_val = np.max(np.abs(hist_vals[1]))
+					half_max_x = np.floor(max_x_val/2)
 					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
 						min_y = bin_min_y 
+					if half_max_x < min_x:
+						min_x = half_max_x
+					if max_x_val > max_x:
+						max_x = max_x_val
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = cp_data[c_p]
 					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					max_x_val = np.max(np.abs(hist_vals[1]))
+					half_max_x = np.floor(max_x_val/2)
 					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
 						min_y = bin_min_y 
+					if half_max_x < min_x:
+						min_x = half_max_x
+					if max_x_val > max_x:
+						max_x = max_x_val
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -916,15 +995,28 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = cp_data[c_p]
 					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					max_x_val = np.max(np.abs(hist_vals[1]))
+					half_max_x = np.floor(max_x_val/2)
 					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
 						min_y = bin_min_y 
+					if half_max_x < min_x:
+						min_x = half_max_x
+					if max_x_val > max_x:
+						max_x = max_x_val
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -973,30 +1065,56 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				cp_data = []
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = (pop_data_storage[:,:,c_p]).flatten()
 					cp_data.append(all_dist_cp)
 					hist_vals = plt.hist(all_dist_cp,density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+					max_x_val = np.max(np.abs(hist_vals[1]))
+					half_max_x = np.floor(max_x_val/2)
 					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
 						min_y = bin_min_y 
+					if half_max_x < min_x:
+						min_x = half_max_x
+					if max_x_val > max_x:
+						max_x = max_x_val
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = cp_data[c_p]
 					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					max_x_val = np.max(np.abs(hist_vals[1]))
+					half_max_x = np.floor(max_x_val/2)
 					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
 						min_y = bin_min_y 
+					if half_max_x < min_x:
+						min_x = half_max_x
+					if max_x_val > max_x:
+						max_x = max_x_val
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1020,15 +1138,28 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = cp_data[c_p]
 					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+					max_x_val = np.max(np.abs(hist_vals[1]))
+					half_max_x = np.floor(max_x_val/2)
 					bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 					bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 					if bin_min_y < min_y:
 						min_y = bin_min_y 
+					if half_max_x < min_x:
+						min_x = half_max_x
+					if max_x_val > max_x:
+						max_x = max_x_val
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1050,7 +1181,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 	
 	neuron_indices should be binary and shaped num_neur x num_cp
 	"""
-	
+	warnings.filterwarnings('ignore')
 	#Grab parameters
 	num_tastes = len(dig_in_names)
 	num_segments = len(segment_names)
@@ -1075,6 +1206,8 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 			pop_data_storage = taste_stats['pop_data_storage']
 			pop_vec_data_storage = taste_stats['pop_vec_data_storage']
 			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
+			if total_num_neur != np.shape(neuron_indices)[0]: #accounts for sub-population calculation case
+				neuron_indices = np.ones((total_num_neur,num_cp))
 			cp_data = []
 			cp_data_pop = []
 			cp_data_avg = []
@@ -1137,35 +1270,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f1 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data[t_i][c_p]
 						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
-							min_y = bin_min_y 
+							min_y = bin_min_y
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data[t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1179,35 +1338,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f1 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data[t_i][c_p]
 						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data[t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1252,35 +1437,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f1 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_data[t_i][c_p]
 						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_data[t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1294,35 +1505,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f1 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_data[t_i][c_p]
 						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_data[t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1367,35 +1604,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f1 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_vec_data[t_i][c_p]
 						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_vec_data[t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1409,35 +1672,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f1 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_vec_data[t_i][c_p]
 						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_vec_data[t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1483,35 +1772,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f1 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data_avg[t_i][c_p]
 						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data_avg[t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1525,35 +1840,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f1 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data_avg[t_i][c_p]
 						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for t_i in range(num_tastes):
 					try:
 						data = taste_data_avg[t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
-							min_y = bin_min_y 
+							min_y = bin_min_y  
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1600,35 +1941,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f3 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_data_avg[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
-							min_y = bin_min_y 
+							min_y = bin_min_y  
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_data_avg[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
-							min_y = bin_min_y 
+							min_y = bin_min_y  
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1642,35 +2009,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f3 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_data_avg[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_data_avg[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1715,35 +2108,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f3 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_data[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_data[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1757,35 +2176,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f3 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_data[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_data[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1830,35 +2275,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f3 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_vec_data[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_vec_data[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1872,35 +2343,61 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				f3 = plt.figure(figsize=(5,5))
 				plt.subplot(2,1,1)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_vec_data[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Probability Mass Function - ' + dist_name)
 				plt.subplot(2,1,2)
 				min_y = 1
+				min_x = 1
+				max_x = 0
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_vec_data[s_i][t_i][c_p]
 						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						max_x_val = np.max(np.abs(hist_vals[1]))
+						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
 						bin_min_y = hist_vals[0][np.max(bin_05-1,0)]
 						if bin_min_y < min_y:
 							min_y = bin_min_y 
+						if half_max_x < min_x:
+							min_x = half_max_x
+						if max_x_val > max_x:
+							max_x = max_x_val
 					except:
 						pass
+				if min_y == 1:
+					min_y = 0.5
+				if max_x_val < 0.5:
+					plt.xlim([min_x,max_x])
+				else:
+					plt.xlim([0.5,1])
 				plt.xlabel(dist_name)
-				plt.xlim([0.5,1])
 				plt.ylim([min_y,1])
 				plt.legend()
 				plt.title('Cumulative Mass Function - ' + dist_name)
@@ -1940,8 +2437,8 @@ def stat_significance(segment_data, segment_names, dig_in_names, save_dir, dist_
 		try:
 			ind_1 = pair_combinations[p_i][0]
 			ind_2 = pair_combinations[p_i][1]
-			data_1 = segment_data[ind_1[0]][ind_1[1]][ind_1[2]]
-			data_2 = segment_data[ind_2[0]][ind_2[1]][ind_2[2]]
+			data_1 = np.abs(segment_data[ind_1[0]][ind_1[1]][ind_1[2]])
+			data_2 = np.abs(segment_data[ind_2[0]][ind_2[1]][ind_2[2]])
 			result = ks_2samp(data_1[~np.isnan(data_1)],data_2[~np.isnan(data_2)])
 			if result[1] < 0.05:
 				pair_significances[p_i] = 1
@@ -1987,8 +2484,8 @@ def stat_significance_ttest_less(segment_data, segment_names, dig_in_names, save
 		try:
 			ind_1 = pair_combinations[p_i][0]
 			ind_2 = pair_combinations[p_i][1]
-			data_1 = segment_data[ind_1[0]][ind_1[1]][ind_1[2]]
-			data_2 = segment_data[ind_2[0]][ind_2[1]][ind_2[2]]
+			data_1 = np.abs(segment_data[ind_1[0]][ind_1[1]][ind_1[2]])
+			data_2 = np.abs(segment_data[ind_2[0]][ind_2[1]][ind_2[2]])
 			result = ttest_ind(data_1,data_2,nan_policy='omit',alternative='less')
 			if result[1] < 0.05:
 				statement = segment_names[ind_1[0]] + '_' + dig_in_names[ind_1[1]] + '_epoch' + str(ind_1[2]) + \
@@ -2032,8 +2529,8 @@ def stat_significance_ttest_more(segment_data, segment_names, dig_in_names, save
 		try:
 			ind_1 = pair_combinations[p_i][0]
 			ind_2 = pair_combinations[p_i][1]
-			data_1 = segment_data[ind_1[0]][ind_1[1]][ind_1[2]]
-			data_2 = segment_data[ind_2[0]][ind_2[1]][ind_2[2]]
+			data_1 = np.abs(segment_data[ind_1[0]][ind_1[1]][ind_1[2]])
+			data_2 = np.abs(segment_data[ind_2[0]][ind_2[1]][ind_2[2]])
 			result = ttest_ind(data_1,data_2,nan_policy='omit',alternative='more')
 			if result[1] < 0.05:
 				statement = segment_names[ind_1[0]] + '_' + dig_in_names[ind_1[1]] + '_epoch' + str(ind_1[2]) + \
@@ -2077,8 +2574,8 @@ def mean_compare(segment_data, segment_names, dig_in_names, save_dir, dist_name)
 		try:
 			ind_1 = pair_combinations[p_i][0]
 			ind_2 = pair_combinations[p_i][1]
-			data_1 = segment_data[ind_1[0]][ind_1[1]][ind_1[2]]
-			data_2 = segment_data[ind_2[0]][ind_2[1]][ind_2[2]]
+			data_1 = np.abs(segment_data[ind_1[0]][ind_1[1]][ind_1[2]])
+			data_2 = np.abs(segment_data[ind_2[0]][ind_2[1]][ind_2[2]])
 			result =  (np.nanmean(data_1) < np.nanmean(data_2)).astype('int') #ttest_ind(data_1,data_2,nan_policy='omit',alternative='less')
 			if result == 1:
 				statement = segment_names[ind_1[0]] + '_' + dig_in_names[ind_1[1]] + '_epoch' + str(ind_1[2]) + \
@@ -2126,13 +2623,15 @@ def top_dev_corr_bins(dev_stats,segment_names,dig_in_names,save_dir,neuron_indic
 			pop_data_storage = taste_stats['pop_data_storage']
 			pop_vec_data_storage = taste_stats['pop_vec_data_storage']
 			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
+			if total_num_neur != np.shape(neuron_indices)[0]: #accounts for sub-population calculation case
+				neuron_indices = np.ones((total_num_neur,num_cp))
 			#Calculate, for each deviation bin, which taste delivery and cp it correlates with most
 			all_dev_data = np.zeros((num_dev,num_deliv,num_cp))
 			for c_p in range(num_cp):
 				all_dev_data[:,:,c_p] = np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2) #num_dev x num_deliv x num_cp 
-			top_99_percentile = np.percentile(all_dev_data[~np.isnan(all_dev_data)].flatten(),99)
-			top_99_percentile_pop = np.percentile(pop_data_storage[~np.isnan(pop_data_storage)][:,:,c_p].flatten(),99)
-			top_99_percentile_pop_vec = np.percentile(pop_vec_data_storage[~np.isnan(pop_vec_data_storage)][:,:,c_p].flatten(),99)
+			top_99_percentile = np.percentile((all_dev_data[~np.isnan(all_dev_data)]).flatten(),99)
+			top_99_percentile_pop = np.percentile((pop_data_storage[~np.isnan(pop_data_storage)]).flatten(),99)
+			top_99_percentile_pop_vec = np.percentile((pop_vec_data_storage[~np.isnan(pop_vec_data_storage)]).flatten(),99)
 			for dev_i in range(num_dev):
 				dev_data = all_dev_data[dev_i,:,:]  #num_deliv x num_cp
 				[deliv_i,cp_i] = np.where(dev_data >= top_99_percentile)
@@ -2148,12 +2647,12 @@ def top_dev_corr_bins(dev_stats,segment_names,dig_in_names,save_dir,neuron_indic
 				if len(pop_deliv_i) > 0:
 					for d_i in range(len(pop_deliv_i)):
 						dev_pop_cp_corr_val = pop_dev_data[pop_deliv_i[d_i],pop_cp_i[d_i]]
-						statement = 'dev-' + str(dev_i) + '; epoch-' + str(cp_i[d_i]) + '; deliv-' + str(deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
+						statement = 'dev-' + str(dev_i) + '; epoch-' + str(pop_cp_i[d_i]) + '; deliv-' + str(pop_deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
 						corr_pop_data.append(statement)
 				if len(pop_vec_deliv_i) > 0:
 					for d_i in range(len(pop_deliv_i)):
 						dev_pop_cp_corr_val = pop_dev_data[pop_vec_deliv_i[d_i],pop_vec_cp_i[d_i]]
-						statement = 'dev-' + str(dev_i) + '; epoch-' + str(cp_i[d_i]) + '; deliv-' + str(deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
+						statement = 'dev-' + str(dev_i) + '; epoch-' + str(pop_vec_cp_i[d_i]) + '; deliv-' + str(pop_vec_deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
 						corr_pop_vec_data.append(statement)
 			#Save to file neuron average statements
 			with open(save_file, 'w') as f:
