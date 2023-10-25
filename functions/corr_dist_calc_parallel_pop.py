@@ -7,6 +7,7 @@ Created on Wed Sep 20 14:50:37 2023
 """
 
 import numpy as np
+from scipy.stats import pearsonr
 import warnings
 
 def deliv_corr_population_parallelized(inputs):
@@ -17,7 +18,7 @@ def deliv_corr_population_parallelized(inputs):
 	deliv_i = inputs[0]
 	deliv_st = inputs[1]
 	deliv_len = inputs[2] #deliv_rast = np.zeros((total_num_neur,deliv_len))
-	neuron_keep_indices = inputs[3]
+	neuron_keep_indices = inputs[3] #indices of neurons to keep
 	taste_cp = inputs[4] 
 	deliv_adjustment = inputs[5]
 	dev_rast_binned = inputs[6]
@@ -26,14 +27,15 @@ def deliv_corr_population_parallelized(inputs):
 	num_cp = np.shape(taste_cp)[1]
 	#Pull delivery raster
 	deliv_rast = np.zeros((total_num_neur,deliv_len))
-	for n_i in neuron_keep_indices:
-		n_st = deliv_st[n_i]
+	for n_i in range(total_num_neur):
+		n_i_val = neuron_keep_indices[n_i]
+		n_st = deliv_st[n_i_val]
 		if len(n_st) >= 1:
 			if len(n_st) > 1:
 				neur_deliv_st = list(np.array(n_st).astype('int') - deliv_adjustment)
 			else:
 				neur_deliv_st = int(n_st[0]) - deliv_adjustment
-			deliv_rast[n_i,neur_deliv_st] = 1
+		deliv_rast[n_i,neur_deliv_st] = 1
 	end_ind = np.arange(fr_bin,fr_bin+deliv_len)
 	end_ind[end_ind > deliv_len] = deliv_len
 	deliv_rast_binned = np.zeros(np.shape(deliv_rast))
@@ -78,7 +80,7 @@ def deliv_corr_population_vec_parallelized(inputs):
 	deliv_i = inputs[0]
 	deliv_st = inputs[1]
 	deliv_len = inputs[2] #deliv_rast = np.zeros((total_num_neur,deliv_len))
-	neuron_keep_indices = inputs[3]
+	neuron_keep_indices = inputs[3] #indices, not binary
 	taste_cp = inputs[4] 
 	deliv_adjustment = inputs[5]
 	dev_vec = inputs[6]
@@ -86,14 +88,15 @@ def deliv_corr_population_vec_parallelized(inputs):
 	num_cp = np.shape(taste_cp)[1]
 	#Pull delivery raster
 	deliv_rast = np.zeros((total_num_neur,deliv_len))
-	for n_i in neuron_keep_indices:
-		n_st = deliv_st[n_i]
+	for n_i in range(total_num_neur):
+		n_i_val = neuron_keep_indices[n_i]
+		n_st = deliv_st[n_i_val]
 		if len(n_st) >= 1:
 			if len(n_st) > 1:
 				neur_deliv_st = list(np.array(n_st).astype('int') - deliv_adjustment)
 			else:
 				neur_deliv_st = int(n_st[0]) - deliv_adjustment
-			deliv_rast[n_i,neur_deliv_st] = 1
+		deliv_rast[n_i,neur_deliv_st] = 1
 	deliv_corr_storage = np.zeros(num_cp-1)
 	#Calculate correlation with each cp segment
 	for c_p in range(num_cp-1):

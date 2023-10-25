@@ -563,7 +563,7 @@ def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 					#Population fr vector changepoints
 					pool = Pool(4)
 					inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
-						itertools.repeat(np.arange(0,total_num_neur)), itertools.repeat(taste_cp_pop), \
+						itertools.repeat(taste_keep_ind), itertools.repeat(taste_cp_pop), \
 						deliv_adjustment, itertools.repeat(dev_vec))
 					deliv_vec_corr_storage = pool.map(cdcpp.deliv_corr_population_vec_parallelized, inputs_pop)
 					pool.close()
@@ -2650,7 +2650,7 @@ def top_dev_corr_bins(dev_stats,segment_names,dig_in_names,save_dir,neuron_indic
 						statement = 'dev-' + str(dev_i) + '; epoch-' + str(pop_cp_i[d_i]) + '; deliv-' + str(pop_deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
 						corr_pop_data.append(statement)
 				if len(pop_vec_deliv_i) > 0:
-					for d_i in range(len(pop_deliv_i)):
+					for d_i in range(len(pop_vec_deliv_i)):
 						dev_pop_cp_corr_val = pop_dev_data[pop_vec_deliv_i[d_i],pop_vec_cp_i[d_i]]
 						statement = 'dev-' + str(dev_i) + '; epoch-' + str(pop_vec_cp_i[d_i]) + '; deliv-' + str(pop_vec_deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
 						corr_pop_vec_data.append(statement)
