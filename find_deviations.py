@@ -12,6 +12,7 @@ import os,json,gzip,itertools,tqdm
 import numpy as np
 import functions.analysis_funcs as af
 import functions.dev_funcs as df
+import functions.dev_plot_funcs as dpf
 import functions.hdf5_handling as hf5
 from multiprocessing import Pool
 		
@@ -30,6 +31,8 @@ if __name__ == '__main__':
 	#_____Calculate spike time datasets_____
 	pre_taste = 0.5 #Seconds before tastant delivery to store
 	post_taste = 2 #Seconds after tastant delivery to store
+	#pre_taste will also be used for the z-scoring of both deliveries and deviation bins
+	#the firing rate binning will be used for z-scoring as well
 	
 	#_____Add "no taste" control segments to the dataset_____
 	if dig_in_names[-1] != 'none':
@@ -84,19 +87,19 @@ if __name__ == '__main__':
 		filepath = dev_dir + segment_names[s_i] + '/deviations.json'
 		with gzip.GzipFile(filepath, mode="r") as f:
 			json_bytes = f.read()
-			json_str = json_bytes.decode('utf-8')            
+			json_str = json_bytes.decode('utf-8')			
 			data = json.loads(json_str) 
 			segment_deviations.append(data)
 	
 	#_____Pull rasters of deviations and plot_____
 	#Calculate segment deviation spikes
 	print("Now pulling true deviation rasters")
-	segment_dev_rasters, segment_dev_times = df.create_dev_rasters(num_segments, segment_spike_times, 
-						   np.array(segment_times_reshaped), segment_deviations)
+	segment_dev_rasters, segment_dev_times, segment_dev_rasters_zscore = df.create_dev_rasters(num_segments, segment_spike_times, 
+						   np.array(segment_times_reshaped), segment_deviations, pre_taste)
 		
 	#Plot deviations
 	#print("Now plotting deviations")
-	#df.plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,segment_times_reshaped,pre_taste,post_taste,segment_names,dev_dir)
+	#dpf.plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,segment_times_reshaped,pre_taste,post_taste,segment_names,dev_dir)
 	
 	#_____Calculate segment deviation statistics - length,IDI_____
 	print("Now calculating and plotting true deviation statistics")
