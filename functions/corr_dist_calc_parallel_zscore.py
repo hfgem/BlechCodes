@@ -36,11 +36,13 @@ def deliv_corr_parallelized(inputs):
 	for n_i in neuron_keep_indices:
 		neur_deliv_st = list(np.array(deliv_st[n_i]).astype('int') - deliv_adjustment)
 		deliv_rast[n_i,neur_deliv_st] = 1
-	end_ind = np.arange(fr_bin,fr_bin+deliv_len)
+	start_ind = (np.arange(-int(fr_bin/2),deliv_len-int(fr_bin/2))).astype('int')
+	start_ind[start_ind < 0] = 0
+	end_ind = (np.arange(int(fr_bin/2),deliv_len+int(fr_bin/2))).astype('int')
 	end_ind[end_ind > deliv_len] = deliv_len
 	deliv_rast_binned = np.zeros(np.shape(deliv_rast))
-	for start_ind in range(deliv_len):
-		deliv_rast_binned[:,start_ind] = np.sum(deliv_rast[:,start_ind:end_ind[start_ind]],1)
+	for si in range(deliv_len):
+		deliv_rast_binned[:,si] = np.sum(deliv_rast[:,start_ind[si]:end_ind[si]],1)
 	#Z-score the delivery by taking the pre-taste interval bins for the mean and std
 	deliv_cp = taste_cp[neuron_keep_indices,:]
 	pre_deliv = int(deliv_cp[0,0])
@@ -61,14 +63,17 @@ def deliv_corr_parallelized(inputs):
 			neur_deliv_cp_rast_zscored,neur_dev_rast_zscored = interp_vecs(neur_deliv_cp_rast_zscored,neur_dev_rast_zscored)
 			neur_corrs[n_i] = correlation_calcs(n_i, neur_deliv_cp_rast_zscored, neur_dev_rast_zscored)
 		deliv_corr_storage[:,c_p] = neur_corrs
-		if np.mean(neur_corrs) > 0.9:
+		if np.nanmean(neur_corrs) > 0.9:
+			print("Deliv " + str(deliv_i) + " highly correlated.")
 			plt.figure()
 			plt.subplot(1,2,1)
-			plt.imshow(deliv_rast_zscored)
+			plt.imshow(deliv_rast_zscored,aspect='auto')
 			plt.title('deliv')
 			plt.subplot(1,2,2)
-			plt.imshow(dev_rast_zscored)
+			plt.imshow(dev_rast_zscored,aspect='auto')
 			plt.title('dev')
+			plt.suptitle('Deliv ' + str(deliv_i))
+			plt.tight_layout()
 	
 	return deliv_corr_storage
 
@@ -116,7 +121,7 @@ def correlation_calcs(n_i, neur_deliv_cp_rast_binned, neur_dev_rast_binned):
 	min_len = min(len_deliv,len_dev)
 	if min_len >  2:
 		#Calculate correlation
-		corr_val = pearsonr(neur_deliv_cp_rast_binned,neur_dev_rast_binned)[1]
+		corr_val = pearsonr(neur_deliv_cp_rast_binned,neur_dev_rast_binned)[0]
 	else:
 		corr_val = 0
 	
@@ -137,7 +142,7 @@ def correlation_vec_calcs(neur_deliv_cp_vec, neur_dev_vec):
 	min_len = min(len_deliv,len_dev)
 	if min_len >  2:
 		#Calculate correlation
-		corr_val = pearsonr(neur_deliv_cp_vec,neur_dev_vec)[1]
+		corr_val = pearsonr(neur_deliv_cp_vec,neur_dev_vec)[0]
 	else:
 		corr_val = 0
 	

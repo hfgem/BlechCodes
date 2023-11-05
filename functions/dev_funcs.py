@@ -336,7 +336,7 @@ def calculate_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_time
 	changepoint interval"""
 
 	#Grab parameters
-	fr_bin = 25 #ms to bin together for number of spikes 'fr'
+	fr_bin = 20 #ms to bin together for number of spikes 'fr' - make sure it's even
 	num_tastes = len(start_dig_in_times)
 	num_segments = len(segment_dev_rasters_zscore)
 	pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
@@ -386,12 +386,14 @@ def calculate_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_time
 				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
 					dev_rast = seg_rast[dev_i][taste_keep_ind,:]
 					dev_len = np.shape(dev_rast)[1]
-					end_ind = np.arange(fr_bin,fr_bin+dev_len)
+					start_ind = (np.arange(-int(fr_bin/2),dev_len-int(fr_bin/2))).astype('int')
+					start_ind[start_ind < 0] = 0
+					end_ind = (np.arange(int(fr_bin/2),dev_len+int(fr_bin/2))).astype('int')
 					end_ind[end_ind > dev_len] = dev_len
 					#TODO: test gaussian convolution instead of binning
 					dev_rast_binned = np.zeros(np.shape(dev_rast)) #timeseries information kept
-					for start_ind in range(dev_len):
-						dev_rast_binned[:,start_ind] = np.sum(dev_rast[:,start_ind:end_ind[start_ind]],1)
+					for si in range(dev_len):
+						dev_rast_binned[:,si] = np.sum(dev_rast[:,start_ind[si]:end_ind[si]],1)
 					#z-score the deviation raster and send only the deviation itself
 					#Z-score the deviation bin by taking the pre-taste interval bins
 					dev_z_mean = np.expand_dims(np.mean(dev_rast_binned[:,:pre_taste_dt],axis=1),1)
@@ -473,8 +475,9 @@ def calculate_vec_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_
 				neuron_pop_vec_corr_storage = np.nan*np.ones((num_dev, num_deliv, num_cp-1))
 				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
 					dev_rast = seg_rast[dev_i][taste_keep_ind,:]
-					dev_z_mean = np.mean(dev_rast[:,:pre_taste_dt],axis=1)
-					dev_z_std = np.std(dev_rast[:pre_taste_dt],axis=1)
+					dev_z_mean = np.expand_dims(np.mean(dev_rast[:,:pre_taste_dt],axis=1),1)
+					dev_z_std = np.expand_dims(np.std(dev_rast[:pre_taste_dt],axis=1),1)
+					dev_z_std[dev_z_std == 0] = 1
 					dev_zscored = (dev_rast - dev_z_mean)/dev_z_std
 					dev_zscored = dev_zscored[:,pre_taste_dt:]
 					

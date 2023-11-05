@@ -10,15 +10,12 @@ Must be run following find_deviations.py
 		
 if __name__ == '__main__':
 
-	import os,json,gzip,itertools,tqdm
+	import os,json,gzip,tqdm
 	import numpy as np
 	import functions.analysis_funcs as af
 	import functions.dev_funcs as df
 	import functions.dev_plot_funcs as dpf
 	import functions.hdf5_handling as hf5
-	from multiprocess import Pool
-	import functions.corr_dist_calc_parallel as cdcp
-	import functions.corr_dist_calc_parallel_pop as cdcpp
 	
 	#_____Get the directory of the hdf5 file_____
 	sorted_dir, segment_dir, cleaned_dir = hf5.sorted_data_import() #Program will automatically quit if file not found in given folder

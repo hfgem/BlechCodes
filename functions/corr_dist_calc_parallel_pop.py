@@ -149,7 +149,7 @@ def correlation_calc_pop(neur_deliv_cp_rast_pop, neur_dev_rast_pop):
 	"""
 	warnings.filterwarnings('ignore')
 	
-	corr_val = pearsonr(neur_deliv_cp_rast_pop.flatten(),neur_dev_rast_pop.flatten())[1]
+	corr_val = pearsonr(neur_deliv_cp_rast_pop.flatten(),neur_dev_rast_pop.flatten())[0]
 	
 	return corr_val
 
@@ -161,6 +161,6 @@ def correlation_calc_vec(neur_deliv_cp_vec, neur_dev_vec):
 	"""
 	warnings.filterwarnings('ignore')
 	
-	corr_val = pearsonr(neur_deliv_cp_vec,neur_dev_vec)[1]
+	corr_val = pearsonr(neur_deliv_cp_vec,neur_dev_vec)[0]
 	
 	return corr_val

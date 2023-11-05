@@ -22,7 +22,7 @@ def deliv_corr_population_parallelized(inputs):
 	deliv_len = inputs[2] #deliv_rast = np.zeros((total_num_neur,deliv_len))
 	neuron_keep_indices = inputs[3] #indices of neurons to keep
 	deliv_cp = inputs[4] 
-	deliv_adjustment = inputs[5]
+	deliv_adjust = inputs[5]
 	dev_rast_zscored = inputs[6]
 	fr_bin = inputs[7]
 	total_num_neur = len(neuron_keep_indices)
@@ -34,15 +34,17 @@ def deliv_corr_population_parallelized(inputs):
 		n_st = deliv_st[n_i_val]
 		if len(n_st) >= 1:
 			if len(n_st) > 1:
-				neur_deliv_st = list(np.array(n_st).astype('int') - deliv_adjustment)
+				neur_deliv_st = list(np.array(n_st).astype('int') - deliv_adjust)
 			else:
-				neur_deliv_st = int(n_st[0]) - deliv_adjustment
+				neur_deliv_st = int(n_st[0]) - deliv_adjust
 		deliv_rast[n_i,neur_deliv_st] = 1
-	end_ind = np.arange(fr_bin,fr_bin+deliv_len)
+	start_ind = (np.arange(-int(fr_bin/2),deliv_len-int(fr_bin/2))).astype('int')
+	start_ind[start_ind < 0] = 0
+	end_ind = (np.arange(int(fr_bin/2),deliv_len+int(fr_bin/2))).astype('int')
 	end_ind[end_ind > deliv_len] = deliv_len
 	deliv_rast_binned = np.zeros(np.shape(deliv_rast))
-	for start_ind in range(deliv_len):
-		deliv_rast_binned[:,start_ind] = np.sum(deliv_rast[:,start_ind:end_ind[start_ind]],1)
+	for si in range(deliv_len):
+		deliv_rast_binned[:,si] = np.sum(deliv_rast[:,start_ind[si]:end_ind[si]],1)
 	#Z-score the delivery by taking the pre-taste interval bins for the mean and std
 	pre_deliv = int(deliv_cp[0])
 	deliv_z_mean = np.expand_dims(np.mean(deliv_rast_binned[:pre_deliv],axis=1),1)
@@ -98,7 +100,7 @@ def deliv_corr_population_vec_parallelized(inputs):
 	deliv_len = inputs[2] #deliv_rast = np.zeros((total_num_neur,deliv_len))
 	neuron_keep_indices = inputs[3] #indices, not binary
 	taste_cp = inputs[4] 
-	deliv_adjustment = inputs[5]
+	deliv_adjust = inputs[5]
 	dev_vec = inputs[6]
 	total_num_neur = len(neuron_keep_indices)
 	num_cp = np.shape(taste_cp)[1]
@@ -109,9 +111,9 @@ def deliv_corr_population_vec_parallelized(inputs):
 		n_st = deliv_st[n_i_val]
 		if len(n_st) >= 1:
 			if len(n_st) > 1:
-				neur_deliv_st = list(np.array(n_st).astype('int') - deliv_adjustment)
+				neur_deliv_st = list(np.array(n_st).astype('int') - deliv_adjust)
 			else:
-				neur_deliv_st = int(n_st[0]) - deliv_adjustment
+				neur_deliv_st = int(n_st[0]) - deliv_adjust
 		deliv_rast[n_i,neur_deliv_st] = 1
 	deliv_corr_storage = np.zeros(num_cp-1)
 	#Calculate correlation with each cp segment
@@ -138,7 +140,12 @@ def interp_vecs_pop(neur_deliv_cp_rast_binned,neur_dev_rast_binned,bin_length):
 		x_interp_vals = np.arange(len_deliv)
 		for x_interp_val, y_interp_val in zip(x_interp_vals,y_interp_vals):
 			interp_mat[x_interp_val,y_interp_val] = 1
-		neur_deliv_cp_interp = neur_deliv_cp_rast_binned@interp_mat
+			interp_mat[max(x_interp_val-1,0),y_interp_val] = 1
+			interp_mat[min(x_interp_val+1,len_deliv-1),y_interp_val] = 1
+			interp_mat[x_interp_val,max(y_interp_val-1,0)] = 1
+			interp_mat[x_interp_val,min(y_interp_val+1,bin_length-1)] = 1
+			
+		neur_deliv_cp_interp = (neur_deliv_cp_rast_binned@interp_mat)
 		neur_deliv_cp_rast_binned = neur_deliv_cp_interp
 	elif len_deliv < bin_length:
 		neur_deliv_cp_rast_binned = np.zeros(bin_length)
@@ -150,6 +157,11 @@ def interp_vecs_pop(neur_deliv_cp_rast_binned,neur_dev_rast_binned,bin_length):
 		x_interp_vals = np.arange(len_dev)
 		for x_interp_val, y_interp_val in zip(x_interp_vals,y_interp_vals):
 			interp_mat[x_interp_val,y_interp_val] = 1
+			interp_mat[x_interp_val,y_interp_val] = 1
+			interp_mat[max(x_interp_val-1,0),y_interp_val] = 1
+			interp_mat[min(x_interp_val+1,len_dev-1),y_interp_val] = 1
+			interp_mat[x_interp_val,max(y_interp_val-1,0)] = 1
+			interp_mat[x_interp_val,min(y_interp_val+1,bin_length-1)] = 1
 		neur_dev_interp = neur_dev_rast_binned@interp_mat
 		neur_dev_rast_binned = neur_dev_interp
 	elif len_dev < bin_length:
@@ -165,7 +177,7 @@ def correlation_calc_pop(neur_deliv_cp_rast_pop, neur_dev_rast_pop):
 	"""
 	warnings.filterwarnings('ignore')
 	
-	corr_val = pearsonr(neur_deliv_cp_rast_pop.flatten(),neur_dev_rast_pop.flatten())[1]
+	corr_val = pearsonr(neur_deliv_cp_rast_pop.flatten(),neur_dev_rast_pop.flatten())[0]
 	
 	return corr_val
 
@@ -177,6 +189,6 @@ def correlation_calc_vec(neur_deliv_cp_vec, neur_dev_vec):
 	"""
 	warnings.filterwarnings('ignore')
 	
-	corr_val = pearsonr(neur_deliv_cp_vec,neur_dev_vec)[1]
+	corr_val = pearsonr(neur_deliv_cp_vec,neur_dev_vec)[0]
 	
 	return corr_val

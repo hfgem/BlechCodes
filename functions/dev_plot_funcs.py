@@ -10,6 +10,7 @@ import os, tqdm, itertools
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import pearsonr, ks_2samp, ttest_ind, kruskal
+import warnings
 
 def plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
 					 segment_times_reshaped,pre_taste,post_taste,segment_names,dev_dir):

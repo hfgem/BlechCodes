@@ -100,7 +100,7 @@ def correlation_calcs(n_i, neur_deliv_cp_rast_binned, neur_dev_rast_binned):
 	min_len = min(len_deliv,len_dev)
 	if min_len >  2:
 		#Calculate correlation
-		corr_val = pearsonr(neur_deliv_cp_rast_binned,neur_dev_rast_binned)[1]
+		corr_val = pearsonr(neur_deliv_cp_rast_binned,neur_dev_rast_binned)[0]
 	else:
 		corr_val = 0
 	
@@ -121,7 +121,7 @@ def correlation_vec_calcs(neur_deliv_cp_vec, neur_dev_vec):
 	min_len = min(len_deliv,len_dev)
 	if min_len >  2:
 		#Calculate correlation
-		corr_val = pearsonr(neur_deliv_cp_vec,neur_dev_vec)[1]
+		corr_val = pearsonr(neur_deliv_cp_vec,neur_dev_vec)[0]
 	else:
 		corr_val = 0
 	

@@ -10,15 +10,12 @@ Must be run following find_deviations.py
 		
 if __name__ == '__main__':
 
-	import os,json,gzip,itertools,tqdm
+	import os,json,gzip,tqdm
 	import numpy as np
 	import functions.analysis_funcs as af
 	import functions.dev_funcs as df
 	import functions.dev_plot_funcs as dpf
 	import functions.hdf5_handling as hf5
-	from multiprocessing import Pool
-	import functions.corr_dist_calc_parallel as cdcp
-	import functions.corr_dist_calc_parallel_pop as cdcpp
 	
 	#_____Get the directory of the hdf5 file_____
 	sorted_dir, segment_dir, cleaned_dir = hf5.sorted_data_import() #Program will automatically quit if file not found in given folder
@@ -33,8 +30,6 @@ if __name__ == '__main__':
 	#_____Calculate spike time datasets_____
 	pre_taste = 0.5 #Seconds before tastant delivery to store
 	post_taste = 2 #Seconds after tastant delivery to store
-    pre_z = post_taste #Seconds before deviation/delivery to use in z-scoring
-    z_bin = 0.05 #Seconds bin for z-scoring
 	
 	#_____Add "no taste" control segments to the dataset_____
 	if dig_in_names[-1] != 'none':
@@ -64,7 +59,7 @@ if __name__ == '__main__':
 	#Calculate segment deviation spikes
 	print("Now pulling true deviation rasters")
 	segment_dev_rasters, segment_dev_times, _ = df.create_dev_rasters(num_segments, segment_spike_times, 
-						   np.array(segment_times_reshaped), segment_deviations, pre_z)
+						   np.array(segment_times_reshaped), segment_deviations, pre_taste)
 	
 	#Import changepoint data
 	data_group_name = 'changepoint_data'
@@ -113,8 +108,8 @@ if __name__ == '__main__':
 	taste_select_neur_plot_dir = taste_select_corr_dir + 'plots/'
 	if os.path.isdir(taste_select_neur_plot_dir) == False:
 		os.mkdir(taste_select_neur_plot_dir)
-	df.plot_stats(corr_dev_stats, segment_names, dig_in_names, taste_select_neur_plot_dir, 'Correlation',taste_select_prob_epoch)
-	segment_corr_data, segment_corr_data_avg, segment_corr_pop_data, segment_pop_vec_data = df.plot_combined_stats(corr_dev_stats, \
+	dpf.plot_stats(corr_dev_stats, segment_names, dig_in_names, taste_select_neur_plot_dir, 'Correlation',taste_select_prob_epoch)
+	segment_corr_data, segment_corr_data_avg, segment_corr_pop_data, segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, \
 																								segment_names, dig_in_names, taste_select_neur_plot_dir, \
 																								'Correlation',taste_select_prob_epoch)
 	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,taste_select_neur_plot_dir,taste_select_prob_epoch)
