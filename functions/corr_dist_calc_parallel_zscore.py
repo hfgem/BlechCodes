@@ -4,7 +4,7 @@
 Created on Tue Sep 12 14:26:35 2023
 
 @author: Hannah Germaine
-Deviation and Correlation calculation functions for parallelization
+Deviation and Correlation calculation functions for parallelization on z-scored data
 """
 
 import numpy as np
@@ -14,6 +14,7 @@ import itertools
 from multiprocessing import Pool
 from numba import jit
 import warnings
+import matplotlib.pyplot as plt
 
 def deliv_corr_parallelized(inputs):
 	"""Parallelizes the correlation calculation for deliveries"""
@@ -26,33 +27,53 @@ def deliv_corr_parallelized(inputs):
 	neuron_keep_indices = inputs[3]
 	taste_cp = inputs[4] 
 	deliv_adjustment = inputs[5]
-	dev_rast_binned = inputs[6]
+	dev_rast_zscored = inputs[6]
 	fr_bin = inputs[7]
 	total_num_neur = len(neuron_keep_indices)
-	num_cp = np.shape(taste_cp)[2]
+	num_cp = np.shape(taste_cp)[1]
 	#Pull delivery raster
 	deliv_rast = np.zeros((total_num_neur,deliv_len))
 	for n_i in neuron_keep_indices:
 		neur_deliv_st = list(np.array(deliv_st[n_i]).astype('int') - deliv_adjustment)
 		deliv_rast[n_i,neur_deliv_st] = 1
-	end_ind = np.arange(fr_bin,fr_bin+deliv_len)
+	start_ind = (np.arange(-int(fr_bin/2),deliv_len-int(fr_bin/2))).astype('int')
+	start_ind[start_ind < 0] = 0
+	end_ind = (np.arange(int(fr_bin/2),deliv_len+int(fr_bin/2))).astype('int')
 	end_ind[end_ind > deliv_len] = deliv_len
 	deliv_rast_binned = np.zeros(np.shape(deliv_rast))
-	for start_ind in range(deliv_len):
-		deliv_rast_binned[:,start_ind] = np.sum(deliv_rast[:,start_ind:end_ind[start_ind]],1)
+	for si in range(deliv_len):
+		deliv_rast_binned[:,si] = np.sum(deliv_rast[:,start_ind[si]:end_ind[si]],1)
+	#Z-score the delivery by taking the pre-taste interval bins for the mean and std
+	deliv_cp = taste_cp[neuron_keep_indices,:]
+	pre_deliv = int(deliv_cp[0,0])
+	z_mean = np.expand_dims(np.mean(deliv_rast_binned[:pre_deliv],axis=1),1)
+	z_std = np.expand_dims(np.std(deliv_rast_binned[:pre_deliv],axis=1),1)
+	z_std[z_std == 0] = 1 #Get rid of NaNs
+	deliv_rast_zscored = np.divide(np.subtract(deliv_rast_binned,z_mean),z_std)
 	
 	deliv_corr_storage = np.zeros((total_num_neur,num_cp-1))
 	#Calculate correlation with each cp segment
 	for c_p in range(num_cp-1):
-		cp_vals = (taste_cp[deliv_i,neuron_keep_indices,c_p:c_p+2]).astype('int')
+		cp_vals = (deliv_cp[:,c_p:c_p+2]).astype('int')
 		#Calculate by neuron using the parallelized code
 		neur_corrs = np.zeros(total_num_neur)
 		for n_i in range(total_num_neur):
-			neur_deliv_cp_rast_binned = deliv_rast_binned[n_i,cp_vals[n_i,0]:cp_vals[n_i,1]]
-			neur_dev_rast_binned = dev_rast_binned[n_i,:]
-			neur_deliv_cp_rast_binned,neur_dev_rast_binned = interp_vecs(neur_deliv_cp_rast_binned,neur_dev_rast_binned)
-			neur_corrs[n_i] = correlation_calcs(n_i, neur_deliv_cp_rast_binned, neur_dev_rast_binned)
+			neur_deliv_cp_rast_zscored = deliv_rast_zscored[n_i,cp_vals[n_i,0]:cp_vals[n_i,1]]
+			neur_dev_rast_zscored = dev_rast_zscored[n_i,:]
+			neur_deliv_cp_rast_zscored,neur_dev_rast_zscored = interp_vecs(neur_deliv_cp_rast_zscored,neur_dev_rast_zscored)
+			neur_corrs[n_i] = correlation_calcs(n_i, neur_deliv_cp_rast_zscored, neur_dev_rast_zscored)
 		deliv_corr_storage[:,c_p] = neur_corrs
+		if np.nanmean(neur_corrs) > 0.9:
+			print("Deliv " + str(deliv_i) + " highly correlated.")
+			plt.figure()
+			plt.subplot(1,2,1)
+			plt.imshow(deliv_rast_zscored,aspect='auto')
+			plt.title('deliv')
+			plt.subplot(1,2,2)
+			plt.imshow(dev_rast_zscored,aspect='auto')
+			plt.title('dev')
+			plt.suptitle('Deliv ' + str(deliv_i))
+			plt.tight_layout()
 	
 	return deliv_corr_storage
 

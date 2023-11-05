@@ -140,9 +140,9 @@ def PSTH_plots(fig_save_dir, num_tastes, num_neur, dig_in_names,
 	#Note: this assumes all taste deliveries fall within one segment (and they should!!)
 	closest_seg_start = np.argmin(np.abs(segment_times - min_start_dig_in_time))
 	segment_start = segment_times[closest_seg_start]
-	raster_start = segment_start - pre_taste_dt - 1
-	raster_end = segment_times[closest_seg_start + 1] + post_taste_dt + 1 #Expand just in case
-	raster_len = raster_end - raster_start
+	raster_start = int(segment_start - pre_taste_dt - 1)
+	raster_end = int(segment_times[closest_seg_start + 1] + post_taste_dt + 1) #Expand just in case
+	raster_len = int(raster_end - raster_start)
 	raster_array = np.zeros((num_neur,raster_len)) #Create binary storage array
 	segment_spikes = segment_spike_times[closest_seg_start] #Grab spike times
 	for n_i in range(num_neur):
@@ -416,12 +416,12 @@ def epoch_taste_select_plot(prob_taste_epoch, dig_in_names, save_dir):
 	for t_i in range(num_tastes):
 		fig_t, axes = plt.subplots(nrows=1,ncols=num_cp+1,figsize=(15,5),gridspec_kw=dict(width_ratios=[5,5,5,1]))
 		for e_i in range(num_cp):
-			im = axes[e_i].imshow(prob_taste_epoch[:,t_i,:,e_i])
+			im = axes[e_i].imshow(prob_taste_epoch[:,t_i,:,e_i],vmin=0, vmax=1)
 			axes[e_i].set_title('Taste ' + str(dig_in_names[t_i]) + ' Epoch ' + str(e_i))
 		#fig_t.subplots_adjust(left = 0.05, right = 0.9)
 		fig_t.colorbar(im, cax = axes[num_cp])
-		fig_t.savefig(save_dir + 'epoch_taste_selectivity.png')
-		fig_t.savefig(save_dir + 'epoch_taste_selectivity.svg')
+		fig_t.savefig(save_dir + 'taste_'+str(t_i)+'_epoch_taste_selectivity.png')
+		fig_t.savefig(save_dir + 'taste_'+str(t_i)+'_epoch_taste_selectivity.svg')
 		plt.close(fig_t)
 	#Plot distributions of decoding probability for each taste for each neuron
 	cross_epoch_dir = save_dir + 'epoch_prob_dist/'
