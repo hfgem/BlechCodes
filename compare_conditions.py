@@ -30,7 +30,8 @@ if __name__ == '__main__':
 	import functions.compare_conditions_funcs as ccf
 	
 	#_____Prompt user for the number of datasets needed in the analysis_____
-	num_cond = int_input("How many animals-worth of correlation data do you wish to import for this comparative analysis (integer value)? ")
+	print("Conditions include across days and across animals (the number of separate spike sorted datasets).")
+	num_cond = int_input("How many conditions-worth of correlation data do you wish to import for this comparative analysis (integer value)? ")
 	if num_cond >= 1:
 		print("Multiple file import selected.")
 	else:
