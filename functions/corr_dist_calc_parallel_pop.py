@@ -35,7 +35,7 @@ def deliv_corr_population_parallelized(inputs):
 				neur_deliv_st = list(np.array(n_st).astype('int') - deliv_adjustment)
 			else:
 				neur_deliv_st = int(n_st[0]) - deliv_adjustment
-		deliv_rast[n_i,neur_deliv_st] = 1
+			deliv_rast[n_i,neur_deliv_st] = 1
 	end_ind = np.arange(fr_bin,fr_bin+deliv_len)
 	end_ind[end_ind > deliv_len] = deliv_len
 	deliv_rast_binned = np.zeros(np.shape(deliv_rast))
@@ -96,7 +96,7 @@ def deliv_corr_population_vec_parallelized(inputs):
 				neur_deliv_st = list(np.array(n_st).astype('int') - deliv_adjustment)
 			else:
 				neur_deliv_st = int(n_st[0]) - deliv_adjustment
-		deliv_rast[n_i,neur_deliv_st] = 1
+			deliv_rast[n_i,neur_deliv_st] = 1
 	deliv_corr_storage = np.zeros(num_cp-1)
 	#Calculate correlation with each cp segment
 	for c_p in range(num_cp-1):

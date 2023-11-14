@@ -79,15 +79,15 @@ except:
 
 #%%
 #_____Grab and plot firing rate distributions and comparisons (by segment)_____
-sc_save_dir = data_save_dir + 'Segment_Comparison/'
-if os.path.isdir(sc_save_dir) == False:
-	os.mkdir(sc_save_dir)
+#sc_save_dir = data_save_dir + 'Segment_Comparison/'
+#if os.path.isdir(sc_save_dir) == False:
+#	os.mkdir(sc_save_dir)
 	
 #All data
-all_sc_save_dir = sc_save_dir + 'All/'
-if os.path.isdir(all_sc_save_dir) == False:
-	os.mkdir(all_sc_save_dir)
-sc.bin_spike_counts(all_sc_save_dir,segment_spike_times,segment_names,segment_times)
+#all_sc_save_dir = sc_save_dir + 'All/'
+#if os.path.isdir(all_sc_save_dir) == False:
+#	os.mkdir(all_sc_save_dir)
+#sc.bin_spike_counts(all_sc_save_dir,segment_spike_times,segment_names,segment_times)
 
   
 #%%

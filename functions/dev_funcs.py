@@ -99,6 +99,9 @@ def create_dev_rasters(num_iterations, spike_times,
 			spikes_bin[n_i, neur_spikes] = 1
 		seg_rast = []
 		seg_rast_zscore = []
+		ind_dev = deviations[ind]
+		ind_dev[0] = 0
+		ind_dev[-1] = 0
 		change_inds = np.diff(deviations[ind])
 		start_dev_bouts = np.where(change_inds == 1)[0]
 		end_dev_bouts = np.where(change_inds == -1)[0]

@@ -201,7 +201,8 @@ def plot_dev_stats_dict(dict_data, iteration_names, data_name, save_dir, x_label
 	#Plot distributions as CDFs
 	cdf_fig = plt.figure(figsize=(3,3))
 	for d_i in range(len(data)):
-		plt.hist(data[d_i],bins=np.arange(0,np.max(data[d_i])),label=iteration_names[d_i],density=True,cumulative=True,histtype='step')
+		max_bin = max(np.max(data[d_i]),1)
+		plt.hist(data[d_i],bins=np.arange(0,max_bin),label=iteration_names[d_i],density=True,cumulative=True,histtype='step')
 	plt.legend()
 	plt.title(data_name)
 	plt.xlabel(y_label)
