@@ -433,8 +433,12 @@ def epoch_taste_select_plot(prob_taste_epoch, dig_in_names, save_dir):
 			dist_collect = []
 			pairs = list(itertools.combinations(np.arange(num_cp),2))
 			for c_p in range(num_cp):
-				dist_collect.append(prob_taste_epoch[n_i,t_i,:,c_p])
-				plt.hist(prob_taste_epoch[n_i,t_i,:,c_p],bins=num_deliv,density = True,histtype='step',cumulative=True,color=colors_cp[c_p],label='Epoch ' + str(c_p))
+				c_p_data = prob_taste_epoch[n_i,t_i,:,c_p]
+				dist_collect.append(c_p_data)
+				c_p_data = c_p_data[~np.isnan(c_p_data)]
+				c_p_data = c_p_data[~np.isinf(c_p_data)]
+				if len(c_p_data) > 1:
+					plt.hist(c_p_data,bins=num_deliv,density = True,histtype='step',cumulative=True,color=colors_cp[c_p],label='Epoch ' + str(c_p))
 			args = [d for d in dist_collect]
 			x_ticks = plt.xticks()[0]
 			x_tick_diff = np.mean(np.diff(x_ticks))
@@ -464,8 +468,12 @@ def epoch_taste_select_plot(prob_taste_epoch, dig_in_names, save_dir):
 			dist_collect = []
 			pairs = list(itertools.combinations(np.arange(num_tastes),2))
 			for t_i in range(num_tastes):
-				dist_collect.append(prob_taste_epoch[n_i,t_i,:,c_p])
-				plt.hist(prob_taste_epoch[n_i,t_i,:,c_p],bins=num_deliv,density = True,histtype='step',cumulative=True,color=colors_taste[t_i],label=dig_in_names[t_i])
+				c_p_data = prob_taste_epoch[n_i,t_i,:,c_p]
+				dist_collect.append(c_p_data)
+				c_p_data = c_p_data[~np.isnan(c_p_data)]
+				c_p_data = c_p_data[~np.isinf(c_p_data)]
+				if len(c_p_data) > 1:
+					plt.hist(c_p_data,bins=num_deliv,density = True,histtype='step',cumulative=True,color=colors_taste[t_i],label=dig_in_names[t_i])
 			args = [d for d in dist_collect]
 			x_ticks = plt.xticks()[0]
 			x_tick_diff = np.mean(np.diff(x_ticks))
