@@ -22,7 +22,7 @@ def int_input(prompt):
 
 if __name__ == '__main__':
 
-	import os, easygui
+	import os, easygui, pickle
 	import numpy as np
 	import functions.analysis_funcs as af
 	import functions.dev_funcs as df
@@ -82,6 +82,10 @@ if __name__ == '__main__':
 	print('Please select a directory to save all results from this set of analyses.')
 	#DO NOT use the same directory as where the correlation analysis results are stored
 	results_dir = easygui.diropenbox(title='Please select the storage folder.')
+	#Save the dictionary of data
+	dict_save_dir = os.path.join(results_dir,'data_dict.pkl')
+	f = open(dict_save_dir,"wb")
+	pickle.dump(data_dict,f)
 		
 	#_____Grab Unique Groupings_____
 	num_datasets = len(data_dict)

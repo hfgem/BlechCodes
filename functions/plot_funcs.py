@@ -371,12 +371,12 @@ def LFP_dev_plots(fig_save_dir,segment_names,segment_times,fig_buffer_size,segme
 		plt.savefig(seg_spect_save_dir + im_name + '.svg')
 		plt.close()
 	
-def taste_select_plot(taste_select_by_bin, x_vals, x_label, name, save_dir):
+def taste_select_success_plot(taste_select_prob_joint, x_vals, x_label, name, save_dir):
 	#Calculate the fraction of successful decoding by neuron by taste
-	num_bins, num_neur, num_tastes = np.shape(taste_select_by_bin)
+	num_neur, num_tastes = np.shape(taste_select_prob_joint)
 	chance = 1/num_tastes
-	above_chance_all = (taste_select_by_bin > chance).astype('int')
-	num_tastes_above_chance = np.sum(above_chance_all,2)
+	above_chance_all = (taste_select_prob_joint > chance).astype('int')
+	num_tastes_above_chance = np.sum(above_chance_all,1)
 	#Plot the successful decoding taste count
 	plt.figure(figsize=(8,8))
 	plt.imshow(num_tastes_above_chance.T)
