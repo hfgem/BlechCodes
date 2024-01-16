@@ -114,7 +114,7 @@ data_group_name = 'changepoint_data'
 #Raster Poisson Bayes Changepoint Calcs Indiv Neurons
 try:
 	taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_raster_inds')
-	taste_cp_raster_inds_pop = af.pull_data_from_hdf5(sorted_dir,data_group_name,'pop_taste_cp_raster_inds')
+	pop_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'pop_taste_cp_raster_inds')
 except:	
 	taste_cp_raster_save_dir = taste_cp_save_dir + 'neur/'
 	if os.path.isdir(taste_cp_raster_save_dir) == False:
@@ -148,85 +148,73 @@ loo_distribution_save_dir = decoding_save_dir + 'LOO_Distributions/'
 if os.path.isdir(loo_distribution_save_dir) == False:
 	os.mkdir(loo_distribution_save_dir)
 	
-#____Calculate which neurons are taste selective by epoch_____
+#_____Calculate taste decoding probabilities and success probabilities_____
 try:
 	taste_select_prob_joint = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint')[0]
 	taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
-	prob_taste_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'prob_taste_epoch')[0]
+	p_taste_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'p_taste_epoch')[0]
+	p_taste_joint = af.pull_data_from_hdf5(sorted_dir,data_group_name,'p_taste_joint')[0]
+	taste_select_neur_bin = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_neur_bin')[0]
+	taste_select_neur_epoch_bin = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
 except:
-	print("Using changepoint indices to calculate taste selectivity by epoch.")
-	#taste_select_prob_joint = Fraction of deliveries that are successfully decoded by neuron,taste - multiplying across epochs
-	#taste_select_prob_epoch = Fraction of deliveries that are successfully decoded by neuron,taste,epoch
-	taste_select_prob_joint, taste_select_prob_epoch, prob_taste_epoch = df.taste_decoding_cp(tastant_spike_times, \
-												 taste_cp_raster_inds,pop_taste_cp_raster_inds,num_cp, \
-												 start_dig_in_times,end_dig_in_times,dig_in_names, \
-												 num_neur,pre_taste_dt,post_taste_dt,loo_distribution_save_dir)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint',taste_select_prob_joint)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch',taste_select_prob_epoch)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'prob_taste_epoch',prob_taste_epoch)
-
-#Plot the decoding - * denotes statitical significance in KW nonparametric multiple-comparisons test
-pf.epoch_taste_select_plot(prob_taste_epoch, dig_in_names, decoding_save_dir)
-epoch_max_decoding, epoch_select_neur = pf.taste_select_plot(taste_select_prob_epoch, np.arange(num_cp), 'epoch', 'taste_selectivity_by_epoch', decoding_save_dir)
-
-try:
-	taste_response_prob = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_response_prob')[0]
-	taste_select_prob = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob')[0]
-	taste_response_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_response_prob_epoch')[0]
-	taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
-except:
-	#_____All Epochs Included_____
-	#Select the taste responsive neurons using taste_select_prob_joint (matrix num_neur x num_tastes)
-	taste_response_prob = np.expand_dims((np.sum(taste_select_prob_joint,1)/3 >= 1/num_tastes).astype('int'),1)*np.ones((num_neur,num_tastes))
-	#Select the taste selective neurons using taste_select_prob_joint
-	taste_select_prob = ((taste_select_prob_joint >= 1/num_tastes).astype('int'))*np.ones((num_neur,num_tastes))
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_response_prob',taste_response_prob)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob',taste_select_prob)
-	#_____Using Highest Probability Epoch_____
-	#Select the taste responsive neurons using taste_select_prob_epoch
-	max_taste_select_prob_epoch = np.max(taste_select_prob_epoch,0) #Select the maximal taste probability epoch as representative
-	taste_response_prob_epoch = np.expand_dims((np.sum(max_taste_select_prob_epoch,1)/3 >= 1/num_tastes).astype('int'),1)*np.ones((num_neur,num_tastes))
-	#Select the taste selective neurons using taste_select_prob_epoch
-	taste_select_prob_epoch = ((max_taste_select_prob_epoch >= 1/num_tastes).astype('int'))*np.ones((num_neur,num_tastes))
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_response_prob_epoch',taste_response_prob_epoch)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch',taste_select_prob_epoch)
+	print("Using population changepoint indices to calculate taste selectivity by epoch.")
+	#p_taste_joint = prob of decoding each taste [num_neur x num_tastes x num_deliv]
+	#p_taste_epoch = prob of decoding each taste [num_neur x num_tastes x num_deliv x num_cp]
+	#taste_select_prob_joint = fraction of correctly decoded deliveries [num_neur, num_tastes]
+	#taste_select_prob_epoch = fraction of correctly decoded deliveries [num_cp, num_neur, num_tastes]
 	
+	p_taste_joint, p_taste_epoch, taste_select_prob_joint, taste_select_prob_epoch = df. taste_decoding_cp(tastant_spike_times,\
+												   pop_taste_cp_raster_inds,num_cp,start_dig_in_times,end_dig_in_times,dig_in_names, \
+													   num_neur,pre_taste_dt,post_taste_dt,loo_distribution_save_dir)
+	#_____Calculate binary matrices of taste selective neurons / taste selective neurons by epoch_____
+	#On average, does the neuron decode neurons more often than chance?
+	taste_select_neur_bin = np.sum(taste_select_prob_joint,1) > 1/num_tastes
+	taste_select_neur_epoch_bin = np.sum(taste_select_prob_epoch,2) > 1/num_tastes
+	#Save
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'p_taste_joint',p_taste_joint)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint',taste_select_prob_joint)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'p_taste_epoch',p_taste_epoch)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch',taste_select_prob_epoch)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_neur_bin',taste_select_neur_bin)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_neur_epoch_bin',taste_select_neur_epoch_bin)
 
 
-#%% Plot changepoint statistics
+#%%
+#Plot the decoding - * denotes statitical significance in KW nonparametric multiple-comparisons test
+# pf.epoch_taste_select_plot(prob_taste_epoch, dig_in_names, decoding_save_dir)
+# epoch_max_decoding, epoch_select_neur = pf.taste_select_success_plot(taste_select_prob_joint, np.arange(num_cp), 'epoch', 'taste_selectivity_by_epoch', decoding_save_dir)
 
-#TODO: move to plot_funcs document
+# try:
+# 	taste_response_prob = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_response_prob')[0]
+# 	taste_select_prob = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob')[0]
+# 	taste_response_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_response_prob_epoch')[0]
+# 	taste_select_bin_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_bin_epoch')[0]
+# except:
+# 	#_____All Epochs Included_____
+# 	#Select the taste responsive neurons using taste_select_prob_joint (matrix num_neur x num_tastes)
+# 	taste_response_prob = np.expand_dims((np.sum(taste_select_prob_joint,1)/3 >= 1/num_tastes).astype('int'),1)*np.ones((num_neur,num_tastes))
+# 	#Select the taste selective neurons using taste_select_prob_joint
+# 	taste_select_prob = ((taste_select_prob_joint >= 1/num_tastes).astype('int'))*np.ones((num_neur,num_tastes))
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_response_prob',taste_response_prob)
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob',taste_select_prob)
+# 	#_____Using Highest Probability Epoch_____
+# 	#Select the taste responsive neurons using taste_select_prob_epoch (epoch,neur,taste)
+# 	max_taste_select_prob_epoch = np.max(taste_select_prob_epoch,0) #Select the maximal taste probability epoch's probability as representative
+# 	taste_response_prob_epoch = np.expand_dims((np.sum(max_taste_select_prob_epoch,1)/3 >= 1/num_tastes).astype('int'),1)*np.ones((num_neur,num_tastes))
+# 	#Select the taste selective neurons using taste_select_prob_epoch
+# 	taste_select_bin_epoch = np.zeros((num_cp,num_neur))
+# 	for t_i in range(num_tastes-1): #assumes last taste is "none" so if at least 1 taste is highly decodeable for that epoch, we can call taste selective
+# 	    taste_select_bin_epoch += np.squeeze(taste_select_prob_epoch[:,:,t_i]) > 1/3
+# 	taste_select_bin_epoch = ((taste_select_bin_epoch > 0)*np.ones(np.shape(taste_select_bin_epoch))).T
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_response_prob_epoch',taste_response_prob_epoch)
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_bin_epoch',taste_select_bin_epoch)
+# 	
 
-import matplotlib.pyplot as plt
-from matplotlib import cm
+# #%% Plot changepoint statistics
 
-colors = cm.cool(np.arange(num_cp)/(num_cp))
+# #TODO: move to plot_funcs document
 
+# import matplotlib.pyplot as plt
+# from matplotlib import cm
 
-#%% DEPRECATED
-#____Calculate which neurons are taste responsive_____
-
-data_group_name = 'taste_responsivity'
-try:
-	taste_responsivity_probability = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability')
-	taste_responsivity_binary = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary')[0]
-	taste_responsive_ind = (af.pull_data_from_hdf5(sorted_dir, data_group_name, 'taste_responsive_ind')[0]).astype('int')
-except:	
-	taste_responsivity_probability, taste_responsivity_binary = af.taste_responsivity_raster(tastant_spike_times,start_dig_in_times,end_dig_in_times,num_neur,pre_taste_dt)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_responsivity_probability',taste_responsivity_probability)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_responsivity_binary',taste_responsivity_binary)
-	#Pull out the taste responsive data only
-	taste_responsive_ind = np.where(taste_responsivity_binary == 1)[0]
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_responsive_ind',taste_responsive_ind)
-
-taste_responsive_segment_spike_times = []
-for s_i in range(len(segment_names)):
-	taste_responsive_segment_spike_times.append([segment_spike_times[s_i][tri] for tri in taste_responsive_ind])
-taste_responsive_tastant_spike_times = []
-taste_responsive_tastant_PSTH = []
-for t_i in range(len(dig_in_names)):
-	d_collect = []
-	for d_i in range(len(start_dig_in_times[t_i])):
-		d_collect.append([tastant_spike_times[t_i][d_i][tri] for tri in taste_responsive_ind])
-	taste_responsive_tastant_spike_times.append(d_collect)
-	taste_responsive_tastant_PSTH.append(tastant_PSTH[t_i][:,taste_responsive_ind,:])
+# colors = cm.cool(np.arange(num_cp)/(num_cp))
