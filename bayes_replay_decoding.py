@@ -68,10 +68,12 @@ if __name__ == '__main__':
 		os.mkdir(bayes_dir_all)
 	
 	#Get FR Distributions
+	taste_select = np.ones(num_neur) #stand in to use full population
+	taste_select_epoch = np.ones((num_cp,num_neur)) #stand in to use full population
 	full_taste_fr_dist, tastant_fr_dist, tastant_fr_dist_pop, taste_num_deliv = df.taste_fr_dist(num_neur,
 																							  num_cp,tastant_spike_times,
 																							  taste_cp_raster_inds,pop_taste_cp_raster_inds,
-																								  start_dig_in_times, pre_taste_dt, post_taste_dt)
+																							  start_dig_in_times, pre_taste_dt, post_taste_dt)
 	
 	#Decode by segment for a sliding post-taste bin size first
 	#___Phase 1: Decode using full taste response___
@@ -79,7 +81,8 @@ if __name__ == '__main__':
 	skip_dt = np.ceil(skip_time*1000).astype('int')
 	df.decode_phase_1(full_taste_fr_dist,segment_spike_times,post_taste_dt,
 				   skip_dt,dig_in_names,segment_times,segment_names,
-				   start_dig_in_times,taste_num_deliv,bayes_dir_all)
+				   start_dig_in_times,taste_num_deliv,taste_select,bayes_dir_all)
+#%%
 	#___Phase 2: Decode using epoch-specific responses___
 	e_skip_time = 0.01 #Seconds to skip forward in sliding bin
 	e_skip_dt = np.ceil(e_skip_time*1000).astype('int')
@@ -87,8 +90,10 @@ if __name__ == '__main__':
 	e_len_dt = np.ceil(e_len_time*1000).astype('int')
 	df.decode_phase_2(tastant_fr_dist,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
-					   segment_names,start_dig_in_times,taste_num_deliv,bayes_dir_all)
-	
+					   segment_names,start_dig_in_times,taste_num_deliv,
+					   taste_select_epoch,bayes_dir_all)
+
+#%%	
 	#_____DECODE TASTE SELECTIVE NEURONS_____
 	print("\nNow decoding using only taste selective neurons.\n")
 	
@@ -109,7 +114,7 @@ if __name__ == '__main__':
 	full_taste_fr_dist, tastant_fr_dist, tastant_fr_dist_pop, taste_num_deliv = df.taste_fr_dist(num_neur,
 																							  num_cp,tastant_spike_times,
 																							  taste_cp_raster_inds,pop_taste_cp_raster_inds,
-																								  start_dig_in_times, pre_taste_dt, post_taste_dt)
+																							  start_dig_in_times, pre_taste_dt, post_taste_dt)
 	
 	#Decode by segment for a sliding post-taste bin size first
 	#___Phase 1: Decode using full taste response___
@@ -117,7 +122,8 @@ if __name__ == '__main__':
 	skip_dt = np.ceil(skip_time*1000).astype('int')
 	df.decode_phase_1(full_taste_fr_dist,segment_spike_times,post_taste_dt,
 				   skip_dt,dig_in_names,segment_times,segment_names,
-				   start_dig_in_times,taste_num_deliv,bayes_dir_select)
+				   start_dig_in_times,taste_num_deliv,taste_select_neur_bin,bayes_dir_all)
+
 	#___Phase 2: Decode using epoch-specific responses___
 	e_skip_time = 0.01 #Seconds to skip forward in sliding bin
 	e_skip_dt = np.ceil(e_skip_time*1000).astype('int')
@@ -125,7 +131,8 @@ if __name__ == '__main__':
 	e_len_dt = np.ceil(e_len_time*1000).astype('int')
 	df.decode_phase_2(tastant_fr_dist,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
-					   segment_names,start_dig_in_times,taste_num_deliv,bayes_dir_select)
+					   segment_names,start_dig_in_times,taste_num_deliv,
+					   taste_select_neur_epoch_bin,bayes_dir_all)
 	
 	
 	
