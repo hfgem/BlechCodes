@@ -49,7 +49,7 @@ if __name__ == '__main__':
 													  pre_taste,post_taste,num_tastes,num_neur)
 	num_segments = len(segment_spike_times)
 	segment_times_reshaped = [[segment_times[i],segment_times[i+1]] for i in range(num_segments)]
-	
+
 	#Raster Poisson Bayes Changepoint Calcs Indiv Neurons
 	data_group_name = 'changepoint_data'
 	taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_raster_inds')
@@ -75,20 +75,24 @@ if __name__ == '__main__':
 																							  taste_cp_raster_inds,pop_taste_cp_raster_inds,
 																							  start_dig_in_times, pre_taste_dt, post_taste_dt)
 	
-	#Decode by segment for a sliding post-taste bin size first
-	#___Phase 1: Decode using full taste response___
+	#If first run full-taste decode and use only the decoded periods for the epoch decode, set to 1, else 0
+	use_full = 0
 	skip_time = 0.05 #Seconds to skip forward in sliding bin
 	skip_dt = np.ceil(skip_time*1000).astype('int')
-	df.decode_phase_1(full_taste_fr_dist,segment_spike_times,post_taste_dt,
-				   skip_dt,dig_in_names,segment_times,segment_names,
-				   start_dig_in_times,taste_num_deliv,taste_select,bayes_dir_all)
-#%%
-	#___Phase 2: Decode using epoch-specific responses___
+	
+	if use_full == 1:
+		#Decode by segment for a sliding post-taste bin size first
+		#___Decode using full taste response___
+		df.decode_full(full_taste_fr_dist,segment_spike_times,post_taste_dt,
+					   skip_dt,dig_in_names,segment_times,segment_names,
+					   start_dig_in_times,taste_num_deliv,taste_select,bayes_dir_all)
+
+	#___Decode using epoch-specific responses___
 	e_skip_time = 0.01 #Seconds to skip forward in sliding bin
 	e_skip_dt = np.ceil(e_skip_time*1000).astype('int')
 	e_len_time = 0.05 #Seconds to decode
 	e_len_dt = np.ceil(e_len_time*1000).astype('int')
-	df.decode_phase_2(tastant_fr_dist,segment_spike_times,post_taste_dt,
+	df.decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					   segment_names,start_dig_in_times,taste_num_deliv,
 					   taste_select_epoch,bayes_dir_all)
@@ -101,7 +105,6 @@ if __name__ == '__main__':
 	try:
 		taste_select_neur_bin = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_neur_bin')[0]
 		taste_select_neur_epoch_bin = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
-		#TODO: Pass these to the functions below and use them to reduce which neurons are being used in the calculations
 	except:
 		print("ERROR: No taste selective data.")
 		quit()
@@ -116,20 +119,16 @@ if __name__ == '__main__':
 																							  taste_cp_raster_inds,pop_taste_cp_raster_inds,
 																							  start_dig_in_times, pre_taste_dt, post_taste_dt)
 	
-	#Decode by segment for a sliding post-taste bin size first
-	#___Phase 1: Decode using full taste response___
-	skip_time = 0.05 #Seconds to skip forward in sliding bin
-	skip_dt = np.ceil(skip_time*1000).astype('int')
-	df.decode_phase_1(full_taste_fr_dist,segment_spike_times,post_taste_dt,
+	#Assumes the parameters are the same from all neurons above
+	if use_full == 1:
+		#Decode by segment for a sliding post-taste bin size first
+		#___Decode using full taste response___
+		df.decode_full(full_taste_fr_dist,segment_spike_times,post_taste_dt,
 				   skip_dt,dig_in_names,segment_times,segment_names,
 				   start_dig_in_times,taste_num_deliv,taste_select_neur_bin,bayes_dir_all)
 
 	#___Phase 2: Decode using epoch-specific responses___
-	e_skip_time = 0.01 #Seconds to skip forward in sliding bin
-	e_skip_dt = np.ceil(e_skip_time*1000).astype('int')
-	e_len_time = 0.05 #Seconds to decode
-	e_len_dt = np.ceil(e_len_time*1000).astype('int')
-	df.decode_phase_2(tastant_fr_dist,segment_spike_times,post_taste_dt,
+	df.decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					   segment_names,start_dig_in_times,taste_num_deliv,
 					   taste_select_neur_epoch_bin,bayes_dir_all)
