@@ -37,7 +37,6 @@ def segment_taste_decode_parallelized(inputs):
 			else:
 				neur_decode_prob[t_i,n_i] = np.nan
 	joint_decode_prob = [np.prod(neur_decode_prob[t_i,~np.isnan(neur_decode_prob[t_i,:])])*p_taste[t_i] for t_i in range(num_tastes)]
-	joint_decode_prob_frac = np.array(joint_decode_prob)/np.sum(joint_decode_prob)
-	#Return vector of probabilities for each taste
+	joint_decode_prob_frac = np.expand_dims(np.array(joint_decode_prob)/np.sum(joint_decode_prob),1) #Return vector of probabilities for each taste
 	
-	return np.expand_dims(joint_decode_prob_frac,1)
+	return joint_decode_prob_frac
