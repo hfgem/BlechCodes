@@ -95,7 +95,7 @@ if __name__ == '__main__':
 	df.decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					   segment_names,start_dig_in_times,taste_num_deliv,
-					   taste_select_epoch,bayes_dir_all)
+					   taste_select_epoch,use_full,bayes_dir_all)
 
 #%%	
 	#_____DECODE TASTE SELECTIVE NEURONS_____
@@ -125,14 +125,18 @@ if __name__ == '__main__':
 		#___Decode using full taste response___
 		df.decode_full(full_taste_fr_dist,segment_spike_times,post_taste_dt,
 				   skip_dt,dig_in_names,segment_times,segment_names,
-				   start_dig_in_times,taste_num_deliv,taste_select_neur_bin,bayes_dir_all)
+				   start_dig_in_times,taste_num_deliv,taste_select_neur_bin,bayes_dir_select)
 
 	#___Phase 2: Decode using epoch-specific responses___
 	df.decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					   segment_names,start_dig_in_times,taste_num_deliv,
-					   taste_select_neur_epoch_bin,bayes_dir_all)
+					   taste_select_neur_epoch_bin,use_full,bayes_dir_select)
 	
+#%%
+	
+	#_____DECODE ALL NEURONS Z-SCORED_____
+	print("\nNow decoding using all neurons z-scored.\n")
 	
 	
 	

@@ -9,13 +9,13 @@ A collection of decoding functions used across analyses.
 
 import numpy as np
 import tqdm, os, warnings, itertools, time
-file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
-os.chdir(file_path)
+#file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
+#os.chdir(file_path)
 import matplotlib.pyplot as plt
 from scipy import interpolate
 from multiprocess import Pool
 from p_tqdm import p_map
-import decode_parallel as dp
+import functions.decode_parallel as dp
 
 def taste_decoding_cp(tastant_spike_times,pop_taste_cp_raster_inds,num_cp, \
 					  start_dig_in_times,end_dig_in_times,dig_in_names, \
@@ -377,6 +377,7 @@ def decode_full(full_taste_fr_dist,segment_spike_times,post_taste_dt,
 	hist_bins = np.arange(max_hz+1)
 	x_vals = hist_bins[:-1] + np.diff(hist_bins)/2
 	p_taste = taste_num_deliv/np.sum(taste_num_deliv)
+	half_bin = np.floor(post_taste_dt/2).astype('int')
 	
 	prev_run = np.zeros(2)
 	
@@ -457,14 +458,14 @@ def decode_full(full_taste_fr_dist,segment_spike_times,post_taste_dt,
 			print("Decoding Segment " + str(s_i))
 			seg_start = segment_times[s_i]
 			seg_end = segment_times[s_i+1]
-			time_bin_starts = np.arange(seg_start,seg_end - post_taste_dt,skip_dt)
+			time_bin_starts = np.arange(seg_start+post_taste_dt,seg_end-post_taste_dt,skip_dt)
 			num_times = len(time_bin_starts)
 			seg_decode_prob = np.zeros((num_tastes,num_times))
 			for tb_i,tb in enumerate(tqdm.tqdm(time_bin_starts)):
 				neur_decode_prob = np.nan*np.ones((num_tastes,num_neur))
 				for t_i in range(num_tastes):
 					for n_i in taste_select_neur:
-						neur_spike_fr = len(np.where((np.int64(tb) <= segment_spike_times[s_i][n_i])*(np.int64(tb)+post_taste_dt >= segment_spike_times[s_i][n_i]))[0])/(post_taste_dt*(1/1000))
+						neur_spike_fr = len(np.where((np.int64(tb-half_bin) <= segment_spike_times[s_i][n_i])*(np.int64(tb)+half_bin >= segment_spike_times[s_i][n_i]))[0])/(2*half_bin*(1/1000))
 						closest_x = np.argmin(np.abs(x_vals - neur_spike_fr))
 						p_fr_taste = fit_tastant_neur[t_i,n_i,closest_x]
 						p_fr = joint_fit_neur[n_i,closest_x]
@@ -557,6 +558,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 	hist_bins = np.arange(max_hz+1)
 	x_vals = hist_bins[:-1] + np.diff(hist_bins)/2
 	p_taste = taste_num_deliv/np.sum(taste_num_deliv)
+	half_bin = np.floor(e_len_dt/2).astype('int')
 	
 	for e_i in range(num_cp): #By epoch conduct decoding
 		print('Decoding Epoch ' + str(e_i))
@@ -633,54 +635,59 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 		if not os.path.isdir(seg_decode_save_dir):
 			os.mkdir(seg_decode_save_dir)
 		for s_i in range(num_segments):
+			#Get segment variables
+			seg_start = segment_times[s_i]
+			seg_end = segment_times[s_i+1]
+			seg_len = segment_times[s_i+1] - segment_times[s_i] #in dt = ms
+			if use_full == 1:
+				#Load previously calculated probabilities and pull start/end times
+				time_bin_starts = np.arange(seg_start+half_bin,seg_end-post_taste_dt,skip_dt)
+				seg_decode_prob = np.load(save_dir + 'decode_prob_full_taste/' + 'segment_' + str(s_i) + '.npy')
+				seg_decode_pref = seg_decode_prob/np.sum(seg_decode_prob,0)
+				seg_decode_taste_ind = np.argmax(seg_decode_pref,0)
+				seg_decode_taste_bin = np.zeros(np.shape(seg_decode_pref)[-1])
+				for t_i in range(num_tastes - 1): #Assumes last taste is "none"
+ 					seg_decode_taste_bin[np.where(seg_decode_taste_ind == t_i)[0]] = 1
+				start_decode_bins = np.where(np.diff(seg_decode_taste_bin) == 1)[0] + 1
+				end_decode_bins = np.where(np.diff(seg_decode_taste_bin) == -1)[0] + 1
+				if len(start_decode_bins) < len(end_decode_bins):
+ 					start_decode_bins = np.concatenate((np.zeros(1),start_decode_bins)).astype('int')
+				if len(end_decode_bins) < len(start_decode_bins):
+ 					end_decode_bins = np.concatenate((end_decode_bins,(len(seg_decode_taste_bin)-1)*np.ones(1))).astype('int')
+				#Get bins of full taste decoding back to original segment times
+				start_decode_times = time_bin_starts[start_decode_bins]
+				end_decode_times = time_bin_starts[end_decode_bins]
+				new_time_bins = []
+				for sd_i,sd in enumerate(start_decode_times):
+ 					decode_starts = np.arange(sd,end_decode_times[sd_i],e_skip_dt)
+ 					new_time_bins.extend(list(decode_starts))
+				new_time_bins = np.array(new_time_bins)
+			else:
+				new_time_bins = np.arange(seg_start+half_bin,seg_end-half_bin,e_skip_dt)
+			#Now pull epoch-specific probabilities (only in previously decoded times)
+			seg_decode_epoch_prob = np.zeros((num_tastes,seg_len))
+			seg_decode_epoch_prob[-1,:] = 1 #Start with assumption of "none" taste at all times
+			#Binerize Spike Times
+			segment_spike_times_s_i = segment_spike_times[s_i]
+			segment_spike_times_s_i_bin = np.zeros((num_neur,seg_len+1))
+			for n_i in taste_select_neur:
+				n_i_spike_times = np.array(segment_spike_times_s_i[n_i] - seg_start).astype('int')
+				segment_spike_times_s_i_bin[n_i,n_i_spike_times] = 1
 			try:
 				seg_decode_epoch_prob = np.load(seg_decode_save_dir + 'segment_' + str(s_i) + '.npy')
+				tb_fr = np.load(seg_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy')
 				print('\tSegment ' + str(s_i) + ' Previously Decoded')
 			except:
 				print('\tDecoding Segment ' + str(s_i))
-				#Get segment variables
-				seg_start = segment_times[s_i]
-				seg_end = segment_times[s_i+1]
-				seg_len = segment_times[s_i+1] - segment_times[s_i] #in dt = ms
-				if use_full == 1:
-					#Load previously calculated probabilities and pull start/end times
-					time_bin_starts = np.arange(seg_start,seg_end - post_taste_dt,skip_dt)
-					seg_decode_prob = np.load(save_dir + 'decode_prob_full_taste/' + 'segment_' + str(s_i) + '.npy')
-					seg_decode_pref = seg_decode_prob/np.sum(seg_decode_prob,0)
-					seg_decode_taste_ind = np.argmax(seg_decode_pref,0)
-					seg_decode_taste_bin = np.zeros(np.shape(seg_decode_pref)[-1])
-					for t_i in range(num_tastes - 1): #Assumes last taste is "none"
-	 					seg_decode_taste_bin[np.where(seg_decode_taste_ind == t_i)[0]] = 1
-					start_decode_bins = np.where(np.diff(seg_decode_taste_bin) == 1)[0] + 1
-					end_decode_bins = np.where(np.diff(seg_decode_taste_bin) == -1)[0] + 1
-					if len(start_decode_bins) < len(end_decode_bins):
-	 					start_decode_bins = np.concatenate((np.zeros(1),start_decode_bins)).astype('int')
-					if len(end_decode_bins) < len(start_decode_bins):
-	 					end_decode_bins = np.concatenate((end_decode_bins,(len(seg_decode_taste_bin)-1)*np.ones(1))).astype('int')
-					#Get bins of full taste decoding back to original segment times
-					start_decode_times = time_bin_starts[start_decode_bins]
-					end_decode_times = time_bin_starts[end_decode_bins]
-					new_time_bins = []
-					for sd_i,sd in enumerate(start_decode_times):
-	 					decode_starts = np.arange(sd,end_decode_times[sd_i],e_skip_dt)
-	 					new_time_bins.extend(list(decode_starts))
-					new_time_bins = np.array(new_time_bins)
-				else:
-					new_time_bins = np.arange(seg_start,seg_end)
-				#Now pull epoch-specific probabilities (only in previously decoded times)
-				seg_decode_epoch_prob = np.zeros((num_tastes,seg_len))
-				seg_decode_epoch_prob[-1,:] = 1 #Start with assumption of "none" taste at all times
-				#Binerize Spike Times
-				segment_spike_times_s_i = segment_spike_times[s_i]
-				segment_spike_times_s_i_bin = np.zeros((num_neur,seg_len+1))
-				for n_i in taste_select_neur:
-					n_i_spike_times = np.array(segment_spike_times_s_i[n_i] - seg_start).astype('int')
-					segment_spike_times_s_i_bin[n_i,n_i_spike_times] = 1
 				#Perform parallel computation for each time bin
 				print('\t\tCalculate firing rates for time bins')
-				tb_fr = np.zeros((num_neur,len(new_time_bins)))
-				for tb_i,tb in enumerate(tqdm.tqdm(new_time_bins)):
-					tb_fr[:,tb_i] = np.sum(segment_spike_times_s_i_bin[:,tb-seg_start:tb+e_len_dt-seg_start],1)/(e_len_dt*(1/1000))
+				try:
+					tb_fr = np.load(seg_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy')
+				except:
+					tb_fr = np.zeros((num_neur,len(new_time_bins)))
+					for tb_i,tb in enumerate(tqdm.tqdm(new_time_bins)):
+						tb_fr[:,tb_i] = np.sum(segment_spike_times_s_i_bin[:,tb-seg_start-half_bin:tb+half_bin-seg_start],1)/(2*half_bin*(1/1000))
+					np.save(seg_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy',tb_fr)
 				list_tb_fr = list(tb_fr.T)
 				del tb_fr, tb_i, tb
 				#Pass inputs to parallel computation on probabilities
@@ -697,89 +704,91 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				print('\t\tTime to decode = ' + str(np.round((toc-tic)/60,2)) + ' (min)')
 				tb_decode_array = np.squeeze(np.array(tb_decode_prob)).T
 				#___
-				seg_decode_epoch_prob[:,new_time_bins - seg_start] = tb_decode_array
+				for e_dt in range(e_skip_dt): #The whole skip interval should have the same decode probability
+					seg_decode_epoch_prob[:,new_time_bins - seg_start + e_dt] = tb_decode_array
 				
 				#Save decoding probabilities
 				np.save(seg_decode_save_dir + 'segment_' + str(s_i) + '.npy',seg_decode_epoch_prob)
-				#Create plots
-				seg_decode_epoch_prob_nonan = np.zeros(np.shape(seg_decode_epoch_prob))
-				seg_decode_epoch_prob_nonan[:] = seg_decode_epoch_prob[:]
-				seg_decode_epoch_prob_nonan[np.isnan(seg_decode_epoch_prob_nonan)] = 0
-				seg_decode_epoch_taste_ind = np.argmax(seg_decode_epoch_prob,0)
-				seg_decode_epoch_taste_bin = np.zeros(np.shape(seg_decode_epoch_prob))
-				for t_i in range(num_tastes):
-					seg_decode_epoch_taste_bin[t_i,np.where(seg_decode_epoch_taste_ind == t_i)[0]] = 1
-				#Line plot
-				f1 = plt.figure()
-				plt.plot(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_prob_nonan.T)
-				for t_i in range(num_tastes):
-					plt.fill_between(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_taste_bin[t_i,:],alpha=0.2)
-				plt.legend(dig_in_names,loc='right')
-				plt.ylabel('Decoding Fraction')
-				plt.xlabel('Time (min)')
-				plt.title('Segment ' + str(s_i))
-				f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.png')
-				f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.svg')
-				plt.close(f1)
-				#Imshow
-				f2 = plt.figure()
-				plt.imshow(seg_decode_epoch_prob_nonan,aspect='auto',interpolation = 'none')
-				x_ticks = np.ceil(np.linspace(0,len(time_bin_starts)-1,10)).astype('int')
-				x_tick_labels = np.round(time_bin_starts[x_ticks]/1000/60,2)
-				plt.xticks(x_ticks,x_tick_labels)
-				y_ticks = np.arange(len(dig_in_names))
-				plt.yticks(y_ticks,dig_in_names)
-				plt.ylabel('Decoding Fraction')
-				plt.xlabel('Time (min)')
-				plt.title('Segment ' + str(s_i))
-				f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.png')
-				f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.svg')
-				plt.close(f2)
-				#Fraction of occurrences
-				f3 = plt.figure()
-				plt.pie(np.sum(seg_decode_epoch_taste_bin,1)/np.sum(seg_decode_epoch_taste_bin),labels=['water','saccharin','none'],autopct='%1.1f%%',pctdistance =1.5)
-				plt.title('Segment ' + str(s_i))
-				f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.png')
-				f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.svg')
-				plt.close(f3)
-				#If it's the taste interval, save separately decoding of each taste delivery
-				if segment_names[s_i].lower() == 'taste': #Assumes it's always called just "taste"
-					taste_save_dir = seg_decode_save_dir + 'taste_decode/'
-					if not os.path.isdir(taste_save_dir):
-						os.mkdir(taste_save_dir)
-					for t_i in range(num_tastes): #Do each taste and find if match
-						for st_i,st in enumerate(np.array(start_dig_in_times[t_i])):
-							#Plot the decoding to [-post_taste_dt,2*post_taste_dt] around delivery
-							f4 = plt.figure()
-							start_dec_t = max(st - post_taste_dt,seg_start)
-							closest_tbs = np.argmin(np.abs(new_time_bins - start_dec_t))
-							end_dec_t = min(st + 2*post_taste_dt,seg_end)
-							closest_tbe = np.argmin(np.abs(new_time_bins - end_dec_t))
-							closest_td = np.argmin(np.abs(new_time_bins - st))
-							decode_tbs = np.arange(closest_tbs,closest_tbe)
-							decode_t = new_time_bins[decode_tbs]
-							decode_t_labels = decode_t - st #in ms
-							decode_snip = seg_decode_epoch_prob[:,decode_tbs]
-							plt.plot(decode_t_labels,decode_snip.T)
-							for t_i_2 in range(num_tastes):
-								plt.fill_between(decode_t_labels,decode_snip[t_i_2,:],alpha=0.2)
-							plt.axvline(0)
-							plt.legend(dig_in_names)
-							plt.ylabel('Decoding Fraction')
-							plt.xlabel('Time From Delivery (ms)')
-							plt.title(dig_in_names[t_i] + ' delivery #' + str(st_i))
-							f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.png')
-							f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.svg')
-							plt.close(f4)
+			#Recreate plots regardless of if data was previously saved
+			seg_decode_epoch_prob_nonan = np.zeros(np.shape(seg_decode_epoch_prob))
+			seg_decode_epoch_prob_nonan[:] = seg_decode_epoch_prob[:]
+			seg_decode_epoch_prob_nonan[np.isnan(seg_decode_epoch_prob_nonan)] = 0
+			seg_decode_epoch_taste_ind = np.argmax(seg_decode_epoch_prob,0)
+			seg_decode_epoch_taste_bin = np.zeros(np.shape(seg_decode_epoch_prob))
+			for t_i in range(num_tastes):
+				seg_decode_epoch_taste_bin[t_i,np.where(seg_decode_epoch_taste_ind == t_i)[0]] = 1
+			#Line plot
+			f1 = plt.figure()
+			plt.plot(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_prob_nonan.T)
+			for t_i in range(num_tastes):
+				plt.fill_between(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_taste_bin[t_i,:],alpha=0.2)
+			plt.legend(dig_in_names,loc='right')
+			plt.ylabel('Decoding Fraction')
+			plt.xlabel('Time (min)')
+			plt.title('Segment ' + str(s_i))
+			f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.png')
+			f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.svg')
+			plt.close(f1)
+			#Imshow
+			f2 = plt.figure()
+			plt.imshow(seg_decode_epoch_prob_nonan,aspect='auto',interpolation = 'none')
+			x_ticks = np.ceil(np.linspace(0,len(new_time_bins)-1,10)).astype('int')
+			x_tick_labels = np.round(new_time_bins[x_ticks]/1000/60,2)
+			plt.xticks(x_ticks,x_tick_labels)
+			y_ticks = np.arange(len(dig_in_names))
+			plt.yticks(y_ticks,dig_in_names)
+			plt.ylabel('Decoding Fraction')
+			plt.xlabel('Time (min)')
+			plt.title('Segment ' + str(s_i))
+			f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.png')
+			f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.svg')
+			plt.close(f2)
+			#Fraction of occurrences
+			f3 = plt.figure()
+			plt.pie(np.sum(seg_decode_epoch_taste_bin,1)/np.sum(seg_decode_epoch_taste_bin),labels=['water','saccharin','none'],autopct='%1.1f%%',pctdistance =1.5)
+			plt.title('Segment ' + str(s_i))
+			f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.png')
+			f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.svg')
+			plt.close(f3)
+			#If it's the taste interval, save separately decoding of each taste delivery
+			if segment_names[s_i].lower() == 'taste': #Assumes it's always called just "taste"
+				taste_save_dir = seg_decode_save_dir + 'taste_decode/'
+				if not os.path.isdir(taste_save_dir):
+					os.mkdir(taste_save_dir)
+				for t_i in range(num_tastes): #Do each taste and find if match
+					for st_i,st in enumerate(np.array(start_dig_in_times[t_i])):
+						#Plot the decoding to [-post_taste_dt,2*post_taste_dt] around delivery
+						f4 = plt.figure()
+						start_dec_t = max(st - post_taste_dt,seg_start)
+						closest_tbs = np.argmin(np.abs(new_time_bins - start_dec_t))
+						end_dec_t = min(st + 2*post_taste_dt,seg_end)
+						closest_tbe = np.argmin(np.abs(new_time_bins - end_dec_t))
+						closest_td = np.argmin(np.abs(new_time_bins - st))
+						decode_tbs = np.arange(closest_tbs,closest_tbe)
+						decode_t = new_time_bins[decode_tbs]
+						decode_t_labels = decode_t - st #in ms
+						decode_snip = seg_decode_epoch_prob[:,decode_tbs]
+						plt.plot(decode_t_labels,decode_snip.T)
+						for t_i_2 in range(num_tastes):
+							plt.fill_between(decode_t_labels,decode_snip[t_i_2,:],alpha=0.2)
+						plt.axvline(0)
+						plt.legend(dig_in_names)
+						plt.ylabel('Decoding Fraction')
+						plt.xlabel('Time From Delivery (ms)')
+						plt.title(dig_in_names[t_i] + ' delivery #' + str(st_i))
+						f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.png')
+						f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.svg')
+						plt.close(f4)
 
 def plot_decoded(num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
-				 start_dig_in_times,end_dig_in_times,post_taste_dt,
+				 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 				 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 				 segment_names,taste_num_deliv,taste_select_epoch,
 				 use_full,save_dir):
 	"""Function to plot the periods when something other than no taste is 
 	decoded"""
 	num_segments = len(segment_spike_times)
+	half_bin = np.floor(e_len_dt/2).astype('int')
 	
 	for e_i in range(num_cp): #By epoch conduct decoding
 		print('Plotting Decoding for Epoch ' + str(e_i))
@@ -817,9 +826,20 @@ def plot_decoded(num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_ti
 			
 			#For each taste (except none) calculate start and end times of decoded intervals and plot
 			for t_i in range(num_tastes - 1):
-				#Import taste raster plots
+				#Import taste spike times
 				taste_spike_times = tastant_spike_times[t_i]
-				taste_spike_times_bin = np.zeros((len(taste_spike_times),))
+				taste_deliv_times = start_dig_in_times[t_i]
+				#Store as binary spike arrays
+				taste_spike_times_bin = np.zeros((len(taste_spike_times),num_neur,post_taste_dt))
+				for d_i in range(len(taste_spike_times)): #store each delivery to binary spike matrix
+					for n_i in range(num_neur):
+						if t_i == num_tastes-1:
+							d_i_spikes = np.array(taste_spike_times[d_i][n_i] - taste_spike_times[d_i][n_i]).astype('int')
+						else:
+							d_i_spikes = np.array(taste_spike_times[d_i][n_i] - taste_deliv_times[d_i]).astype('int')
+						taste_spike_times_bin[d_i,n_i,d_i_spikes[d_i_spikes<post_taste_dt]] = 1
+				#Import taste CP times
+				taste_cp_times = pop_taste_cp_raster_inds[t_i]
 				
 				#Binarize where the taste was the maximally decoded taste
 				#Calculate start and end times for bins of decoding
@@ -832,28 +852,66 @@ def plot_decoded(num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_ti
 				if not os.path.isdir(taste_decode_save_dir):
 					os.mkdir(taste_decode_save_dir)
 				
-				for d_i in range(num_decoded):
-					d_start = np.max((start_decoded[d_i]-post_taste_dt,0))
-					d_end = np.min((end_decoded[d_i]+post_taste_dt,seg_len))
-					decode_plot_times = np.arange(d_start,d_end)/1000/60
-					
-					f = plt.figure()
-					#Decoding probabilities (NEEDS WORK)
+				for nd_i in range(num_decoded):
+					#Decode variables
+					d_start = start_decoded[nd_i]
+					d_end = end_decoded[nd_i]
+					d_len = d_end-d_start
+					d_plot_start = np.max((start_decoded[nd_i]-2*d_len,0))
+					d_plot_end = np.min((end_decoded[nd_i]+2*d_len,seg_len))
+					decode_plot_times = np.arange(d_plot_start,d_plot_end)
+					#Start Figure
+					f = plt.figure(figsize=(8,8))
+					#Decoding probabilities
 					plt.subplot(3,2,1)
-					plt.plot(decode_plot_times,seg_decode_epoch_prob[:,d_start:d_end].T)
-					for t_i in range(num_tastes):
-						plt.fill_between(decode_plot_times,decoded_taste_bin[t_i,d_start:d_end],alpha=0.2)
-					plt.axvline(d_start/1000/60,color='k',alpha=0.5)
-					plt.axvline(d_end/1000/60,color='k',alpha=0.5)
+					plt.plot(decode_plot_times-d_start,seg_decode_epoch_prob[:,d_plot_start:d_plot_end].T)
+					for t_i_2 in range(num_tastes):
+						plt.fill_between(decode_plot_times-d_start,decoded_taste_bin[t_i_2,d_plot_start:d_plot_end],alpha=0.2)
+					plt.axvline(0,color='k',alpha=0.5)
+					plt.axvline(d_len,color='k',alpha=0.5)
 					plt.legend(dig_in_names,loc='right')
 					plt.ylabel('Decoding Fraction')
-					plt.xlabel('Time (min)')
-					plt.title('Event ' + str(d_i))
+					plt.xlabel('Time from Event Start (ms)')
+					plt.title('Event ' + str(nd_i) + '\nStart Time = ' + str(round(d_start/1000/60,3)) + ' Minutes')
 					#Decoded raster
-					plt.subplot(2,1)
-					plt.eventplot(segment_times_s_i)
-					
-					
+					plt.subplot(3,2,3)
+					decode_spike_times = []
+					for n_i in range(num_neur):
+						decode_spike_times.append(list(np.where(segment_spike_times_s_i_bin[n_i,d_plot_start:d_plot_end])[0]))
+					plt.eventplot(decode_spike_times)
+					plt.xlim([0,d_plot_end-d_plot_start])
+					x_ticks = plt.xticks()[0]
+					plt.xticks(x_ticks,labels=np.linspace(d_plot_start,d_plot_end,len(x_ticks))-d_start)
+					plt.axvline(d_start-d_plot_start,color='k',alpha=0.5)
+					plt.axvline(d_end-d_plot_start,color='k',alpha=0.5)
+					plt.xlabel('Time from Event Start (ms)')
+					plt.ylabel('Neuron Index')
+					plt.title('Event Spike Raster')
+					#TODO: Matching taste raster (how do you pick one?)
+					plt.subplot(3,2,4)
+					d_p_i = np.random.randint(0,len(taste_spike_times)) #Randomly select delivery?
+					cp_chosen = np.concatenate((np.cumsum(np.diff(taste_cp_times[d_p_i,:])),post_taste_dt*np.ones(1))).astype('int')
+					plt.eventplot(taste_spike_times[d_p_i])
+					plt.xlim([taste_deliv_times[d_p_i] + cp_chosen[e_i],taste_deliv_times[d_p_i] + cp_chosen[e_i+1]])
+					x_ticks = plt.xticks()[0]
+					plt.xticks(x_ticks,labels=x_ticks-taste_deliv_times[d_p_i])
+					plt.xlabel('Time from Event Start (ms)')
+					plt.ylabel('Neuron Index')
+					plt.title('Ex. Taste Raster\nDeliv ' + str(d_p_i) + ' Epoch ' + str(e_i+1))
+					#Decoded Firing Rates
+					d_fr_vec = np.sum(segment_spike_times_s_i_bin[:,d_start:d_end],1)/(d_len/1000)
+					plt.subplot(3,2,5)
+					plt.imshow(np.expand_dims(d_fr_vec,1))
+					plt.colorbar(location='right',label='Firing Rate (Hz)')
+					plt.title('Event FR')
+					#Taste Firing Rates
+					t_fr_vec = np.array([len(np.where((taste_deliv_times[d_p_i] + cp_chosen[e_i] <= taste_spike_times[d_p_i][n_i])*(taste_spike_times[d_p_i][n_i] <= taste_deliv_times[d_p_i] + cp_chosen[e_i+1]))[0])/((cp_chosen[e_i+1]-cp_chosen[e_i])/1000) for n_i in range(num_neur)])
+					plt.subplot(3,2,5)
+					plt.imshow(np.expand_dims(t_fr_vec,1))
+					plt.colorbar(location='right',label='Firing Rate (Hz)')
+					plt.title('Ex. Taste Resp. FR')
+					plt.tight_layout()
+					#Save Figure
 					f.savefig(taste_decode_save_dir + 'event_' + str(d_i) + '.png')
 					f.savefig(taste_decode_save_dir + 'event_' + str(d_i) + '.svg')
 					plt.close(f)
