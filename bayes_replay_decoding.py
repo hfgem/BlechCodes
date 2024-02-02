@@ -6,9 +6,8 @@ Created on Tue Jan  2 09:22:42 2024
 @author: hannahgermaine
 
 This code is written to perform Bayesian decoding of taste information outside 
-of taste delivery intervals to determine potential replay events. The first 
-pass will use a larger bin size, to hone in on regions of potential replay, and
-the second pass will go into those regions and test smaller bins.
+of taste delivery intervals to determine potential replay events. This code
+assumes neurons are independent.
 
 Assumes analyze_states.py was run first.
 """
@@ -55,10 +54,11 @@ if __name__ == '__main__':
 	taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_raster_inds')
 	pop_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'pop_taste_cp_raster_inds')
 	num_cp = np.shape(taste_cp_raster_inds[0])[-1] - 1
-	#%%
+	
 	bayes_dir = fig_save_dir + 'Bayes_Decoding/'
 	if os.path.isdir(bayes_dir) == False:
 		os.mkdir(bayes_dir)
+	#%%
 	
 	#_____DECODE ALL NEURONS_____
 	print("\nDecoding using all neurons.\n")
@@ -261,6 +261,6 @@ if __name__ == '__main__':
 					     start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 						  e_skip_dt,e_len_dt,dig_in_names,segment_times,
 						   segment_names,taste_num_deliv,taste_select_epoch,
-						    use_full,bayes_dir_select_z,max_decode,max_hz_pop,min_hz_pop,seg_stat_bin)
+						    use_full,bayes_dir_select_z,max_decode,max_hz_pop,seg_stat_bin)
 	
 	

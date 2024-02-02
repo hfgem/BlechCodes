@@ -379,7 +379,7 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,
 					#TODO: add variable to change the bin size
 					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
 					if len(bin_edges) != 0:
-						if bin_edges[-1] != end_epoch:
+						if (bin_edges[-1] != end_epoch)*(end_epoch - bin_edges[-1] > 10):
 							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
 						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
 						tastant_fr_dist[t_i][n_i][d_i][cp_i] = bst_hz
@@ -399,7 +399,7 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,
 					#TODO: add variable to change the bin size
 					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
 					if len(bin_edges) != 0:
-						if bin_edges[-1] != end_epoch:
+						if (bin_edges[-1] != end_epoch)*(end_epoch - bin_edges[-1] > 10):
 							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
 						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
 						tastant_fr_dist_pop[t_i][n_i][d_i][cp_i] = bst_hz
@@ -415,7 +415,7 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,
 				#____Toddler decoder block____
 				bin_edges = np.arange(0,post_taste_dt,100).astype('int') #bin the epoch
 				if len(bin_edges) != 0:
-					if bin_edges[-1] != post_taste_dt:
+					if (bin_edges[-1] != post_taste_dt)*(post_taste_dt - bin_edges[-1] > 10):
 						bin_edges = np.concatenate((bin_edges,post_taste_dt*np.ones(1).astype('int')))
 					bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
 					full_taste_fr_dist[t_i][n_i][d_i] = bst_hz
@@ -435,7 +435,7 @@ def decode_full(full_taste_fr_dist,segment_spike_times,post_taste_dt,
 	num_tastes, num_neur, num_deliv = np.shape(full_taste_fr_dist)
 	num_segments = len(segment_spike_times)
 	max_hz = np.max(full_taste_fr_dist[~np.isnan(full_taste_fr_dist)])
-	hist_bins = np.arange(stop=max_hz+1,step=0.5)
+	hist_bins = np.arange(stop=max_hz+1,step=0.25)
 	x_vals = hist_bins[:-1] + np.diff(hist_bins)/2
 	p_taste = taste_num_deliv/np.sum(taste_num_deliv)
 	half_bin = np.floor(post_taste_dt/2).astype('int')
@@ -630,7 +630,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 	num_tastes = len(start_dig_in_times)
 	num_neur = len(segment_spike_times[0])
 	max_num_deliv = np.max(taste_num_deliv)
-	num_cp = len(tastant_fr_dist[0][0][0])
+	num_cp = len(tastant_fr_dist[0][0])
 	#____
 	num_segments = len(segment_spike_times)
 	hist_bins = np.arange(stop=max_hz+1,step=0.25)
@@ -757,7 +757,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				new_time_bins = np.array(new_time_bins)
 			else:
 				new_time_bins = np.arange(seg_start+half_bin,seg_end-half_bin,e_skip_dt)
-			#Now pull epoch-specific probabilities (only in previously decoded times)
+			#Now pull epoch-specific probabilities
 			seg_decode_epoch_prob = np.zeros((num_tastes,seg_len))
 			seg_decode_epoch_prob[-1,:] = 1 #Start with assumption of "none" taste at all times
 			#Binerize Spike Times
