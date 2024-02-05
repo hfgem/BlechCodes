@@ -630,7 +630,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 	num_tastes = len(start_dig_in_times)
 	num_neur = len(segment_spike_times[0])
 	max_num_deliv = np.max(taste_num_deliv)
-	num_cp = len(tastant_fr_dist[0][0])
+	num_cp = len(tastant_fr_dist[0][0][0])
 	#____
 	num_segments = len(segment_spike_times)
 	hist_bins = np.arange(stop=max_hz+1,step=0.25)
@@ -971,8 +971,8 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 				times_post_taste = (np.array(raster_times)[np.where((raster_times >= start_taste_i)*(raster_times < start_taste_i + post_taste_dt))[0]] - start_taste_i).astype('int')
 				bin_post_taste = np.zeros(post_taste_dt)
 				bin_post_taste[times_post_taste] += 1
-				deliv_binned_fr = []
-				deliv_binned_fr_pop = []
+# 				deliv_binned_fr = []
+# 				deliv_binned_fr_pop = []
 				for cp_i in range(num_cp):
 					#individual neuron changepoints
 					start_epoch = int(deliv_cp[cp_i])
@@ -990,11 +990,12 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 						if bin_edges[-1] != end_epoch:
 							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
 						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
-						tastant_fr_dist[t_i][n_i][d_i][cp_i] = bst_hz
-						if np.max(bst_hz) > max_hz:
-							max_hz = np.max(bst_hz)
-						if np.min(bst_hz) < min_hz:
-							min_hz = np.min(bst_hz)
+						bst_hz_z = (np.array(bst_hz) - mean_fr[n_i])/std_fr[n_i]
+						tastant_fr_dist[t_i][n_i][d_i][cp_i] = bst_hz_z
+						if np.max(bst_hz_z) > max_hz:
+							max_hz = np.max(bst_hz_z)
+						if np.min(bst_hz_z) < min_hz:
+							min_hz = np.min(bst_hz_z)
 					#____
 					#population changepoints
 					start_epoch = int(deliv_cp_pop[cp_i])
@@ -1012,13 +1013,14 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 						if bin_edges[-1] != end_epoch:
 							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
 						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
-						tastant_fr_dist_pop[t_i][n_i][d_i][cp_i] = bst_hz
-						if np.max(bst_hz) > max_hz_pop:
-							max_hz_pop = np.max(bst_hz)
-						if np.min(bst_hz) < min_hz_pop:
-							min_hz_pop = np.min(bst_hz)
+						bst_hz_z = (np.array(bst_hz) - mean_fr[n_i])/std_fr[n_i]
+						tastant_fr_dist_pop[t_i][n_i][d_i][cp_i] = bst_hz_z
+						if np.max(bst_hz_z) > max_hz_pop:
+							max_hz_pop = np.max(bst_hz_z)
+						if np.min(bst_hz_z) < min_hz_pop:
+							min_hz_pop = np.min(bst_hz_z)
 					#____
-				del cp_i, start_epoch, end_epoch, bst_hz
+				del cp_i, start_epoch, end_epoch, bst_hz, bst_hz_z
 				#____Baby decoder block____
 # 				full_taste_fr_dist[t_i,n_i,d_i] = ((np.sum(bin_post_taste)/(post_taste_dt*(1/1000))) - mean_fr[n_i])/std_fr[n_i]
 # 				tastant_fr_dist[t_i,n_i,d_i,:] = deliv_binned_fr
@@ -1030,11 +1032,12 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 					if bin_edges[-1] != post_taste_dt:
 						bin_edges = np.concatenate((bin_edges,post_taste_dt*np.ones(1).astype('int')))
 					bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
-					full_taste_fr_dist[t_i][n_i][d_i] = bst_hz
-					if np.max(bst_hz) > max_hz_full:
-						max_hz_full = np.max(bst_hz)
-					if np.min(bst_hz) < min_hz_full:
-						min_hz_full = np.max(bst_hz)
+					bst_hz_z = (np.array(bst_hz) - mean_fr[n_i])/std_fr[n_i]
+					full_taste_fr_dist[t_i][n_i][d_i] = bst_hz_z
+					if np.max(bst_hz_z) > max_hz_full:
+						max_hz_full = np.max(bst_hz_z)
+					if np.min(bst_hz_z) < min_hz_full:
+						min_hz_full = np.max(bst_hz_z)
 				#___
 	del t_i, num_deliv, taste_cp, n_i, d_i, raster_times, start_taste_i, deliv_cp, times_post_taste, bin_post_taste
 
@@ -1435,7 +1438,9 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 					tb_fr = np.zeros((num_neur,len(new_time_bins)))
 					for tb_i,tb in enumerate(tqdm.tqdm(new_time_bins)):
 						tb_fr_orig = np.sum(segment_spike_times_s_i_bin[:,tb-seg_start-half_bin:tb+half_bin-seg_start],1)/(2*half_bin*(1/1000))
-						tb_fr[:,tb_i] = (tb_fr_orig - mean_fr)/std_fr
+						tb_fr_z = (tb_fr_orig - mean_fr)/std_fr
+						tb_fr_z[np.isnan(tb_fr_z)] = 0
+						tb_fr[:,tb_i] = tb_fr_z
 					np.save(epoch_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy',tb_fr)
 				list_tb_fr = list(tb_fr.T)
 				del tb_fr, tb_i, tb

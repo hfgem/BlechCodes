@@ -174,8 +174,8 @@ if __name__ == '__main__':
 	bin_time = 0.1 #Seconds to skip forward in calculating firing rates
 	bin_dt = np.ceil(bin_time*1000).astype('int')
 	full_taste_fr_dist_z, tastant_fr_dist_z, tastant_fr_dist_pop_z, taste_num_deliv_z, \
-		max_hz, max_hz_pop, max_hz_full, min_hz, min_hz_pop, min_hz_full = df.taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times,
-																segment_names,segment_times,
+		max_hz, max_hz_pop, max_hz_full, min_hz, min_hz_pop, min_hz_full = df.taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,
+																segment_spike_times,segment_names,segment_times,
 																taste_cp_raster_inds,pop_taste_cp_raster_inds,
 																start_dig_in_times, pre_taste_dt, post_taste_dt, bin_dt)
 	
