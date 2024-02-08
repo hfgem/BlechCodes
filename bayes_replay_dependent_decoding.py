@@ -100,7 +100,7 @@ if __name__ == '__main__':
 	
 	max_decode = 50 #number of example decodes to plot
 	seg_stat_bin = 5000 #ms to bin segment
-	df.plot_decoded_test(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					 segment_names,taste_num_deliv,taste_select_epoch,
@@ -128,7 +128,7 @@ if __name__ == '__main__':
 					   segment_names,start_dig_in_times,taste_num_deliv,
 					   taste_select_neur_epoch_bin,use_full,max_hz,bayes_dir_select)
 					
-	df.plot_decoded_test(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					     start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 						  e_skip_dt,e_len_dt,dig_in_names,segment_times,
 						   segment_names,taste_num_deliv,taste_select_neur_epoch_bin,
@@ -178,7 +178,7 @@ if __name__ == '__main__':
 	
 	max_decode = 50 #number of example decodes to plot
 	seg_stat_bin = 5000 #ms to bin segment
-	df.plot_decoded_test(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					 segment_names,taste_num_deliv,taste_select_epoch,
@@ -234,7 +234,7 @@ if __name__ == '__main__':
 	
 	max_decode = 50 #number of example decodes to plot
 	seg_stat_bin = 5000 #ms to bin segment
-	df.plot_decoded_test(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					 segment_names,taste_num_deliv,taste_select_neur_epoch_bin,
