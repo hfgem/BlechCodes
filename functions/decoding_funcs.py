@@ -1725,11 +1725,12 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 					ax[0,1].set_title('Event Spike Raster')
 					ax[1,0].axis('off')
 					#Plot population firing rates - 50ms smoothing
+					event_spikes_fr = segment_spike_times_s_i_bin[:,d_plot_start-25:d_plot_end+25]
 					firing_rate_vec = np.zeros(d_plot_len)
 					for t_i in range(d_plot_len):
-						min_t_i = max(t_i-25,0)
-						max_t_i = min(t_i+25,d_plot_len)
-						firing_rate_vec[t_i] = np.mean(np.sum(event_spikes[:,min_t_i:max_t_i],1)/(50/1000))
+						min_t_i = max(t_i+25-25,0)
+						max_t_i = min(t_i+25+25,d_plot_len+50)
+						firing_rate_vec[t_i] = np.mean(np.sum(event_spikes_fr[:,min_t_i:max_t_i],1)/(50/1000))
 					ax[1,1].plot(decode_plot_times-d_start,firing_rate_vec)
 					ax[1,1].axvline(0,color='k')
 					ax[1,1].axvline(d_len,color='k')
