@@ -1629,6 +1629,7 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				len_decoded = end_decoded-start_decoded
 				iei_decoded = start_decoded[1:] - end_decoded[:-1]
 				num_neur_decoded = np.zeros(num_decoded)
+				prob_decoded = np.zeros(num_decoded)
 				for nd_i in range(num_decoded):
 					d_start = start_decoded[nd_i]
 					d_end = end_decoded[nd_i]
@@ -1636,10 +1637,14 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 					for n_i in range(num_neur):
 						if len(np.where(segment_spike_times_s_i_bin[n_i,d_start:d_end])[0]) > 0:
 							num_neur_decoded[nd_i] += 1
+					prob_decoded[nd_i] = np.mean(seg_decode_epoch_prob[t_i,d_start:d_end])
 				seg_dist_starts = np.arange(0,seg_len,seg_stat_bin)
 				seg_distribution = np.zeros(len(seg_dist_starts)-1)
+				prob_distribution = np.zeros(len(seg_dist_starts)-1)
 				for sd_i in range(len(seg_dist_starts)-1):
-					seg_distribution[sd_i] = len(np.where((start_decoded < seg_dist_starts[sd_i+1])*(start_decoded >= seg_dist_starts[sd_i]))[0])
+					bin_events = np.where((start_decoded < seg_dist_starts[sd_i+1])*(start_decoded >= seg_dist_starts[sd_i]))[0]
+					seg_distribution[sd_i] = len(bin_events)
+					prob_distribution[sd_i] = np.mean(prob_decoded[bin_events])
 				seg_dist_midbin = seg_dist_starts[:-1] + np.diff(seg_dist_starts)/2
 				
 				
@@ -1648,28 +1653,39 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 					os.mkdir(taste_decode_save_dir)
 				
 				#Create statistics plots
-				f = plt.figure()
-				plt.subplot(2,2,1)
+				f = plt.figure(figsize=(8,8))
+				plt.subplot(3,2,1)
 				plt.hist(len_decoded)
 				plt.xlabel('Length (ms)')
 				plt.ylabel('Number of Occurrences')
 				plt.title('Length of Decoded Event')
-				plt.subplot(2,2,2)
+				plt.subplot(3,2,2)
 				plt.hist(iei_decoded)
 				plt.xlabel('IEI (ms)')
 				plt.ylabel('Number of Occurrences')
 				plt.title('Inter-Event-Interval (IEI)')
-				plt.subplot(2,2,3)
+				plt.subplot(3,2,3)
 				plt.hist(num_neur_decoded)
 				plt.xlabel('# Neurons')
 				plt.ylabel('Number of Occurrences')
 				plt.title('Number of Neurons Active')
-				plt.subplot(2,2,4)
+				plt.subplot(3,2,4)
 				plt.bar(seg_dist_midbin,seg_distribution,width=seg_stat_bin)
 				plt.xticks(np.linspace(0,seg_len,8),labels=np.round((np.linspace(0,seg_len,8)/1000/60),2),rotation=-45)
 				plt.xlabel('Time in Segment (min)')
 				plt.ylabel('# Events')
 				plt.title('Number of Decoded Events')
+				plt.subplot(3,2,5)
+				plt.hist(prob_decoded)
+				plt.xlabel('Event Avg P(Decoding)')
+				plt.ylabel('Number of Occurrences')
+				plt.title('Average Decoding Probability')
+				plt.subplot(3,2,6)
+				plt.bar(seg_dist_midbin,prob_distribution,width=seg_stat_bin)
+				plt.xticks(np.linspace(0,seg_len,8),labels=np.round((np.linspace(0,seg_len,8)/1000/60),2),rotation=-45)
+				plt.xlabel('Time in Segment (min)')
+				plt.ylabel('Avg(Event Avg P(Decoding))')
+				plt.title('Average Decoding Probability')
 				plt.suptitle('')
 				plt.tight_layout()
 				f.savefig(taste_decode_save_dir + 'epoch_' + str(e_i) + '_seg_' + str(s_i) + '_event_statistics.png')
