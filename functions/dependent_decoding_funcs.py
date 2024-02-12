@@ -192,81 +192,81 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 					seg_decode_epoch_prob[:,new_time_bins - seg_start + e_dt] = tb_decode_array
 				#Save decoding probabilities
 				np.save(epoch_decode_save_dir + 'segment_' + str(s_i) + '.npy',seg_decode_epoch_prob)
-			#Recreate plots regardless of if data was previously saved
-			seg_decode_save_dir = epoch_decode_save_dir + 'segment_' + str(s_i) + '/'
-			if not os.path.isdir(seg_decode_save_dir):
-				os.mkdir(seg_decode_save_dir)
-			
-			seg_decode_epoch_prob_nonan = np.zeros(np.shape(seg_decode_epoch_prob))
-			seg_decode_epoch_prob_nonan[:] = seg_decode_epoch_prob[:]
-			seg_decode_epoch_prob_nonan[np.isnan(seg_decode_epoch_prob_nonan)] = 0
-			seg_decode_epoch_taste_ind = np.argmax(seg_decode_epoch_prob,0)
-			seg_decode_epoch_taste_bin = np.zeros(np.shape(seg_decode_epoch_prob))
-			for t_i in range(num_tastes):
-				seg_decode_epoch_taste_bin[t_i,np.where(seg_decode_epoch_taste_ind == t_i)[0]] = 1
-			#Line plot
-			f1 = plt.figure()
-			plt.plot(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_prob_nonan.T)
-			for t_i in range(num_tastes):
-				plt.fill_between(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_taste_bin[t_i,:],alpha=0.2)
-			plt.legend(dig_in_names,loc='right')
-			plt.ylabel('Decoding Fraction')
-			plt.xlabel('Time (min)')
-			plt.title('Segment ' + str(s_i))
-			f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.png')
-			f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.svg')
-			plt.close(f1)
-			#Imshow
-			f2 = plt.figure()
-			plt.imshow(seg_decode_epoch_prob_nonan,aspect='auto',interpolation = 'none')
-			x_ticks = np.ceil(np.linspace(0,len(new_time_bins)-1,10)).astype('int')
-			x_tick_labels = np.round(new_time_bins[x_ticks]/1000/60,2)
-			plt.xticks(x_ticks,x_tick_labels)
-			y_ticks = np.arange(len(dig_in_names))
-			plt.yticks(y_ticks,dig_in_names)
-			plt.ylabel('Decoding Fraction')
-			plt.xlabel('Time (min)')
-			plt.title('Segment ' + str(s_i))
-			f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.png')
-			f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.svg')
-			plt.close(f2)
-			#Fraction of occurrences
-			f3 = plt.figure()
-			plt.pie(np.sum(seg_decode_epoch_taste_bin,1)/np.sum(seg_decode_epoch_taste_bin),labels=['water','saccharin','none'],autopct='%1.1f%%',pctdistance =1.5)
-			plt.title('Segment ' + str(s_i))
-			f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.png')
-			f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.svg')
-			plt.close(f3)
-			#If it's the taste interval, save separately decoding of each taste delivery
-			if segment_names[s_i].lower() == 'taste': #Assumes it's always called just "taste"
-				taste_save_dir = seg_decode_save_dir + 'taste_decode/'
-				if not os.path.isdir(taste_save_dir):
-					os.mkdir(taste_save_dir)
-				for t_i in range(num_tastes): #Do each taste and find if match
-					for st_i,st in enumerate(np.array(start_dig_in_times[t_i])):
-						#Plot the decoding to [-post_taste_dt,2*post_taste_dt] around delivery
-						f4 = plt.figure()
-						start_dec_t = max(st - post_taste_dt,seg_start)
-						closest_tbs = np.argmin(np.abs(new_time_bins - start_dec_t))
-						end_dec_t = min(st + 2*post_taste_dt,seg_end)
-						closest_tbe = np.argmin(np.abs(new_time_bins - end_dec_t))
-						closest_td = np.argmin(np.abs(new_time_bins - st))
-						decode_tbs = np.arange(closest_tbs,closest_tbe)
-						decode_t = new_time_bins[decode_tbs]
-						decode_t_labels = decode_t - st #in ms
-						decode_snip = seg_decode_epoch_prob[:,decode_tbs]
-						#TODO: Only plot filled background when decoder is above percentage threshold
-						plt.plot(decode_t_labels,decode_snip.T)
-						for t_i_2 in range(num_tastes):
-							plt.fill_between(decode_t_labels,decode_snip[t_i_2,:],alpha=0.2)
-						plt.axvline(0)
-						plt.legend(dig_in_names)
-						plt.ylabel('Decoding Fraction')
-						plt.xlabel('Time From Delivery (ms)')
-						plt.title(dig_in_names[t_i] + ' delivery #' + str(st_i))
-						f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.png')
-						f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.svg')
-						plt.close(f4)
+				#Create plots
+				seg_decode_save_dir = epoch_decode_save_dir + 'segment_' + str(s_i) + '/'
+				if not os.path.isdir(seg_decode_save_dir):
+					os.mkdir(seg_decode_save_dir)
+				
+				seg_decode_epoch_prob_nonan = np.zeros(np.shape(seg_decode_epoch_prob))
+				seg_decode_epoch_prob_nonan[:] = seg_decode_epoch_prob[:]
+				seg_decode_epoch_prob_nonan[np.isnan(seg_decode_epoch_prob_nonan)] = 0
+				seg_decode_epoch_taste_ind = np.argmax(seg_decode_epoch_prob,0)
+				seg_decode_epoch_taste_bin = np.zeros(np.shape(seg_decode_epoch_prob))
+				for t_i in range(num_tastes):
+					seg_decode_epoch_taste_bin[t_i,np.where(seg_decode_epoch_taste_ind == t_i)[0]] = 1
+				#Line plot
+				f1 = plt.figure()
+				plt.plot(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_prob_nonan.T)
+				for t_i in range(num_tastes):
+					plt.fill_between(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_taste_bin[t_i,:],alpha=0.2)
+				plt.legend(dig_in_names,loc='right')
+				plt.ylabel('Decoding Fraction')
+				plt.xlabel('Time (min)')
+				plt.title('Segment ' + str(s_i))
+				f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.png')
+				f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.svg')
+				plt.close(f1)
+				#Imshow
+				f2 = plt.figure()
+				plt.imshow(seg_decode_epoch_prob_nonan,aspect='auto',interpolation = 'none')
+				x_ticks = np.ceil(np.linspace(0,len(new_time_bins)-1,10)).astype('int')
+				x_tick_labels = np.round(new_time_bins[x_ticks]/1000/60,2)
+				plt.xticks(x_ticks,x_tick_labels)
+				y_ticks = np.arange(len(dig_in_names))
+				plt.yticks(y_ticks,dig_in_names)
+				plt.ylabel('Decoding Fraction')
+				plt.xlabel('Time (min)')
+				plt.title('Segment ' + str(s_i))
+				f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.png')
+				f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.svg')
+				plt.close(f2)
+				#Fraction of occurrences
+				f3 = plt.figure()
+				plt.pie(np.sum(seg_decode_epoch_taste_bin,1)/np.sum(seg_decode_epoch_taste_bin),labels=['water','saccharin','none'],autopct='%1.1f%%',pctdistance =1.5)
+				plt.title('Segment ' + str(s_i))
+				f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.png')
+				f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.svg')
+				plt.close(f3)
+				#If it's the taste interval, save separately decoding of each taste delivery
+				if segment_names[s_i].lower() == 'taste': #Assumes it's always called just "taste"
+					taste_save_dir = seg_decode_save_dir + 'taste_decode/'
+					if not os.path.isdir(taste_save_dir):
+						os.mkdir(taste_save_dir)
+					for t_i in range(num_tastes): #Do each taste and find if match
+						for st_i,st in enumerate(np.array(start_dig_in_times[t_i])):
+							#Plot the decoding to [-post_taste_dt,2*post_taste_dt] around delivery
+							f4 = plt.figure()
+							start_dec_t = max(st - post_taste_dt,seg_start)
+							closest_tbs = np.argmin(np.abs(new_time_bins - start_dec_t))
+							end_dec_t = min(st + 2*post_taste_dt,seg_end)
+							closest_tbe = np.argmin(np.abs(new_time_bins - end_dec_t))
+							closest_td = np.argmin(np.abs(new_time_bins - st))
+							decode_tbs = np.arange(closest_tbs,closest_tbe)
+							decode_t = new_time_bins[decode_tbs]
+							decode_t_labels = decode_t - st #in ms
+							decode_snip = seg_decode_epoch_prob[:,decode_tbs]
+							#TODO: Only plot filled background when decoder is above percentage threshold
+							plt.plot(decode_t_labels,decode_snip.T)
+							for t_i_2 in range(num_tastes):
+								plt.fill_between(decode_t_labels,decode_snip[t_i_2,:],alpha=0.2)
+							plt.axvline(0)
+							plt.legend(dig_in_names)
+							plt.ylabel('Decoding Fraction')
+							plt.xlabel('Time From Delivery (ms)')
+							plt.title(dig_in_names[t_i] + ' delivery #' + str(st_i))
+							f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.png')
+							f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.svg')
+							plt.close(f4)
 						
 
 
@@ -487,81 +487,81 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 					seg_decode_epoch_prob[:,new_time_bins - seg_start + e_dt] = tb_decode_array
 				#Save decoding probabilities
 				np.save(epoch_decode_save_dir + 'segment_' + str(s_i) + '.npy',seg_decode_epoch_prob)
-			#Recreate plots regardless of if data was previously saved
-			seg_decode_save_dir = epoch_decode_save_dir + 'segment_' + str(s_i) + '/'
-			if not os.path.isdir(seg_decode_save_dir):
-				os.mkdir(seg_decode_save_dir)
-			
-			seg_decode_epoch_prob_nonan = np.zeros(np.shape(seg_decode_epoch_prob))
-			seg_decode_epoch_prob_nonan[:] = seg_decode_epoch_prob[:]
-			seg_decode_epoch_prob_nonan[np.isnan(seg_decode_epoch_prob_nonan)] = 0
-			seg_decode_epoch_taste_ind = np.argmax(seg_decode_epoch_prob,0)
-			seg_decode_epoch_taste_bin = np.zeros(np.shape(seg_decode_epoch_prob))
-			for t_i in range(num_tastes):
-				seg_decode_epoch_taste_bin[t_i,np.where(seg_decode_epoch_taste_ind == t_i)[0]] = 1
-			#Line plot
-			f1 = plt.figure()
-			plt.plot(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_prob_nonan.T)
-			for t_i in range(num_tastes):
-				plt.fill_between(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_taste_bin[t_i,:],alpha=0.2)
-			plt.legend(dig_in_names,loc='right')
-			plt.ylabel('Decoding Fraction')
-			plt.xlabel('Time (min)')
-			plt.title('Segment ' + str(s_i))
-			f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.png')
-			f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.svg')
-			plt.close(f1)
-			#Imshow
-			f2 = plt.figure()
-			plt.imshow(seg_decode_epoch_prob_nonan,aspect='auto',interpolation = 'none')
-			x_ticks = np.ceil(np.linspace(0,len(new_time_bins)-1,10)).astype('int')
-			x_tick_labels = np.round(new_time_bins[x_ticks]/1000/60,2)
-			plt.xticks(x_ticks,x_tick_labels)
-			y_ticks = np.arange(len(dig_in_names))
-			plt.yticks(y_ticks,dig_in_names)
-			plt.ylabel('Decoding Fraction')
-			plt.xlabel('Time (min)')
-			plt.title('Segment ' + str(s_i))
-			f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.png')
-			f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.svg')
-			plt.close(f2)
-			#Fraction of occurrences
-			f3 = plt.figure()
-			plt.pie(np.sum(seg_decode_epoch_taste_bin,1)/np.sum(seg_decode_epoch_taste_bin),labels=['water','saccharin','none'],autopct='%1.1f%%',pctdistance =1.5)
-			plt.title('Segment ' + str(s_i))
-			f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.png')
-			f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.svg')
-			plt.close(f3)
-			#If it's the taste interval, save separately decoding of each taste delivery
-			if segment_names[s_i].lower() == 'taste': #Assumes it's always called just "taste"
-				taste_save_dir = seg_decode_save_dir + 'taste_decode/'
-				if not os.path.isdir(taste_save_dir):
-					os.mkdir(taste_save_dir)
-				for t_i in range(num_tastes): #Do each taste and find if match
-					for st_i,st in enumerate(np.array(start_dig_in_times[t_i])):
-						#Plot the decoding to [-post_taste_dt,2*post_taste_dt] around delivery
-						f4 = plt.figure()
-						start_dec_t = max(st - post_taste_dt,seg_start)
-						closest_tbs = np.argmin(np.abs(new_time_bins - start_dec_t))
-						end_dec_t = min(st + 2*post_taste_dt,seg_end)
-						closest_tbe = np.argmin(np.abs(new_time_bins - end_dec_t))
-						closest_td = np.argmin(np.abs(new_time_bins - st))
-						decode_tbs = np.arange(closest_tbs,closest_tbe)
-						decode_t = new_time_bins[decode_tbs]
-						decode_t_labels = decode_t - st #in ms
-						decode_snip = seg_decode_epoch_prob[:,decode_tbs]
-						#TODO: Only plot filled background when decoder is above percentage threshold
-						plt.plot(decode_t_labels,decode_snip.T)
-						for t_i_2 in range(num_tastes):
-							plt.fill_between(decode_t_labels,decode_snip[t_i_2,:],alpha=0.2)
-						plt.axvline(0)
-						plt.legend(dig_in_names)
-						plt.ylabel('Decoding Fraction')
-						plt.xlabel('Time From Delivery (ms)')
-						plt.title(dig_in_names[t_i] + ' delivery #' + str(st_i))
-						f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.png')
-						f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.svg')
-						plt.close(f4)						
+				#Create plots
+				seg_decode_save_dir = epoch_decode_save_dir + 'segment_' + str(s_i) + '/'
+				if not os.path.isdir(seg_decode_save_dir):
+					os.mkdir(seg_decode_save_dir)
+				
+				seg_decode_epoch_prob_nonan = np.zeros(np.shape(seg_decode_epoch_prob))
+				seg_decode_epoch_prob_nonan[:] = seg_decode_epoch_prob[:]
+				seg_decode_epoch_prob_nonan[np.isnan(seg_decode_epoch_prob_nonan)] = 0
+				seg_decode_epoch_taste_ind = np.argmax(seg_decode_epoch_prob,0)
+				seg_decode_epoch_taste_bin = np.zeros(np.shape(seg_decode_epoch_prob))
+				for t_i in range(num_tastes):
+					seg_decode_epoch_taste_bin[t_i,np.where(seg_decode_epoch_taste_ind == t_i)[0]] = 1
+				#Line plot
+				f1 = plt.figure()
+				plt.plot(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_prob_nonan.T)
+				for t_i in range(num_tastes):
+					plt.fill_between(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_taste_bin[t_i,:],alpha=0.2)
+				plt.legend(dig_in_names,loc='right')
+				plt.ylabel('Decoding Fraction')
+				plt.xlabel('Time (min)')
+				plt.title('Segment ' + str(s_i))
+				f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.png')
+				f1.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '.svg')
+				plt.close(f1)
+				#Imshow
+				f2 = plt.figure()
+				plt.imshow(seg_decode_epoch_prob_nonan,aspect='auto',interpolation = 'none')
+				x_ticks = np.ceil(np.linspace(0,len(new_time_bins)-1,10)).astype('int')
+				x_tick_labels = np.round(new_time_bins[x_ticks]/1000/60,2)
+				plt.xticks(x_ticks,x_tick_labels)
+				y_ticks = np.arange(len(dig_in_names))
+				plt.yticks(y_ticks,dig_in_names)
+				plt.ylabel('Decoding Fraction')
+				plt.xlabel('Time (min)')
+				plt.title('Segment ' + str(s_i))
+				f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.png')
+				f2.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_im.svg')
+				plt.close(f2)
+				#Fraction of occurrences
+				f3 = plt.figure()
+				plt.pie(np.sum(seg_decode_epoch_taste_bin,1)/np.sum(seg_decode_epoch_taste_bin),labels=['water','saccharin','none'],autopct='%1.1f%%',pctdistance =1.5)
+				plt.title('Segment ' + str(s_i))
+				f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.png')
+				f3.savefig(seg_decode_save_dir + 'segment_' + str(s_i) + '_pie.svg')
+				plt.close(f3)
+				#If it's the taste interval, save separately decoding of each taste delivery
+				if segment_names[s_i].lower() == 'taste': #Assumes it's always called just "taste"
+					taste_save_dir = seg_decode_save_dir + 'taste_decode/'
+					if not os.path.isdir(taste_save_dir):
+						os.mkdir(taste_save_dir)
+					for t_i in range(num_tastes): #Do each taste and find if match
+						for st_i,st in enumerate(np.array(start_dig_in_times[t_i])):
+							#Plot the decoding to [-post_taste_dt,2*post_taste_dt] around delivery
+							f4 = plt.figure()
+							start_dec_t = max(st - post_taste_dt,seg_start)
+							closest_tbs = np.argmin(np.abs(new_time_bins - start_dec_t))
+							end_dec_t = min(st + 2*post_taste_dt,seg_end)
+							closest_tbe = np.argmin(np.abs(new_time_bins - end_dec_t))
+							closest_td = np.argmin(np.abs(new_time_bins - st))
+							decode_tbs = np.arange(closest_tbs,closest_tbe)
+							decode_t = new_time_bins[decode_tbs]
+							decode_t_labels = decode_t - st #in ms
+							decode_snip = seg_decode_epoch_prob[:,decode_tbs]
+							#TODO: Only plot filled background when decoder is above percentage threshold
+							plt.plot(decode_t_labels,decode_snip.T)
+							for t_i_2 in range(num_tastes):
+								plt.fill_between(decode_t_labels,decode_snip[t_i_2,:],alpha=0.2)
+							plt.axvline(0)
+							plt.legend(dig_in_names)
+							plt.ylabel('Decoding Fraction')
+							plt.xlabel('Time From Delivery (ms)')
+							plt.title(dig_in_names[t_i] + ' delivery #' + str(st_i))
+							f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.png')
+							f4.savefig(taste_save_dir + dig_in_names[t_i] + '_' + str(st_i) + '.svg')
+							plt.close(f4)						
 
 
 
