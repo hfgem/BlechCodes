@@ -1944,10 +1944,11 @@ def plot_decoded_func_p(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,t
 	plot_ind = 1
 	for e_i in range(num_cp):
 		for s_i in range(num_segments):
-			ax[e_i,s_i].set_ylabel('Epoch ' + str(e_i))
 			ax[e_i,s_i].set_ylim([0,max_decoding_percent+10])
 			for t_i in range(num_tastes):
 				ax[e_i,s_i].plot(prob_cutoffs,(epoch_seg_taste_percents[:,e_i,s_i,t_i]).flatten(),color=taste_colors[t_i,:],alpha=0.8)
+			if s_i == 0:
+				ax[e_i,s_i].set_ylabel('Epoch ' + str(e_i))
 			if e_i == 0:
 				ax[e_i,s_i].set_title(segment_names[s_i])
 			if e_i == num_cp-1:
