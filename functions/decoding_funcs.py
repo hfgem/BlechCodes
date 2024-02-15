@@ -619,7 +619,7 @@ def decode_full(full_taste_fr_dist,segment_spike_times,post_taste_dt,
 def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
 				   segment_names,start_dig_in_times,taste_num_deliv,
-				   taste_select_epoch,use_full,max_hz,save_dir):
+				   taste_select_epoch,use_full,max_hz,save_dir,neuron_count_thresh):
 	"""Decode probability of each epoch in high-probability replay regions
 	found using decode_phase_1 based on full taste profile decoding.
 	Use parallelized function to speed up."""
@@ -814,7 +814,29 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 			seg_decode_epoch_taste_ind = np.argmax(seg_decode_epoch_prob,0)
 			seg_decode_epoch_taste_bin = np.zeros(np.shape(seg_decode_epoch_prob))
 			for t_i in range(num_tastes):
-				seg_decode_epoch_taste_bin[t_i,np.where(seg_decode_epoch_taste_ind == t_i)[0]] = 1
+				taste_bin = (seg_decode_epoch_taste_ind == t_i).astype('int')
+				#To ensure starts and ends of bins align
+				taste_bin[0] = 0
+				taste_bin[-1] = 0
+				#Calculate decoding periods
+				diff_decoded_taste = np.diff(taste_bin)
+				start_decoded = np.where(diff_decoded_taste == 1)[0] + 1
+				end_decoded = np.where(diff_decoded_taste == -1)[0] + 1
+				num_decoded = len(start_decoded)
+				#Calculate number of neurons in each period
+				num_neur_decoded = np.zeros(num_decoded)
+				for nd_i in range(num_decoded):
+					d_start = start_decoded[nd_i]
+					d_end = end_decoded[nd_i]
+					for n_i in range(num_neur):
+						if len(np.where(segment_spike_times_s_i_bin[n_i,d_start:d_end])[0]) > 0:
+							num_neur_decoded[nd_i] += 1
+				#Now cut at threshold and only keep matching decoded intervals
+				decode_ind = np.where(num_neur_decoded > neuron_count_thresh)[0]
+				for db in decode_ind:
+					s_db = start_decoded[db]
+					e_db = end_decoded[db]
+					seg_decode_epoch_taste_bin[t_i,s_db:e_db] = 1
 			#Line plot
 			f1 = plt.figure()
 			plt.plot(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_prob_nonan.T)
@@ -866,10 +888,11 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 						decode_t = new_time_bins[decode_tbs]
 						decode_t_labels = decode_t - st #in ms
 						decode_snip = seg_decode_epoch_prob[:,decode_tbs]
+						decode_prob_snip = seg_decode_epoch_taste_bin[:,decode_tbs]
 						#TODO: Only plot filled background when decoder is above percentage threshold
 						plt.plot(decode_t_labels,decode_snip.T)
 						for t_i_2 in range(num_tastes):
-							plt.fill_between(decode_t_labels,decode_snip[t_i_2,:],alpha=0.2)
+							plt.fill_between(decode_t_labels,decode_prob_snip[t_i_2,:],alpha=0.2)
 						plt.axvline(0)
 						plt.legend(dig_in_names)
 						plt.ylabel('Decoding Fraction')
@@ -1262,7 +1285,7 @@ def decode_full_zscore(full_taste_fr_dist_z,segment_spike_times,post_taste_dt,
 def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 				   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,bin_dt,
 				   segment_names,start_dig_in_times,taste_num_deliv,
-				   taste_select_epoch,use_full,max_hz,min_hz,save_dir):
+				   taste_select_epoch,use_full,max_hz,min_hz,save_dir,neuron_count_thresh):
 	"""Decode probability of each epoch in high-probability replay regions
 	found using decode_phase_1 based on full taste profile decoding.
 	Use parallelized function to speed up."""
@@ -1472,9 +1495,32 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 			seg_decode_epoch_prob_nonan[:] = seg_decode_epoch_prob[:]
 			seg_decode_epoch_prob_nonan[np.isnan(seg_decode_epoch_prob_nonan)] = 0
 			seg_decode_epoch_taste_ind = np.argmax(seg_decode_epoch_prob,0)
+			#Updated decoding based on threshold
 			seg_decode_epoch_taste_bin = np.zeros(np.shape(seg_decode_epoch_prob))
 			for t_i in range(num_tastes):
-				seg_decode_epoch_taste_bin[t_i,np.where(seg_decode_epoch_taste_ind == t_i)[0]] = 1
+				taste_bin = (seg_decode_epoch_taste_ind == t_i).astype('int')
+				#To ensure starts and ends of bins align
+				taste_bin[0] = 0
+				taste_bin[-1] = 0
+				#Calculate decoding periods
+				diff_decoded_taste = np.diff(taste_bin)
+				start_decoded = np.where(diff_decoded_taste == 1)[0] + 1
+				end_decoded = np.where(diff_decoded_taste == -1)[0] + 1
+				num_decoded = len(start_decoded)
+				#Calculate number of neurons in each period
+				num_neur_decoded = np.zeros(num_decoded)
+				for nd_i in range(num_decoded):
+					d_start = start_decoded[nd_i]
+					d_end = end_decoded[nd_i]
+					for n_i in range(num_neur):
+						if len(np.where(segment_spike_times_s_i_bin[n_i,d_start:d_end])[0]) > 0:
+							num_neur_decoded[nd_i] += 1
+				#Now cut at threshold and only keep matching decoded intervals
+				decode_ind = np.where(num_neur_decoded > neuron_count_thresh)[0]
+				for db in decode_ind:
+					s_db = start_decoded[db]
+					e_db = end_decoded[db]
+					seg_decode_epoch_taste_bin[t_i,s_db:e_db] = 1
 			#Line plot
 			f1 = plt.figure()
 			plt.plot(np.arange(seg_start,seg_end)/1000/60,seg_decode_epoch_prob_nonan.T)
@@ -1526,9 +1572,10 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 						decode_t = new_time_bins[decode_tbs]
 						decode_t_labels = decode_t - st #in ms
 						decode_snip = seg_decode_epoch_prob[:,decode_tbs]
+						decode_prob_snip = seg_decode_epoch_taste_bin[:,decode_tbs]
 						plt.plot(decode_t_labels,decode_snip.T)
 						for t_i_2 in range(num_tastes):
-							plt.fill_between(decode_t_labels,decode_snip[t_i_2,:],alpha=0.2)
+							plt.fill_between(decode_t_labels,decode_prob_snip[t_i_2,:],alpha=0.2)
 						plt.axvline(0)
 						plt.legend(dig_in_names)
 						plt.ylabel('Decoding Fraction')
@@ -1545,10 +1592,11 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 				 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 				 segment_names,taste_num_deliv,taste_select_epoch,
-				 use_full,save_dir,max_decode,max_hz,seg_stat_bin):
+				 use_full,save_dir,max_decode,max_hz,seg_stat_bin,neuron_count_thresh):
 	"""Function to plot the periods when something other than no taste is 
 	decoded"""
 	num_segments = len(segment_spike_times)
+	neur_cut = np.floor(num_neur*neuron_count_thresh).astype('int')
 	
 	epoch_seg_taste_percents = np.zeros((num_cp,num_segments,num_tastes))
 	for e_i in range(num_cp): #By epoch conduct decoding
@@ -1584,20 +1632,54 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				segment_spike_times_s_i_bin[n_i,n_i_spike_times] = 1
 			
 			#Calculate maximally decoded taste
-			decoded_taste = np.argmax(seg_decode_epoch_prob,0)
-				#Store percents in larger matrix
+			decoded_taste_max = np.argmax(seg_decode_epoch_prob,0)
+			#Store binary decoding results
+			decoded_taste_bin = np.zeros((num_tastes,len(decoded_taste_max)))
 			for t_i in range(num_tastes):
-				epoch_seg_taste_percents[e_i,s_i,t_i] = (np.sum((decoded_taste == t_i).astype('int'))/len(decoded_taste))*100
-				#Store binary decoding results
-			decoded_taste_bin = np.zeros((num_tastes,len(decoded_taste)))
-			for t_i in range(num_tastes):
-				decoded_taste_bin[t_i,np.where(decoded_taste == t_i)[0]] = 1
+				decoded_taste_bin[t_i,np.where(decoded_taste_max == t_i)[0]] = 1
 			#To ensure starts and ends of bins align
 			decoded_taste_bin[:,0] = 0
 			decoded_taste_bin[:,-1] = 0
 			
 			#For each taste (except none) calculate start and end times of decoded intervals and plot
 			for t_i in range(num_tastes - 1):
+				#First calculate neurons decoded in all decoded intervals
+				decoded_taste = decoded_taste_bin[t_i,:]
+				decoded_taste[0] = 0
+				decoded_taste[-1] = 0
+				diff_decoded_taste = np.diff(decoded_taste)
+				start_decoded = np.where(diff_decoded_taste == 1)[0] + 1
+				end_decoded = np.where(diff_decoded_taste == -1)[0] + 1
+				num_decoded = len(start_decoded)
+				num_neur_decoded = np.zeros(num_decoded)
+				prob_decoded = np.zeros(num_decoded)
+				for nd_i in range(num_decoded):
+					d_start = start_decoded[nd_i]
+					d_end = end_decoded[nd_i]
+					d_len = d_end-d_start
+					for n_i in range(num_neur):
+						if len(np.where(segment_spike_times_s_i_bin[n_i,d_start:d_end])[0]) > 0:
+							num_neur_decoded[nd_i] += 1
+					prob_decoded[nd_i] = np.mean(seg_decode_epoch_prob[t_i,d_start:d_end])
+				#Now cut at threshold and only keep matching decoded intervals
+				decode_ind = np.where(num_neur_decoded > neur_cut)[0]
+				decoded_bin = np.zeros(np.shape(decoded_taste))
+				for db in decode_ind:
+					s_db = start_decoded[db]
+					e_db = end_decoded[db]
+					decoded_bin[s_db:e_db] = 1
+				#Save the percent taste decoded matching threshold
+				epoch_seg_taste_percents[e_i,s_i,t_i] = (np.sum(decoded_bin)/len(decoded_bin))*100	
+				#Re-calculate start and end times of the decoded intervals
+				start_decoded = start_decoded[decode_ind]
+				end_decoded = end_decoded[decode_ind]
+				#Re-calculate the decoded statistics
+				num_decoded = len(start_decoded)
+				num_neur_decoded = num_neur_decoded[decode_ind]
+				prob_decoded = prob_decoded[decode_ind]
+				len_decoded = end_decoded-start_decoded
+				iei_decoded = start_decoded[1:] - end_decoded[:-1]
+				
 				#Import taste spike and cp times
 				taste_spike_times = tastant_spike_times[t_i]
 				taste_deliv_times = start_dig_in_times[t_i]
@@ -1621,25 +1703,7 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				taste_fr_vecs_mean_z = (taste_fr_vecs_mean - np.mean(taste_fr_vecs_mean))/np.std(taste_fr_vecs_mean)
 				taste_fr_vecs_max_hz = np.max(taste_epoch_fr_vecs)
 				
-				#Binarize where the taste was the maximally decoded taste
-				#Calculate start and end times for bins of decoding
-				start_decoded = np.where(np.diff(decoded_taste_bin[t_i,:]) == 1)[0] + 1
-				end_decoded = np.where(np.diff(decoded_taste_bin[t_i,:]) == -1)[0] + 1
-				num_decoded = len(start_decoded)
-				
 				#Create plots of decoded period statistics
-				len_decoded = end_decoded-start_decoded
-				iei_decoded = start_decoded[1:] - end_decoded[:-1]
-				num_neur_decoded = np.zeros(num_decoded)
-				prob_decoded = np.zeros(num_decoded)
-				for nd_i in range(num_decoded):
-					d_start = start_decoded[nd_i]
-					d_end = end_decoded[nd_i]
-					d_len = d_end-d_start
-					for n_i in range(num_neur):
-						if len(np.where(segment_spike_times_s_i_bin[n_i,d_start:d_end])[0]) > 0:
-							num_neur_decoded[nd_i] += 1
-					prob_decoded[nd_i] = np.nanmean(seg_decode_epoch_prob[t_i,d_start:d_end])
 				seg_dist_starts = np.arange(0,seg_len,seg_stat_bin)
 				seg_distribution = np.zeros(len(seg_dist_starts)-1)
 				prob_distribution = np.zeros(len(seg_dist_starts)-1)
@@ -1648,7 +1712,6 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 					seg_distribution[sd_i] = len(bin_events)
 					prob_distribution[sd_i] = np.mean(prob_decoded[bin_events])
 				seg_dist_midbin = seg_dist_starts[:-1] + np.diff(seg_dist_starts)/2
-				
 				
 				taste_decode_save_dir = seg_decode_save_dir + dig_in_names[t_i] + '_events/'
 				if not os.path.isdir(taste_decode_save_dir):
