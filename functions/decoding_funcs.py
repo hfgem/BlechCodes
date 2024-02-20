@@ -11,6 +11,7 @@ import numpy as np
 import tqdm, os, warnings, itertools, time, random
 #file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
 #os.chdir(file_path)
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from scipy import interpolate
@@ -1597,7 +1598,7 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 	decoded"""
 	num_segments = len(segment_spike_times)
 	neur_cut = np.floor(num_neur*neuron_count_thresh).astype('int')
-	
+	taste_colors = cm.viridis(np.linspace(0,1,num_tastes))
 	epoch_seg_taste_percents = np.zeros((num_cp,num_segments,num_tastes))
 	for e_i in range(num_cp): #By epoch conduct decoding
 		print('Plotting Decoding for Epoch ' + str(e_i))
@@ -1642,7 +1643,12 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 			decoded_taste_bin[:,-1] = 0
 			
 			#For each taste (except none) calculate start and end times of decoded intervals and plot
-			for t_i in range(num_tastes - 1):
+			all_taste_fr_vecs = []
+			all_taste_fr_vecs_mean = np.zeros((num_tastes,num_neur))
+			all_taste_z_fr_vecs_mean = np.zeros((num_tastes,num_neur))
+			all_taste_event_fr_vecs = []
+			all_taste_event_z_fr_vecs = []
+			for t_i in range(num_tastes):
 				#First calculate neurons decoded in all decoded intervals
 				decoded_taste = decoded_taste_bin[t_i,:]
 				decoded_taste[0] = 0
@@ -1691,16 +1697,23 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				for d_i in range(len(taste_spike_times)): #store each delivery to binary spike matrix
 					for n_i in range(num_neur):
 						if t_i == num_tastes-1:
-							d_i_spikes = np.array(taste_spike_times[d_i][n_i] - taste_spike_times[d_i][n_i]).astype('int')
+							if len(taste_spike_times[d_i][n_i]) > 0:
+								d_i_spikes = np.array(taste_spike_times[d_i][n_i] - np.min(taste_spike_times[d_i][n_i])).astype('int')
+							else:
+								d_i_spikes = np.empty(0)
 						else:
 							d_i_spikes = np.array(taste_spike_times[d_i][n_i] - taste_deliv_times[d_i]).astype('int')
-						taste_spike_times_bin[d_i,n_i,d_i_spikes[d_i_spikes<post_taste_dt]] = 1
+						if len(d_i_spikes) > 0:
+							taste_spike_times_bin[d_i,n_i,d_i_spikes[d_i_spikes<post_taste_dt]] = 1
 					taste_cp_times[d_i,:] = np.concatenate((np.cumsum(np.diff(pop_taste_cp_times[d_i,:])),post_taste_dt*np.ones(1))).astype('int')
 					#Calculate the FR vectors by epoch for each taste response and the average FR vector
 					taste_epoch_fr_vecs[d_i,:] = np.sum(taste_spike_times_bin[d_i,:,taste_cp_times[d_i,e_i]:taste_cp_times[d_i,e_i+1]],1)/((taste_cp_times[d_i,e_i+1]-taste_cp_times[d_i,e_i])/1000) #FR in HZ
+				all_taste_fr_vecs.append(taste_epoch_fr_vecs)
 				#Calculate average taste fr vec
 				taste_fr_vecs_mean = np.nanmean(taste_epoch_fr_vecs,0)
+				all_taste_fr_vecs_mean[t_i,:] = taste_fr_vecs_mean
 				taste_fr_vecs_mean_z = (taste_fr_vecs_mean - np.mean(taste_fr_vecs_mean))/np.std(taste_fr_vecs_mean)
+				all_taste_z_fr_vecs_mean[t_i,:] = taste_fr_vecs_mean_z
 				taste_fr_vecs_max_hz = np.max(taste_epoch_fr_vecs)
 				
 				#Create plots of decoded period statistics
@@ -1758,13 +1771,11 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				plt.close(f)
 					
 				#Create plots of the decoded periods
+				decoded_fr_vecs = [] #Store all decoded events firing rates
+				decoded_z_fr_vecs = [] #Store all decoded events z-scored firing rates
 				if num_decoded > max_decode: #Reduce number if too many
 					decode_prob_avg = np.array([np.mean(seg_decode_epoch_prob[t_i,start_decoded[i]:end_decoded[i]]) for i in range(len(start_decoded))])
 					decode_plot_ind = np.argsort(decode_prob_avg)[-max_decode:]
-					#decode_plot_ind = np.sort(random.sample(list(np.arange(num_decoded)),max_decode))
-					start_decoded = start_decoded[decode_plot_ind]
-					end_decoded = end_decoded[decode_plot_ind]
-					num_decoded = max_decode
 				for nd_i in range(num_decoded):
 					#Decode variables
 					d_start = start_decoded[nd_i]
@@ -1774,84 +1785,186 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 					d_plot_end = np.min((end_decoded[nd_i]+2*d_len,seg_len))
 					d_plot_len = d_plot_end-d_plot_start
 					decode_plot_times = np.arange(d_plot_start,d_plot_end)
-					#Start Figure
-					f, ax = plt.subplots(nrows=4,ncols=2,figsize=(8,8),gridspec_kw=dict(height_ratios=[1,1,2,2]))
-					gs = ax[0,0].get_gridspec()
-					#Decoding probabilities
-					ax[0,0].remove()
-					ax[1,0].remove()
-					axbig = f.add_subplot(gs[0:2,0])
-					axbig.plot(decode_plot_times-d_start,seg_decode_epoch_prob[:,d_plot_start:d_plot_end].T)
-					for t_i_2 in range(num_tastes):
-						axbig.fill_between(decode_plot_times-d_start,decoded_taste_bin[t_i_2,d_plot_start:d_plot_end],alpha=0.2)
-					axbig.axvline(0,color='k',alpha=0.5)
-					axbig.axvline(d_len,color='k',alpha=0.5)
-					axbig.legend(dig_in_names,loc='right')
-					axbig.set_ylabel('Decoding Fraction')
-					axbig.set_xlabel('Time from Event Start (ms)')
-					axbig.set_title('Event ' + str(nd_i) + '\nStart Time = ' + str(round(d_start/1000/60,3)) + ' Minutes')
-					#Decoded raster
 					event_spikes = segment_spike_times_s_i_bin[:,d_plot_start:d_plot_end]
 					decode_spike_times = []
 					for n_i in range(num_neur):
 						decode_spike_times.append(list(np.where(event_spikes[n_i,:])[0]))
-					ax[0,1].eventplot(decode_spike_times)
-					ax[0,1].set_xlim([0,d_plot_len])
-					x_ticks = np.linspace(0,d_plot_len,8).astype('int')
-					x_tick_labels = np.linspace(d_plot_start,d_plot_end,8).astype('int')-d_start
-					ax[0,1].set_xticks(x_ticks,labels=x_tick_labels)
-					ax[0,1].axvline(d_start-d_plot_start,color='k',alpha=0.5)
-					ax[0,1].axvline(d_end-d_plot_start,color='k',alpha=0.5)
-					ax[0,1].set_ylabel('Neuron Index')
-					ax[0,1].set_title('Event Spike Raster')
-					ax[1,0].axis('off')
-					#Plot population firing rates - 50ms smoothing
 					event_spikes_fr = segment_spike_times_s_i_bin[:,d_plot_start-25:d_plot_end+25]
 					firing_rate_vec = np.zeros(d_plot_len)
 					for t_i in range(d_plot_len):
 						min_t_i = max(t_i+25-25,0)
 						max_t_i = min(t_i+25+25,d_plot_len+50)
 						firing_rate_vec[t_i] = np.mean(np.sum(event_spikes_fr[:,min_t_i:max_t_i],1)/(50/1000))
-					ax[1,1].plot(decode_plot_times-d_start,firing_rate_vec)
-					ax[1,1].axvline(0,color='k')
-					ax[1,1].axvline(d_len,color='k')
-					ax[1,1].set_title('Population FR')
-					ax[1,1].set_ylabel('FR (Hz)')
-					ax[1,1].set_xlabel('Time from Event Start (ms)')
-					#Decoded Firing Rates
 					d_fr_vec = np.sum(segment_spike_times_s_i_bin[:,d_start:d_end],1)/(d_len/1000)
+					decoded_fr_vecs.append(d_fr_vec)
 					d_fr_vec_max_hz = np.max(d_fr_vec)
-					img = ax[2,0].imshow(np.expand_dims(d_fr_vec,0),vmin=0,vmax=np.max([taste_fr_vecs_max_hz,d_fr_vec_max_hz]))
-					ax[2,0].set_xlabel('Neuron Index')
-					ax[2,0].set_yticks(ticks=[])
-					plt.colorbar(img, location='bottom',orientation='horizontal',label='Firing Rate (Hz)',panchor=(0.9,0.5),ax=ax[2,0])
-					ax[2,0].set_title('Event FR')
-					#Taste Firing Rates
-					img = ax[2,1].imshow(np.expand_dims(taste_fr_vecs_mean,0),vmin=0,vmax=np.max([taste_fr_vecs_max_hz,d_fr_vec_max_hz]))
-					ax[2,1].set_xlabel('Neuron Index')
-					ax[2,1].set_yticks(ticks=[])
-					plt.colorbar(img, ax= ax[2,1], location='bottom',orientation='horizontal',label='Firing Rate (Hz)',panchor=(0.9,0.5))
-					ax[2,1].set_title('Avg. Taste Resp. FR')
-					#Decoded Firing Rates Z-Scored
 					d_fr_vec_z = (d_fr_vec - np.mean(d_fr_vec))/np.std(d_fr_vec)
-					img = ax[3,0].imshow(np.expand_dims(d_fr_vec_z,0),vmin=-3,vmax=3,cmap='bwr')
-					ax[3,0].set_xlabel('Neuron Index')
-					ax[3,0].set_yticks(ticks=[])
-					plt.colorbar(img, ax=ax[3,0], location='bottom',orientation='horizontal',label='Z-Scored Firing Rate (Hz)',panchor=(0.9,0.5))
-					ax[3,0].set_title('Event FR Z-Scored')
-					#Taste Firing Rates Z-Scored
-					img = ax[3,1].imshow(np.expand_dims(taste_fr_vecs_mean_z,0),vmin=-3,vmax=3,cmap='bwr')
-					ax[3,1].set_xlabel('Neuron Index')
-					ax[3,1].set_yticks(ticks=[])
-					plt.colorbar(img, ax=ax[3,1], location='bottom',orientation='horizontal',label='Z-Scored Firing Rate (Hz)',panchor=(0.9,0.5))
-					ax[3,1].set_title('Avg. Taste Resp. FR Z-Scored')
-					
-					plt.tight_layout()
-					#Save Figure
-					f.savefig(taste_decode_save_dir + 'event_' + str(nd_i) + '.png')
-					f.savefig(taste_decode_save_dir + 'event_' + str(nd_i) + '.svg')
-					plt.close(f)
-					
+					decoded_z_fr_vecs.append(d_fr_vec_z)
+					#If it's a event to plot
+					if np.sum((decode_plot_ind == nd_i).astype('int')) > 0:
+						#Start Figure
+						f, ax = plt.subplots(nrows=5,ncols=2,figsize=(10,10),gridspec_kw=dict(height_ratios=[1,1,2,2,2]))
+						gs = ax[0,0].get_gridspec()
+						#Decoding probabilities
+						ax[0,0].remove()
+						ax[1,0].remove()
+						axbig = f.add_subplot(gs[0:2,0])
+						axbig.plot(decode_plot_times-d_start,seg_decode_epoch_prob[:,d_plot_start:d_plot_end].T)
+						for t_i_2 in range(num_tastes):
+ 							axbig.fill_between(decode_plot_times-d_start,decoded_taste_bin[t_i_2,d_plot_start:d_plot_end],alpha=0.2)
+						axbig.axvline(0,color='k',alpha=0.5)
+						axbig.axvline(d_len,color='k',alpha=0.5)
+						axbig.legend(dig_in_names,loc='right')
+						axbig.set_ylabel('Decoding Fraction')
+						axbig.set_xlabel('Time from Event Start (ms)')
+						axbig.set_title('Event ' + str(nd_i) + '\nStart Time = ' + str(round(d_start/1000/60,3)) + ' Minutes')
+						#Decoded raster
+						ax[0,1].eventplot(decode_spike_times)
+						ax[0,1].set_xlim([0,d_plot_len])
+						x_ticks = np.linspace(0,d_plot_len,8).astype('int')
+						x_tick_labels = np.linspace(d_plot_start,d_plot_end,8).astype('int')-d_start
+						ax[0,1].set_xticks(x_ticks,labels=x_tick_labels)
+						ax[0,1].axvline(d_start-d_plot_start,color='k',alpha=0.5)
+						ax[0,1].axvline(d_end-d_plot_start,color='k',alpha=0.5)
+						ax[0,1].set_ylabel('Neuron Index')
+						ax[0,1].set_title('Event Spike Raster')
+						ax[1,0].axis('off')
+						#Plot population firing rates - 50ms smoothing
+						ax[1,1].plot(decode_plot_times-d_start,firing_rate_vec)
+						ax[1,1].axvline(0,color='k')
+						ax[1,1].axvline(d_len,color='k')
+						ax[1,1].set_title('Population FR')
+						ax[1,1].set_ylabel('FR (Hz)')
+						ax[1,1].set_xlabel('Time from Event Start (ms)')
+						#Decoded Firing Rates
+						img = ax[2,0].imshow(np.expand_dims(d_fr_vec,0),vmin=0,vmax=np.max([taste_fr_vecs_max_hz,d_fr_vec_max_hz]))
+						ax[2,0].set_xlabel('Neuron Index')
+						ax[2,0].set_yticks(ticks=[])
+						plt.colorbar(img, location='bottom',orientation='horizontal',label='Firing Rate (Hz)',panchor=(0.9,0.5),ax=ax[2,0])
+						ax[2,0].set_title('Event FR')
+						#Taste Firing Rates
+						img = ax[2,1].imshow(np.expand_dims(taste_fr_vecs_mean,0),vmin=0,vmax=np.max([taste_fr_vecs_max_hz,d_fr_vec_max_hz]))
+						ax[2,1].set_xlabel('Neuron Index')
+						ax[2,1].set_yticks(ticks=[])
+						plt.colorbar(img, ax= ax[2,1], location='bottom',orientation='horizontal',label='Firing Rate (Hz)',panchor=(0.9,0.5))
+						ax[2,1].set_title('Avg. Taste Resp. FR')
+						#Decoded Firing Rates Z-Scored
+						img = ax[3,0].imshow(np.expand_dims(d_fr_vec_z,0),vmin=-3,vmax=3,cmap='bwr')
+						ax[3,0].set_xlabel('Neuron Index')
+						ax[3,0].set_yticks(ticks=[])
+						plt.colorbar(img, ax=ax[3,0], location='bottom',orientation='horizontal',label='Z-Scored Firing Rate (Hz)',panchor=(0.9,0.5))
+						ax[3,0].set_title('Event FR Z-Scored')
+						#Taste Firing Rates Z-Scored
+						img = ax[3,1].imshow(np.expand_dims(taste_fr_vecs_mean_z,0),vmin=-3,vmax=3,cmap='bwr')
+						ax[3,1].set_xlabel('Neuron Index')
+						ax[3,1].set_yticks(ticks=[])
+						plt.colorbar(img, ax=ax[3,1], location='bottom',orientation='horizontal',label='Z-Scored Firing Rate (Hz)',panchor=(0.9,0.5))
+						ax[3,1].set_title('Avg. Taste Resp. FR Z-Scored')
+						#Decoded Firing Rates x Average Firing Rates
+						max_lim = np.max([np.max(d_fr_vec_z),np.max(taste_fr_vecs_mean)])
+						ax[4,0].plot([0,max_lim],[0,max_lim],alpha=0.5,linestyle='dashed')
+						ax[4,0].scatter(taste_fr_vecs_mean,d_fr_vec)
+						ax[4,0].set_xlabel('Average Taste FR')
+						ax[4,0].set_ylabel('Decoded Taste FR')
+						ax[4,0].set_title('Firing Rate Similarity')
+						#Z-Scored Decoded Firing Rates x Z-Scored Average Firing Rates
+						ax[4,1].plot([-3,3],[-3,3],alpha=0.5,linestyle='dashed',color='k')
+						ax[4,1].scatter(taste_fr_vecs_mean_z,d_fr_vec_z)
+						ax[4,1].set_xlabel('Average Taste Neuron FR')
+						ax[4,1].set_ylabel('Event Neuron FR')
+						ax[4,1].set_title('Z-Scored Firing Rate Similarity')
+						plt.tight_layout()
+						#Save Figure
+						f.savefig(taste_decode_save_dir + 'event_' + str(nd_i) + '.png')
+						f.savefig(taste_decode_save_dir + 'event_' + str(nd_i) + '.svg')
+						plt.close(f)
+				all_taste_event_fr_vecs.append(np.array(decoded_fr_vecs))
+				all_taste_event_z_fr_vecs.append(np.array(decoded_z_fr_vecs))
+			
+			#Taste event scatter plots
+			#f, ax = plt.subplots(nrows=1, ncols=num_tastes+1, figsize=(8,8), gridspec_kw=dict(width_ratios=list(np.concatenate((6*np.ones(num_tastes),np.ones(1))))))
+			f, ax = plt.subplots(nrows=num_tastes, ncols=num_tastes, figsize=(num_tastes*2,num_tastes*2), gridspec_kw=dict(width_ratios=list(6*np.ones(num_tastes))))
+			max_fr = 0
+			max_fr_t_av = 0
+			for t_i in range(num_tastes): #Event Taste
+				ax[t_i,0].set_ylabel('Decoded ' + dig_in_names[t_i] +' FR')
+				taste_event_fr_vecs = all_taste_event_fr_vecs[t_i]
+				max_taste_fr = np.max(taste_event_fr_vecs)
+				if max_taste_fr > max_fr:
+					max_fr = max_taste_fr
+				for t_i_c in range(num_tastes): #Average Taste
+					average_fr_vec_mat = all_taste_fr_vecs_mean[t_i_c,:]*np.ones(np.shape(taste_event_fr_vecs))
+					#Calculate max avg fr
+					max_avg_fr = np.max(all_taste_fr_vecs_mean[t_i_c,:])
+					if max_avg_fr > max_fr_t_av:
+						max_fr_t_av = max_avg_fr
+					ax[t_i,t_i_c].set_xlabel('Average ' + dig_in_names[t_i_c] + ' FR')
+					ax[t_i,t_i_c].scatter(average_fr_vec_mat,taste_event_fr_vecs,color=taste_colors[t_i,:],alpha = 0.3)
+			for t_i in range(num_tastes):
+				for t_i_c in range(num_tastes):
+					ax[t_i,t_i_c].plot([0,max_fr],[0,max_fr],alpha=0.5,color='k',linestyle='dashed')
+					ax[t_i,t_i_c].set_ylim([0,max_fr])
+					ax[t_i,t_i_c].set_xlim([0,max_fr_t_av])
+					if t_i == t_i_c:
+						for child in ax[t_i,t_i_c].get_children():
+						    if isinstance(child, matplotlib.spines.Spine):
+						        child.set_color('r')
+			plt.suptitle('Deviation Events x Average Taste Response')
+			plt.tight_layout()
+			f.savefig(seg_decode_save_dir + 'event_vs_avg_taste_deliv_scat.png')
+			f.savefig(seg_decode_save_dir + 'event_vs_avg_taste_deliv_scat.svg')
+			plt.close(f)
+			
+			#Taste event angled deviation plots
+			#f, ax = plt.subplots(nrows=1, ncols=num_tastes+1, figsize=(8,8), gridspec_kw=dict(width_ratios=list(np.concatenate((6*np.ones(num_tastes),np.ones(1))))))
+			f, ax = plt.subplots(nrows=num_tastes, ncols=num_tastes, figsize=(num_tastes*3,num_tastes*3), gridspec_kw=dict(width_ratios=list(6*np.ones(num_tastes))))
+			max_y = 0
+			min_y = 0
+			max_x = 0
+			for t_i in range(num_tastes): #Event Taste
+				ax[t_i,0].set_ylabel('Decoded ' + dig_in_names[t_i] +' FR')
+				taste_event_fr_vecs = all_taste_event_fr_vecs[t_i]
+				max_taste_fr = np.max(taste_event_fr_vecs)
+				for t_i_c in range(num_tastes): #Average Taste
+					#Calculate max fr of taste response
+					taste_fr_vecs = all_taste_fr_vecs[t_i_c]
+					max_taste_resp_fr = np.max(taste_fr_vecs)
+					x_vals = np.linspace(0,max_taste_resp_fr,num_neur)
+					if max_taste_resp_fr > max_x:
+						max_x = max_taste_resp_fr
+					num_taste_deliv = np.shape(taste_fr_vecs)[0]
+					#Calculate mean and std of event away from average
+					num_events = np.shape(taste_event_fr_vecs)[0]
+					all_diff = np.zeros((num_events*num_taste_deliv,num_neur))
+					for td_i in range(num_taste_deliv):
+						diff = taste_event_fr_vecs - taste_fr_vecs[td_i,:]
+						all_diff[td_i*num_events:(td_i+1)*num_events,:] = diff
+					diff_mean = np.mean(all_diff,0)
+					diff_std = np.std(all_diff,0)
+					if max_y < np.max(diff_mean + x_vals + diff_std):
+						max_y = np.max(diff_mean + x_vals + diff_std)
+					if min_y > np.min(diff_mean + x_vals - diff_std):
+						min_y = np.min(diff_mean + x_vals - diff_std)
+					ax[t_i,t_i_c].plot(x_vals,diff_mean + x_vals,alpha=0.5,color='b',linestyle='solid')
+					ax[t_i,t_i_c].fill_between(x_vals,diff_mean + x_vals - diff_std,diff_mean + x_vals + diff_std,alpha=0.5,color='b')
+					#Plot
+					ax[t_i,t_i_c].set_xlabel(dig_in_names[t_i_c] + ' delivery FR')
+			for t_i in range(num_tastes):
+				for t_i_c in range(num_tastes):
+					ax[t_i,t_i_c].plot(np.arange(max_x),np.arange(max_x),alpha=0.5,color='k',linestyle='dashed')
+					ax[t_i,t_i_c].set_xlim([0,max_x])
+					ax[t_i,t_i_c].set_ylim([min_y-10,max_y+10])
+					if t_i == t_i_c:
+						for child in ax[t_i,t_i_c].get_children():
+						    if isinstance(child, matplotlib.spines.Spine):
+						        child.set_color('r')
+			plt.suptitle('Deviation Events x Individual Taste Response')
+			plt.tight_layout()
+			f.savefig(seg_decode_save_dir + 'event_vs_taste_deliv_dev.png')
+			f.savefig(seg_decode_save_dir + 'event_vs_taste_deliv_dev.svg')
+			plt.close(f)
+			
+			
 	#Summary Plot of Percent of Each Taste Decoded Across Epochs and Segments		
 	f = plt.figure(figsize=(8,8))
 	plot_ind = 1
@@ -1875,12 +1988,10 @@ def plot_decoded_func_p(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,t
 				 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 				 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 				 segment_names,taste_num_deliv,taste_select_epoch,
-				 use_full,save_dir,max_decode,max_hz,seg_stat_bin):
-	
-	warnings.filterwarnings('ignore')
-	
+				 use_full,save_dir,max_decode,max_hz,seg_stat_bin):	
 	"""Function to plot the decoding statistics as a function of average decoding
 	probability within the decoded interval."""
+	warnings.filterwarnings('ignore')
 	num_segments = len(segment_spike_times)
 	prob_cutoffs = np.arange(1/num_tastes,1,0.05)
 	num_prob = len(prob_cutoffs)
@@ -2034,11 +2145,9 @@ def plot_decoded_func_n(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,t
 				 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 				 segment_names,taste_num_deliv,taste_select_epoch,
 				 use_full,save_dir,max_decode,max_hz,seg_stat_bin):
-	
-	warnings.filterwarnings('ignore')
-	
 	"""Function to plot the decoding statistics as a function of number of 
 	neurons firing within the decoded interval."""
+	warnings.filterwarnings('ignore')
 	num_segments = len(segment_spike_times)
 	neur_cutoffs = np.arange(1,num_neur)
 	num_cuts = len(neur_cutoffs)
