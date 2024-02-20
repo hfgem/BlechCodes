@@ -79,10 +79,7 @@ if __name__ == '__main__':
 	
 	#Import taste selectivity data
 	data_group_name = 'taste_selectivity'
-	#taste_response_prob = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_response_prob')[0]
-	#taste_select_prob = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob')[0]
-	#taste_response_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_response_prob_epoch')[0]
-	taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
+	taste_select_neur_epoch_bin = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
 	
 	taste_select_corr_dir = corr_dir + 'taste_select_neur/'
 	if os.path.isdir(taste_select_corr_dir) == False:
@@ -95,19 +92,19 @@ if __name__ == '__main__':
 	df.calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 							   start_dig_in_times, end_dig_in_times, segment_names, 
 							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
-							   pop_taste_cp_raster_inds, taste_select_corr_dir, taste_select_prob_epoch) #For all neurons in dataset
+							   pop_taste_cp_raster_inds, taste_select_corr_dir, taste_select_neur_epoch_bin) #For all neurons in dataset
 	corr_dev_stats = df.pull_corr_dev_stats(segment_names, dig_in_names, taste_select_corr_dir)
 	
 	taste_select_neur_plot_dir = taste_select_corr_dir + 'plots/'
 	if os.path.isdir(taste_select_neur_plot_dir) == False:
 		os.mkdir(taste_select_neur_plot_dir)
-	dpf.plot_stats(corr_dev_stats, segment_names, dig_in_names, taste_select_neur_plot_dir, 'Correlation',taste_select_prob_epoch)
+	dpf.plot_stats(corr_dev_stats, segment_names, dig_in_names, taste_select_neur_plot_dir, 'Correlation',taste_select_neur_epoch_bin)
 # 	segment_corr_data, segment_corr_data_avg, segment_corr_pop_data, segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, \
 # 																								segment_names, dig_in_names, taste_select_neur_plot_dir, \
 # 																								'Correlation',taste_select_bin_epoch)
 	segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, \
-												taste_select_neur_plot_dir, 'Correlation',taste_select_prob_epoch)
-	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,taste_select_neur_plot_dir,taste_select_prob_epoch)
+												taste_select_neur_plot_dir, 'Correlation',taste_select_neur_epoch_bin)
+	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,taste_select_neur_plot_dir,taste_select_neur_epoch_bin)
 	
 	#Calculate pairwise significance
 	taste_select_neur_stats_dir = taste_select_corr_dir + 'stats/'

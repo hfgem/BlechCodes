@@ -290,14 +290,6 @@ def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 		num_dev = len(seg_rast)
 			
 		for t_i in range(num_tastes):  #Loop through each taste
-			#Find the number of neurons
-			if np.shape(neuron_keep_indices)[0] == 0:
-				total_num_neur = np.shape(seg_rast[0])[0]
-				taste_keep_ind = np.arange(total_num_neur)
-			else:
-				total_num_neur = np.sum(neuron_keep_indices[:,:,t_i]).astype('int')
-				taste_keep_ind = (np.where(((neuron_keep_indices[:,t_i]).astype('int')).flatten())[0]).astype('int')
-		
 			#Set storage directory and check if data previously stored
 			filename_pop_vec = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec.npy'
 			filename_pop_vec_loaded = 0
@@ -316,119 +308,129 @@ def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 				deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
 				#Store the correlation results in a numpy array
 				neuron_pop_vec_corr_storage = np.nan*np.ones((num_dev, num_deliv, num_cp-1))
-				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
-					dev_rast = seg_rast[dev_i][taste_keep_ind,:]
-					dev_len = np.shape(dev_rast)[1]
-					dev_vec = np.sum(dev_rast,1)/(dev_len/1000) #in Hz
-					#Population fr vector changepoints
-					#TODO: Rewrite to use proper taste selective indices that reflect each epoch
-					pool = Pool(4)
-					inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
-						itertools.repeat(taste_keep_ind), itertools.repeat(taste_cp_pop), \
-						deliv_adjustment, itertools.repeat(dev_vec))
-					deliv_vec_corr_storage = pool.map(cdcpp.deliv_corr_population_vec_parallelized, inputs_pop)
-					pool.close()
-					neuron_pop_vec_corr_storage[dev_i,:,:] = np.array(deliv_vec_corr_storage)
-				np.save(filename_pop_vec,neuron_pop_vec_corr_storage)
-
-def calculate_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_times,
-						   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
-						   pre_taste, post_taste, taste_cp_raster_inds, pop_taste_cp_raster_inds,
-						   save_dir, neuron_keep_indices=[]):
-	"""This function takes in deviation rasters, tastant delivery spikes, and
-	changepoint indices to calculate correlations of each deviation to each 
-	changepoint interval"""
-
-	#Grab parameters
-	fr_bin = 20 #ms to bin together for number of spikes 'fr' - make sure it's even
-	num_tastes = len(start_dig_in_times)
-	num_segments = len(segment_dev_rasters_zscore)
-	pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
-	post_taste_dt = np.ceil(post_taste*1000).astype('int')
-
-	for s_i in range(num_segments):  #Loop through each segment
-		print("Beginning timeseries correlation calcs for segment " + str(s_i))
-		#Gather segment data
-		seg_rast = segment_dev_rasters_zscore[s_i]
-		num_dev = len(seg_rast)
-			
-		for t_i in range(num_tastes):  #Loop through each taste
-			#Find the number of neurons
-			if np.shape(neuron_keep_indices)[0] == 0:
-				total_num_neur = np.shape(seg_rast[0])[0]
-				taste_keep_ind = np.arange(total_num_neur)
-			else:
-				total_num_neur = np.sum(neuron_keep_indices[:,t_i]).astype('int')
-				taste_keep_ind = (np.where(((neuron_keep_indices[:,t_i]).astype('int')).flatten())[0]).astype('int')
-			#Try to import previously stored data if exists
-			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
-			filename_loaded = 0
-			filename_pop = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop.npy'
-			filename_pop_loaded = 0
-			try:
-				neuron_corr_storage = np.load(filename)
-				filename_loaded = 1
-			except:
-				print("Individual Neuron Timeseries Correlations Need to Be Calculated")
-			try:
-				neuron_vec_corr_storage = np.load(filename_pop)
-				filename_pop_loaded = 1
-			except:
-				print("Population Timeseries Correlations Need to Be Calculated")
-			if filename_loaded*filename_pop_loaded == 0:
-				print("\tCalculating Taste #" + str(t_i + 1))
-				taste_cp = taste_cp_raster_inds[t_i][:, taste_keep_ind, :]
-				taste_cp_pop = pop_taste_cp_raster_inds[t_i]
-				taste_spikes = tastant_spike_times[t_i]
-				#Note, num_cp = num_cp+1 with the first value the taste delivery index
-				num_deliv, _, num_cp = np.shape(taste_cp)
-				taste_deliv_len = [(end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i][deliv_i] + pre_taste_dt + post_taste_dt + 1) for deliv_i in range(num_deliv)]
-				deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
-				#Store the correlation results in a numpy array
-				neuron_corr_storage = np.nan*np.ones((num_dev, num_deliv, total_num_neur, num_cp-1))
-				neuron_pop_corr_storage = np.nan*np.ones((num_dev, num_deliv, num_cp-1))
-				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
-					dev_rast = seg_rast[dev_i][taste_keep_ind,:]
-					dev_len = np.shape(dev_rast)[1]
-					start_ind = (np.arange(-int(fr_bin/2),dev_len-int(fr_bin/2))).astype('int')
-					start_ind[start_ind < 0] = 0
-					end_ind = (np.arange(int(fr_bin/2),dev_len+int(fr_bin/2))).astype('int')
-					end_ind[end_ind > dev_len] = dev_len
-					#TODO: test gaussian convolution instead of binning
-					dev_rast_binned = np.zeros(np.shape(dev_rast)) #timeseries information kept
-					for si in range(dev_len):
-						dev_rast_binned[:,si] = np.sum(dev_rast[:,start_ind[si]:end_ind[si]],1)
-					#z-score the deviation raster and send only the deviation itself
-					#Z-score the deviation bin by taking the pre-taste interval bins
-					dev_z_mean = np.expand_dims(np.mean(dev_rast_binned[:,:pre_taste_dt],axis=1),1)
-					dev_z_std = np.expand_dims(np.std(dev_rast_binned[:,:pre_taste_dt],axis=1),1)
-					dev_z_std[dev_z_std == 0] = 1 #get rid of NaNs
-					dev_rast_zscored = np.divide(np.subtract(dev_rast_binned,dev_z_mean),dev_z_std)
-					dev_rast_zscored = dev_rast_zscored[:,pre_taste_dt:]
-	
-					#Individual neuron changepoints
-					if filename_loaded == 0:
-						inputs = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
-						 itertools.repeat(np.arange(0,total_num_neur)), taste_cp, \
-							 deliv_adjustment, itertools.repeat(dev_rast_zscored), itertools.repeat(fr_bin))
-						pool = Pool(4)
-						deliv_corr_storage = pool.map(cdcpz.deliv_corr_parallelized, inputs)
-						pool.close()
-						neuron_corr_storage[dev_i,:,:,:] = np.array(deliv_corr_storage)
-					#Population changepoints
-					if filename_pop_loaded == 0:
+				for cp_i in tqdm.tqdm(range(num_cp-1)):
+					#Find the number of neurons
+					if np.shape(neuron_keep_indices)[0] == 0:
+						total_num_neur = np.shape(seg_rast[0])[0]
+						taste_keep_ind = np.arange(total_num_neur)
+					else:
+						#neuron_keep_indices = taste_select_neur_epoch_bin = num_cp x num_neur
+						total_num_neur = np.sum(neuron_keep_indices[cp_i,:]).astype('int')
+						taste_keep_ind = (np.where(((neuron_keep_indices[cp_i,:]).astype('int')).flatten())[0]).astype('int')
+					#Loop through all deviations
+					for dev_i in tqdm.tqdm(range(num_dev)): 
+						dev_rast = seg_rast[dev_i][taste_keep_ind,:]
+						dev_len = np.shape(dev_rast)[1]
+						dev_vec = np.sum(dev_rast,1)/(dev_len/1000) #in Hz
+						#Population fr vector changepoints
 						pool = Pool(4)
 						inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
-							itertools.repeat(np.arange(0,total_num_neur)), taste_cp_pop, \
-							deliv_adjustment, itertools.repeat(dev_rast_zscored), itertools.repeat(fr_bin))
-						deliv_vec_corr_storage = pool.map(cdcppz.deliv_corr_population_parallelized, inputs_pop)
+							itertools.repeat(taste_keep_ind), itertools.repeat(taste_cp_pop), \
+							deliv_adjustment, itertools.repeat(dev_vec), itertools.repeat(cp_i))
+						deliv_vec_corr_storage = pool.map(cdcpp.deliv_corr_population_vec_parallelized, inputs_pop)
 						pool.close()
-						neuron_pop_corr_storage[dev_i,:,:] = np.array(deliv_vec_corr_storage)
-				#Save to a numpy array
-				if filename_loaded == 0:
-					np.save(filename,neuron_corr_storage)
-				if filename_pop_loaded == 0:
-					np.save(filename_pop,neuron_pop_corr_storage)
+						neuron_pop_vec_corr_storage[dev_i,:,cp_i] = np.array(deliv_vec_corr_storage)
+				np.save(filename_pop_vec,neuron_pop_vec_corr_storage)
+
+# def calculate_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_times,
+# 						   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
+# 						   pre_taste, post_taste, taste_cp_raster_inds, pop_taste_cp_raster_inds,
+# 						   save_dir, neuron_keep_indices=[]):
+# 	"""This function takes in deviation rasters, tastant delivery spikes, and
+# 	changepoint indices to calculate correlations of each deviation to each 
+# 	changepoint interval"""
+
+# 	#Grab parameters
+# 	fr_bin = 20 #ms to bin together for number of spikes 'fr' - make sure it's even
+# 	num_tastes = len(start_dig_in_times)
+# 	num_segments = len(segment_dev_rasters_zscore)
+# 	pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
+# 	post_taste_dt = np.ceil(post_taste*1000).astype('int')
+
+# 	for s_i in range(num_segments):  #Loop through each segment
+# 		print("Beginning timeseries correlation calcs for segment " + str(s_i))
+# 		#Gather segment data
+# 		seg_rast = segment_dev_rasters_zscore[s_i]
+# 		num_dev = len(seg_rast)
+# 			
+# 		for t_i in range(num_tastes):  #Loop through each taste
+# 			#Find the number of neurons
+# 			if np.shape(neuron_keep_indices)[0] == 0:
+# 				total_num_neur = np.shape(seg_rast[0])[0]
+# 				taste_keep_ind = np.arange(total_num_neur)
+# 			else:
+# 				#neuron_keep_indices = taste_select_neur_epoch_bin = num_cp x num_neur
+# 				total_num_neur = np.sum(neuron_keep_indices,1).astype('int')
+# 				taste_keep_ind = (np.where(((neuron_keep_indices[:,t_i]).astype('int')).flatten())[0]).astype('int')
+# 			#Try to import previously stored data if exists
+# 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
+# 			filename_loaded = 0
+# 			filename_pop = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop.npy'
+# 			filename_pop_loaded = 0
+# 			try:
+# 				neuron_corr_storage = np.load(filename)
+# 				filename_loaded = 1
+# 			except:
+# 				print("Individual Neuron Timeseries Correlations Need to Be Calculated")
+# 			try:
+# 				neuron_vec_corr_storage = np.load(filename_pop)
+# 				filename_pop_loaded = 1
+# 			except:
+# 				print("Population Timeseries Correlations Need to Be Calculated")
+# 			if filename_loaded*filename_pop_loaded == 0:
+# 				print("\tCalculating Taste #" + str(t_i + 1))
+# 				taste_cp = taste_cp_raster_inds[t_i][:, taste_keep_ind, :]
+# 				taste_cp_pop = pop_taste_cp_raster_inds[t_i]
+# 				taste_spikes = tastant_spike_times[t_i]
+# 				#Note, num_cp = num_cp+1 with the first value the taste delivery index
+# 				num_deliv, _, num_cp = np.shape(taste_cp)
+# 				taste_deliv_len = [(end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i][deliv_i] + pre_taste_dt + post_taste_dt + 1) for deliv_i in range(num_deliv)]
+# 				deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
+# 				#Store the correlation results in a numpy array
+# 				neuron_corr_storage = np.nan*np.ones((num_dev, num_deliv, total_num_neur, num_cp-1))
+# 				neuron_pop_corr_storage = np.nan*np.ones((num_dev, num_deliv, num_cp-1))
+# 				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
+# 					dev_rast = seg_rast[dev_i][taste_keep_ind,:]
+# 					dev_len = np.shape(dev_rast)[1]
+# 					start_ind = (np.arange(-int(fr_bin/2),dev_len-int(fr_bin/2))).astype('int')
+# 					start_ind[start_ind < 0] = 0
+# 					end_ind = (np.arange(int(fr_bin/2),dev_len+int(fr_bin/2))).astype('int')
+# 					end_ind[end_ind > dev_len] = dev_len
+# 					#TODO: test gaussian convolution instead of binning
+# 					dev_rast_binned = np.zeros(np.shape(dev_rast)) #timeseries information kept
+# 					for si in range(dev_len):
+# 						dev_rast_binned[:,si] = np.sum(dev_rast[:,start_ind[si]:end_ind[si]],1)
+# 					#z-score the deviation raster and send only the deviation itself
+# 					#Z-score the deviation bin by taking the pre-taste interval bins
+# 					dev_z_mean = np.expand_dims(np.mean(dev_rast_binned[:,:pre_taste_dt],axis=1),1)
+# 					dev_z_std = np.expand_dims(np.std(dev_rast_binned[:,:pre_taste_dt],axis=1),1)
+# 					dev_z_std[dev_z_std == 0] = 1 #get rid of NaNs
+# 					dev_rast_zscored = np.divide(np.subtract(dev_rast_binned,dev_z_mean),dev_z_std)
+# 					dev_rast_zscored = dev_rast_zscored[:,pre_taste_dt:]
+# 	
+# 					#Individual neuron changepoints
+# 					if filename_loaded == 0:
+# 						inputs = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
+# 						 itertools.repeat(np.arange(0,total_num_neur)), taste_cp, \
+# 							 deliv_adjustment, itertools.repeat(dev_rast_zscored), itertools.repeat(fr_bin))
+# 						pool = Pool(4)
+# 						deliv_corr_storage = pool.map(cdcpz.deliv_corr_parallelized, inputs)
+# 						pool.close()
+# 						neuron_corr_storage[dev_i,:,:,:] = np.array(deliv_corr_storage)
+# 					#Population changepoints
+# 					if filename_pop_loaded == 0:
+# 						pool = Pool(4)
+# 						inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
+# 							itertools.repeat(np.arange(0,total_num_neur)), taste_cp_pop, \
+# 							deliv_adjustment, itertools.repeat(dev_rast_zscored), itertools.repeat(fr_bin))
+# 						deliv_vec_corr_storage = pool.map(cdcppz.deliv_corr_population_parallelized, inputs_pop)
+# 						pool.close()
+# 						neuron_pop_corr_storage[dev_i,:,:] = np.array(deliv_vec_corr_storage)
+# 				#Save to a numpy array
+# 				if filename_loaded == 0:
+# 					np.save(filename,neuron_corr_storage)
+# 				if filename_pop_loaded == 0:
+# 					np.save(filename_pop,neuron_pop_corr_storage)
 
 
 def calculate_vec_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_times,
@@ -451,14 +453,6 @@ def calculate_vec_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_
 		num_dev = len(seg_rast)
 			
 		for t_i in range(num_tastes):  #Loop through each taste
-			#Find the number of neurons
-			if np.shape(neuron_keep_indices)[0] == 0:
-				total_num_neur = np.shape(seg_rast[0])[0]
-				taste_keep_ind = np.arange(total_num_neur)
-			else:
-				total_num_neur = np.sum(neuron_keep_indices[:,t_i]).astype('int')
-				taste_keep_ind = (np.where(((neuron_keep_indices[:,t_i]).astype('int')).flatten())[0]).astype('int')
-		
 			#Set storage directory and check if data previously stored
 			filename_pop_vec = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec.npy'
 			filename_pop_vec_loaded = 0
@@ -477,24 +471,33 @@ def calculate_vec_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_
 				deliv_adjustment = [start_dig_in_times[t_i][deliv_i] + pre_taste_dt for deliv_i in range(num_deliv)]
 				#Store the correlation results in a numpy array
 				neuron_pop_vec_corr_storage = np.nan*np.ones((num_dev, num_deliv, num_cp-1))
-				for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
-					dev_rast = seg_rast[dev_i][taste_keep_ind,:]
-					dev_z_mean = np.expand_dims(np.mean(dev_rast[:,:pre_taste_dt],axis=1),1)
-					dev_z_std = np.expand_dims(np.std(dev_rast[:pre_taste_dt],axis=1),1)
-					dev_z_std[dev_z_std == 0] = 1
-					dev_zscored = (dev_rast - dev_z_mean)/dev_z_std
-					dev_zscored = dev_zscored[:,pre_taste_dt:]
-					
-					dev_len = np.shape(dev_zscored)[1]
-					dev_vec = np.mean(dev_zscored,axis=1)/(dev_len/1000) #in Hz the average z-scored firing rate for the deviation
-					#Population fr vector changepoints
-					pool = Pool(4)
-					inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
-						itertools.repeat(taste_keep_ind), itertools.repeat(taste_cp_pop), \
-						deliv_adjustment, itertools.repeat(dev_vec))
-					deliv_vec_corr_storage = pool.map(cdcppz.deliv_corr_population_vec_parallelized, inputs_pop)
-					pool.close()
-					neuron_pop_vec_corr_storage[dev_i,:,:] = np.array(deliv_vec_corr_storage)
+				for cp_i in tqdm.tqdm(range(num_cp-1)):
+					#Find the number of neurons
+					if np.shape(neuron_keep_indices)[0] == 0:
+						total_num_neur = np.shape(seg_rast[0])[0]
+						taste_keep_ind = np.arange(total_num_neur)
+					else:
+						#neuron_keep_indices = taste_select_neur_epoch_bin = num_cp x num_neur
+						total_num_neur = np.sum(neuron_keep_indices[cp_i,:]).astype('int')
+						taste_keep_ind = (np.where(((neuron_keep_indices[cp_i,:]).astype('int')).flatten())[0]).astype('int')
+					for dev_i in tqdm.tqdm(range(num_dev)): #Loop through all deviations
+						dev_rast = seg_rast[dev_i][taste_keep_ind,:]
+						dev_z_mean = np.expand_dims(np.mean(dev_rast[:,:pre_taste_dt],axis=1),1)
+						dev_z_std = np.expand_dims(np.std(dev_rast[:pre_taste_dt],axis=1),1)
+						dev_z_std[dev_z_std == 0] = 1
+						dev_zscored = (dev_rast - dev_z_mean)/dev_z_std
+						dev_zscored = dev_zscored[:,pre_taste_dt:]
+						
+						dev_len = np.shape(dev_zscored)[1]
+						dev_vec = np.mean(dev_zscored,axis=1)/(dev_len/1000) #in Hz the average z-scored firing rate for the deviation
+						#Population fr vector changepoints
+						pool = Pool(4)
+						inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
+							itertools.repeat(taste_keep_ind), itertools.repeat(taste_cp_pop), \
+							deliv_adjustment, itertools.repeat(dev_vec), itertools.repeat(cp_i))
+						deliv_vec_corr_storage = pool.map(cdcppz.deliv_corr_population_vec_parallelized, inputs_pop)
+						pool.close()
+						neuron_pop_vec_corr_storage[dev_i,:,cp_i] = np.array(deliv_vec_corr_storage)
 				np.save(filename_pop_vec,neuron_pop_vec_corr_storage)
 				
 				
