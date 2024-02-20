@@ -90,10 +90,10 @@ if __name__ == '__main__':
 	if os.path.isdir(all_neur_corr_dir) == False:
 		os.mkdir(all_neur_corr_dir)
 		
-	df.calculate_correlations(segment_dev_rasters, tastant_spike_times,
-							   start_dig_in_times, end_dig_in_times, segment_names, 
-							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
-							   pop_taste_cp_raster_inds, all_neur_corr_dir) #For all neurons in dataset
+# 	df.calculate_correlations(segment_dev_rasters, tastant_spike_times,
+# 							   start_dig_in_times, end_dig_in_times, segment_names, 
+# 							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
+# 							   pop_taste_cp_raster_inds, all_neur_corr_dir) #For all neurons in dataset
 	df.calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 							   start_dig_in_times, end_dig_in_times, segment_names, 
 							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
@@ -103,9 +103,11 @@ if __name__ == '__main__':
 	if os.path.isdir(all_neur_plot_dir) == False:
 		os.mkdir(all_neur_plot_dir)
 	dpf.plot_stats(corr_dev_stats, segment_names, dig_in_names, all_neur_plot_dir, 'Correlation',neuron_keep_indices)
-	segment_corr_data, segment_corr_data_avg, segment_corr_pop_data, segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, \
-																								segment_names, dig_in_names, all_neur_plot_dir, \
-																								'Correlation',neuron_keep_indices)
+# 	segment_corr_data, segment_corr_data_avg, segment_corr_pop_data, segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, \
+# 																								segment_names, dig_in_names, all_neur_plot_dir, \
+# 																								'Correlation',neuron_keep_indices)
+	segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, \
+												all_neur_plot_dir, 'Correlation',neuron_keep_indices)
 	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,all_neur_plot_dir,neuron_keep_indices)
 	
 	#Calculate pairwise significance
@@ -114,27 +116,27 @@ if __name__ == '__main__':
 		os.mkdir(all_neur_stats_dir)
 	
 	#KS-test
-	df.stat_significance(segment_corr_data, segment_names, dig_in_names, all_neur_stats_dir, 'neuron_correlation')
-	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, all_neur_stats_dir, 'population_avg_correlation')
-	df.stat_significance(segment_corr_pop_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_correlation')
+# 	df.stat_significance(segment_corr_data, segment_names, dig_in_names, all_neur_stats_dir, 'neuron_correlation')
+# 	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, all_neur_stats_dir, 'population_avg_correlation')
+# 	df.stat_significance(segment_corr_pop_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_correlation')
 	df.stat_significance(segment_pop_vec_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_vec_correlation')
 	
 	#T-test less
-	df.stat_significance_ttest_less(segment_corr_data, segment_names, dig_in_names, all_neur_stats_dir, 'neuron_correlation_ttest_less')
-	df.stat_significance_ttest_less(segment_corr_data_avg, segment_names, dig_in_names, all_neur_stats_dir, 'population_avg_correlation_ttest_less')
-	df.stat_significance_ttest_less(segment_corr_pop_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_correlation_ttest_less')
+# 	df.stat_significance_ttest_less(segment_corr_data, segment_names, dig_in_names, all_neur_stats_dir, 'neuron_correlation_ttest_less')
+# 	df.stat_significance_ttest_less(segment_corr_data_avg, segment_names, dig_in_names, all_neur_stats_dir, 'population_avg_correlation_ttest_less')
+# 	df.stat_significance_ttest_less(segment_corr_pop_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_correlation_ttest_less')
 	df.stat_significance_ttest_less(segment_pop_vec_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_vec_correlation_ttest_less')
 	
 	#T-test more
-	df.stat_significance_ttest_more(segment_corr_data, segment_names, dig_in_names, all_neur_stats_dir, 'neuron_correlation_ttest_more')
-	df.stat_significance_ttest_more(segment_corr_data_avg, segment_names, dig_in_names, all_neur_stats_dir, 'population_avg_correlation_ttest_more')
-	df.stat_significance_ttest_more(segment_corr_pop_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_correlation_ttest_more')
+# 	df.stat_significance_ttest_more(segment_corr_data, segment_names, dig_in_names, all_neur_stats_dir, 'neuron_correlation_ttest_more')
+# 	df.stat_significance_ttest_more(segment_corr_data_avg, segment_names, dig_in_names, all_neur_stats_dir, 'population_avg_correlation_ttest_more')
+# 	df.stat_significance_ttest_more(segment_corr_pop_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_correlation_ttest_more')
 	df.stat_significance_ttest_more(segment_pop_vec_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_vec_correlation_ttest_more')
 	
 	#Mean compare
-	df.mean_compare(segment_corr_data, segment_names, dig_in_names, all_neur_stats_dir, 'neuron_mean_difference')
-	df.mean_compare(segment_corr_data_avg, segment_names, dig_in_names, all_neur_stats_dir, 'population_avg_mean_difference')
-	df.mean_compare(segment_corr_pop_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_mean_difference')
+# 	df.mean_compare(segment_corr_data, segment_names, dig_in_names, all_neur_stats_dir, 'neuron_mean_difference')
+# 	df.mean_compare(segment_corr_data_avg, segment_names, dig_in_names, all_neur_stats_dir, 'population_avg_mean_difference')
+# 	df.mean_compare(segment_corr_pop_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_mean_difference')
 	df.mean_compare(segment_pop_vec_data, segment_names, dig_in_names, all_neur_stats_dir, 'population_vec_mean_difference')
 	
 	

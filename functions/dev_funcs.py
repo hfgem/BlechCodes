@@ -295,7 +295,7 @@ def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 				total_num_neur = np.shape(seg_rast[0])[0]
 				taste_keep_ind = np.arange(total_num_neur)
 			else:
-				total_num_neur = np.sum(neuron_keep_indices[:,t_i]).astype('int')
+				total_num_neur = np.sum(neuron_keep_indices[:,:,t_i]).astype('int')
 				taste_keep_ind = (np.where(((neuron_keep_indices[:,t_i]).astype('int')).flatten())[0]).astype('int')
 		
 			#Set storage directory and check if data previously stored
@@ -321,6 +321,7 @@ def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 					dev_len = np.shape(dev_rast)[1]
 					dev_vec = np.sum(dev_rast,1)/(dev_len/1000) #in Hz
 					#Population fr vector changepoints
+					#TODO: Rewrite to use proper taste selective indices that reflect each epoch
 					pool = Pool(4)
 					inputs_pop = zip(range(num_deliv), taste_spikes, taste_deliv_len, \
 						itertools.repeat(taste_keep_ind), itertools.repeat(taste_cp_pop), \
@@ -509,20 +510,21 @@ def pull_corr_dev_stats(segment_names, dig_in_names, save_dir):
 		segment_stats = dict()
 		for t_i in range(num_tastes):  #Loop through each taste
 			#Import distance numpy array
-			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
-			filename_pop = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop.npy'
+# 			filename = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '.npy'
+# 			filename_pop = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop.npy'
 			filename_pop_vec = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec.npy'
-			neuron_data_storage = np.load(filename)
-			population_data_storage = np.load(filename_pop)
+# 			neuron_data_storage = np.load(filename)
+# 			population_data_storage = np.load(filename_pop)
 			population_vec_data_storage = np.load(filename_pop_vec)
 			#Calculate statistics
 			data_dict = dict()
 			data_dict['segment'] = segment_names[s_i]
 			data_dict['taste'] = dig_in_names[t_i]
-			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
+# 			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
+			num_dev, num_deliv, num_cp = np.shape(population_vec_data_storage)
 			data_dict['num_dev'] = num_dev
-			data_dict['neuron_data_storage'] = np.abs(neuron_data_storage)
-			data_dict['pop_data_storage'] = np.abs(population_data_storage)
+# 			data_dict['neuron_data_storage'] = np.abs(neuron_data_storage)
+# 			data_dict['pop_data_storage'] = np.abs(population_data_storage)
 			data_dict['pop_vec_data_storage'] = np.abs(population_vec_data_storage)
 			segment_stats[t_i] = data_dict
 		dev_stats[s_i] = segment_stats
@@ -728,60 +730,61 @@ def top_dev_corr_bins(dev_stats,segment_names,dig_in_names,save_dir,neuron_indic
 		seg_stats = dev_stats[s_i]
 		print("Beginning calcs for segment " + str(s_i))
 		for t_i in range(num_tastes):  #Loop through each taste
-			save_file = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_top_corr_combos_neur_avg.txt'
-			pop_save_file = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_top_corr_combos_pop.txt'
+# 			save_file = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_top_corr_combos_neur_avg.txt'
+# 			pop_save_file = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_top_corr_combos_pop.txt'
 			pop_vec_save_file = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_top_corr_combos_pop_vec.txt'
-			corr_data = []
-			corr_pop_data = []
+# 			corr_data = []
+# 			corr_pop_data = []
 			corr_pop_vec_data = []
 			print("\tTaste #" + str(t_i + 1))
 			taste_stats = seg_stats[t_i]
 			#Import distance numpy array
-			neuron_data_storage = taste_stats['neuron_data_storage']
-			pop_data_storage = taste_stats['pop_data_storage']
+# 			neuron_data_storage = taste_stats['neuron_data_storage']
+# 			pop_data_storage = taste_stats['pop_data_storage']
 			pop_vec_data_storage = taste_stats['pop_vec_data_storage']
-			num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
-			if total_num_neur != np.shape(neuron_indices)[0]: #accounts for sub-population calculation case
-				neuron_indices = np.ones((total_num_neur,num_cp))
+			#num_dev, num_deliv, total_num_neur, num_cp = np.shape(neuron_data_storage)
+			num_dev, num_deliv, num_cp = np.shape(pop_vec_data_storage)
+# 			if total_num_neur != np.shape(neuron_indices)[0]: #accounts for sub-population calculation case
+# 				neuron_indices = np.ones((total_num_neur,num_cp))
 			#Calculate, for each deviation bin, which taste delivery and cp it correlates with most
-			all_dev_data = np.zeros((num_dev,num_deliv,num_cp))
-			for c_p in range(num_cp):
-				all_dev_data[:,:,c_p] = np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2) #num_dev x num_deliv x num_cp 
-			top_99_percentile = np.percentile((all_dev_data[~np.isnan(all_dev_data)]).flatten(),99)
-			top_99_percentile_pop = np.percentile((pop_data_storage[~np.isnan(pop_data_storage)]).flatten(),99)
+# 			all_dev_data = np.zeros((num_dev,num_deliv,num_cp))
+# 			for c_p in range(num_cp):
+# 				all_dev_data[:,:,c_p] = np.nanmean(neuron_data_storage[:,:,neuron_indices[:,c_p].astype('bool'),c_p],2) #num_dev x num_deliv x num_cp 
+# 			top_99_percentile = np.percentile((all_dev_data[~np.isnan(all_dev_data)]).flatten(),99)
+# 			top_99_percentile_pop = np.percentile((pop_data_storage[~np.isnan(pop_data_storage)]).flatten(),99)
 			top_99_percentile_pop_vec = np.percentile((pop_vec_data_storage[~np.isnan(pop_vec_data_storage)]).flatten(),99)
 			for dev_i in range(num_dev):
-				dev_data = all_dev_data[dev_i,:,:]  #num_deliv x num_cp
-				[deliv_i,cp_i] = np.where(dev_data >= top_99_percentile)
-				pop_dev_data = pop_data_storage[dev_i,:,:]
-				[pop_deliv_i,pop_cp_i] = np.where(pop_dev_data >= top_99_percentile_pop)
+# 				dev_data = all_dev_data[dev_i,:,:]  #num_deliv x num_cp
+# 				[deliv_i,cp_i] = np.where(dev_data >= top_99_percentile)
+# 				pop_dev_data = pop_data_storage[dev_i,:,:]
+# 				[pop_deliv_i,pop_cp_i] = np.where(pop_dev_data >= top_99_percentile_pop)
 				pop_vec_data = pop_vec_data_storage[dev_i,:,:]
 				[pop_vec_deliv_i,pop_vec_cp_i] = np.where(pop_vec_data >= top_99_percentile_pop_vec)
-				if len(deliv_i) > 0:
-					for d_i in range(len(deliv_i)):
-						dev_cp_corr_val = dev_data[deliv_i[d_i],cp_i[d_i]]
-						statement = 'dev-' + str(dev_i) + '; epoch-' + str(cp_i[d_i]) + '; deliv-' + str(deliv_i[d_i]) + '; corr-' + str(dev_cp_corr_val)
-						corr_data.append(statement)
-				if len(pop_deliv_i) > 0:
-					for d_i in range(len(pop_deliv_i)):
-						dev_pop_cp_corr_val = pop_dev_data[pop_deliv_i[d_i],pop_cp_i[d_i]]
-						statement = 'dev-' + str(dev_i) + '; epoch-' + str(pop_cp_i[d_i]) + '; deliv-' + str(pop_deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
-						corr_pop_data.append(statement)
+# 				if len(deliv_i) > 0:
+# 					for d_i in range(len(deliv_i)):
+# 						dev_cp_corr_val = dev_data[deliv_i[d_i],cp_i[d_i]]
+# 						statement = 'dev-' + str(dev_i) + '; epoch-' + str(cp_i[d_i]) + '; deliv-' + str(deliv_i[d_i]) + '; corr-' + str(dev_cp_corr_val)
+# 						corr_data.append(statement)
+# 				if len(pop_deliv_i) > 0:
+# 					for d_i in range(len(pop_deliv_i)):
+# 						dev_pop_cp_corr_val = pop_dev_data[pop_deliv_i[d_i],pop_cp_i[d_i]]
+# 						statement = 'dev-' + str(dev_i) + '; epoch-' + str(pop_cp_i[d_i]) + '; deliv-' + str(pop_deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
+# 						corr_pop_data.append(statement)
 				if len(pop_vec_deliv_i) > 0:
 					for d_i in range(len(pop_vec_deliv_i)):
-						dev_pop_cp_corr_val = pop_dev_data[pop_vec_deliv_i[d_i],pop_vec_cp_i[d_i]]
+						dev_pop_cp_corr_val = pop_vec_data[pop_vec_deliv_i[d_i],pop_vec_cp_i[d_i]]
 						statement = 'dev-' + str(dev_i) + '; epoch-' + str(pop_vec_cp_i[d_i]) + '; deliv-' + str(pop_vec_deliv_i[d_i]) + '; corr-' + str(dev_pop_cp_corr_val)
 						corr_pop_vec_data.append(statement)
 			#Save to file neuron average statements
-			with open(save_file, 'w') as f:
-				for line in corr_data:
-					f.write(line)
-					f.write('\n')
-			#Save to file population statements
-			with open(pop_save_file, 'w') as f:
-				for line in corr_pop_data:
-					f.write(line)
-					f.write('\n')
+# 			with open(save_file, 'w') as f:
+# 				for line in corr_data:
+# 					f.write(line)
+# 					f.write('\n')
+# 			#Save to file population statements
+# 			with open(pop_save_file, 'w') as f:
+# 				for line in corr_pop_data:
+# 					f.write(line)
+# 					f.write('\n')
 			#Save to file population vector statements
 			with open(pop_vec_save_file, 'w') as f:
 				for line in corr_pop_vec_data:

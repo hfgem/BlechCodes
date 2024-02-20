@@ -373,8 +373,13 @@ def taste_cp_frs(taste_cp_raster_inds,tastant_spike_times,start_dig_in_times,end
 				bin_post_taste[times_post_taste] += 1
 				#Epoch-binned average firing rate
 				cp_bin_inds = t_cp_rast[d_i,n_i,:].astype('int')
-				post_taste_bins = [np.sum(bin_post_taste[cp_bin_inds[cp_i]:cp_bin_inds[cp_i+1]])/((cp_bin_inds[cp_i+1]-cp_bin_inds[cp_i])/1000) for cp_i in range(num_cp)]
-				deliv_binned_spikes[n_i,d_i,:] = np.array(post_taste_bins)
+				post_taste_bins = np.zeros(num_cp)
+				for cp_i in range(num_cp):
+					if cp_bin_inds[cp_i+1]-cp_bin_inds[cp_i] != 0:
+						post_taste_bins[cp_i] = np.sum(bin_post_taste[cp_bin_inds[cp_i]:cp_bin_inds[cp_i+1]])/((cp_bin_inds[cp_i+1]-cp_bin_inds[cp_i])/1000)
+					else:
+						post_taste_bins[cp_i] = 0
+				deliv_binned_spikes[n_i,d_i,:] = post_taste_bins
 		tastant_binned_frs.append(deliv_binned_spikes)
 	
 	return tastant_binned_frs

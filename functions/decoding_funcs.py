@@ -378,11 +378,21 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,
 					#____
 					#____Toddler decoder block____
 					#TODO: add variable to change the bin size
-					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
-					if len(bin_edges) != 0:
-						if (bin_edges[-1] != end_epoch)*(end_epoch - bin_edges[-1] > 10):
-							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
-						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
+# 					if len(bin_edges) != 0:
+# 						if (bin_edges[-1] != end_epoch)*(end_epoch - bin_edges[-1] > 10):
+# 							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
+# 						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 						tastant_fr_dist[t_i][n_i][d_i][cp_i] = bst_hz
+# 						if np.max(bst_hz) > max_hz:
+# 							max_hz = np.max(bst_hz)
+					#____
+					#____Teen decoder block____
+					#TODO: add variable to change the bin size
+					#Sweep across the interval continuously pulling distribution
+					bin_starts = np.arange(start_epoch,end_epoch-100).astype('int') #bin the epoch
+					if len(bin_starts) != 0:
+						bst_hz = [np.sum(bin_post_taste[bin_starts[b_i]:bin_starts[b_i]+100])/(100/1000) for b_i in range(len(bin_starts))]
 						tastant_fr_dist[t_i][n_i][d_i][cp_i] = bst_hz
 						if np.max(bst_hz) > max_hz:
 							max_hz = np.max(bst_hz)
@@ -398,11 +408,21 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,
 					#____
 					#____Toddler decoder block____
 					#TODO: add variable to change the bin size
-					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
-					if len(bin_edges) != 0:
-						if (bin_edges[-1] != end_epoch)*(end_epoch - bin_edges[-1] > 10):
-							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
-						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
+# 					if len(bin_edges) != 0:
+# 						if (bin_edges[-1] != end_epoch)*(end_epoch - bin_edges[-1] > 10):
+# 							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
+# 						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 						tastant_fr_dist_pop[t_i][n_i][d_i][cp_i] = bst_hz
+# 						if np.max(bst_hz) > max_hz_pop:
+# 							max_hz_pop = np.max(bst_hz)
+ 					#____
+					#____Teen decoder block____
+					#TODO: add variable to change the bin size
+					#Sweep across the interval continuously pulling distribution
+					bin_starts = np.arange(start_epoch,end_epoch-100).astype('int') #bin the epoch
+					if len(bin_starts) != 0:
+						bst_hz = [np.sum(bin_post_taste[bin_starts[b_i]:bin_starts[b_i]+100])/(100/1000) for b_i in range(len(bin_starts))]
 						tastant_fr_dist_pop[t_i][n_i][d_i][cp_i] = bst_hz
 						if np.max(bst_hz) > max_hz_pop:
 							max_hz_pop = np.max(bst_hz)
@@ -414,11 +434,19 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,
 # 				tastant_fr_dist_pop[t_i,n_i,d_i,:] = deliv_binned_fr_pop
 				#____
 				#____Toddler decoder block____
-				bin_edges = np.arange(0,post_taste_dt,100).astype('int') #bin the epoch
-				if len(bin_edges) != 0:
-					if (bin_edges[-1] != post_taste_dt)*(post_taste_dt - bin_edges[-1] > 10):
-						bin_edges = np.concatenate((bin_edges,post_taste_dt*np.ones(1).astype('int')))
-					bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 				bin_edges = np.arange(0,post_taste_dt,100).astype('int') #bin the epoch
+# 				if len(bin_edges) != 0:
+# 					if (bin_edges[-1] != post_taste_dt)*(post_taste_dt - bin_edges[-1] > 10):
+# 						bin_edges = np.concatenate((bin_edges,post_taste_dt*np.ones(1).astype('int')))
+# 					bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 					full_taste_fr_dist[t_i][n_i][d_i] = bst_hz
+# 					if np.max(bst_hz) > max_hz_full:
+# 						max_hz_full = np.max(bst_hz)
+				#___
+				#Teen decoder block____
+				bin_starts = np.arange(0,post_taste_dt-100).astype('int') #bin the epoch
+				if len(bin_starts) != 0:
+					bst_hz = [np.sum(bin_post_taste[bin_starts[b_i]:bin_starts[b_i]+100])/(100/1000) for b_i in range(len(bin_starts))]
 					full_taste_fr_dist[t_i][n_i][d_i] = bst_hz
 					if np.max(bst_hz) > max_hz_full:
 						max_hz_full = np.max(bst_hz)
