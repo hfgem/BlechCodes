@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from scipy import signal
 import scipy.stats as stats
 import matplotlib.cm as cm
+from scipy.stats import pearsonr
 
 def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_times, 
 				 segment_names, segment_times, segment_spike_times, tastant_spike_times, 
@@ -500,6 +501,183 @@ def epoch_taste_select_plot(prob_taste_epoch, dig_in_names, save_dir):
 			plt.close(fig_2)
 			
 			
-			
+def taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
+									tastant_spike_times,start_dig_in_times,
+									end_dig_in_times,pop_taste_cp_raster_inds,
+									post_taste_dt,dig_in_names,save_dir):
+	"""Plot the individual taste responses against each other to show how similar
+	different tastes are + calculate correlations"""
 		
-
+	for e_i in tqdm.tqdm(range(num_cp+1)):
+		#Save directory for epoch
+		epoch_save_dir = save_dir + 'epoch_' + str(e_i) + '/'
+		if not os.path.isdir(epoch_save_dir):
+			os.mkdir(epoch_save_dir)
+		
+		#Grab tastant epoch firing rate vectors
+		all_taste_fr_vecs = []
+		all_taste_fr_vecs_mean = np.zeros((num_tastes,num_neur))
+		for t_i in range(num_tastes):
+			#Import taste spike and cp times
+			taste_spike_times = tastant_spike_times[t_i]
+			num_deliv = len(taste_spike_times)
+			taste_deliv_times = start_dig_in_times[t_i]
+			pop_taste_cp_times = pop_taste_cp_raster_inds[t_i]
+			#Store as binary spike arrays
+			taste_spike_times_bin = np.zeros((len(taste_spike_times),num_neur,post_taste_dt))
+			taste_cp_times = np.zeros((len(taste_spike_times),num_cp+2)).astype('int')
+			taste_epoch_fr_vecs = np.zeros((len(taste_spike_times),num_neur))
+			for d_i in range(num_deliv): #store each delivery to binary spike matrix
+				for n_i in range(num_neur):
+					if t_i == num_tastes-1:
+						if len(taste_spike_times[d_i][n_i]) > 0:
+							d_i_spikes = np.array(taste_spike_times[d_i][n_i] - np.min(taste_spike_times[d_i][n_i])).astype('int')
+						else:
+							d_i_spikes = np.empty(0)
+					else:
+						d_i_spikes = np.array(taste_spike_times[d_i][n_i] - taste_deliv_times[d_i]).astype('int')
+					if len(d_i_spikes) > 0:
+						taste_spike_times_bin[d_i,n_i,d_i_spikes[d_i_spikes<post_taste_dt]] = 1
+				taste_cp_times[d_i,:] = np.cumsum(np.concatenate((np.zeros(1),np.diff(pop_taste_cp_times[d_i,:])))).astype('int')
+				#Calculate the FR vectors by epoch for each taste response and the average FR vector
+				taste_epoch_fr_vecs[d_i,:] = np.sum(taste_spike_times_bin[d_i,:,taste_cp_times[d_i,e_i]:taste_cp_times[d_i,e_i+1]],1)/((taste_cp_times[d_i,e_i+1]-taste_cp_times[d_i,e_i])/1000) #FR in HZ
+			all_taste_fr_vecs.append(taste_epoch_fr_vecs)
+			#Calculate average response
+			taste_fr_vecs_mean = np.nanmean(taste_epoch_fr_vecs,0)
+			all_taste_fr_vecs_mean[t_i,:] = taste_fr_vecs_mean
+			#___Correlations
+			#Correlation matrix
+			corr_mat = np.zeros((num_deliv,num_deliv))
+			for d_1 in range(num_deliv-1): #First delivery
+				t_vec_1 = taste_epoch_fr_vecs[d_1,:]
+				for d_2 in np.arange(d_1,num_deliv): #Second delivery
+					t_vec_2 = taste_epoch_fr_vecs[d_2,:]
+					corr_mat[d_1,d_2] = np.abs(pearsonr(t_vec_1,t_vec_2)[0])
+			#Correlation timeseries average
+			corr_mean_vec = np.nansum(corr_mat,0)/np.arange(1,num_deliv+1)
+			#Indiv taste deliv similarity/correlation plots
+			f,ax = plt.subplots(nrows=2,ncols=1,figsize=(8,8),gridspec_kw=dict(height_ratios=[3,1]))
+			img = ax[0].imshow(corr_mat,cmap='binary')
+			plt.colorbar(img, ax=ax[0],location='right')
+			ax[0].set_title('epoch ' + str(e_i) + ' ' + dig_in_names[t_i] + ' delivery correlation')
+			ax[0].set_xlabel('Delivery Index')
+			ax[0].set_ylabel('Delivery Index')
+			ax[1].plot(np.arange(num_deliv),corr_mean_vec)
+			#ax[1].set_ylim([0,1])
+			ax[1].set_title('Average corr of pre to given index')
+			ax[1].set_xlabel('Delivery Index')
+			ax[1].set_ylabel('Correlation')
+			plt.tight_layout()
+			f.savefig(epoch_save_dir + dig_in_names[t_i] + '_deliv_correlation_mat.png')
+			f.savefig(epoch_save_dir + dig_in_names[t_i] + '_deliv_correlation_mat.svg')
+			plt.close(f)
+			#___Distances
+			#Distance matrix
+			dist_mat = np.zeros((num_deliv,num_deliv))
+			for d_1 in range(num_deliv-1): #First delivery
+				t_vec_1 = taste_epoch_fr_vecs[d_1,:]
+				for d_2 in np.arange(d_1,num_deliv): #Second delivery
+					t_vec_2 = taste_epoch_fr_vecs[d_2,:]
+					dist_mat[d_1,d_2] = np.sqrt(np.sum((t_vec_1-t_vec_2)**2))
+			#Distance timeseries average
+			dist_mean_vec = np.nansum(dist_mat,0)/np.arange(1,num_deliv+1)
+			#Indiv taste deliv distance plots
+			f,ax = plt.subplots(nrows=2,ncols=1,figsize=(8,8),gridspec_kw=dict(height_ratios=[3,1]))
+			img = ax[0].imshow(dist_mat,cmap='binary')
+			plt.colorbar(img, ax=ax[0],location='right')
+			ax[0].set_title('epoch ' + str(e_i) + ' ' + dig_in_names[t_i] + ' delivery distance')
+			ax[0].set_xlabel('Delivery Index')
+			ax[0].set_ylabel('Delivery Index')
+			ax[1].plot(np.arange(num_deliv),dist_mean_vec)
+			#ax[1].set_ylim([0,1])
+			ax[1].set_title('Average distance of pre to given index')
+			ax[1].set_xlabel('Delivery Index')
+			ax[1].set_ylabel('Distance')
+			plt.tight_layout()
+			f.savefig(epoch_save_dir + dig_in_names[t_i] + '_deliv_distance_mat.png')
+			f.savefig(epoch_save_dir + dig_in_names[t_i] + '_deliv_distance_mat.svg')
+			plt.close(f)
+			
+			
+		#___Taste avg plots
+		num_pairs = len(list(itertools.combinations(np.arange(num_tastes),2)))
+		f,ax = plt.subplots(nrows=1,ncols=num_pairs)
+		pair_i = 0
+		for t_1 in np.arange(num_tastes-1):
+			x_taste_vec = all_taste_fr_vecs_mean[t_1,:]
+			for t_2 in np.arange(t_1+1,num_tastes):
+				y_taste_vec = all_taste_fr_vecs_mean[t_2,:]
+				corr_result = np.abs(pearsonr(x_taste_vec,y_taste_vec)[0])
+				dist_result = np.sqrt(np.sum((x_taste_vec-y_taste_vec)**2))
+				max_vec_fr = np.max([np.max(x_taste_vec),np.max(y_taste_vec)])
+				ax[pair_i].plot([0,max_vec_fr],[0,max_vec_fr],alpha=0.5,linestyle='dashed',color='b')
+				ax[pair_i].scatter(x_taste_vec,y_taste_vec,alpha=0.8,color='k')
+				ax[pair_i].set_title('Corr = ' + str(np.round(corr_result,2)) + '\nDist = ' + str(np.round(dist_result,2)))
+				ax[pair_i].set_xlabel(dig_in_names[t_1] + ' Avg. FR')
+				ax[pair_i].set_ylabel(dig_in_names[t_2] + ' Avg. FR')
+				pair_i += 1
+		plt.suptitle('Average Taste Response Similarity')
+		plt.tight_layout()
+		f.savefig(epoch_save_dir + 'avg_tastes_compare.png')
+		f.savefig(epoch_save_dir + 'avg_tastes_compare.svg')
+		plt.close(f)
+		
+		#___Indiv taste deliv plots
+		num_pairs = len(list(itertools.combinations(np.arange(num_tastes),2)))
+		f,ax = plt.subplots(nrows=3,ncols=num_pairs,figsize=(10,10))
+		pair_i = 0
+		min_corr = 1
+		max_corr = 0
+		max_num_corr = 0
+		min_dist = 100000
+		max_dist = 0
+		max_num_dist = 0
+		for t_1 in np.arange(num_tastes-1):
+			x_taste_mat = all_taste_fr_vecs[t_1]
+			num_taste_1 = np.shape(x_taste_mat)[0]
+			for t_2 in np.arange(t_1+1,num_tastes):
+				y_taste_mat = all_taste_fr_vecs[t_2]
+				num_taste_2 = np.shape(y_taste_mat)[0]
+				taste_pairs = list(itertools.product(np.arange(num_taste_1),np.arange(num_taste_2)))
+				pair_corrs = np.zeros(len(taste_pairs))
+				for tp_i,tp in enumerate(taste_pairs):
+					pair_corrs[tp_i] = np.abs(pearsonr(x_taste_mat[tp[0],:],y_taste_mat[tp[1],:])[0])
+				if np.min(pair_corrs) < min_corr:
+					min_corr = np.min(pair_corrs)
+				if np.max(pair_corrs) > max_corr:
+					max_corr = np.max(pair_corrs)
+				pair_dists = np.zeros(len(taste_pairs))
+				for tp_i,tp in enumerate(taste_pairs):
+					pair_dists[tp_i] = np.sqrt(np.sum((x_taste_mat[tp[0],:]-y_taste_mat[tp[1],:])**2))
+				if np.min(pair_dists) < min_dist:
+					min_dist = np.min(pair_dists)
+				if np.max(pair_dists) > max_dist:
+					max_dist = np.max(pair_dists)
+				max_vec_fr = np.max([np.max(x_taste_mat),np.max(y_taste_mat)])
+				ax[0,pair_i].plot([0,max_vec_fr],[0,max_vec_fr],alpha=0.5,linestyle='dashed',color='b')
+				ax[0,pair_i].scatter(x_taste_mat,y_taste_mat,alpha=0.1,color='k')
+				ax[0,pair_i].set_title('Avg Corr = ' + str(np.round(np.nanmean(pair_corrs),2)) + '\nAvg Dist = ' + str(np.round(np.nanmean(pair_dists),2)))
+				ax[0,pair_i].set_xlabel(dig_in_names[t_1] + ' FR')
+				ax[0,pair_i].set_ylabel(dig_in_names[t_2] + ' FR')
+				h1 = ax[1,pair_i].hist(pair_corrs)
+				if np.max(h1[0]) > max_num_corr:
+					max_num_corr = np.max(h1[0])
+				ax[1,pair_i].set_title('Histogram of Correlations')
+				ax[1,pair_i].set_xlabel('|Correlation|')
+				h2 = ax[2,pair_i].hist(pair_dists)
+				if np.max(h2[0]) > max_num_dist:
+					max_num_dist = np.max(h2[0])
+				ax[2,pair_i].set_title('Histogram of Distances')
+				ax[2,pair_i].set_xlabel('|Distance|')
+				pair_i += 1
+		for p_i in range(pair_i-1):
+			ax[1,p_i].set_xlim([min_corr,max_corr])
+			ax[1,p_i].set_ylim([0,max_num_corr])
+			ax[2,p_i].set_xlim([min_dist,max_dist])
+			ax[2,p_i].set_ylim([0,max_num_dist])
+		plt.suptitle('Individual Taste Response Similarity')
+		plt.tight_layout()
+		f.savefig(epoch_save_dir + 'all_delivered_tastes_compare.png')
+		f.savefig(epoch_save_dir + 'all_delivered_tastes_compare.svg')
+		plt.close(f)
+		

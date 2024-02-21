@@ -95,8 +95,8 @@ except:
 #second using classic Bayes assuming spikes are sampled from a Poisson 
 #distribution (taken from Paul's Comp Neuro Textbook)
 
-cp_bin = 250 #minimum state size in ms
-num_cp = 3 #number of changepoints to find
+cp_bin = 300 #minimum state size in ms
+num_cp = 2 #number of changepoints to find
 before_taste = np.ceil(pre_taste*1000).astype('int') #Milliseconds before taste delivery to plot
 after_taste = np.ceil(post_taste*1000).astype('int') #Milliseconds after taste delivery to plot
 
@@ -132,6 +132,18 @@ except:
 				  dig_in_names,taste_cp_raster_pop_save_dir)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'pop_taste_cp_raster_inds',pop_taste_cp_raster_inds)
 
+#%%
+#Plot taste delivery similarity across deliveries within epochs
+num_segments = len(segment_spike_times)
+taste_epoch_save_dir = data_save_dir + 'Taste_Delivery_Similarity/'
+if os.path.isdir(taste_epoch_save_dir) == False:
+	os.mkdir(taste_epoch_save_dir)
+pf.taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
+									tastant_spike_times,start_dig_in_times,
+									end_dig_in_times,pop_taste_cp_raster_inds,
+									post_taste_dt,dig_in_names,taste_epoch_save_dir)
+
+
 #%%	
 
 #____Calculate which neurons are taste selective by bin size_____
@@ -163,7 +175,7 @@ except:
 	#taste_select_prob_joint = fraction of correctly decoded deliveries [num_neur, num_tastes]
 	#taste_select_prob_epoch = fraction of correctly decoded deliveries [num_cp, num_neur, num_tastes]
 	
-	p_taste_joint, p_taste_epoch, taste_select_prob_joint, taste_select_prob_epoch = df. taste_decoding_cp(tastant_spike_times,\
+	p_taste_joint, p_taste_epoch, taste_select_prob_joint, taste_select_prob_epoch = df.taste_decoding_cp(tastant_spike_times,\
 												   pop_taste_cp_raster_inds,num_cp,start_dig_in_times,end_dig_in_times,dig_in_names, \
 													   num_neur,pre_taste_dt,post_taste_dt,loo_distribution_save_dir)
 	#_____Calculate binary matrices of taste selective neurons / taste selective neurons by epoch_____
