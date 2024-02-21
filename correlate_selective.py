@@ -65,13 +65,6 @@ if __name__ == '__main__':
 	data_group_name = 'changepoint_data'
 	taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_raster_inds')
 	pop_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'pop_taste_cp_raster_inds')
-	
-	#Generate comparable binary matrix for regular data
-	num_cp = np.shape(taste_cp_raster_inds[0])[-1] - 1
-	for t_i in range(num_tastes-1):
-		if np.shape(taste_cp_raster_inds[t_i+1])[-1] - 1 < num_cp:
-			num_cp = np.shape(taste_cp_raster_inds[t_i+1])[-1] - 1
-	neuron_keep_indices = np.ones((num_neur,num_cp))
 
 	#_____Calculate correlation between taste and deviation rasters for individual neurons_____
 	#Create directory to store analysis results
@@ -86,33 +79,32 @@ if __name__ == '__main__':
 	
 	#Import taste selectivity data
 	data_group_name = 'taste_selectivity'
-	#taste_response_prob = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_response_prob')[0]
-	#taste_select_prob = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob')[0]
-	#taste_response_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_response_prob_epoch')[0]
-	taste_select_bin_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_bin_epoch')[0]
+	taste_select_neur_epoch_bin = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
 	
 	taste_select_corr_dir = corr_dir + 'taste_select_neur/'
 	if os.path.isdir(taste_select_corr_dir) == False:
 		os.mkdir(taste_select_corr_dir)
 	
-	df.calculate_correlations(segment_dev_rasters, tastant_spike_times,
-							   start_dig_in_times, end_dig_in_times, segment_names, 
-							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
-							   pop_taste_cp_raster_inds, taste_select_corr_dir, taste_select_bin_epoch)
+# 	df.calculate_correlations(segment_dev_rasters, tastant_spike_times,
+# 							   start_dig_in_times, end_dig_in_times, segment_names, 
+# 							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
+# 							   pop_taste_cp_raster_inds, taste_select_corr_dir, taste_select_bin_epoch)
 	df.calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 							   start_dig_in_times, end_dig_in_times, segment_names, 
 							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
-							   pop_taste_cp_raster_inds, taste_select_corr_dir, taste_select_bin_epoch) #For all neurons in dataset
+							   pop_taste_cp_raster_inds, taste_select_corr_dir, taste_select_neur_epoch_bin) #For all neurons in dataset
 	corr_dev_stats = df.pull_corr_dev_stats(segment_names, dig_in_names, taste_select_corr_dir)
 	
 	taste_select_neur_plot_dir = taste_select_corr_dir + 'plots/'
 	if os.path.isdir(taste_select_neur_plot_dir) == False:
 		os.mkdir(taste_select_neur_plot_dir)
-	dpf.plot_stats(corr_dev_stats, segment_names, dig_in_names, taste_select_neur_plot_dir, 'Correlation',taste_select_bin_epoch)
-	segment_corr_data, segment_corr_data_avg, segment_corr_pop_data, segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, \
-																								segment_names, dig_in_names, taste_select_neur_plot_dir, \
-																								'Correlation',taste_select_bin_epoch)
-	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,taste_select_neur_plot_dir,taste_select_bin_epoch)
+	dpf.plot_stats(corr_dev_stats, segment_names, dig_in_names, taste_select_neur_plot_dir, 'Correlation',taste_select_neur_epoch_bin)
+# 	segment_corr_data, segment_corr_data_avg, segment_corr_pop_data, segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, \
+# 																								segment_names, dig_in_names, taste_select_neur_plot_dir, \
+# 																								'Correlation',taste_select_bin_epoch)
+	segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names, \
+												taste_select_neur_plot_dir, 'Correlation',taste_select_neur_epoch_bin)
+	df.top_dev_corr_bins(corr_dev_stats,segment_names,dig_in_names,taste_select_neur_plot_dir,taste_select_neur_epoch_bin)
 	
 	#Calculate pairwise significance
 	taste_select_neur_stats_dir = taste_select_corr_dir + 'stats/'
@@ -120,27 +112,27 @@ if __name__ == '__main__':
 		os.mkdir(taste_select_neur_stats_dir)
 	
 	#KS-test
-	df.stat_significance(segment_corr_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'neuron_correlation')
-	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_avg_correlation')
-	df.stat_significance(segment_corr_pop_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_correlation')
+# 	df.stat_significance(segment_corr_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'neuron_correlation')
+# 	df.stat_significance(segment_corr_data_avg, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_avg_correlation')
+# 	df.stat_significance(segment_corr_pop_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_correlation')
 	df.stat_significance(segment_pop_vec_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_vec_correlation')
 	
 	#T-test less
-	df.stat_significance_ttest_less(segment_corr_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'neuron_correlation_ttest_less')
-	df.stat_significance_ttest_less(segment_corr_data_avg, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_avg_correlation_ttest_less')
-	df.stat_significance_ttest_less(segment_corr_pop_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_correlation_ttest_less')
+# 	df.stat_significance_ttest_less(segment_corr_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'neuron_correlation_ttest_less')
+# 	df.stat_significance_ttest_less(segment_corr_data_avg, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_avg_correlation_ttest_less')
+# 	df.stat_significance_ttest_less(segment_corr_pop_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_correlation_ttest_less')
 	df.stat_significance_ttest_less(segment_pop_vec_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_vec_correlation_ttest_less')
 	
 	#T-test more
-	df.stat_significance_ttest_more(segment_corr_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'neuron_correlation_ttest_more')
-	df.stat_significance_ttest_more(segment_corr_data_avg, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_avg_correlation_ttest_more')
-	df.stat_significance_ttest_more(segment_corr_pop_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_correlation_ttest_more')
+# 	df.stat_significance_ttest_more(segment_corr_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'neuron_correlation_ttest_more')
+# 	df.stat_significance_ttest_more(segment_corr_data_avg, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_avg_correlation_ttest_more')
+# 	df.stat_significance_ttest_more(segment_corr_pop_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_correlation_ttest_more')
 	df.stat_significance_ttest_more(segment_pop_vec_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_vec_correlation_ttest_more')
 	
 	#Mean compare
-	df.mean_compare(segment_corr_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'neuron_mean_difference')
-	df.mean_compare(segment_corr_data_avg, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_avg_mean_difference')
-	df.mean_compare(segment_corr_pop_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_mean_difference')
+# 	df.mean_compare(segment_corr_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'neuron_mean_difference')
+# 	df.mean_compare(segment_corr_data_avg, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_avg_mean_difference')
+# 	df.mean_compare(segment_corr_pop_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_mean_difference')
 	df.mean_compare(segment_pop_vec_data, segment_names, dig_in_names, taste_select_neur_stats_dir, 'population_vec_mean_difference')
 	
 	

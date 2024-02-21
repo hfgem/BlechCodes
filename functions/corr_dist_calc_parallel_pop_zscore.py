@@ -102,6 +102,7 @@ def deliv_corr_population_vec_parallelized(inputs):
 	taste_cp = inputs[4] 
 	deliv_adjust = inputs[5]
 	dev_vec = inputs[6]
+	c_p = inputs[7]
 	total_num_neur = len(neuron_keep_indices)
 	num_cp = np.shape(taste_cp)[1]
 	#Pull delivery raster
@@ -115,18 +116,14 @@ def deliv_corr_population_vec_parallelized(inputs):
 			else:
 				neur_deliv_st = int(n_st[0]) - deliv_adjust
 			deliv_rast[n_i,neur_deliv_st] = 1
-	deliv_corr_storage = np.zeros(num_cp-1)
-	#Calculate correlation with each cp segment
-	for c_p in range(num_cp-1):
-		cp_vals = (taste_cp[deliv_i,c_p:c_p+2]).astype('int')
-		epoch_len = cp_vals[1] - cp_vals[0]
-		#Pull out the delivery cp fr vector
-		deliv_vec = np.sum(deliv_rast[:,cp_vals[0]:cp_vals[1]],1)/(epoch_len/1000) #in Hz
-		#Calculate population correlation
-		pop_vec_corr = correlation_calc_vec(deliv_vec, dev_vec)
-		deliv_corr_storage[c_p] = pop_vec_corr
+	cp_vals = (taste_cp[deliv_i,c_p:c_p+2]).astype('int')
+	epoch_len = cp_vals[1] - cp_vals[0]
+	#Pull out the delivery cp fr vector
+	deliv_vec = np.sum(deliv_rast[:,cp_vals[0]:cp_vals[1]],1)/(epoch_len/1000) #in Hz
+	#Calculate population correlation
+	pop_vec_corr = correlation_calc_vec(deliv_vec, dev_vec)
 	
-	return deliv_corr_storage
+	return pop_vec_corr
 
 def interp_vecs_pop(neur_deliv_cp_rast_binned,neur_dev_rast_binned,bin_length):
 	#Grab rasters

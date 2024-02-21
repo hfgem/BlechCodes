@@ -18,6 +18,7 @@ from scipy import interpolate
 from multiprocess import Pool
 from p_tqdm import p_map
 import functions.decode_parallel as dp
+from scipy.stats import pearsonr
 
 def taste_decoding_cp(tastant_spike_times,pop_taste_cp_raster_inds,num_cp, \
 					  start_dig_in_times,end_dig_in_times,dig_in_names, \
@@ -379,11 +380,21 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,
 					#____
 					#____Toddler decoder block____
 					#TODO: add variable to change the bin size
-					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
-					if len(bin_edges) != 0:
-						if (bin_edges[-1] != end_epoch)*(end_epoch - bin_edges[-1] > 10):
-							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
-						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
+# 					if len(bin_edges) != 0:
+# 						if (bin_edges[-1] != end_epoch)*(end_epoch - bin_edges[-1] > 10):
+# 							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
+# 						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 						tastant_fr_dist[t_i][n_i][d_i][cp_i] = bst_hz
+# 						if np.max(bst_hz) > max_hz:
+# 							max_hz = np.max(bst_hz)
+					#____
+					#____Teen decoder block____
+					#TODO: add variable to change the bin size
+					#Sweep across the interval continuously pulling distribution
+					bin_starts = np.arange(start_epoch,end_epoch-100).astype('int') #bin the epoch
+					if len(bin_starts) != 0:
+						bst_hz = [np.sum(bin_post_taste[bin_starts[b_i]:bin_starts[b_i]+100])/(100/1000) for b_i in range(len(bin_starts))]
 						tastant_fr_dist[t_i][n_i][d_i][cp_i] = bst_hz
 						if np.max(bst_hz) > max_hz:
 							max_hz = np.max(bst_hz)
@@ -399,11 +410,21 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,
 					#____
 					#____Toddler decoder block____
 					#TODO: add variable to change the bin size
-					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
-					if len(bin_edges) != 0:
-						if (bin_edges[-1] != end_epoch)*(end_epoch - bin_edges[-1] > 10):
-							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
-						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
+# 					if len(bin_edges) != 0:
+# 						if (bin_edges[-1] != end_epoch)*(end_epoch - bin_edges[-1] > 10):
+# 							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
+# 						bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 						tastant_fr_dist_pop[t_i][n_i][d_i][cp_i] = bst_hz
+# 						if np.max(bst_hz) > max_hz_pop:
+# 							max_hz_pop = np.max(bst_hz)
+ 					#____
+					#____Teen decoder block____
+					#TODO: add variable to change the bin size
+					#Sweep across the interval continuously pulling distribution
+					bin_starts = np.arange(start_epoch,end_epoch-100).astype('int') #bin the epoch
+					if len(bin_starts) != 0:
+						bst_hz = [np.sum(bin_post_taste[bin_starts[b_i]:bin_starts[b_i]+100])/(100/1000) for b_i in range(len(bin_starts))]
 						tastant_fr_dist_pop[t_i][n_i][d_i][cp_i] = bst_hz
 						if np.max(bst_hz) > max_hz_pop:
 							max_hz_pop = np.max(bst_hz)
@@ -415,11 +436,19 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,
 # 				tastant_fr_dist_pop[t_i,n_i,d_i,:] = deliv_binned_fr_pop
 				#____
 				#____Toddler decoder block____
-				bin_edges = np.arange(0,post_taste_dt,100).astype('int') #bin the epoch
-				if len(bin_edges) != 0:
-					if (bin_edges[-1] != post_taste_dt)*(post_taste_dt - bin_edges[-1] > 10):
-						bin_edges = np.concatenate((bin_edges,post_taste_dt*np.ones(1).astype('int')))
-					bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 				bin_edges = np.arange(0,post_taste_dt,100).astype('int') #bin the epoch
+# 				if len(bin_edges) != 0:
+# 					if (bin_edges[-1] != post_taste_dt)*(post_taste_dt - bin_edges[-1] > 10):
+# 						bin_edges = np.concatenate((bin_edges,post_taste_dt*np.ones(1).astype('int')))
+# 					bst_hz = [np.sum(bin_post_taste[bin_edges[b_i]:bin_edges[b_i+1]])/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+# 					full_taste_fr_dist[t_i][n_i][d_i] = bst_hz
+# 					if np.max(bst_hz) > max_hz_full:
+# 						max_hz_full = np.max(bst_hz)
+				#___
+				#Teen decoder block____
+				bin_starts = np.arange(0,post_taste_dt-100).astype('int') #bin the epoch
+				if len(bin_starts) != 0:
+					bst_hz = [np.sum(bin_post_taste[bin_starts[b_i]:bin_starts[b_i]+100])/(100/1000) for b_i in range(len(bin_starts))]
 					full_taste_fr_dist[t_i][n_i][d_i] = bst_hz
 					if np.max(bst_hz) > max_hz_full:
 						max_hz_full = np.max(bst_hz)
@@ -1776,6 +1805,8 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				if num_decoded > max_decode: #Reduce number if too many
 					decode_prob_avg = np.array([np.mean(seg_decode_epoch_prob[t_i,start_decoded[i]:end_decoded[i]]) for i in range(len(start_decoded))])
 					decode_plot_ind = np.argsort(decode_prob_avg)[-max_decode:]
+				else:
+					decode_plot_ind = np.arange(num_decoded)
 				for nd_i in range(num_decoded):
 					#Decode variables
 					d_start = start_decoded[nd_i]
@@ -1881,6 +1912,55 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				all_taste_event_fr_vecs.append(np.array(decoded_fr_vecs))
 				all_taste_event_z_fr_vecs.append(np.array(decoded_z_fr_vecs))
 			
+			#Taste avg plots
+			num_pairs = len(list(itertools.combinations(np.arange(num_tastes),2)))
+			f,ax = plt.subplots(nrows=1,ncols=num_pairs)
+			pair_i = 0
+			for t_1 in np.arange(num_tastes-1):
+				x_taste_vec = all_taste_fr_vecs_mean[t_1,:]
+				for t_2 in np.arange(t_1+1,num_tastes):
+					y_taste_vec = all_taste_fr_vecs_mean[t_2,:]
+					corr_result = pearsonr(x_taste_vec,y_taste_vec)
+					max_vec_fr = np.max([np.max(x_taste_vec),np.max(y_taste_vec)])
+					ax[pair_i].plot([0,max_vec_fr],[0,max_vec_fr],alpha=0.5,linestyle='dashed',color='b')
+					ax[pair_i].scatter(x_taste_vec,y_taste_vec,alpha=0.8,color='k')
+					ax[pair_i].set_title('Corr = ' + str(np.round(corr_result[0],2)))
+					ax[pair_i].set_xlabel(dig_in_names[t_1] + ' Avg. FR')
+					ax[pair_i].set_ylabel(dig_in_names[t_2] + ' Avg. FR')
+					pair_i += 1
+			plt.suptitle('Average Taste Response Similarity')
+			plt.tight_layout()
+			f.savefig(seg_decode_save_dir + 'avg_tastes_compare.png')
+			f.savefig(seg_decode_save_dir + 'avg_tastes_compare.svg')
+			plt.close(f)
+			
+			#Indiv taste deliv plots
+			num_pairs = len(list(itertools.combinations(np.arange(num_tastes),2)))
+			f,ax = plt.subplots(nrows=1,ncols=num_pairs)
+			pair_i = 0
+			for t_1 in np.arange(num_tastes-1):
+				x_taste_mat = all_taste_fr_vecs[t_1]
+				num_taste_1 = np.shape(x_taste_mat)[0]
+				for t_2 in np.arange(t_1+1,num_tastes):
+					y_taste_mat = all_taste_fr_vecs[t_2]
+					num_taste_2 = np.shape(y_taste_mat)[0]
+					taste_pairs = list(itertools.product(np.arange(num_taste_1),np.arange(num_taste_2)))
+					pair_corrs = np.zeros(len(taste_pairs))
+					for tp_i,tp in enumerate(taste_pairs):
+						pair_corrs[tp_i] = pearsonr(x_taste_mat[tp[0],:],y_taste_mat[tp[1],:])[0]
+					max_vec_fr = np.max([np.max(x_taste_mat),np.max(y_taste_mat)])
+					ax[pair_i].plot([0,max_vec_fr],[0,max_vec_fr],alpha=0.5,linestyle='dashed',color='b')
+					ax[pair_i].scatter(x_taste_mat,y_taste_mat,alpha=0.1,color='k')
+					ax[pair_i].set_title('Corr = ' + str(np.round(np.mean(pair_corrs),2)))
+					ax[pair_i].set_xlabel(dig_in_names[t_1] + ' FR')
+					ax[pair_i].set_ylabel(dig_in_names[t_2] + ' FR')
+					pair_i += 1
+			plt.suptitle('Individual Taste Response Similarity')
+			plt.tight_layout()
+			f.savefig(seg_decode_save_dir + 'all_delivered_tastes_compare.png')
+			f.savefig(seg_decode_save_dir + 'all_delivered_tastes_compare.svg')
+			plt.close(f)
+			
 			#Taste event scatter plots
 			#f, ax = plt.subplots(nrows=1, ncols=num_tastes+1, figsize=(8,8), gridspec_kw=dict(width_ratios=list(np.concatenate((6*np.ones(num_tastes),np.ones(1))))))
 			f, ax = plt.subplots(nrows=num_tastes, ncols=num_tastes, figsize=(num_tastes*2,num_tastes*2), gridspec_kw=dict(width_ratios=list(6*np.ones(num_tastes))))
@@ -1889,17 +1969,18 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 			for t_i in range(num_tastes): #Event Taste
 				ax[t_i,0].set_ylabel('Decoded ' + dig_in_names[t_i] +' FR')
 				taste_event_fr_vecs = all_taste_event_fr_vecs[t_i]
-				max_taste_fr = np.max(taste_event_fr_vecs)
-				if max_taste_fr > max_fr:
-					max_fr = max_taste_fr
-				for t_i_c in range(num_tastes): #Average Taste
-					average_fr_vec_mat = all_taste_fr_vecs_mean[t_i_c,:]*np.ones(np.shape(taste_event_fr_vecs))
-					#Calculate max avg fr
-					max_avg_fr = np.max(all_taste_fr_vecs_mean[t_i_c,:])
-					if max_avg_fr > max_fr_t_av:
-						max_fr_t_av = max_avg_fr
-					ax[t_i,t_i_c].set_xlabel('Average ' + dig_in_names[t_i_c] + ' FR')
-					ax[t_i,t_i_c].scatter(average_fr_vec_mat,taste_event_fr_vecs,color=taste_colors[t_i,:],alpha = 0.3)
+				if len(taste_event_fr_vecs) > 0:
+					max_taste_fr = np.max(taste_event_fr_vecs)
+					if max_taste_fr > max_fr:
+						max_fr = max_taste_fr
+					for t_i_c in range(num_tastes): #Average Taste
+						average_fr_vec_mat = all_taste_fr_vecs_mean[t_i_c,:]*np.ones(np.shape(taste_event_fr_vecs))
+						#Calculate max avg fr
+						max_avg_fr = np.max(all_taste_fr_vecs_mean[t_i_c,:])
+						if max_avg_fr > max_fr_t_av:
+							max_fr_t_av = max_avg_fr
+						ax[t_i,t_i_c].set_xlabel('Average ' + dig_in_names[t_i_c] + ' FR')
+						ax[t_i,t_i_c].scatter(average_fr_vec_mat,taste_event_fr_vecs,color=taste_colors[t_i,:],alpha = 0.3)
 			for t_i in range(num_tastes):
 				for t_i_c in range(num_tastes):
 					ax[t_i,t_i_c].plot([0,max_fr],[0,max_fr],alpha=0.5,color='k',linestyle='dashed')
@@ -1922,14 +2003,15 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 			min_y = 0
 			max_x = 0
 			for t_i in range(num_tastes): #Event Taste
-				ax[t_i,0].set_ylabel('Decoded ' + dig_in_names[t_i] +' FR')
 				taste_event_fr_vecs = all_taste_event_fr_vecs[t_i]
 				max_taste_fr = np.max(taste_event_fr_vecs)
+				ax[t_i,0].set_ylabel('Firing Rate Difference')
 				for t_i_c in range(num_tastes): #Average Taste
 					#Calculate max fr of taste response
+					ax[t_i,t_i_c].set_title('Decoded ' + dig_in_names[t_i] +' - Delivery ' + dig_in_names[t_i_c] )
 					taste_fr_vecs = all_taste_fr_vecs[t_i_c]
 					max_taste_resp_fr = np.max(taste_fr_vecs)
-					x_vals = np.linspace(0,max_taste_resp_fr,num_neur)
+					x_vals = np.arange(num_neur)
 					if max_taste_resp_fr > max_x:
 						max_x = max_taste_resp_fr
 					num_taste_deliv = np.shape(taste_fr_vecs)[0]
@@ -1941,18 +2023,18 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 						all_diff[td_i*num_events:(td_i+1)*num_events,:] = diff
 					diff_mean = np.mean(all_diff,0)
 					diff_std = np.std(all_diff,0)
-					if max_y < np.max(diff_mean + x_vals + diff_std):
-						max_y = np.max(diff_mean + x_vals + diff_std)
-					if min_y > np.min(diff_mean + x_vals - diff_std):
-						min_y = np.min(diff_mean + x_vals - diff_std)
-					ax[t_i,t_i_c].plot(x_vals,diff_mean + x_vals,alpha=0.5,color='b',linestyle='solid')
-					ax[t_i,t_i_c].fill_between(x_vals,diff_mean + x_vals - diff_std,diff_mean + x_vals + diff_std,alpha=0.5,color='b')
+					if max_y < np.max(diff_mean + diff_std):
+						max_y = np.max(diff_mean + diff_std)
+					if min_y > np.min(diff_mean - diff_std):
+						min_y = np.min(diff_mean - diff_std)
+					ax[t_i,t_i_c].plot(x_vals,diff_mean,alpha=0.5,color='b',linestyle='solid')
+					ax[t_i,t_i_c].fill_between(x_vals,diff_mean - diff_std,diff_mean + diff_std,alpha=0.5,color='b')
 					#Plot
-					ax[t_i,t_i_c].set_xlabel(dig_in_names[t_i_c] + ' delivery FR')
+					ax[t_i,t_i_c].set_xlabel('Neuron Index')
 			for t_i in range(num_tastes):
 				for t_i_c in range(num_tastes):
-					ax[t_i,t_i_c].plot(np.arange(max_x),np.arange(max_x),alpha=0.5,color='k',linestyle='dashed')
-					ax[t_i,t_i_c].set_xlim([0,max_x])
+					ax[t_i,t_i_c].plot(np.arange(num_neur),np.zeros(num_neur),alpha=0.5,color='k',linestyle='dashed')
+					ax[t_i,t_i_c].set_xlim([0,num_neur])
 					ax[t_i,t_i_c].set_ylim([min_y-10,max_y+10])
 					if t_i == t_i_c:
 						for child in ax[t_i,t_i_c].get_children():
