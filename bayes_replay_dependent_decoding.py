@@ -81,6 +81,12 @@ if __name__ == '__main__':
 	bin_time = 0.1 #Seconds to skip forward in calculating firing rates
 	bin_dt = np.ceil(bin_time*1000).astype('int')
 	
+	tastant_fr_dist, full_taste_fr_dist, taste_num_deliv, max_hz, max_hz_full = ddf.taste_fr_dist(num_neur,
+														  num_cp,tastant_spike_times,
+														  pop_taste_cp_raster_inds,
+														  start_dig_in_times, pre_taste_dt,
+														  post_taste_dt)
+	
 	#%%
 	
 	#_____DECODE ALL NEURONS_____
@@ -93,11 +99,6 @@ if __name__ == '__main__':
 	taste_select = np.ones(num_neur) #stand in to use full population
 	taste_select_epoch = np.ones((num_cp,num_neur)) #stand in to use full population
 	
-	tastant_fr_dist, full_taste_fr_dist, taste_num_deliv, max_hz, max_hz_full = ddf.taste_fr_dist(num_neur,
-														  num_cp,tastant_spike_times,
-														  pop_taste_cp_raster_inds,
-														  start_dig_in_times, pre_taste_dt,
-														  post_taste_dt)
 	
 	ddf.decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
@@ -126,7 +127,7 @@ if __name__ == '__main__':
 
 #%%
 
-#_____DECODE TASTE SELECTIVE NEURONS_____
+	#_____DECODE TASTE SELECTIVE NEURONS_____
 	print("\nNow decoding using only taste selective neurons.\n")
 	
 	data_group_name = 'taste_selectivity'
