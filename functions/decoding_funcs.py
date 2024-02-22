@@ -1912,55 +1912,6 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				all_taste_event_fr_vecs.append(np.array(decoded_fr_vecs))
 				all_taste_event_z_fr_vecs.append(np.array(decoded_z_fr_vecs))
 			
-			#Taste avg plots
-			num_pairs = len(list(itertools.combinations(np.arange(num_tastes),2)))
-			f,ax = plt.subplots(nrows=1,ncols=num_pairs)
-			pair_i = 0
-			for t_1 in np.arange(num_tastes-1):
-				x_taste_vec = all_taste_fr_vecs_mean[t_1,:]
-				for t_2 in np.arange(t_1+1,num_tastes):
-					y_taste_vec = all_taste_fr_vecs_mean[t_2,:]
-					corr_result = pearsonr(x_taste_vec,y_taste_vec)
-					max_vec_fr = np.max([np.max(x_taste_vec),np.max(y_taste_vec)])
-					ax[pair_i].plot([0,max_vec_fr],[0,max_vec_fr],alpha=0.5,linestyle='dashed',color='b')
-					ax[pair_i].scatter(x_taste_vec,y_taste_vec,alpha=0.8,color='k')
-					ax[pair_i].set_title('Corr = ' + str(np.round(corr_result[0],2)))
-					ax[pair_i].set_xlabel(dig_in_names[t_1] + ' Avg. FR')
-					ax[pair_i].set_ylabel(dig_in_names[t_2] + ' Avg. FR')
-					pair_i += 1
-			plt.suptitle('Average Taste Response Similarity')
-			plt.tight_layout()
-			f.savefig(seg_decode_save_dir + 'avg_tastes_compare.png')
-			f.savefig(seg_decode_save_dir + 'avg_tastes_compare.svg')
-			plt.close(f)
-			
-			#Indiv taste deliv plots
-			num_pairs = len(list(itertools.combinations(np.arange(num_tastes),2)))
-			f,ax = plt.subplots(nrows=1,ncols=num_pairs)
-			pair_i = 0
-			for t_1 in np.arange(num_tastes-1):
-				x_taste_mat = all_taste_fr_vecs[t_1]
-				num_taste_1 = np.shape(x_taste_mat)[0]
-				for t_2 in np.arange(t_1+1,num_tastes):
-					y_taste_mat = all_taste_fr_vecs[t_2]
-					num_taste_2 = np.shape(y_taste_mat)[0]
-					taste_pairs = list(itertools.product(np.arange(num_taste_1),np.arange(num_taste_2)))
-					pair_corrs = np.zeros(len(taste_pairs))
-					for tp_i,tp in enumerate(taste_pairs):
-						pair_corrs[tp_i] = pearsonr(x_taste_mat[tp[0],:],y_taste_mat[tp[1],:])[0]
-					max_vec_fr = np.max([np.max(x_taste_mat),np.max(y_taste_mat)])
-					ax[pair_i].plot([0,max_vec_fr],[0,max_vec_fr],alpha=0.5,linestyle='dashed',color='b')
-					ax[pair_i].scatter(x_taste_mat,y_taste_mat,alpha=0.1,color='k')
-					ax[pair_i].set_title('Corr = ' + str(np.round(np.mean(pair_corrs),2)))
-					ax[pair_i].set_xlabel(dig_in_names[t_1] + ' FR')
-					ax[pair_i].set_ylabel(dig_in_names[t_2] + ' FR')
-					pair_i += 1
-			plt.suptitle('Individual Taste Response Similarity')
-			plt.tight_layout()
-			f.savefig(seg_decode_save_dir + 'all_delivered_tastes_compare.png')
-			f.savefig(seg_decode_save_dir + 'all_delivered_tastes_compare.svg')
-			plt.close(f)
-			
 			#Taste event scatter plots
 			#f, ax = plt.subplots(nrows=1, ncols=num_tastes+1, figsize=(8,8), gridspec_kw=dict(width_ratios=list(np.concatenate((6*np.ones(num_tastes),np.ones(1))))))
 			f, ax = plt.subplots(nrows=num_tastes, ncols=num_tastes, figsize=(num_tastes*2,num_tastes*2), gridspec_kw=dict(width_ratios=list(6*np.ones(num_tastes))))
@@ -1998,7 +1949,7 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 			
 			#Taste event angled deviation plots
 			#f, ax = plt.subplots(nrows=1, ncols=num_tastes+1, figsize=(8,8), gridspec_kw=dict(width_ratios=list(np.concatenate((6*np.ones(num_tastes),np.ones(1))))))
-			f, ax = plt.subplots(nrows=num_tastes, ncols=num_tastes, figsize=(num_tastes*3,num_tastes*3), gridspec_kw=dict(width_ratios=list(6*np.ones(num_tastes))))
+			f, ax = plt.subplots(nrows=num_tastes, ncols=num_tastes, figsize=(num_tastes*4,num_tastes*4), gridspec_kw=dict(width_ratios=list(6*np.ones(num_tastes))))
 			max_y = 0
 			min_y = 0
 			max_x = 0
@@ -2028,7 +1979,8 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 					if min_y > np.min(diff_mean - diff_std):
 						min_y = np.min(diff_mean - diff_std)
 					ax[t_i,t_i_c].plot(x_vals,diff_mean,alpha=0.5,color='b',linestyle='solid')
-					ax[t_i,t_i_c].fill_between(x_vals,diff_mean - diff_std,diff_mean + diff_std,alpha=0.5,color='b')
+					#ax[t_i,t_i_c].fill_between(x_vals,diff_mean - diff_std,diff_mean + diff_std,alpha=0.5,color='b')
+					ax[t_i,t_i_c].violinplot(all_diff,x_vals)
 					#Plot
 					ax[t_i,t_i_c].set_xlabel('Neuron Index')
 			for t_i in range(num_tastes):

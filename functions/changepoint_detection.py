@@ -103,20 +103,24 @@ def calc_cp_bayes(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 def calc_cp_iter(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 				  end_dig_in_times,before_taste,after_taste,
 				  dig_in_names,taste_cp_save_dir):
+	#Neuron changepoint save directory
 	neur_save_dir = taste_cp_save_dir + 'neur/'
 	if os.path.isdir(neur_save_dir) == False:
 		os.mkdir(neur_save_dir)
+	#Delivery changepoint save directory
 	deliv_save_dir = taste_cp_save_dir + 'deliv/'
 	if os.path.isdir(deliv_save_dir) == False:
 		os.mkdir(deliv_save_dir)
+	#Grab parameters
 	num_tastes = len(tastant_spike_times)
 	num_deliv = len(tastant_spike_times[0])
 	num_neur = len(tastant_spike_times[0][0])
+	#Calculate changepoints by taste
 	taste_cp = []
 	for t_i in range(num_tastes):
 		print('Calculating changepoints for taste ' + dig_in_names[t_i])
-		neur_deliv_cp = np.zeros((num_deliv,num_neur,num_cp+1))
-		deliv_st = dict()
+		neur_deliv_cp = np.zeros((num_deliv,num_neur,num_cp+1)) #Store changepoints
+		deliv_st = dict() #Delivery spike times storage
 		#Calculate changepoints for each neuron for each tastant delivery
 		for n_i in tqdm.tqdm(range(num_neur)):
 			neur_deliv_st = []
@@ -221,7 +225,7 @@ def calc_cp_iter_pop(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 	for t_i in range(num_tastes):
 		print('Calculating changepoints for taste ' + dig_in_names[t_i])
 		dig_in_name = dig_in_names[t_i]
-		deliv_cp = np.zeros((num_deliv,num_cp+1))
+		deliv_cp = np.zeros((num_deliv,num_cp+2))
 		deliv_st = dict()
 		#Calculate changepoints for the population for each tastant delivery
 		for d_i in tqdm.tqdm(range(num_deliv)):
@@ -231,7 +235,7 @@ def calc_cp_iter_pop(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 			bin_length = before_taste+taste_deliv_len+after_taste+1
 			#Create the binary spike matrix
 			neur_st = dict()
-			deliv_bin = np.zeros((num_neur,bin_length))
+			deliv_bin_full = np.zeros((num_neur,bin_length))
 			for n_i in range(num_neur):
 				spike_ind = tastant_spike_times[t_i][d_i][n_i]
 				converted_ind = list((np.array(spike_ind) - start_deliv + before_taste).astype('int'))
@@ -241,7 +245,10 @@ def calc_cp_iter_pop(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 					neur_st[n_i] = cur_st
 				except:
 					neur_st[n_i] = [converted_ind]
-				deliv_bin[n_i,converted_ind] = 1		
+				deliv_bin_full[n_i,converted_ind] = 1		
+			#Crop spike matrix to just taste interval
+			bin_length -= before_taste
+			deliv_bin = deliv_bin_full[:,before_taste:]
 			#Run through each timepoint starting at the minimum changepoint bin 
 			#size to the length of the segment - the changepoint bin size and
 			#calculate the proxy for a changepoint between two Poisson processes.
@@ -252,18 +259,18 @@ def calc_cp_iter_pop(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 			for iter_i in range(num_cp):
 				if len(peak_inds) > 0:
 					sorted_peak_inds = np.sort(np.array(peak_inds))
-					sub_bins = [cp_bin]
+					sub_bins = [0]
 					sub_bins.extend(list(sorted_peak_inds))
 					sub_bins.extend([bin_length-cp_bin])
 				else:
-					sub_bins = [cp_bin, bin_length - cp_bin]
+					sub_bins = [0, bin_length - cp_bin]
 				for b_i in range(len(sub_bins)-1):
 					sub_bin_len = sub_bins[b_i+1] - sub_bins[b_i]
-					sub_bin_spikes = np.sum(deliv_bin[:,sub_bins[b_i]:sub_bins[b_i+1]])
+					sub_bin_spikes = np.sum(deliv_bin[:,sub_bins[b_i]:sub_bins[b_i+1]]).astype('int')
 					if (sub_bin_len > cp_bin) & (sub_bin_spikes > 0):
 						cp_likelihood_bin_pop = np.zeros((num_neur,bin_length))
 						for n_i in range(num_neur):
-							for time_i in np.arange(sub_bins[b_i]+cp_bin,sub_bins[b_i+1]):
+							for time_i in np.arange(sub_bins[b_i],sub_bins[b_i+1]):
 								N_1 = np.sum(deliv_bin[n_i,sub_bins[b_i]:time_i])
 								N_2 = np.sum(deliv_bin[n_i,time_i+1:sub_bins[b_i+1]])
 								T_1 = time_i - sub_bins[b_i]
@@ -272,7 +279,6 @@ def calc_cp_iter_pop(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 								cp_likelihood_bin_pop[n_i,time_i] = cp_like_calc#/np.max(cp_like_calc)
 						cp_likelihood_bin = np.prod(cp_likelihood_bin_pop,axis=0)
 						bin_peak_inds = find_peaks(cp_likelihood_bin[cp_bin:],distance=cp_bin)[0] + cp_bin
-						bin_peak_inds = bin_peak_inds[bin_peak_inds > before_taste]
 						if len(bin_peak_inds) > 0:
 							sorted_peak_ind = bin_peak_inds[np.argsort(cp_likelihood_bin[bin_peak_inds])]
 							if iter_i > 0:
@@ -290,20 +296,18 @@ def calc_cp_iter_pop(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 								peak_inds.extend([max_peak_ind])
 								peak_likelihoods.extend([max_peak_likelihood])
 			#Now select the best num_cp peaks
-			peak_inds = np.array(peak_inds)
+			peak_inds = np.array(peak_inds) + before_taste
 			peak_likelihoods = np.array(peak_likelihoods)
-			too_close_inds = peak_inds >= before_taste + cp_bin
-			peak_inds = peak_inds[too_close_inds]
-			peak_likelihoods = peak_likelihoods[too_close_inds]
-			best_peak_inds = np.zeros(num_cp+1)
+			best_peak_inds = np.zeros(num_cp+2)
 			best_peak_inds[0] = before_taste
 			selected_peak_inds = np.sort(np.array(peak_inds)[np.argsort(peak_likelihoods[-num_cp:])])
 			if len(selected_peak_inds) < num_cp:
 				remaining_cp = num_cp - len(selected_peak_inds)
 				selected_peak_inds = np.concatenate((selected_peak_inds,(bin_length-1)*np.ones(remaining_cp)))
-			best_peak_inds[1:] = selected_peak_inds
+			best_peak_inds[1:-1] = selected_peak_inds
+			best_peak_inds[-1] = after_taste + before_taste
 			deliv_cp[d_i,:] = best_peak_inds.astype('int')
-			plot_cp_rasters_pop(deliv_bin,best_peak_inds,d_i,before_taste,dig_in_name,taste_cp_save_dir)
+			plot_cp_rasters_pop(deliv_bin_full,best_peak_inds,d_i,before_taste,dig_in_name,taste_cp_save_dir)
 		taste_cp.append(deliv_cp)
 		
 	return taste_cp
