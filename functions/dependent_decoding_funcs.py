@@ -40,7 +40,7 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 	
 	#If trial_start_frac > 0 use only trials after that threshold
 	trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
-	new_max_num_deliv = max_num_deliv - trial_start_ind
+	new_max_num_deliv = (max_num_deliv - trial_start_ind).astype('int')
 	
 	#Set up storage dictionary of results
 	tastant_fr_dist = dict() #Population firing rate distributions by epoch
@@ -307,7 +307,7 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 	
 	#If trial_start_frac > 0 use only trials after that threshold
 	trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
-	new_max_num_deliv = max_num_deliv - trial_start_ind
+	new_max_num_deliv = (max_num_deliv - trial_start_ind).astype('int')
 	
 	deliv_taste_index = []
 	taste_num_deliv = np.zeros(num_tastes)
@@ -356,7 +356,7 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 	max_hz = 0
 	min_hz = 0
 	for t_i in range(num_tastes):
-		num_deliv = taste_num_deliv[t_i]
+		num_deliv = (taste_num_deliv[t_i]).astype('int')
 		taste_cp = pop_taste_cp_raster_inds[t_i]
 		for d_i in range(num_deliv): #index for that taste
 			if d_i >= trial_start_ind:
@@ -400,7 +400,7 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 	#Variables
 	num_tastes = len(start_dig_in_times)
 	num_neur = len(segment_spike_times[0])
-	max_num_deliv = np.max(taste_num_deliv)
+	max_num_deliv = np.max(taste_num_deliv).astype('int')
 	num_cp = len(tastant_fr_dist_z[0][0])
 	num_segments = len(segment_spike_times)
 	hist_bins = np.arange(stop=max_hz+1,step=0.25)
@@ -411,7 +411,7 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 
 	#If trial_start_frac > 0 use only trials after that threshold
 	trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
-	new_max_num_deliv = max_num_deliv - trial_start_ind
+	new_max_num_deliv = (max_num_deliv - trial_start_ind).astype('int')
 
 	for e_i in range(num_cp): #By epoch conduct decoding
 		print('Decoding Epoch ' + str(e_i))

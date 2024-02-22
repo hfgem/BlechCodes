@@ -116,7 +116,6 @@ if __name__ == '__main__':
 					   taste_select_epoch,use_full,max_hz_pop,bayes_dir_all,
 					   neuron_count_thresh,trial_start_frac)
 	
-	
 	#___Plot Results___
 	df.plot_decoded(tastant_fr_dist_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
