@@ -548,25 +548,53 @@ def taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
 			#___Correlations
 			#Correlation matrix
 			corr_mat = np.zeros((num_deliv,num_deliv))
-			for d_1 in range(num_deliv-1): #First delivery
+			for d_1 in range(num_deliv): #First delivery
 				t_vec_1 = taste_epoch_fr_vecs[d_1,:]
 				for d_2 in np.arange(d_1,num_deliv): #Second delivery
 					t_vec_2 = taste_epoch_fr_vecs[d_2,:]
 					corr_mat[d_1,d_2] = np.abs(pearsonr(t_vec_1,t_vec_2)[0])
 			#Correlation timeseries average
-			corr_mean_vec = np.nansum(corr_mat,0)/np.arange(1,num_deliv+1)
+			corr_mean_vec_pre = np.nansum(corr_mat,0)/np.arange(1,num_deliv+1)
+			corr_mean_vec_post = np.nansum(corr_mat,1).T/np.flip(np.arange(1,num_deliv+1))
+			#Rolling correlation average for block of 5
+			corr_block_mean_pre = np.nan*np.ones(num_deliv)
+			corr_block_mean_post = np.nan*np.ones(num_deliv)
+			for b_i in range(num_deliv):
+				try:
+					corr_block_mean_pre[b_i] = np.nansum(corr_mat[b_i-5:b_i,b_i])/5
+				except:
+					"do nothing"
+				try:
+					corr_block_mean_post[b_i] = np.nansum(corr_mat[b_i,b_i:b_i+5])/5
+				except:
+					"do nothing"
 			#Indiv taste deliv similarity/correlation plots
-			f,ax = plt.subplots(nrows=2,ncols=1,figsize=(8,8),gridspec_kw=dict(height_ratios=[3,1]))
+			f,ax = plt.subplots(nrows=5,ncols=1,figsize=(10,10),gridspec_kw=dict(height_ratios=[10,1,1,1,1]))
 			img = ax[0].imshow(corr_mat,cmap='binary')
 			plt.colorbar(img, ax=ax[0],location='right')
 			ax[0].set_title('epoch ' + str(e_i) + ' ' + dig_in_names[t_i] + ' delivery correlation')
 			ax[0].set_xlabel('Delivery Index')
 			ax[0].set_ylabel('Delivery Index')
-			ax[1].plot(np.arange(num_deliv),corr_mean_vec)
+			ax[1].plot(np.arange(num_deliv),corr_mean_vec_pre)
 			#ax[1].set_ylim([0,1])
 			ax[1].set_title('Average corr of pre to given index')
 			ax[1].set_xlabel('Delivery Index')
 			ax[1].set_ylabel('Correlation')
+			ax[2].plot(np.arange(num_deliv),corr_mean_vec_post)
+			#ax[2].set_ylim([0,1])
+			ax[2].set_title('Average corr of post to given index')
+			ax[2].set_xlabel('Delivery Index')
+			ax[2].set_ylabel('Correlation')
+			ax[3].plot(np.arange(5,num_deliv),corr_block_mean_pre[5:])
+			#ax[3].set_ylim([0,1])
+			ax[3].set_title('Average 5-trial corr of pre to given index')
+			ax[3].set_xlabel('Delivery Index')
+			ax[3].set_ylabel('Correlation')
+			ax[4].plot(np.arange(num_deliv-5),corr_block_mean_post[:-5])
+			#ax[4].set_ylim([0,1])
+			ax[4].set_title('Average 5-trial corr of post to given index')
+			ax[4].set_xlabel('Delivery Index')
+			ax[4].set_ylabel('Correlation')
 			plt.tight_layout()
 			f.savefig(epoch_save_dir + dig_in_names[t_i] + '_deliv_correlation_mat.png')
 			f.savefig(epoch_save_dir + dig_in_names[t_i] + '_deliv_correlation_mat.svg')
@@ -574,25 +602,53 @@ def taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
 			#___Distances
 			#Distance matrix
 			dist_mat = np.zeros((num_deliv,num_deliv))
-			for d_1 in range(num_deliv-1): #First delivery
+			for d_1 in range(num_deliv): #First delivery
 				t_vec_1 = taste_epoch_fr_vecs[d_1,:]
 				for d_2 in np.arange(d_1,num_deliv): #Second delivery
 					t_vec_2 = taste_epoch_fr_vecs[d_2,:]
 					dist_mat[d_1,d_2] = np.sqrt(np.sum((t_vec_1-t_vec_2)**2))
 			#Distance timeseries average
-			dist_mean_vec = np.nansum(dist_mat,0)/np.arange(1,num_deliv+1)
+			dist_mean_vec_pre = np.nansum(dist_mat,0)/np.arange(1,num_deliv+1)
+			dist_mean_vec_post = np.nansum(dist_mat,1).T/np.flip(np.arange(1,num_deliv+1))
+			#Rolling correlation average for block of 5
+			dist_block_mean_pre = np.nan*np.ones(num_deliv)
+			dist_block_mean_post = np.nan*np.ones(num_deliv)
+			for b_i in range(num_deliv):
+				try:
+					dist_block_mean_pre[b_i] = np.nansum(dist_mat[b_i-5:b_i,b_i])/5
+				except:
+					"do nothing"
+				try:
+					dist_block_mean_post[b_i] = np.nansum(dist_mat[b_i,b_i:b_i+5])/5
+				except:
+					"do nothing"
 			#Indiv taste deliv distance plots
-			f,ax = plt.subplots(nrows=2,ncols=1,figsize=(8,8),gridspec_kw=dict(height_ratios=[3,1]))
+			f,ax = plt.subplots(nrows=5,ncols=1,figsize=(10,10),gridspec_kw=dict(height_ratios=[10,1,1,1,1]))
 			img = ax[0].imshow(dist_mat,cmap='binary')
 			plt.colorbar(img, ax=ax[0],location='right')
 			ax[0].set_title('epoch ' + str(e_i) + ' ' + dig_in_names[t_i] + ' delivery distance')
 			ax[0].set_xlabel('Delivery Index')
 			ax[0].set_ylabel('Delivery Index')
-			ax[1].plot(np.arange(num_deliv),dist_mean_vec)
+			ax[1].plot(np.arange(num_deliv),dist_mean_vec_pre)
 			#ax[1].set_ylim([0,1])
 			ax[1].set_title('Average distance of pre to given index')
 			ax[1].set_xlabel('Delivery Index')
 			ax[1].set_ylabel('Distance')
+			ax[2].plot(np.arange(num_deliv),dist_mean_vec_post)
+			#ax[2].set_ylim([0,1])
+			ax[2].set_title('Average distance of post to given index')
+			ax[2].set_xlabel('Delivery Index')
+			ax[2].set_ylabel('Distance')
+			ax[3].plot(np.arange(5,num_deliv),dist_block_mean_pre[5:])
+			#ax[3].set_ylim([0,1])
+			ax[3].set_title('Average 5-trial distance of pre to given index')
+			ax[3].set_xlabel('Delivery Index')
+			ax[3].set_ylabel('Distance')
+			ax[4].plot(np.arange(num_deliv-5),dist_block_mean_post[:-5])
+			#ax[4].set_ylim([0,1])
+			ax[4].set_title('Average 5-trial distance of post to given index')
+			ax[4].set_xlabel('Delivery Index')
+			ax[4].set_ylabel('Distance')
 			plt.tight_layout()
 			f.savefig(epoch_save_dir + dig_in_names[t_i] + '_deliv_distance_mat.png')
 			f.savefig(epoch_save_dir + dig_in_names[t_i] + '_deliv_distance_mat.svg')
