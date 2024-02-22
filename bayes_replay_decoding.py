@@ -81,6 +81,18 @@ if __name__ == '__main__':
 	bin_time = 0.1 #Seconds to skip forward in calculating firing rates
 	bin_dt = np.ceil(bin_time*1000).astype('int')
 	
+	#%% Get FR distributions
+	
+	tastant_fr_dist_pop, max_hz_pop, taste_num_deliv = df.taste_fr_dist(num_neur,num_cp,tastant_spike_times,
+														 taste_cp_raster_inds,pop_taste_cp_raster_inds,
+														 start_dig_in_times, pre_taste_dt, post_taste_dt)
+	
+	tastant_fr_dist_pop_z, max_hz_pop, min_hz_pop, taste_num_deliv_z = df.taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,
+																segment_spike_times,segment_names,segment_times,
+																taste_cp_raster_inds,pop_taste_cp_raster_inds,
+																start_dig_in_times, pre_taste_dt, post_taste_dt, bin_dt)
+	
+	
 	#%%
 	
 	#_____DECODE ALL NEURONS_____
@@ -93,20 +105,7 @@ if __name__ == '__main__':
 	#Get FR Distributions
 	taste_select = np.ones(num_neur) #stand in to use full population
 	taste_select_epoch = np.ones((num_cp,num_neur)) #stand in to use full population
-	full_taste_fr_dist, tastant_fr_dist, tastant_fr_dist_pop, \
-		taste_num_deliv, max_hz, max_hz_pop, max_hz_full = df.taste_fr_dist(num_neur,num_cp,tastant_spike_times,
-														 taste_cp_raster_inds,pop_taste_cp_raster_inds,
-														 start_dig_in_times, pre_taste_dt, post_taste_dt)
 	
-	#If first run full-taste decode and use only the decoded periods for the epoch decode, set to 1, else 0
-	
-	if use_full == 1:
-		#Decode by segment for a sliding post-taste bin size first
-		#___Decode using full taste response___
-		df.decode_full(full_taste_fr_dist,segment_spike_times,post_taste_dt,
-					   skip_dt,dig_in_names,segment_times,segment_names,
-					   start_dig_in_times,taste_num_deliv,taste_select,max_hz_full,bayes_dir_all)
-
 	#___Decode using epoch-specific responses___
 	df.decode_epochs(tastant_fr_dist_pop,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
@@ -115,24 +114,23 @@ if __name__ == '__main__':
 	
 	
 	#___Plot Results___
-	
-	df.plot_decoded(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded(tastant_fr_dist_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					 segment_names,taste_num_deliv,taste_select_epoch,
 					 use_full,bayes_dir_all,max_decode,max_hz_pop,seg_stat_bin,neuron_count_thresh)
 	
-	df.plot_decoded_func_p(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded_func_p(tastant_fr_dist_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					 segment_names,taste_num_deliv,taste_select_epoch,
-					 use_full,bayes_dir_all,max_decode,max_hz,seg_stat_bin)
+					 use_full,bayes_dir_all,max_decode,max_hz_pop,seg_stat_bin)
 	
-	df.plot_decoded_func_n(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded_func_n(tastant_fr_dist_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					 segment_names,taste_num_deliv,taste_select_epoch,
-					 use_full,bayes_dir_all,max_decode,max_hz,seg_stat_bin)
+					 use_full,bayes_dir_all,max_decode,max_hz_pop,seg_stat_bin)
 
 #%%	
 	#_____DECODE TASTE SELECTIVE NEURONS_____
@@ -150,21 +148,6 @@ if __name__ == '__main__':
 	if os.path.isdir(bayes_dir_select) == False:
 		os.mkdir(bayes_dir_select)
 	
-	#Get FR Distributions
-	full_taste_fr_dist, tastant_fr_dist, tastant_fr_dist_pop, \
-		taste_num_deliv, max_hz, max_hz_pop, max_hz_full  = df.taste_fr_dist(num_neur,num_cp,tastant_spike_times,
-														  taste_cp_raster_inds,pop_taste_cp_raster_inds,
-														  start_dig_in_times, pre_taste_dt, post_taste_dt)
-	
-	#Assumes the parameters are the same from all neurons above
-	if use_full == 1:
-		#Decode by segment for a sliding post-taste bin size first
-		#___Decode using full taste response___
-		df.decode_full(full_taste_fr_dist,segment_spike_times,post_taste_dt,
-				   skip_dt,dig_in_names,segment_times,segment_names,
-				   start_dig_in_times,taste_num_deliv,taste_select_neur_bin,max_hz_full,bayes_dir_select)
-
-	#___Phase 2: Decode using epoch-specific responses___
 	df.decode_epochs(tastant_fr_dist_pop,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					   segment_names,start_dig_in_times,taste_num_deliv,
@@ -172,23 +155,23 @@ if __name__ == '__main__':
 	
 	#___Plot Results___
 					
-	df.plot_decoded(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded(tastant_fr_dist_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					     start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 						  e_skip_dt,e_len_dt,dig_in_names,segment_times,
 						   segment_names,taste_num_deliv,taste_select_epoch,
 						    use_full,bayes_dir_select,max_decode,max_hz_pop,seg_stat_bin,neuron_count_thresh)
 	
-	df.plot_decoded_func_p(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded_func_p(tastant_fr_dist_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					 segment_names,taste_num_deliv,taste_select_epoch,
-					 use_full,bayes_dir_select,max_decode,max_hz,seg_stat_bin)
+					 use_full,bayes_dir_select,max_decode,max_hz_pop,seg_stat_bin)
 	
-	df.plot_decoded_func_n(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded_func_n(tastant_fr_dist_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 					 segment_names,taste_num_deliv,taste_select_epoch,
-					 use_full,bayes_dir_select,max_decode,max_hz,seg_stat_bin)
+					 use_full,bayes_dir_select,max_decode,max_hz_pop,seg_stat_bin)
 	
 #%%
 	#_____DECODE ALL NEURONS Z-SCORED_____
@@ -201,44 +184,32 @@ if __name__ == '__main__':
 	#Get FZ-Scored R Distributions
 	taste_select = np.ones(num_neur) #stand in to use full population
 	taste_select_epoch = np.ones((num_cp,num_neur)) #stand in to use full population
-	full_taste_fr_dist_z, tastant_fr_dist_z, tastant_fr_dist_pop_z, taste_num_deliv_z, \
-		max_hz, max_hz_pop, max_hz_full, min_hz, min_hz_pop, min_hz_full = df.taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,
-																segment_spike_times,segment_names,segment_times,
-																taste_cp_raster_inds,pop_taste_cp_raster_inds,
-																start_dig_in_times, pre_taste_dt, post_taste_dt, bin_dt)
 	
-	if use_full == 1:
-		#Decode by segment for a sliding post-taste bin size first
-		#___Decode using full taste response___
-		df.decode_full_zscore(full_taste_fr_dist_z,segment_spike_times,post_taste_dt,
-						   skip_dt,dig_in_names,segment_times,segment_names,bin_dt,
-						   start_dig_in_times,taste_num_deliv,taste_select,max_hz_full,min_hz_full,bayes_dir_all_z)
-		
-	#___Phase 2: Decode using epoch-specific responses___
 	df.decode_epochs_zscore(tastant_fr_dist_pop_z,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,bin_dt,
-					   segment_names,start_dig_in_times,taste_num_deliv,
+					   segment_names,start_dig_in_times,taste_num_deliv_z,
 					   taste_select_epoch,use_full,max_hz_pop,min_hz_pop,bayes_dir_all_z)
 	
-	#___Plot Results___
+	tastant_fr_dist_pop_z, max_hz_pop, min_hz_pop, taste_num_deliv_z
 	
-	df.plot_decoded(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	#___Plot Results___
+	df.plot_decoded(tastant_fr_dist_pop_z,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					     start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 						  e_skip_dt,e_len_dt,dig_in_names,segment_times,
-						   segment_names,taste_num_deliv,taste_select_epoch,
+						   segment_names,taste_num_deliv_z,taste_select_epoch,
 						    use_full,bayes_dir_all_z,max_decode,max_hz_pop,seg_stat_bin,neuron_count_thresh)
 	
-	df.plot_decoded_func_p(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded_func_p(tastant_fr_dist_pop_z,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
-					 segment_names,taste_num_deliv,taste_select_epoch,
-					 use_full,bayes_dir_all_z,max_decode,max_hz,seg_stat_bin)
+					 segment_names,taste_num_deliv_z,taste_select_epoch,
+					 use_full,bayes_dir_all_z,max_decode,max_hz_pop,seg_stat_bin)
 	
-	df.plot_decoded_func_n(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded_func_n(tastant_fr_dist_pop_z,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
-					 segment_names,taste_num_deliv,taste_select_epoch,
-					 use_full,bayes_dir_all_z,max_decode,max_hz,seg_stat_bin)
+					 segment_names,taste_num_deliv_z,taste_select_epoch,
+					 use_full,bayes_dir_all_z,max_decode,max_hz_pop,seg_stat_bin)
 	
 	
 #%%
@@ -257,46 +228,28 @@ if __name__ == '__main__':
 	if os.path.isdir(bayes_dir_select_z) == False:
 		os.mkdir(bayes_dir_select_z)
 	
-	#Get FR Distributions
-	full_taste_fr_dist_z, tastant_fr_dist_z, tastant_fr_dist_pop_z, taste_num_deliv_z, \
-		max_hz, max_hz_pop, max_hz_full, min_hz, min_hz_pop, min_hz_full = df.taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times, 
-															segment_spike_times,segment_names,segment_times, 
-																taste_cp_raster_inds,pop_taste_cp_raster_inds, 
-																	start_dig_in_times, pre_taste_dt, post_taste_dt, bin_dt)
-	
-	#Assumes the parameters are the same from all neurons above
-	if use_full == 1:
-		#Decode by segment for a sliding post-taste bin size first
-		#___Decode using full taste response___
-		df.decode_full_zscore(full_taste_fr_dist_z,segment_spike_times,post_taste_dt,
-				   skip_dt,dig_in_names,segment_times,segment_names,bin_dt,
-				   start_dig_in_times,taste_num_deliv,taste_select_neur_bin,max_hz_full,min_hz_full,bayes_dir_select_z)
-	
-	
-	#___Phase 2: Decode using epoch-specific responses___
-	df.decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
+	df.decode_epochs_zscore(tastant_fr_dist_pop_z,segment_spike_times,post_taste_dt,
 					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,bin_dt,
-					   segment_names,start_dig_in_times,taste_num_deliv,
+					   segment_names,start_dig_in_times,taste_num_deliv_z,
 					   taste_select_neur_epoch_bin,use_full,max_hz_pop,min_hz_pop,bayes_dir_select_z)
 	
 	#___Plot Results___
-	
-	df.plot_decoded(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded(tastant_fr_dist_pop_z,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					     start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 						  e_skip_dt,e_len_dt,dig_in_names,segment_times,
-						   segment_names,taste_num_deliv,taste_select_epoch,
+						   segment_names,taste_num_deliv_z,taste_select_epoch,
 						    use_full,bayes_dir_select_z,max_decode,max_hz_pop,seg_stat_bin,neuron_count_thresh)
 	
-	df.plot_decoded_func_p(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded_func_p(tastant_fr_dist_pop_z,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
-					 segment_names,taste_num_deliv,taste_select_epoch,
-					 use_full,bayes_dir_select_z,max_decode,max_hz,seg_stat_bin)
+					 segment_names,taste_num_deliv_z,taste_select_epoch,
+					 use_full,bayes_dir_select_z,max_decode,max_hz_pop,seg_stat_bin)
 	
-	df.plot_decoded_func_n(tastant_fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+	df.plot_decoded_func_n(tastant_fr_dist_pop_z,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 					 e_skip_dt,e_len_dt,dig_in_names,segment_times,
-					 segment_names,taste_num_deliv,taste_select_epoch,
-					 use_full,bayes_dir_select_z,max_decode,max_hz,seg_stat_bin)
+					 segment_names,taste_num_deliv_z,taste_select_epoch,
+					 use_full,bayes_dir_select_z,max_decode,max_hz_pop,seg_stat_bin)
 	
 	

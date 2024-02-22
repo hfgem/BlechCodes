@@ -39,19 +39,15 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 	del t_i, num_deliv
 	
 	#Set up storage dictionary of results
-	full_taste_fr_dist = dict() #Full taste response firing rate distribution
 	tastant_fr_dist = dict() #Population firing rate distributions by epoch
 	for t_i in range(num_tastes):
-		full_taste_fr_dist[t_i] = dict()
 		tastant_fr_dist[t_i] = dict()
 		for d_i in range(max_num_deliv):
-			full_taste_fr_dist[t_i][d_i] = dict()
 			tastant_fr_dist[t_i][d_i] = dict()
 			for cp_i in range(num_cp):
 				tastant_fr_dist[t_i][d_i][cp_i] = dict()
 					
 	max_hz = 0
-	max_hz_full = 0
 	for t_i in range(num_tastes):
 		num_deliv = taste_num_deliv[t_i]
 		taste_cp = pop_taste_cp_raster_inds[t_i]
@@ -71,20 +67,6 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 					start_epoch = int(deliv_cp[cp_i])
 					end_epoch = int(deliv_cp[cp_i+1])
 					#TODO: add variable to change the bin size
-					#____Toddler block____
-# 					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
-# 					if len(bin_edges) != 0:
-# 						if (bin_edges[-1] != end_epoch)*(end_epoch-bin_edges[-1]>10):
-# 							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
-# 						#Calculate population firing rate vectors within bins
-# 						bst_hz = np.array([np.sum(bin_post_taste[:,bin_edges[b_i]:bin_edges[b_i+1]],1)/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)])
-# 						#Store the firing rate vectors
-# 						tastant_fr_dist[t_i][d_i][cp_i] = bst_hz
-# 						#Store maximum firing rate
-# 						if np.max(bst_hz) > max_hz:
-# 							max_hz = np.max(bst_hz)
-					#____
-					#____Teen block____
 					bin_starts = np.arange(start_epoch,end_epoch-100).astype('int') #bin the epoch
 					if len(bin_starts) != 0:
 						#Calculate population firing rate vectors within bins
@@ -94,29 +76,8 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 						#Store maximum firing rate
 						if np.max(bst_hz) > max_hz:
 							max_hz = np.max(bst_hz)
-					#____
-			#Calculate full taste interval firing rate vectors
-			#____Toddler block____
-# 			bin_edges = np.arange(0,post_taste_dt,100).astype('int') #bin the epoch
-# 			if len(bin_edges) != 0:
-# 				if (bin_edges[-1] != post_taste_dt)*(post_taste_dt-bin_edges[-1]>10):
-# 					bin_edges = np.concatenate((bin_edges,post_taste_dt*np.ones(1).astype('int')))
-# 				bst_hz = np.array([np.sum(bin_post_taste[:,bin_edges[b_i]:bin_edges[b_i+1]],1)/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)])
-# 				full_taste_fr_dist[t_i][d_i] = bst_hz.T
-# 				if np.max(bst_hz) > max_hz_full:
-# 					max_hz_full = np.max(bst_hz)
-			#____
-			#____Teen block____
-			bin_starts = np.arange(0,post_taste_dt-100).astype('int') #bin the epoch
-			if len(bin_starts) != 0:
-				bst_hz = np.array([np.sum(bin_post_taste[:,bin_starts[b_i]:bin_starts[b_i]+100],1)/(100/1000) for b_i in range(len(bin_starts))])
-				full_taste_fr_dist[t_i][d_i] = bst_hz.T
-				if np.max(bst_hz) > max_hz_full:
-					max_hz_full = np.max(bst_hz)
-			#____
-			
 					
-	return tastant_fr_dist, full_taste_fr_dist, taste_num_deliv, max_hz, max_hz_full
+	return tastant_fr_dist, taste_num_deliv, max_hz
 	
 def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
@@ -364,21 +325,16 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 		
 	#Determine the spike fr distributions for each neuron for each taste
 	#print("\tPulling spike fr distributions by taste by neuron")
-	full_taste_fr_dist = dict() #Full taste response firing rate distribution
 	tastant_fr_dist = dict() #Population firing rate distributions by epoch
 	for t_i in range(num_tastes):
-		full_taste_fr_dist[t_i] = dict()
 		tastant_fr_dist[t_i] = dict()
 		for d_i in range(max_num_deliv):
-			full_taste_fr_dist[t_i][d_i] = dict()
 			tastant_fr_dist[t_i][d_i] = dict()
 			for cp_i in range(num_cp):
 				tastant_fr_dist[t_i][d_i][cp_i] = dict()
 	#____
 	max_hz = 0
 	min_hz = 0
-	max_hz_full = 0
-	min_hz_full = 0
 	for t_i in range(num_tastes):
 		num_deliv = taste_num_deliv[t_i]
 		taste_cp = pop_taste_cp_raster_inds[t_i]
@@ -408,21 +364,10 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 					if np.min(bst_hz_z) < min_hz:
 						min_hz = np.min(bst_hz_z)
 			del cp_i, start_epoch, end_epoch, bst_hz, bst_hz_z
-			bin_edges = np.arange(0,post_taste_dt,100).astype('int') #bin the epoch
-			if len(bin_edges) != 0:
-				if (bin_edges[-1] != post_taste_dt)*(post_taste_dt-bin_edges[-1]>10):
-					bin_edges = np.concatenate((bin_edges,post_taste_dt*np.ones(1).astype('int')))
-				bst_hz = [np.sum(bin_post_taste[:,bin_edges[b_i]:bin_edges[b_i+1]],1)/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
-				bst_hz_z = (np.array(bst_hz).T - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
-				full_taste_fr_dist[t_i][d_i] = bst_hz_z
-				if np.max(bst_hz_z) > max_hz_full:
-					max_hz_full = np.max(bst_hz_z)
-				if np.min(bst_hz_z) < min_hz_full:
-					min_hz_full = np.max(bst_hz_z)
+			
 	del t_i, num_deliv, taste_cp, n_i, d_i, raster_times, start_taste_i, deliv_cp, times_post_taste, bin_post_taste
 
-	return full_taste_fr_dist, tastant_fr_dist, taste_num_deliv, max_hz, \
-		max_hz_full, min_hz, min_hz_full
+	return tastant_fr_dist, taste_num_deliv, max_hz, min_hz
 
 
 def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
