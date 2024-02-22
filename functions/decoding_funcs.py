@@ -1060,13 +1060,15 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				 start_dig_in_times,end_dig_in_times,post_taste_dt,pop_taste_cp_raster_inds,
 				 e_skip_dt,e_len_dt,dig_in_names,segment_times,
 				 segment_names,taste_num_deliv,taste_select_epoch,
-				 use_full,save_dir,max_decode,max_hz,seg_stat_bin,neuron_count_thresh):
+				 use_full,save_dir,max_decode,max_hz,seg_stat_bin,
+				 neuron_count_thresh,trial_start_frac=0):
 	"""Function to plot the periods when something other than no taste is 
 	decoded"""
 	num_segments = len(segment_spike_times)
 	neur_cut = np.floor(num_neur*neuron_count_thresh).astype('int')
 	taste_colors = cm.viridis(np.linspace(0,1,num_tastes))
 	epoch_seg_taste_percents = np.zeros((num_cp,num_segments,num_tastes))
+	
 	for e_i in range(num_cp): #By epoch conduct decoding
 		print('Plotting Decoding for Epoch ' + str(e_i))
 		
@@ -1156,25 +1158,32 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				#Import taste spike and cp times
 				taste_spike_times = tastant_spike_times[t_i]
 				taste_deliv_times = start_dig_in_times[t_i]
+				max_num_deliv = np.len(taste_deliv_times)
 				pop_taste_cp_times = pop_taste_cp_raster_inds[t_i]
+				
+				#If trial_start_frac > 0 use only trials after that threshold
+				trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
+				new_max_num_deliv = max_num_deliv - trial_start_ind
+				
 				#Store as binary spike arrays
-				taste_spike_times_bin = np.zeros((len(taste_spike_times),num_neur,post_taste_dt))
-				taste_cp_times = np.zeros((len(taste_spike_times),num_cp+1)).astype('int')
-				taste_epoch_fr_vecs = np.zeros((len(taste_spike_times),num_neur))
+				taste_spike_times_bin = np.zeros((new_max_num_deliv,num_neur,post_taste_dt))
+				taste_cp_times = np.zeros((new_max_num_deliv,num_cp+1)).astype('int')
+				taste_epoch_fr_vecs = np.zeros((new_max_num_deliv,num_neur))
 				for d_i in range(len(taste_spike_times)): #store each delivery to binary spike matrix
-					for n_i in range(num_neur):
-						if t_i == num_tastes-1:
-							if len(taste_spike_times[d_i][n_i]) > 0:
-								d_i_spikes = np.array(taste_spike_times[d_i][n_i] - np.min(taste_spike_times[d_i][n_i])).astype('int')
+					if d_i >= trial_start_frac:	
+						for n_i in range(num_neur):
+							if t_i == num_tastes-1:
+								if len(taste_spike_times[d_i-trial_start_frac][n_i]) > 0:
+									d_i_spikes = np.array(taste_spike_times[d_i-trial_start_frac][n_i] - np.min(taste_spike_times[d_i-trial_start_frac][n_i])).astype('int')
+								else:
+									d_i_spikes = np.empty(0)
 							else:
-								d_i_spikes = np.empty(0)
-						else:
-							d_i_spikes = np.array(taste_spike_times[d_i][n_i] - taste_deliv_times[d_i]).astype('int')
-						if len(d_i_spikes) > 0:
-							taste_spike_times_bin[d_i,n_i,d_i_spikes[d_i_spikes<post_taste_dt]] = 1
-					taste_cp_times[d_i,:] = np.concatenate((np.zeros(1),np.cumsum(np.diff(pop_taste_cp_times[d_i,:])))).astype('int')
-					#Calculate the FR vectors by epoch for each taste response and the average FR vector
-					taste_epoch_fr_vecs[d_i,:] = np.sum(taste_spike_times_bin[d_i,:,taste_cp_times[d_i,e_i]:taste_cp_times[d_i,e_i+1]],1)/((taste_cp_times[d_i,e_i+1]-taste_cp_times[d_i,e_i])/1000) #FR in HZ
+								d_i_spikes = np.array(taste_spike_times[d_i-trial_start_frac][n_i] - taste_deliv_times[d_i-trial_start_frac]).astype('int')
+							if len(d_i_spikes) > 0:
+								taste_spike_times_bin[d_i-trial_start_frac,n_i,d_i_spikes[d_i_spikes<post_taste_dt]] = 1
+						taste_cp_times[d_i-trial_start_frac,:] = np.concatenate((np.zeros(1),np.cumsum(np.diff(pop_taste_cp_times[d_i,:])))).astype('int')
+						#Calculate the FR vectors by epoch for each taste response and the average FR vector
+						taste_epoch_fr_vecs[d_i-trial_start_frac,:] = np.sum(taste_spike_times_bin[d_i-trial_start_frac,:,taste_cp_times[d_i,e_i]:taste_cp_times[d_i,e_i+1]],1)/((taste_cp_times[d_i,e_i+1]-taste_cp_times[d_i,e_i])/1000) #FR in HZ
 				all_taste_fr_vecs.append(taste_epoch_fr_vecs)
 				#Calculate average taste fr vec
 				taste_fr_vecs_mean = np.nanmean(taste_epoch_fr_vecs,0)
