@@ -33,45 +33,34 @@ def run_dev_pull_parallelized(inputs):
 	local_size = inputs[1]  # how many bins are the local activity?
 	# what is the minimum number of bins for a deviation?
 	min_dev_size = inputs[2]
-	segment_times = inputs[3]  # start and end times of segment
+	segment_times_i = inputs[3]  # start and end times of segment
 	save_dir = inputs[4]  # directory to save data
 	# calculate the deviations
 	num_neur = len(spikes)
-	num_dt = segment_times[1] - segment_times[0] + 1
+	num_dt = segment_times_i[1] - segment_times_i[0] + 1
 	spikes_bin = np.zeros((num_neur, num_dt))
 	for n_i in range(num_neur):
-		n_spikes = np.array(spikes[n_i]).astype('int') - int(segment_times[0])
+		n_spikes = np.array(spikes[n_i]).astype('int') - int(segment_times_i[0])
 		spikes_bin[n_i, n_spikes] = 1
 	spike_sum = np.sum(spikes_bin, 0)
 	half_min_dev_size = int(np.ceil(min_dev_size/2))
 	half_local_size = int(np.ceil(local_size/2))
+	#Spike sum reshape
+	spike_sum_reshape = np.zeros((num_dt,half_min_dev_size*2))
+	for i_s in np.arange(half_min_dev_size, num_dt-half_min_dev_size):
+		spike_sum_reshape[i_s,:] = spike_sum[i_s - half_min_dev_size:i_s + half_min_dev_size]
+	fr_calc = np.sum(spike_sum_reshape,1)/(2*half_min_dev_size)
 	# Find where the firing rate is above 3std from the mean
-	fr_calc = np.array([np.sum(spike_sum[i_s - half_min_dev_size:i_s + half_min_dev_size]) /
-					   min_dev_size for i_s in np.arange(half_min_dev_size, num_dt-half_min_dev_size)])  # in spikes per min_dev_size
-	local_fr_mean = []
-	local_fr_std = []
-	for i_s in np.arange(half_min_dev_size,num_dt-half_min_dev_size):
+	local_mean_fr = np.zeros(num_dt)
+	local_std_fr = np.zeros(num_dt)
+	for i_s in tqdm.tqdm(np.arange(half_min_dev_size,num_dt-half_min_dev_size)):
 		min_ind = max(i_s - half_local_size,0)
-		max_ind = min(num_dt-half_min_dev_size,i_s+half_local_size)
-		local_fr_mean.append(np.mean(fr_calc[min_ind:max_ind]))
-		local_fr_std.append(np.std(fr_calc[min_ind:max_ind]))
-	local_fr_mean = np.array(local_fr_mean)
-	local_fr_std = np.array(local_fr_std)
-	peak_fr_ind = np.where(fr_calc >= local_fr_mean + 3*local_fr_std)[0]
-	true_ind = peak_fr_ind + half_min_dev_size
-	# Find where the prominence is above the 90th percentile of prominence values
-	#fr_calc = np.array([np.sum(spike_sum[i_s - half_min_dev_size:i_s + half_min_dev_size]) /
-	#				   min_dev_size for i_s in np.arange(half_local_size, num_dt-half_local_size)])  # in spikes per min_dev_size
-	#local_fr_calc = np.array([np.sum(spike_sum[l_s - half_local_size:l_s + half_local_size]) /
-	#						 local_size for l_s in np.arange(half_local_size, num_dt-half_local_size)])  # in spikes per min_dev_size
-	#peak_fr_ind = find_peaks(fr_calc - local_fr_calc, height=0)[0]
-	#peak_fr_prominence = fr_calc[peak_fr_ind] - local_fr_calc[peak_fr_ind]
-	#top_90_prominence = np.percentile(peak_fr_prominence, 90)
-	#top_90_prominence_ind = peak_fr_ind[np.where(
-	#	peak_fr_prominence >= top_90_prominence)[0]]
-	#true_ind = top_90_prominence_ind + half_local_size
+		max_ind = min(num_dt,i_s+half_local_size)
+		local_mean_fr[i_s] = np.mean(fr_calc[min_ind:max_ind])
+		local_std_fr[i_s] = np.std(fr_calc[min_ind:max_ind])
+	peak_fr_ind = np.where(fr_calc >= local_mean_fr + 3*local_std_fr)[0]
 	deviations = np.zeros(num_dt)
-	for t_i in true_ind:
+	for t_i in peak_fr_ind:
 		deviations[t_i - half_min_dev_size:t_i + half_min_dev_size] = 1
 	# store each in a json
 	json_str = json.dumps(list(deviations))
