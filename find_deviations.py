@@ -47,7 +47,7 @@ if __name__ == '__main__':
 	num_segments = len(segment_spike_times)
 	segment_times_reshaped = [[segment_times[i],segment_times[i+1]] for i in range(num_segments)]
 	local_size = 60*1000 #local bin size to compare deviations (in number of ms = dt)
-	min_dev_size = 50 #minimum bin size for a deviation (in number of ms = dt)
+	min_dev_size = 20 #minimum bin size for a deviation (in number of ms = dt)
 	
 	#Create deviation storage directory
 	dev_dir = fig_save_dir + 'Deviations/'
@@ -81,6 +81,8 @@ if __name__ == '__main__':
 											 itertools.repeat(min_dev_size),
 											 segment_times_reshaped,
 											 seg_dirs))
+#%%
+
 	print("Now importing calculated deviations")
 	segment_deviations = []
 	for s_i in tqdm.tqdm(range(num_segments)):

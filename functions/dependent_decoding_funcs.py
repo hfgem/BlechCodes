@@ -88,24 +88,30 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
 				   segment_names,start_dig_in_times,taste_num_deliv,
 				   taste_select_epoch,use_full,max_hz,save_dir,
-				   neuron_count_thresh,trial_start_frac=0):		
+				   neuron_count_thresh,trial_start_frac=0,
+				   epochs_to_analyze=[],segments_to_analyze=[]):		
 	"""Decode taste from epoch-specific firing rates"""
 	#Variables
 	num_tastes = len(start_dig_in_times)
 	num_neur = len(segment_spike_times[0])
-	max_num_deliv = np.max(taste_num_deliv)
+	max_num_deliv = np.max(taste_num_deliv).astype('int')
 	num_cp = len(tastant_fr_dist[0][0])
 	num_segments = len(segment_spike_times)
 	hist_bins = np.arange(stop=max_hz+1,step=0.25)
 	x_vals = hist_bins[:-1] + np.diff(hist_bins)/2
 	p_taste = taste_num_deliv/np.sum(taste_num_deliv) #P(taste)
 	half_bin = np.floor(e_len_dt/2).astype('int')
+	
+	if len(epochs_to_analyze) == 0:
+		epochs_to_analyze = np.arange(num_cp)
+	if len(segments_to_analyze == 0):
+		segments_to_analyze = np.arange(num_segments)
 
 	#If trial_start_frac > 0 use only trials after that threshold
 	trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
 	new_max_num_deliv = max_num_deliv - trial_start_ind
 
-	for e_i in range(num_cp): #By epoch conduct decoding
+	for e_i in epochs_to_analyze: #By epoch conduct decoding
 		print('Decoding Epoch ' + str(e_i))
 		
 		taste_select_neur = np.where(taste_select_epoch[e_i,:] == 1)[0]
@@ -136,7 +142,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 		epoch_decode_save_dir = save_dir + 'decode_prob_epoch_' + str(e_i) + '/'
 		if not os.path.isdir(epoch_decode_save_dir):
 			os.mkdir(epoch_decode_save_dir)
-		for s_i in range(num_segments):
+		for s_i in segments_to_analyze:
 			#Get segment variables
 			seg_start = segment_times[s_i]
 			seg_end = segment_times[s_i+1]
@@ -395,7 +401,8 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 				   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,bin_dt,
 				   segment_names,start_dig_in_times,taste_num_deliv,
 				   taste_select_epoch,use_full,max_hz,save_dir,
-				   neuron_count_thresh,trial_start_frac=0):		
+				   neuron_count_thresh,trial_start_frac=0,
+				   epochs_to_analyze=[],segments_to_analyze=[]):		
 	"""Decode taste from epoch-specific firing rates"""
 	#Variables
 	num_tastes = len(start_dig_in_times)
@@ -413,7 +420,12 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 	trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
 	new_max_num_deliv = (max_num_deliv - trial_start_ind).astype('int')
 
-	for e_i in range(num_cp): #By epoch conduct decoding
+	if len(epochs_to_analyze) == 0:
+		epochs_to_analyze = np.arange(num_cp)
+	if len(segments_to_analyze == 0):
+		segments_to_analyze = np.arange(num_segments)
+
+	for e_i in epochs_to_analyze: #By epoch conduct decoding
 		print('Decoding Epoch ' + str(e_i))
 		
 		taste_select_neur = np.where(taste_select_epoch[e_i,:] == 1)[0]
@@ -445,7 +457,7 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 		epoch_decode_save_dir = save_dir + 'decode_prob_epoch_' + str(e_i) + '/'
 		if not os.path.isdir(epoch_decode_save_dir):
 			os.mkdir(epoch_decode_save_dir)
-		for s_i in range(num_segments):
+		for s_i in segments_to_analyze:
 			#Get segment variables
 			seg_start = segment_times[s_i]
 			seg_end = segment_times[s_i+1]
