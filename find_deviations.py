@@ -34,6 +34,10 @@ if __name__ == '__main__':
 	#pre_taste will also be used for the z-scoring of both deliveries and deviation bins
 	#the firing rate binning will be used for z-scoring as well
 	
+	#Analysis/plotting params
+	segments_to_analyze = np.array([0, 2, 4])
+	max_plot = 50
+	
 	#_____Add "no taste" control segments to the dataset_____
 	if dig_in_names[-1] != 'none':
 		dig_in_names, start_dig_in_times, end_dig_in_times, num_tastes = af.add_no_taste(start_dig_in_times, end_dig_in_times, post_taste, dig_in_names)
@@ -81,6 +85,7 @@ if __name__ == '__main__':
 											 itertools.repeat(min_dev_size),
 											 segment_times_reshaped,
 											 seg_dirs))
+		pool.close()
 #%%
 
 	print("Now importing calculated deviations")
@@ -100,11 +105,14 @@ if __name__ == '__main__':
 						   np.array(segment_times_reshaped), segment_deviations, pre_taste)
 		
 	#Plot deviations
-	#print("Now plotting deviations")
-	#dpf.plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,segment_times_reshaped,pre_taste,post_taste,segment_names,dev_dir)
+	print("Now plotting deviations")
+	dpf.plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
+					  segment_times_reshaped,pre_taste,post_taste,min_dev_size,
+					  segment_names,dev_dir,segments_to_analyze,max_plot)
 	
 	#_____Calculate segment deviation statistics - length,IDI_____
 	print("Now calculating and plotting true deviation statistics")
-	segment_length_dict, segment_IDI_dict, segment_num_spike_dict, segment_num_neur_dict = df.calculate_dev_stats(segment_dev_rasters,segment_dev_times,segment_names,dev_dir)
+	segment_length_dict, segment_IDI_dict, segment_num_spike_dict, segment_num_neur_dict = df.calculate_dev_stats(segment_dev_rasters,
+																					   segment_dev_times,segment_names,dev_dir,segments_to_analyze)
 
 				
