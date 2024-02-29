@@ -15,11 +15,13 @@ import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 from scipy.interpolate import interp1d
 from scipy.stats import pearsonr, ks_2samp, ttest_ind, kruskal
-import functions.corr_dist_calc_parallel as cdcp
-import functions.corr_dist_calc_parallel_pop as cdcpp
-import functions.corr_dist_calc_parallel_zscore as cdcpz
-import functions.corr_dist_calc_parallel_pop_zscore as cdcppz
-import functions.dev_plot_funcs as dpf
+file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
+os.chdir(file_path)
+import corr_dist_calc_parallel as cdcp
+import corr_dist_calc_parallel_pop as cdcpp
+import corr_dist_calc_parallel_zscore as cdcpz
+import corr_dist_calc_parallel_pop_zscore as cdcppz
+import dev_plot_funcs as dpf
 from multiprocess import Pool
 from sklearn.decomposition import PCA
 import warnings
@@ -77,7 +79,7 @@ def create_dev_rasters(num_iterations, spike_times,
 	dev_times = []
 	dev_rasters_zscore = [] #Includes pre-interval for z-scoring
 	pre_z_dt = int(pre_z*1000) #in timesteps
-	for ind in tqdm.tqdm(range(num_iterations)):
+	for ind in range(num_iterations):
 		seg_spikes = spike_times[ind]
 		num_neur = len(seg_spikes)
 		num_dt = int(start_end_times[ind, 1] - start_end_times[ind, 0] + 1)
@@ -114,7 +116,7 @@ def create_dev_rasters(num_iterations, spike_times,
 
 	return dev_rasters, dev_times, dev_rasters_zscore
 
-def calculate_dev_stats(rasters, times, iteration_names, save_dir):
+def calculate_dev_stats(rasters, times, iteration_names, save_dir, iterations_to_analyze=[]):
 	"""This function calculates deviation statistics - and plots them - including:
 			- deviation lengths
 			- inter-deviation-intervals (IDIs)
@@ -127,8 +129,13 @@ def calculate_dev_stats(rasters, times, iteration_names, save_dir):
 	IDI_dict = dict()
 	num_spike_dict = dict()
 	num_neur_dict = dict()
+	
+	if len(iterations_to_analyze) == 0:
+		iterations_to_analyze = np.arange(num_iterations)
+		
+	iteration_names_to_analyze = list(np.array(iteration_names)[iterations_to_analyze])
 
-	for it in tqdm.tqdm(range(num_iterations)):
+	for it in tqdm.tqdm(iterations_to_analyze):
 		iter_name = iteration_names[it]
 		# Gather data
 		iter_rasters = rasters[it]
@@ -161,10 +168,10 @@ def calculate_dev_stats(rasters, times, iteration_names, save_dir):
 					   x_label='deviation index', y_label='# neurons')
 		
 	#Now plot stats across iterations
-	dpf.plot_dev_stats_dict(length_dict, iteration_names, 'Deviation Lengths', save_dir, 'Segment', 'Length (ms)')
-	dpf.plot_dev_stats_dict(IDI_dict, iteration_names, 'Inter-Deviation-Intervals', save_dir, 'Segment', 'Length (ms)')
-	dpf.plot_dev_stats_dict(num_spike_dict, iteration_names, 'Total Spike Count', save_dir, 'Segment', '# Spikes')
-	dpf.plot_dev_stats_dict(num_neur_dict, iteration_names, 'Total Neuron Count', save_dir, 'Segment', '# Neurons')
+	dpf.plot_dev_stats_dict(length_dict, iteration_names_to_analyze, 'Deviation Lengths', save_dir, 'Segment', 'Length (ms)')
+	dpf.plot_dev_stats_dict(IDI_dict, iteration_names_to_analyze, 'Inter-Deviation-Intervals', save_dir, 'Segment', 'Length (ms)')
+	dpf.plot_dev_stats_dict(num_spike_dict, iteration_names_to_analyze, 'Total Spike Count', save_dir, 'Segment', '# Spikes')
+	dpf.plot_dev_stats_dict(num_neur_dict, iteration_names_to_analyze, 'Total Neuron Count', save_dir, 'Segment', '# Neurons')
 
 	return length_dict, IDI_dict, num_spike_dict, num_neur_dict
 

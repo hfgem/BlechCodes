@@ -33,6 +33,7 @@ if __name__ == '__main__':
 	#_____Calculate spike time datasets_____
 	pre_taste = 0.5 #Seconds before tastant delivery to store
 	post_taste = 2 #Seconds after tastant delivery to store
+	segments_to_analyze = np.array([0, 2, 4])
 
 	segment_spike_times = af.calc_segment_spike_times(segment_times,spike_times,num_neur)
 	
@@ -51,7 +52,7 @@ if __name__ == '__main__':
 		os.mkdir(null_dir)
 	
 	#Figure save dir
-	bin_dir = fig_save_dir + 'thresholded_deviations/'
+	bin_dir = fig_save_dir + 'thresholded_statistics/'
 	if os.path.isdir(bin_dir) == False:
 		os.mkdir(bin_dir)
 	
@@ -130,7 +131,7 @@ if __name__ == '__main__':
 				bin_spike[n_i,spike_indices] = 1
 			#_____Calculate statistics of true and null datasets_____
 			true_neur_counts, true_spike_counts = nd.high_bins([bin_spike,segment_start_time,segment_end_time,bin_size,count_cutoff])
-			true_autocorr = nd.auto_corr([bin_spike,segment_start_time,segment_end_time,lag_vals])
+			#true_autocorr = nd.auto_corr([bin_spike,segment_start_time,segment_end_time,lag_vals])
 			null_neur_counts = dict()
 			null_spike_counts = dict()
 			#null_autocorrs = dict()
@@ -248,12 +249,18 @@ if __name__ == '__main__':
 	neur_null_spike_x = []
 	neur_null_spike_mean = []
 	neur_null_spike_std = []
+	neur_true_rate_x = []
+	neur_true_rate_vals = []
+	neur_null_rate_x = []
+	neur_null_rate_mean = []
+	neur_null_rate_std = []
 	#neur_true_autocorr_x = []
 	#neur_true_autocorr_vals = []
 	#neur_null_autocorr_x = []
 	#neur_null_autocorr_mean = []
 	#neur_null_autocorr_std = []
-	for s_i in tqdm.tqdm(range(num_segments)):
+	#for s_i in tqdm.tqdm(range(num_segments)):
+	for s_i in tqdm.tqdm(segments_to_analyze):
 		seg_name = segment_names[s_i]
 		segment_start_time = segment_times[s_i]
 		segment_end_time = segment_times[s_i+1]
@@ -284,6 +291,12 @@ if __name__ == '__main__':
 		neur_true_spike_vals.append(np.array(neur_true_spike_data[1]))
 		neur_null_spike_mean.append(np.array(neur_null_spike_data[1]))
 		neur_null_spike_std.append(np.array(neur_null_spike_data[2]))
+		#Store the bouts/second data
+		neur_true_rate_x.append(np.array(neur_true_count_data[0])/norm_val)
+		neur_null_rate_x.append(np.array(neur_null_count_data[0])/norm_val)
+		neur_true_rate_vals.append(np.array(neur_true_count_data[1])/norm_val)
+		neur_null_rate_mean.append(np.array(neur_null_count_data[1])/norm_val)
+		neur_null_rate_std.append(np.array(neur_null_count_data[2])/norm_val)
 		#Plot the autocorrelation data
 		#nd.plot_indiv_truexnull(np.array(neur_true_autocorr_data[0]),np.array(neur_null_autocorr_data[0]),np.array(neur_true_autocorr_data[1]),np.array(neur_null_autocorr_data[1]),
 		#				   np.array(neur_null_autocorr_data[2]),np.array(segment_length),norm_val,bin_dir,'Autocorrelation',seg_name,np.array(percentile_autocorr_data[1]))
@@ -294,10 +307,14 @@ if __name__ == '__main__':
 		#neur_null_autocorr_std.append(np.array(neur_null_autocorr_data[2]))
 	#Plot all neuron count data
 	nd.plot_all_truexnull(neur_true_count_x,neur_null_count_x,neur_true_count_vals,neur_null_count_mean,
-									 neur_null_count_std,norm_val,bin_dir,'Neuron Counts',segment_names)
+									 neur_null_count_std,norm_val,bin_dir,'Neuron Counts',list(np.array(segment_names)[segments_to_analyze]))
 	#Plot all spike count data
 	nd.plot_all_truexnull(neur_true_spike_x,neur_null_spike_x,neur_true_spike_vals,neur_null_spike_mean,
-									 neur_null_spike_std,norm_val,bin_dir,'Spike Counts',segment_names)
+									 neur_null_spike_std,norm_val,bin_dir,'Spike Counts',list(np.array(segment_names)[segments_to_analyze]))
+	
+	#Plot all bouts/second data
+	nd.plot_all_truexnull(neur_true_rate_x,neur_null_rate_x,neur_true_rate_vals,neur_null_rate_mean,
+									 neur_null_rate_std,norm_val,bin_dir,'Bouts per Second',list(np.array(segment_names)[segments_to_analyze]))
 	#Plot all autocorrelation data
 	#nd.plot_all_truexnull(neur_true_autocorr_x,neur_null_autocorr_x,neur_true_autocorr_vals,neur_null_autocorr_mean,
 	#								 neur_null_autocorr_std,norm_val,bin_dir,'Autocorrelation Lags',segment_names)

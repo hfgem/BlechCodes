@@ -11,76 +11,83 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import pearsonr, ks_2samp, ttest_ind, kruskal
 import warnings
+from random import sample
 
 def plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
-					 segment_times_reshaped,pre_taste,post_taste,segment_names,dev_dir):
+					 segment_times_reshaped,pre_taste,post_taste,min_dev_size,
+					 segment_names,dev_dir,segments_to_analyze=[],max_plot=50):
 	num_segments = len(segment_names)
+	if len(segments_to_analyze) == 0:
+		segments_to_analyze = np.arange(num_segments)
+
 	dev_buffer = 100 #ms before and after a deviation to plot
-	for s_i in range(num_segments):
+	half_min_dev_size = int(np.ceil(min_dev_size/2))
+	for s_i in segments_to_analyze:
 		print("Plotting deviations in segment " + segment_names[s_i])
 		filepath = dev_dir + segment_names[s_i] + '/'
 		indiv_dev_filepath = filepath + 'indiv_dev/'
 		if os.path.isdir(indiv_dev_filepath) == False:
 			os.mkdir(indiv_dev_filepath)
-		#Plot when deviations occur
-		f = plt.figure(figsize=(5,5))
-		plt.plot(segment_deviations[s_i])
-		plt.title('Segment ' + segment_names[s_i] + ' deviations')
-		x_ticks = plt.xticks()[0]
-		x_tick_labels = [np.round(x_ticks[i]/1000/60,2) for i in range(len(x_ticks))]
-		plt.xticks(x_ticks,x_tick_labels)
-		plt.xlabel('Time (min)')
-		plt.yticks([0,1],['No Dev','Dev'])
-		plt.tight_layout()
-		fig_name = filepath + 'all_deviations'
-		f.savefig(fig_name + '.png')
-		f.savefig(fig_name + '.svg')
-		plt.close(f)
-		#Plot individual segments with pre and post time
-		segment_rasters = segment_spike_times[s_i]
-		segment_times = segment_dev_times[s_i] + segment_times_reshaped[s_i][0]
-		num_neur = len(segment_rasters)
-		num_deviations = len(segment_times[0,:])
-		for dev_i in tqdm.tqdm(range(num_deviations)):
-			dev_times = segment_times[:,dev_i]
-			dev_start = int(dev_times[0])
-			dev_len = dev_times[1] - dev_start
-			dev_rast_ind = []
-			raster_len = 2*dev_buffer + dev_len
-			dev_binary = np.zeros((num_neur,raster_len))
-			for n_i in range(num_neur):
-				segment_neur_rast = np.array(segment_rasters[n_i])
-				seg_dev_ind = np.where((segment_neur_rast > dev_start - dev_buffer)*(segment_neur_rast < dev_times[1] + dev_buffer))[0]
-				seg_dev_rast_ind = segment_neur_rast[seg_dev_ind]
-				seg_dev_rast_ind_shift = (seg_dev_rast_ind - dev_start + dev_buffer).astype('int')
-				dev_binary[n_i,seg_dev_rast_ind_shift] = 1
-				dev_rast_ind.append(seg_dev_rast_ind)
-			#Create firing rates matrix
-			firing_rate_vec = np.zeros(raster_len)
-			for t_i in range(raster_len):
-				min_t_i = max(t_i-25,0)
-				max_t_i = min(t_i+25,raster_len)
-				firing_rate_vec[t_i] = np.mean(np.sum(dev_binary[:,min_t_i:max_t_i],1)/(50/1000))
-			rate_x_tick_labels = np.arange(-1*dev_buffer,dev_len + dev_buffer)
-			#Now plot the rasters with firing rate deviations
-			f1, ax1 = plt.subplots(nrows=2,ncols=1,figsize=(5,5),gridspec_kw=dict(height_ratios=[2,1]))
-			#Deviation Raster Plot
-			adjusted_dev_rast_ind = [list(np.array(dev_rast_ind[n_i]) - dev_start) for n_i in range(num_neur)]
-			ax1[0].eventplot(adjusted_dev_rast_ind,colors='b',alpha=0.5)
-			ax1[0].axvline(0)
-			ax1[0].axvline(dev_len)
-			ax1[0].set_ylabel('Neuron Index')
-			ax1[0].set_title('Deviation ' + str(dev_i))
-			#Deviation population activity plot
-			ax1[1].plot(rate_x_tick_labels,firing_rate_vec)
-			ax1[1].axvline(0)
-			ax1[1].axvline(dev_len)
-			ax1[1].set_xlabel('Time (ms)')
-			ax1[1].set_ylabel('Population rate (Hz)')
-			fig_name = indiv_dev_filepath + 'dev_' + str(dev_i)
-			f1.savefig(fig_name + '.png')
-			f1.savefig(fig_name + '.svg')
-			plt.close(f1)
+			#Plot when deviations occur
+			f = plt.figure(figsize=(5,5))
+			plt.plot(segment_deviations[s_i])
+			plt.title('Segment ' + segment_names[s_i] + ' deviations')
+			x_ticks = plt.xticks()[0]
+			x_tick_labels = [np.round(x_ticks[i]/1000/60,2) for i in range(len(x_ticks))]
+			plt.xticks(x_ticks,x_tick_labels)
+			plt.xlabel('Time (min)')
+			plt.yticks([0,1],['No Dev','Dev'])
+			plt.tight_layout()
+			fig_name = filepath + 'all_deviations'
+			f.savefig(fig_name + '.png')
+			f.savefig(fig_name + '.svg')
+			plt.close(f)
+			#Plot individual segments with pre and post time
+			segment_rasters = segment_spike_times[s_i]
+			segment_times = segment_dev_times[s_i] + segment_times_reshaped[s_i][0]
+			num_neur = len(segment_rasters)
+			num_deviations = len(segment_times[0,:])
+			plot_dev_indices = sample(list(np.arange(num_deviations)),max_plot)
+			for dev_i in tqdm.tqdm(plot_dev_indices):
+				dev_times = segment_times[:,dev_i]
+				dev_start = int(dev_times[0])
+				dev_len = dev_times[1] - dev_start
+				dev_rast_ind = []
+				raster_len = 2*dev_buffer + dev_len
+				dev_binary = np.zeros((num_neur,raster_len))
+				for n_i in range(num_neur):
+					segment_neur_rast = np.array(segment_rasters[n_i])
+					seg_dev_ind = np.where((segment_neur_rast > dev_start - dev_buffer)*(segment_neur_rast < dev_times[1] + dev_buffer))[0]
+					seg_dev_rast_ind = segment_neur_rast[seg_dev_ind]
+					seg_dev_rast_ind_shift = (seg_dev_rast_ind - dev_start + dev_buffer).astype('int')
+					dev_binary[n_i,seg_dev_rast_ind_shift] = 1
+					dev_rast_ind.append(seg_dev_rast_ind)
+				#Create firing rates matrix
+				firing_rate_vec = np.zeros(raster_len)
+				for t_i in range(raster_len):
+					min_t_i = max(t_i-half_min_dev_size,0)
+					max_t_i = min(t_i+half_min_dev_size,raster_len)
+					firing_rate_vec[t_i] = np.mean(np.sum(dev_binary[:,min_t_i:max_t_i],1)/(half_min_dev_size*2/1000))
+				rate_x_tick_labels = np.arange(-1*dev_buffer,dev_len + dev_buffer)
+				#Now plot the rasters with firing rate deviations
+				f1, ax1 = plt.subplots(nrows=2,ncols=1,figsize=(5,5),gridspec_kw=dict(height_ratios=[2,1]))
+				#Deviation Raster Plot
+				adjusted_dev_rast_ind = [list(np.array(dev_rast_ind[n_i]) - dev_start) for n_i in range(num_neur)]
+				ax1[0].eventplot(adjusted_dev_rast_ind,colors='b',alpha=0.5)
+				ax1[0].axvline(0)
+				ax1[0].axvline(dev_len)
+				ax1[0].set_ylabel('Neuron Index')
+				ax1[0].set_title('Deviation ' + str(dev_i))
+				#Deviation population activity plot
+				ax1[1].plot(rate_x_tick_labels,firing_rate_vec)
+				ax1[1].axvline(0)
+				ax1[1].axvline(dev_len)
+				ax1[1].set_xlabel('Time (ms)')
+				ax1[1].set_ylabel('Population rate (Hz)')
+				fig_name = indiv_dev_filepath + 'dev_' + str(dev_i)
+				f1.savefig(fig_name + '.png')
+				f1.savefig(fig_name + '.svg')
+				plt.close(f1)
 		
 
 def plot_dev_stats(data, data_name, save_dir, x_label=[], y_label=[]):
