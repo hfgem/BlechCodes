@@ -15,6 +15,7 @@ from scipy import signal
 import scipy.stats as stats
 import matplotlib.cm as cm
 from scipy.stats import pearsonr
+from scipy.optimize import curve_fit
 
 def raster_plots(fig_save_dir, dig_in_names, start_dig_in_times, end_dig_in_times, 
 				 segment_names, segment_times, segment_spike_times, tastant_spike_times, 
@@ -508,6 +509,7 @@ def taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
 	"""Plot the individual taste responses against each other to show how similar
 	different tastes are + calculate correlations"""
 		
+	epoch_trial_out_of_bounds = []
 	for e_i in tqdm.tqdm(range(num_cp+1)):
 		#Save directory for epoch
 		epoch_save_dir = save_dir + 'epoch_' + str(e_i) + '/'
@@ -517,10 +519,14 @@ def taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
 		#Grab tastant epoch firing rate vectors
 		all_taste_fr_vecs = []
 		all_taste_fr_vecs_mean = np.zeros((num_tastes,num_neur))
+		all_taste_trials_out_of_bounds = []
+		max_num_trials_epoch = 0
 		for t_i in range(num_tastes):
 			#Import taste spike and cp times
 			taste_spike_times = tastant_spike_times[t_i]
 			num_deliv = len(taste_spike_times)
+			if num_deliv > max_num_trials_epoch:
+				max_num_trials_epoch = num_deliv
 			taste_deliv_times = start_dig_in_times[t_i]
 			pop_taste_cp_times = pop_taste_cp_raster_inds[t_i]
 			#Store as binary spike arrays
@@ -554,8 +560,36 @@ def taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
 					t_vec_2 = taste_epoch_fr_vecs[d_2,:]
 					corr_mat[d_1,d_2] = np.abs(pearsonr(t_vec_1,t_vec_2)[0])
 			#Correlation timeseries average
+				#pre trial to current trial
 			corr_mean_vec_pre = np.nansum(corr_mat,0)/np.arange(1,num_deliv+1)
+			corr_std_vec_pre = np.std(corr_mean_vec_pre)
+			try:
+				height_change = np.abs(max(corr_mean_vec_pre) - min(corr_mean_vec_pre))
+				p_start = [height_change,1,0.5]
+				cmvprevar, cmvprecov = curve_fit(exp_decay, np.arange(num_deliv), corr_mean_vec_pre,nan_policy='omit',\
+									 sigma=corr_std_vec_pre*np.ones(num_deliv),p0=p_start,bounds=([-3*height_change,0,0],[3*height_change,1,1]))
+				corr_mean_vec_pre_fit = exp_decay(np.arange(num_deliv),*cmvprevar)
+			except:
+				corr_mean_vec_pre_fit = np.zeros(num_deliv)
+				for ndf_i in np.arange(num_deliv):
+					corr_mean_vec_pre_fit[ndf_i] = np.mean(corr_mean_vec_pre[max(ndf_i-2,0):min(ndf_i+2,num_deliv)])
+			trials_in_pre = (corr_mean_vec_pre <= corr_mean_vec_pre_fit + 2*corr_std_vec_pre)*(corr_mean_vec_pre >= corr_mean_vec_pre_fit - 2*corr_std_vec_pre)
+				#post trial to current trial
 			corr_mean_vec_post = np.nansum(corr_mat,1).T/np.flip(np.arange(1,num_deliv+1))
+			corr_std_vec_post = np.std(corr_mean_vec_post)
+			try:
+				height_change = np.abs(max(corr_mean_vec_post) - min(corr_mean_vec_post))
+				p_start = [height_change,1,0.5]
+				cmvpostvar, cmvpostcov = curve_fit(exp_decay, np.arange(num_deliv), corr_mean_vec_post,nan_policy='omit',\
+									   sigma=corr_std_vec_post*np.ones(num_deliv),p0=p_start,bounds=([-3*height_change,0,0],[3*height_change,1,1]))
+				corr_mean_vec_post_fit = exp_decay(np.arange(num_deliv),*cmvpostvar)
+			except:
+				corr_mean_vec_post_fit = np.zeros(num_deliv)
+				for ndf_i in np.arange(num_deliv):
+					corr_mean_vec_pre_fit[ndf_i] = np.mean(corr_mean_vec_post[max(ndf_i-2,0):min(ndf_i+2,num_deliv)])
+			trials_in_post = (corr_mean_vec_post <= corr_mean_vec_post_fit + 2*corr_std_vec_post)*(corr_mean_vec_post >= corr_mean_vec_post_fit - 2*corr_std_vec_post)
+			trials_out_of_bounds = np.where((trials_in_pre*trials_in_post).astype('int') == 0)[0]
+			all_taste_trials_out_of_bounds.append(trials_out_of_bounds)
 			#Rolling correlation average for block of 5
 			corr_block_mean_pre = np.nan*np.ones(num_deliv)
 			corr_block_mean_post = np.nan*np.ones(num_deliv)
@@ -568,30 +602,79 @@ def taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
 					corr_block_mean_post[b_i] = np.nansum(corr_mat[b_i,b_i:b_i+5])/5
 				except:
 					"do nothing"
+			corr_block_std_pre = np.std(corr_block_mean_pre[5:])
+			corr_block_std_post = np.std(corr_block_mean_post[:-5])
+			try:
+				height_change=max(corr_block_mean_pre[5:]) - min(corr_block_mean_pre[5:])
+				p_start = [height_change,1,0.5]
+				cbvprevar, cbvprecov = curve_fit(exp_decay, np.arange(5,num_deliv),corr_block_mean_pre[5:],nan_policy='omit',\
+									 sigma=corr_block_std_pre*np.ones(num_deliv-5),p0=p_start,bounds=([-3*height_change,0,0],[3*height_change,1,1]))
+				corr_block_mean_pre_fit = exp_decay(np.arange(5,num_deliv),*cbvprevar)
+			except:
+				corr_block_mean_pre_fit = np.zeros(num_deliv)
+				for ndf_i in np.arange(5,num_deliv):
+					corr_block_mean_pre_fit[ndf_i] = np.mean(corr_block_mean_pre[max(ndf_i-2,0):min(ndf_i+2,num_deliv)])
+				corr_block_mean_pre_fit = corr_block_mean_pre_fit[5:]
+			try:
+				height_change=max(corr_block_mean_post[:-5]) - min(corr_block_mean_post[:-5])
+				p_start = [height_change,1,0.5]
+				cbvpostvar, cbvpostcov = curve_fit(exp_decay,np.arange(num_deliv-5),corr_block_mean_post[:-5],nan_policy='omit',\
+									   sigma=corr_block_std_post*np.ones(num_deliv-5),p0=p_start,bounds=([-3*height_change,0,0],[3*height_change,1,1]))
+				corr_block_mean_post_fit = exp_decay(np.arange(num_deliv-5),*cbvpostvar)
+			except:
+				corr_block_mean_post_fit = np.zeros(num_deliv)
+				for ndf_i in np.arange(num_deliv-5):
+					corr_block_mean_post_fit[ndf_i] = np.mean(corr_block_mean_post[max(ndf_i-2,0):min(ndf_i+2,num_deliv)])
+				corr_block_mean_post_fit = corr_block_mean_post_fit[:-5]
 			#Indiv taste deliv similarity/correlation plots
-			f,ax = plt.subplots(nrows=5,ncols=1,figsize=(10,10),gridspec_kw=dict(height_ratios=[10,1,1,1,1]))
+			f,ax = plt.subplots(nrows=5,ncols=1,figsize=(10,15),gridspec_kw=dict(height_ratios=[5,1,1,1,1]))
+			#Corr mat
 			img = ax[0].imshow(corr_mat,cmap='binary')
 			plt.colorbar(img, ax=ax[0],location='right')
 			ax[0].set_title('epoch ' + str(e_i) + ' ' + dig_in_names[t_i] + ' delivery correlation')
 			ax[0].set_xlabel('Delivery Index')
 			ax[0].set_ylabel('Delivery Index')
-			ax[1].plot(np.arange(num_deliv),corr_mean_vec_pre)
-			#ax[1].set_ylim([0,1])
+			#Pre corr mean
+			ax[1].plot(np.arange(num_deliv),corr_mean_vec_pre,color='b',linestyle='solid',alpha=0.5,label='true')
+			ax[1].plot(np.arange(num_deliv),corr_mean_vec_pre_fit,color='r',linestyle='dashed',alpha=1.0,label='fit')
+			ax[1].plot(np.arange(num_deliv),corr_mean_vec_pre_fit + 2*corr_std_vec_pre,color='r',linestyle='dashed',alpha=0.3,label='fit+2std')
+			ax[1].plot(np.arange(num_deliv),corr_mean_vec_pre_fit - 2*corr_std_vec_pre,color='r',linestyle='dashed',alpha=0.3,label='fit-2std')
+			ax[1].legend()
+			ax[1].scatter(trials_out_of_bounds,np.ones(len(trials_out_of_bounds)))
+			ax[1].set_ylim([-0.1,1.1])
 			ax[1].set_title('Average corr of pre to given index')
 			ax[1].set_xlabel('Delivery Index')
 			ax[1].set_ylabel('Correlation')
-			ax[2].plot(np.arange(num_deliv),corr_mean_vec_post)
-			#ax[2].set_ylim([0,1])
+			#Post corr mean
+			ax[2].plot(np.arange(num_deliv),corr_mean_vec_post,color='b',linestyle='solid',alpha=0.5,label='true')
+			ax[2].plot(np.arange(num_deliv),corr_mean_vec_post_fit,color='r',linestyle='dashed',alpha=1.0,label='fit')
+			ax[2].plot(np.arange(num_deliv),corr_mean_vec_post_fit + 2*corr_std_vec_post,color='r',linestyle='dashed',alpha=0.3,label='fit+2std')
+			ax[2].plot(np.arange(num_deliv),corr_mean_vec_post_fit - 2*corr_std_vec_post,color='r',linestyle='dashed',alpha=0.3,label='fit-2std')
+			ax[2].legend()
+			ax[2].scatter(trials_out_of_bounds,np.ones(len(trials_out_of_bounds)))
+			ax[2].set_ylim([-0.1,1.1])
 			ax[2].set_title('Average corr of post to given index')
 			ax[2].set_xlabel('Delivery Index')
 			ax[2].set_ylabel('Correlation')
-			ax[3].plot(np.arange(5,num_deliv),corr_block_mean_pre[5:])
-			#ax[3].set_ylim([0,1])
+			#Pre corr 5block
+			ax[3].plot(np.arange(5,num_deliv),corr_block_mean_pre[5:],color='b',linestyle='solid',alpha=0.5,label='true')
+			ax[3].plot(np.arange(5,num_deliv),corr_block_mean_pre_fit,color='r',linestyle='dashed',alpha=1.0,label='fit')
+			ax[3].plot(np.arange(5,num_deliv),corr_block_mean_pre_fit + 2*corr_block_std_pre,color='r',linestyle='dashed',alpha=0.3,label='fit+2std')
+			ax[3].plot(np.arange(5,num_deliv),corr_block_mean_pre_fit - 2*corr_block_std_pre,color='r',linestyle='dashed',alpha=0.3,label='fit-2std')
+			ax[3].legend()
+			ax[3].scatter(trials_out_of_bounds,np.ones(len(trials_out_of_bounds)))
+			ax[3].set_ylim([-0.1,1.1])
 			ax[3].set_title('Average 5-trial corr of pre to given index')
 			ax[3].set_xlabel('Delivery Index')
 			ax[3].set_ylabel('Correlation')
-			ax[4].plot(np.arange(num_deliv-5),corr_block_mean_post[:-5])
-			#ax[4].set_ylim([0,1])
+			#Post corr 5block
+			ax[4].plot(np.arange(num_deliv-5),corr_block_mean_post[:-5],color='b',linestyle='solid',alpha=0.5,label='true')
+			ax[4].plot(np.arange(num_deliv-5),corr_block_mean_post_fit,color='r',linestyle='dashed',alpha=1.0,label='fit')
+			ax[4].plot(np.arange(num_deliv-5),corr_block_mean_post_fit + 2*corr_block_std_post,color='r',linestyle='dashed',alpha=0.3,label='fit+2std')
+			ax[4].plot(np.arange(num_deliv-5),corr_block_mean_post_fit - 2*corr_block_std_post,color='r',linestyle='dashed',alpha=0.3,label='fit-2std')
+			ax[4].legend()
+			ax[4].scatter(trials_out_of_bounds,np.ones(len(trials_out_of_bounds)))
+			ax[4].set_ylim([-0.1,1.1])
 			ax[4].set_title('Average 5-trial corr of post to given index')
 			ax[4].set_xlabel('Delivery Index')
 			ax[4].set_ylabel('Correlation')
@@ -653,7 +736,10 @@ def taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
 			f.savefig(epoch_save_dir + dig_in_names[t_i] + '_deliv_distance_mat.png')
 			f.savefig(epoch_save_dir + dig_in_names[t_i] + '_deliv_distance_mat.svg')
 			plt.close(f)
-			
+		all_taste_trials_out_binarized = np.zeros((num_tastes,max_num_trials_epoch))
+		for t_i in range(num_tastes):
+			all_taste_trials_out_binarized[t_i,all_taste_trials_out_of_bounds[t_i]] = 1
+		epoch_trial_out_of_bounds.append(all_taste_trials_out_binarized)
 			
 		#___Taste avg plots
 		num_pairs = len(list(itertools.combinations(np.arange(num_tastes),2)))
@@ -736,4 +822,12 @@ def taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
 		f.savefig(epoch_save_dir + 'all_delivered_tastes_compare.png')
 		f.savefig(epoch_save_dir + 'all_delivered_tastes_compare.svg')
 		plt.close(f)
+	
+	epoch_trial_out_of_bounds = np.array(epoch_trial_out_of_bounds)
+	return epoch_trial_out_of_bounds
+		
+		
+def exp_decay(x, a, b, c):
+	#Function for exponential decay fit
+	return a*np.exp(-b*x)+c
 		

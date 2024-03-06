@@ -138,10 +138,15 @@ num_segments = len(segment_spike_times)
 taste_epoch_save_dir = data_save_dir + 'Taste_Delivery_Similarity/'
 if os.path.isdir(taste_epoch_save_dir) == False:
 	os.mkdir(taste_epoch_save_dir)
-pf.taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
+data_group_name = 'taste_similarity_data'
+try:
+	epoch_trial_out_of_bounds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'epoch_out_of_bounds')
+except:
+	epoch_trial_out_of_bounds = pf.taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
 									tastant_spike_times,start_dig_in_times,
 									end_dig_in_times,pop_taste_cp_raster_inds,
 									post_taste_dt,dig_in_names,taste_epoch_save_dir)
+	af.add_data_to_hdf5(sorted_dir,data_group_name,'epoch_out_of_bounds',epoch_trial_out_of_bounds)
 
 
 #%%	
