@@ -26,14 +26,9 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 	dependencies between neurons"""
 	
 	num_tastes = len(tastant_spike_times)
-	
 	max_num_deliv = 0 #Find the maximum number of deliveries across tastants
-	taste_num_deliv = np.zeros(num_tastes).astype('int')
-	deliv_taste_index = []
 	for t_i in range(num_tastes):
 		num_deliv = len(tastant_spike_times[t_i])
-		deliv_taste_index.extend(list((t_i*np.ones(num_deliv)).astype('int')))
-		taste_num_deliv[t_i] = num_deliv
 		if num_deliv > max_num_deliv:
 			max_num_deliv = num_deliv
 	del t_i, num_deliv
@@ -41,6 +36,14 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 	#If trial_start_frac > 0 use only trials after that threshold
 	trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
 	new_max_num_deliv = (max_num_deliv - trial_start_ind).astype('int')
+	
+	deliv_taste_index = []
+	taste_num_deliv = np.zeros(num_tastes)
+	for t_i in range(num_tastes):
+		num_deliv = len(tastant_spike_times[t_i][trial_start_ind:])
+		deliv_taste_index.extend(list((t_i*np.ones(num_deliv)).astype('int')))
+		taste_num_deliv[t_i] = num_deliv
+	del t_i, num_deliv
 	
 	#Set up storage dictionary of results
 	tastant_fr_dist = dict() #Population firing rate distributions by epoch
@@ -53,7 +56,7 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 					
 	max_hz = 0
 	for t_i in range(num_tastes):
-		num_deliv = taste_num_deliv[t_i]
+		num_deliv = int(taste_num_deliv[t_i])
 		taste_cp = pop_taste_cp_raster_inds[t_i]
 		for d_i in range(num_deliv): #index for that taste
 			if d_i >= trial_start_ind:
@@ -71,16 +74,21 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 						#population changepoints
 						start_epoch = int(deliv_cp[cp_i])
 						end_epoch = int(deliv_cp[cp_i+1])
-						#TODO: add variable to change the bin size
-						bin_starts = np.arange(start_epoch,end_epoch-100).astype('int') #bin the epoch
-						if len(bin_starts) != 0:
-							#Calculate population firing rate vectors within bins
-							bst_hz = np.array([np.sum(bin_post_taste[:,bin_starts[b_i]:bin_starts[b_i]+100],1)/(100/1000) for b_i in range(len(bin_starts))])
-							#Store the firing rate vectors
-							tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = bst_hz
-							#Store maximum firing rate
-							if np.max(bst_hz) > max_hz:
-								max_hz = np.max(bst_hz)
+						epoch_len = end_epoch - start_epoch
+						all_hz_bst = []
+						for binsize in np.arange(50,epoch_len):
+							bin_edges = np.arange(start_epoch,end_epoch,binsize).astype('int') #bin the epoch
+							if len(bin_edges) != 0:
+								if (bin_edges[-1] != end_epoch)*(end_epoch-bin_edges[-1]>10):
+									bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
+								bst_hz = np.array([np.sum(bin_post_taste[:,bin_edges[b_i]:bin_edges[b_i+1]],1)/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)])
+								all_hz_bst.extend(list(bst_hz)) #nxnum_neur transposed
+						all_hz_bst = np.array(all_hz_bst) #all_nxnum_neur
+						#Store the firing rate vectors
+						tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = all_hz_bst.T #num_neurxall_n
+						#Store maximum firing rate
+						if np.max(all_hz_bst) > max_hz:
+							max_hz = np.max(all_hz_bst)
 					
 	return tastant_fr_dist, taste_num_deliv, max_hz
 	
@@ -104,7 +112,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 	
 	if len(epochs_to_analyze) == 0:
 		epochs_to_analyze = np.arange(num_cp)
-	if len(segments_to_analyze == 0):
+	if len(segments_to_analyze) == 0:
 		segments_to_analyze = np.arange(num_segments)
 
 	#If trial_start_frac > 0 use only trials after that threshold
@@ -123,18 +131,18 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 			full_data = []
 			for d_i in range(max_num_deliv):
 				if d_i >= trial_start_ind:
-					full_data.extend(tastant_fr_dist[t_i][d_i-trial_start_ind][e_i])
-			gm = gmm(n_components=1, n_init=10).fit(full_data)
+					full_data.extend(list(tastant_fr_dist[t_i][d_i-trial_start_ind][e_i].T))
+			gm = gmm(n_components=1, n_init=3).fit(np.array(full_data))
 			fit_tastant_neur[t_i] = gm
-					
+		
 		#Fit gmm distribution to fr of all tastes
 		#P(firing rate) w/ inter-neuron dependencies
 		full_data = []
 		for t_i in range(num_tastes):
 			for d_i in range(max_num_deliv):
 				if d_i >= trial_start_ind:
-					full_data.extend(tastant_fr_dist[t_i][d_i-trial_start_ind][e_i])
-		gm = gmm(n_components=1,  n_init=10).fit(full_data)
+					full_data.extend(list(tastant_fr_dist[t_i][d_i-trial_start_ind][e_i].T))
+		gm = gmm(n_components=1,  n_init=10).fit(np.array(full_data))
 		fit_all_neur = gm
 		
 		#Segment-by-segment use full taste decoding times to zoom in and test 
@@ -171,7 +179,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 					tb_fr = np.load(epoch_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy')
 				except:
 					tb_fr = np.zeros((num_neur,len(new_time_bins)))
-					for tb_i,tb in enumerate(tqdm.tqdm(new_time_bins)):
+					for tb_i,tb in enumerate(new_time_bins):
 						tb_fr[:,tb_i] = np.sum(segment_spike_times_s_i_bin[:,tb-seg_start-half_bin:tb+half_bin-seg_start],1)/(2*half_bin*(1/1000))
 					np.save(epoch_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy',tb_fr)
 					del tb_i, tb
@@ -340,7 +348,7 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 			n_i_spike_times = np.array(segment_spike_times_s_i[n_i] - seg_start).astype('int')
 			segment_spike_times_s_i_bin[n_i,n_i_spike_times] = 1
 		tb_fr = np.zeros((num_neur,len(time_bin_starts)))
-		for tb_i,tb in enumerate(tqdm.tqdm(time_bin_starts)):
+		for tb_i,tb in enumerate(time_bin_starts):
 			tb_fr[:,tb_i] = np.sum(segment_spike_times_s_i_bin[:,tb-seg_start-half_bin:tb+half_bin-seg_start],1)/(2*half_bin*(1/1000))
 		mean_fr = np.mean(tb_fr,1)
 		std_fr = np.std(tb_fr,1)
@@ -378,18 +386,21 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 					#population changepoints
 					start_epoch = int(deliv_cp[cp_i])
 					end_epoch = int(deliv_cp[cp_i+1])
-					#TODO: add variable to change the bin size
-					bin_edges = np.arange(start_epoch,end_epoch,100).astype('int') #bin the epoch
-					if len(bin_edges) != 0:
-						if (bin_edges[-1] != end_epoch)*(end_epoch-bin_edges[-1]>10):
-							bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
-						bst_hz = [np.sum(bin_post_taste[:,bin_edges[b_i]:bin_edges[b_i+1]],1)/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
-						bst_hz_z = (np.array(bst_hz).T - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
-						tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = bst_hz_z.T
-						if np.max(bst_hz_z) > max_hz:
-							max_hz = np.max(bst_hz_z)
-						if np.min(bst_hz_z) < min_hz:
-							min_hz = np.min(bst_hz_z)
+					epoch_len = end_epoch - start_epoch
+					all_hz_bst = []
+					for binsize in np.arange(50,epoch_len):
+						bin_edges = np.arange(start_epoch,end_epoch,binsize).astype('int') #bin the epoch
+						if len(bin_edges) != 0:
+							if (bin_edges[-1] != end_epoch)*(end_epoch-bin_edges[-1]>10):
+								bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
+							bst_hz = [np.sum(bin_post_taste[:,bin_edges[b_i]:bin_edges[b_i+1]],1)/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)]
+							bst_hz_z = (np.array(bst_hz).T - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+							all_hz_bst.extend(list(bst_hz_z.T)) #nxnum_neur transposed
+					tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = np.array(all_hz_bst).T #num_neurxall_n
+					if np.max(bst_hz_z) > max_hz:
+						max_hz = np.max(bst_hz_z)
+					if np.min(bst_hz_z) < min_hz:
+						min_hz = np.min(bst_hz_z)
 				del cp_i, start_epoch, end_epoch, bst_hz, bst_hz_z
 				
 	del t_i, num_deliv, taste_cp, n_i, d_i, raster_times, start_taste_i, deliv_cp, times_post_taste, bin_post_taste
@@ -422,7 +433,7 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 
 	if len(epochs_to_analyze) == 0:
 		epochs_to_analyze = np.arange(num_cp)
-	if len(segments_to_analyze == 0):
+	if len(segments_to_analyze) == 0:
 		segments_to_analyze = np.arange(num_segments)
 
 	for e_i in epochs_to_analyze: #By epoch conduct decoding
@@ -437,8 +448,8 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 			full_data = []
 			for d_i in range(max_num_deliv):
 				if d_i >= trial_start_ind:
-					full_data.extend(tastant_fr_dist_z[t_i][d_i-trial_start_ind][e_i])
-			gm = gmm(n_components=1, n_init=10).fit(full_data)
+					full_data.extend(list(tastant_fr_dist_z[t_i][d_i-trial_start_ind][e_i].T))
+			gm = gmm(n_components=1, n_init=10).fit(np.array(full_data))
 			fit_tastant_neur[t_i] = gm
 					
 		#Fit gmm distribution to fr of all tastes
@@ -447,8 +458,8 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 		for t_i in range(num_tastes):
 			for d_i in range(max_num_deliv):
 				if d_i >= trial_start_ind:
-						full_data.extend(tastant_fr_dist_z[t_i][d_i-trial_start_ind][e_i])
-		gm = gmm(n_components=1,  n_init=10).fit(full_data)
+						full_data.extend(list(tastant_fr_dist_z[t_i][d_i-trial_start_ind][e_i].T))
+		gm = gmm(n_components=1,  n_init=10).fit(np.array(full_data))
 		fit_all_neur = gm
 		
 		

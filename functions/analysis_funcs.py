@@ -97,7 +97,7 @@ def import_data(sorted_dir, segment_dir, data_save_dir):
 				dig_in_data = [list(dig_in_node[d_i][0][:]) for d_i in dig_in_ind]
 		except:
 			dig_in_data = [list(dig_in_node[d_i][:]) for d_i in dig_in_ind]
-		num_tastes = len(dig_in_ind)
+		num_tastes = len(dig_in_data)
 		del dig_in_node
 		#_____Convert dig_in_data to indices of dig_in start and end times_____
 		print("\tConverting digital inputs to free memory")
@@ -346,41 +346,42 @@ def taste_responsivity_raster(tastant_spike_times,start_dig_in_times,end_dig_in_
 	
 	return taste_responsivity_probability, taste_responsivity_binary
 
-def taste_cp_frs(taste_cp_raster_inds,tastant_spike_times,start_dig_in_times,end_dig_in_times,dig_in_names,num_neur,pre_taste_dt,post_taste_dt):
-	"""binned firing rates within epochs between given changepoints"""
-	
-	num_tastes = len(tastant_spike_times)
-	
-	num_cp = np.shape(taste_cp_raster_inds[0])[-1] - 1
-	for t_i in range(num_tastes-1):
-		if np.shape(taste_cp_raster_inds[t_i+1])[-1] - 1 < num_cp:
-			num_cp = np.shape(taste_cp_raster_inds[t_i+1])[-1] - 1
-	
-	tastant_binned_frs = [] #taste x neuron x delivery
-	for t_i in range(num_tastes):
-		num_deliv = len(tastant_spike_times[t_i])
-		t_cp_rast = taste_cp_raster_inds[t_i] #num_deliv x num_neur x num_cp+1
-		num_deliv, _, _ = np.shape(t_cp_rast)
-		deliv_binned_spikes = np.zeros((num_neur,num_deliv,num_cp))
-		for n_i in range(num_neur):
-			for d_i in range(num_deliv):
-				raster_times = tastant_spike_times[t_i][d_i][n_i]
-				start_taste_i = start_dig_in_times[t_i][d_i]
-				#times_pre_taste = (np.array(raster_times)[np.where(raster_times < start_taste_i)[0]] - (start_taste_i - pre_taste_dt)).astype('int')
-				#fr_avg_pre = (len(times_pre_taste)/pre_taste_dt)*(1000/1) #in hz
-				times_post_taste = (np.array(raster_times)[np.where((raster_times > start_taste_i)*(raster_times < start_taste_i + post_taste_dt))[0]] - start_taste_i).astype('int')
-				bin_post_taste = np.zeros(post_taste_dt)
-				bin_post_taste[times_post_taste] += 1
-				#Epoch-binned average firing rate
-				cp_bin_inds = t_cp_rast[d_i,n_i,:].astype('int')
-				post_taste_bins = np.zeros(num_cp)
-				for cp_i in range(num_cp):
-					if cp_bin_inds[cp_i+1]-cp_bin_inds[cp_i] != 0:
-						post_taste_bins[cp_i] = np.sum(bin_post_taste[cp_bin_inds[cp_i]:cp_bin_inds[cp_i+1]])/((cp_bin_inds[cp_i+1]-cp_bin_inds[cp_i])/1000)
-					else:
-						post_taste_bins[cp_i] = 0
-				deliv_binned_spikes[n_i,d_i,:] = post_taste_bins
-		tastant_binned_frs.append(deliv_binned_spikes)
-	
-	return tastant_binned_frs
+# def taste_cp_frs(taste_cp_raster_inds,tastant_spike_times,start_dig_in_times,end_dig_in_times,dig_in_names,num_neur,pre_taste_dt,post_taste_dt):
+# 	"""binned firing rates within epochs between given changepoints"""
+# 	
+# 	num_tastes = len(tastant_spike_times)
+# 	
+# 	num_cp = np.shape(taste_cp_raster_inds[0])[-1]
+# 	for t_i in range(num_tastes-1):
+# 		if np.shape(taste_cp_raster_inds[t_i+1])[-1] < num_cp:
+# 			num_cp = np.shape(taste_cp_raster_inds[t_i+1])[-1] - 1
+# 	
+# 	tastant_binned_frs = [] #taste x neuron x delivery
+# 	for t_i in range(num_tastes):
+# 		num_deliv = len(tastant_spike_times[t_i])
+# 		t_cp_rast = taste_cp_raster_inds[t_i] #num_deliv x num_neur x num_cp+1
+# 		num_deliv, _, _ = np.shape(t_cp_rast)
+# 		t_cp_rast_edit = np.concatenate((t_cp_rast,(post_taste_dt+pre_taste_dt)*np.ones((num_deliv,num_neur,1))),axis=-1)
+# 		deliv_binned_spikes = np.zeros((num_neur,num_deliv,num_cp))
+# 		for n_i in range(num_neur):
+# 			for d_i in range(num_deliv):
+# 				raster_times = tastant_spike_times[t_i][d_i][n_i]
+# 				start_taste_i = start_dig_in_times[t_i][d_i]
+# 				#times_pre_taste = (np.array(raster_times)[np.where(raster_times < start_taste_i)[0]] - (start_taste_i - pre_taste_dt)).astype('int')
+# 				#fr_avg_pre = (len(times_pre_taste)/pre_taste_dt)*(1000/1) #in hz
+# 				times_post_taste = (np.array(raster_times)[np.where((raster_times > start_taste_i)*(raster_times < start_taste_i + post_taste_dt))[0]] - start_taste_i).astype('int')
+# 				bin_post_taste = np.zeros(post_taste_dt)
+# 				bin_post_taste[times_post_taste] += 1
+# 				#Epoch-binned average firing rate
+# 				cp_bin_inds = t_cp_rast_edit[d_i,n_i,:].astype('int')
+# 				post_taste_bins = np.zeros(num_cp)
+# 				for cp_i in range(num_cp):
+# 					if cp_bin_inds[cp_i+1]-cp_bin_inds[cp_i] != 0:
+# 						post_taste_bins[cp_i] = np.sum(bin_post_taste[cp_bin_inds[cp_i]:cp_bin_inds[cp_i+1]])/((cp_bin_inds[cp_i+1]-cp_bin_inds[cp_i])/1000)
+# 					else:
+# 						post_taste_bins[cp_i] = 0
+# 				deliv_binned_spikes[n_i,d_i,:] = post_taste_bins
+# 		tastant_binned_frs.append(deliv_binned_spikes)
+# 	
+# 	return tastant_binned_frs
 	
