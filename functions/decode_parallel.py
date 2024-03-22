@@ -108,3 +108,57 @@ def segment_burst_decode_dependent_parallelized(inputs):
 	
 	return decode_prob
 	
+
+def loo_taste_select_decode(inputs):
+	"""Parallelizes leave-one-out decoding of taste to determine taste selectivity"""
+	
+	d_i = inputs[0]
+	taste_d_i = inputs[1]
+	d_i_o = inputs[2]
+	t_i_spike_times = inputs[3]
+	t_i_dig_in_times = inputs[4]
+	num_neur = inputs[5]
+	taste_cp_pop = inputs[6]
+	pre_taste_dt = inputs[7]
+	post_taste_dt = inputs[8]
+	num_cp = inputs[9]
+	
+	neur_hz = np.nan*np.ones((num_neur,num_cp+1))
+	for n_i in range(num_neur):
+		total_d_i = taste_d_i + d_i #what is the index out of all deliveries
+		if total_d_i != d_i_o:
+			raster_times = t_i_spike_times[d_i][n_i]
+			start_taste_i = t_i_dig_in_times[d_i]
+			deliv_cp_pop = taste_cp_pop[d_i,:] - pre_taste_dt
+			#Binerize the firing following taste delivery start
+			times_post_taste = (np.array(raster_times)[np.where((raster_times >= start_taste_i)*(raster_times < start_taste_i + post_taste_dt))[0]] - start_taste_i).astype('int')
+			bin_post_taste = np.zeros(post_taste_dt)
+			bin_post_taste[times_post_taste] += 1
+			#Grab FR per epoch for the delivery
+			for cp_i in range(num_cp):
+				#individual neuron changepoints
+				start_epoch = int(deliv_cp_pop[cp_i])
+				end_epoch = int(deliv_cp_pop[cp_i+1])
+				epoch_len = end_epoch - start_epoch
+				#all_hz_bst = []
+				#for binsize in np.arange(50,epoch_len):
+				#	bin_starts = np.arange(start_epoch,end_epoch-binsize).astype('int') #bin the epoch
+				#	if len(bin_starts) != 0:
+				#for binsize in epoch_len*np.ones(1):
+				#		bst_hz = [np.sum(bin_post_taste[bin_starts[b_i]:bin_starts[b_i]+binsize])/(binsize/1000) for b_i in range(len(bin_starts))]
+				#		all_hz_bst.extend(bst_hz)
+				neur_hz[n_i,cp_i] = np.sum(bin_post_taste[start_epoch:end_epoch])/(epoch_len/1000)
+			#Grab overall FR for the delivery
+			first_epoch = int(deliv_cp_pop[0])
+			last_epoch = int(deliv_cp_pop[-1])
+			deliv_len = last_epoch - first_epoch
+	# 						all_hz_bst = []
+	# 						for binsize in np.arange(50,deliv_len):
+	# 							bin_starts = np.arange(first_epoch,last_epoch-binsize).astype('int') #bin the epoch
+	# 							if len(bin_starts) != 0:
+	# 								bst_hz = [np.sum(bin_post_taste[bin_starts[b_i]:bin_starts[b_i]+binsize])/(binsize/1000) for b_i in range(len(bin_starts))]
+	# 								all_hz_bst.extend(bst_hz)
+	# 						all_hz_bst = np.array(all_hz_bst)
+			neur_hz[n_i,num_cp] = np.sum(bin_post_taste[first_epoch:last_epoch])/(deliv_len/1000)
+	
+	return neur_hz

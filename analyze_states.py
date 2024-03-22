@@ -96,7 +96,7 @@ except:
 #distribution (taken from Paul's Comp Neuro Textbook)
 
 cp_bin = 300 #minimum state size in ms
-num_cp = 2 #number of changepoints to find
+num_cp = 2 #number of changepoints to find (this means number of epochs is num_cp + 1)
 before_taste = np.ceil(pre_taste*1000).astype('int') #Milliseconds before taste delivery to plot
 after_taste = np.ceil(post_taste*1000).astype('int') #Milliseconds after taste delivery to plot
 
@@ -155,7 +155,7 @@ except:
 
 data_group_name = 'taste_selectivity'
 
-tastant_binned_frs = af.taste_cp_frs(taste_cp_raster_inds,tastant_spike_times,start_dig_in_times,end_dig_in_times,dig_in_names,num_neur,pre_taste_dt,post_taste_dt)
+#tastant_binned_frs = af.taste_cp_frs(taste_cp_raster_inds,tastant_spike_times,start_dig_in_times,end_dig_in_times,dig_in_names,num_neur,pre_taste_dt,post_taste_dt)
 
 decoding_save_dir = data_save_dir + 'Taste_Selectivity/'
 if os.path.isdir(decoding_save_dir) == False:
@@ -181,12 +181,12 @@ except:
 	#taste_select_prob_epoch = fraction of correctly decoded deliveries [num_cp, num_neur, num_tastes]
 	
 	p_taste_joint, p_taste_epoch, taste_select_prob_joint, taste_select_prob_epoch = df.taste_decoding_cp(tastant_spike_times,\
-												   pop_taste_cp_raster_inds,num_cp,start_dig_in_times,end_dig_in_times,dig_in_names, \
+												   pop_taste_cp_raster_inds,start_dig_in_times,end_dig_in_times,dig_in_names, \
 													   num_neur,pre_taste_dt,post_taste_dt,loo_distribution_save_dir)
 	#_____Calculate binary matrices of taste selective neurons / taste selective neurons by epoch_____
 	#On average, does the neuron decode neurons more often than chance?
-	taste_select_neur_bin = np.sum(taste_select_prob_joint,1) > 1/num_tastes
-	taste_select_neur_epoch_bin = np.sum(taste_select_prob_epoch,2) > 1/num_tastes
+	taste_select_neur_bin = np.sum(taste_select_prob_joint,1) > 1/(num_tastes-1)
+	taste_select_neur_epoch_bin = np.sum(taste_select_prob_epoch,2) > 1/(num_tastes-1)
 	#Save
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'p_taste_joint',p_taste_joint)
 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint',taste_select_prob_joint)
