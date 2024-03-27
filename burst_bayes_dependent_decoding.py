@@ -102,12 +102,6 @@ if __name__ == '__main__':
 	skip_time = 0.05  # Seconds to skip forward in sliding bin
 	skip_dt = np.ceil(skip_time*1000).astype('int')
 
-	# For epoch decoding
-	e_skip_time = 0.01  # Seconds to skip forward in sliding bin
-	e_skip_dt = np.ceil(e_skip_time*1000).astype('int')
-	e_len_time = 0.05  # Seconds to decode
-	e_len_dt = np.ceil(e_len_time*1000).astype('int')
-
 	# Decoding settings
 	# Fraction of total population that must be active to consider a decoding event
 	neuron_count_thresh = 0 #1/3
@@ -141,34 +135,33 @@ if __name__ == '__main__':
 														   post_taste_dt, bin_dt, trial_start_frac)
 
 	#%% Decode all neurons
-	print("\n===Decoding using all neurons.===\n")
-	
-	bayes_dir_all = bayes_dir + 'All_Neurons/'
-	if os.path.isdir(bayes_dir_all) == False:
-		os.mkdir(bayes_dir_all)
+# 	print("\n===Decoding using all neurons.===\n")
+# 	
+# 	bayes_dir_all = bayes_dir + 'All_Neurons/'
+# 	if os.path.isdir(bayes_dir_all) == False:
+# 		os.mkdir(bayes_dir_all)
 
-	taste_select = np.ones(num_neur)  # stand in to use full population
-	# stand in to use full population
-	taste_select_epoch = np.ones((num_cp, num_neur))
+# 	# stand in to use full population
+# 	taste_select_epoch = np.ones((num_cp, num_neur))
 
-	#Run decoding!
-	bdf.decode_epochs(tastant_fr_dist_pop,segment_spike_times,post_taste_dt,pre_taste_dt,
-					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
-					   segment_dev_rasters, segment_dev_times,
-					   segment_names,start_dig_in_times,taste_num_deliv,
-					   taste_select_epoch,use_full,max_decode,max_hz_pop,bayes_dir_all,
-					   neuron_count_thresh,trial_start_frac,
-					   epochs_to_analyze,segments_to_analyze)
-	
-	#Plot decodings!
-	bdf.plot_decoded(tastant_fr_dist_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
-					 start_dig_in_times,end_dig_in_times,post_taste_dt,pre_taste_dt,
-					 pop_taste_cp_raster_inds,e_skip_dt,e_len_dt,dig_in_names,
-					 segment_times,segment_names,taste_num_deliv,taste_select_epoch,
-					 use_full,bayes_dir_all,max_decode,max_hz_pop,seg_stat_bin,
-					 neuron_count_thresh,trial_start_frac,
-					 epochs_to_analyze,segments_to_analyze,
-					 bin_pre_taste,decode_prob_cutoff,min_dev_size)
+# 	#Run decoding!
+# 	bdf.decode_epochs(tastant_fr_dist_pop,segment_spike_times,post_taste_dt,pre_taste_dt,
+# 					   skip_dt,dig_in_names,segment_times,
+# 					   segment_dev_rasters, segment_dev_times,
+# 					   segment_names,start_dig_in_times,taste_num_deliv,
+# 					   taste_select_epoch,use_full,max_decode,max_hz_pop,bayes_dir_all,
+# 					   neuron_count_thresh,trial_start_frac,
+# 					   epochs_to_analyze,segments_to_analyze)
+# 	
+# 	#Plot decodings!
+# 	bdf.plot_decoded(tastant_fr_dist_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+# 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pre_taste_dt,
+# 					 pop_taste_cp_raster_inds,bin_dt,dig_in_names,
+# 					 segment_times,segment_names,taste_num_deliv,taste_select_epoch,
+# 					 use_full,bayes_dir_all,max_decode,max_hz_pop,seg_stat_bin,
+# 					 neuron_count_thresh,trial_start_frac,
+# 					 epochs_to_analyze,segments_to_analyze,
+# 					 bin_pre_taste,decode_prob_cutoff,min_dev_size)
 	
 	#%% Decode taste selective neurons
 	print("\n===Decoding using only taste selective neurons.===\n")
@@ -189,7 +182,7 @@ if __name__ == '__main__':
 
 	#Run decoding!
 	bdf.decode_epochs(tastant_fr_dist_pop,segment_spike_times,post_taste_dt,pre_taste_dt,
-					   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
+					   skip_dt,dig_in_names,segment_times,
 					   segment_dev_rasters, segment_dev_times,
 					   segment_names,start_dig_in_times,taste_num_deliv,
 					   taste_select_neur_epoch_bin,use_full,max_decode,max_hz_pop,bayes_dir_select,
@@ -199,7 +192,7 @@ if __name__ == '__main__':
 	#Plot decodings!
 	bdf.plot_decoded(tastant_fr_dist_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pre_taste_dt,
-					 pop_taste_cp_raster_inds,e_skip_dt,e_len_dt,dig_in_names,
+					 pop_taste_cp_raster_inds,bin_dt,dig_in_names,
 					 segment_times,segment_names,taste_num_deliv,taste_select_neur_epoch_bin,
 					 use_full,bayes_dir_select,max_decode,max_hz_pop,seg_stat_bin,
 					 neuron_count_thresh,trial_start_frac,
@@ -207,67 +200,67 @@ if __name__ == '__main__':
 					 bin_pre_taste,decode_prob_cutoff,min_dev_size)
 	
 	#%% Decode all neurons z-scored
-	print("\n===Decoding using all neurons z-scored.===\n")
-	
-	bayes_dir_all_z = bayes_dir + 'All_Neurons_ZScore/'
-	if os.path.isdir(bayes_dir_all_z) == False:
-		os.mkdir(bayes_dir_all_z)
+# 	print("\n===Decoding using all neurons z-scored.===\n")
+# 	
+# 	bayes_dir_all_z = bayes_dir + 'All_Neurons_ZScore/'
+# 	if os.path.isdir(bayes_dir_all_z) == False:
+# 		os.mkdir(bayes_dir_all_z)
 
-	taste_select = np.ones(num_neur)  # stand in to use full population
-	# stand in to use full population
-	taste_select_epoch = np.ones((num_cp, num_neur))
+# 	taste_select = np.ones(num_neur)  # stand in to use full population
+# 	# stand in to use full population
+# 	taste_select_epoch = np.ones((num_cp, num_neur))
 
-	#Run decoding!
-	bdf.decode_epochs_zscore(tastant_fr_dist_z_pop,segment_spike_times,post_taste_dt,pre_taste_dt,
-					   skip_dt,dig_in_names,segment_times,
-					   segment_dev_rasters, segment_dev_times,
-					   segment_names,start_dig_in_times,taste_num_deliv,
-					   taste_select_epoch,use_full,max_decode,max_hz_z_pop,min_hz_z_pop,
-					   bayes_dir_all_z,neuron_count_thresh,bin_dt,trial_start_frac,
-					   epochs_to_analyze,segments_to_analyze)
-	
-	#Plot decodings!
-	bdf.plot_decoded(tastant_fr_dist_z_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
-					 start_dig_in_times,end_dig_in_times,post_taste_dt,pre_taste_dt,
-					 pop_taste_cp_raster_inds,bin_dt,dig_in_names,
-					 segment_times,segment_names,taste_num_deliv,taste_select_epoch,
-					 use_full,bayes_dir_all_z,max_decode,max_hz_z_pop,seg_stat_bin,
-					 neuron_count_thresh,trial_start_frac,
-					 epochs_to_analyze,segments_to_analyze,
-					 bin_pre_taste,decode_prob_cutoff,min_dev_size)
-	
-	#%% Decode taste selective neurons
-	print("\n===Decoding using only taste selective neurons z-scored.===\n")
-	
-	bayes_dir_select_z = bayes_dir + 'Taste_Selective_ZScore/'
-	if os.path.isdir(bayes_dir_select_z) == False:
-		os.mkdir(bayes_dir_select_z)
+# 	#Run decoding!
+# 	bdf.decode_epochs_zscore(tastant_fr_dist_z_pop,segment_spike_times,post_taste_dt,pre_taste_dt,
+# 					   skip_dt,dig_in_names,segment_times,
+# 					   segment_dev_rasters, segment_dev_times,
+# 					   segment_names,start_dig_in_times,taste_num_deliv,
+# 					   taste_select_epoch,use_full,max_decode,max_hz_z_pop,min_hz_z_pop,
+# 					   bayes_dir_all_z,neuron_count_thresh,bin_dt,trial_start_frac,
+# 					   epochs_to_analyze,segments_to_analyze)
+# 	
+# 	#Plot decodings!
+# 	bdf.plot_decoded(tastant_fr_dist_z_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+# 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pre_taste_dt,
+# 					 pop_taste_cp_raster_inds,bin_dt,dig_in_names,
+# 					 segment_times,segment_names,taste_num_deliv,taste_select_epoch,
+# 					 use_full,bayes_dir_all_z,max_decode,max_hz_z_pop,seg_stat_bin,
+# 					 neuron_count_thresh,trial_start_frac,
+# 					 epochs_to_analyze,segments_to_analyze,
+# 					 bin_pre_taste,decode_prob_cutoff,min_dev_size)
+# 	
+# 	#%% Decode taste selective neurons
+# 	print("\n===Decoding using only taste selective neurons z-scored.===\n")
+# 	
+# 	bayes_dir_select_z = bayes_dir + 'Taste_Selective_ZScore/'
+# 	if os.path.isdir(bayes_dir_select_z) == False:
+# 		os.mkdir(bayes_dir_select_z)
 
-	data_group_name = 'taste_selectivity'
-	try:
-		taste_select_neur_bin = af.pull_data_from_hdf5(
-			sorted_dir, data_group_name, 'taste_select_neur_bin')[0]
-		taste_select_neur_epoch_bin = af.pull_data_from_hdf5(
-			sorted_dir, data_group_name, 'taste_select_neur_epoch_bin')[0]
-	except:
-		print("ERROR: No taste selective data.")
-		quit()
+# 	data_group_name = 'taste_selectivity'
+# 	try:
+# 		taste_select_neur_bin = af.pull_data_from_hdf5(
+# 			sorted_dir, data_group_name, 'taste_select_neur_bin')[0]
+# 		taste_select_neur_epoch_bin = af.pull_data_from_hdf5(
+# 			sorted_dir, data_group_name, 'taste_select_neur_epoch_bin')[0]
+# 	except:
+# 		print("ERROR: No taste selective data.")
+# 		quit()
 
-	#Run decoding!
-	bdf.decode_epochs_zscore(tastant_fr_dist_z_pop,segment_spike_times,post_taste_dt,pre_taste_dt,
-					   skip_dt,dig_in_names,segment_times,
-					   segment_dev_rasters, segment_dev_times,
-					   segment_names,start_dig_in_times,taste_num_deliv,
-					   taste_select_epoch,use_full,max_decode,max_hz_z_pop,min_hz_z_pop,
-					   bayes_dir_select_z,neuron_count_thresh,bin_dt,trial_start_frac,
-					   epochs_to_analyze,segments_to_analyze)
+# 	#Run decoding!
+# 	bdf.decode_epochs_zscore(tastant_fr_dist_z_pop,segment_spike_times,post_taste_dt,pre_taste_dt,
+# 					   skip_dt,dig_in_names,segment_times,
+# 					   segment_dev_rasters, segment_dev_times,
+# 					   segment_names,start_dig_in_times,taste_num_deliv,
+# 					   taste_select_epoch,use_full,max_decode,max_hz_z_pop,min_hz_z_pop,
+# 					   bayes_dir_select_z,neuron_count_thresh,bin_dt,trial_start_frac,
+# 					   epochs_to_analyze,segments_to_analyze)
 
-	#Plot decodings!
-	bdf.plot_decoded(tastant_fr_dist_z_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
-					 start_dig_in_times,end_dig_in_times,post_taste_dt,pre_taste_dt,
-					 pop_taste_cp_raster_inds,bin_dt,dig_in_names,
-					 segment_times,segment_names,taste_num_deliv,taste_select_neur_epoch_bin,
-					 use_full,bayes_dir_select_z,max_decode,max_hz_z_pop,seg_stat_bin,
-					 neuron_count_thresh,trial_start_frac,
-					 epochs_to_analyze,segments_to_analyze,
-					 bin_pre_taste,decode_prob_cutoff,min_dev_size)
+# 	#Plot decodings!
+# 	bdf.plot_decoded(tastant_fr_dist_z_pop,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
+# 					 start_dig_in_times,end_dig_in_times,post_taste_dt,pre_taste_dt,
+# 					 pop_taste_cp_raster_inds,bin_dt,dig_in_names,
+# 					 segment_times,segment_names,taste_num_deliv,taste_select_neur_epoch_bin,
+# 					 use_full,bayes_dir_select_z,max_decode,max_hz_z_pop,seg_stat_bin,
+# 					 neuron_count_thresh,trial_start_frac,
+# 					 epochs_to_analyze,segments_to_analyze,
+# 					 bin_pre_taste,decode_prob_cutoff,min_dev_size)

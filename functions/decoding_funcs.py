@@ -406,7 +406,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 	
 	if len(epochs_to_analyze) == 0:
 		epochs_to_analyze = np.arange(num_cp)
-	if len(segments_to_analyze == 0):
+	if len(segments_to_analyze) == 0:
 		segments_to_analyze = np.arange(num_segments)
 	
 	for e_i in epochs_to_analyze: #By epoch conduct decoding
@@ -1076,7 +1076,7 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 	
 def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_spike_times,
 				 start_dig_in_times,end_dig_in_times,post_taste_dt,pre_taste_dt,
-				 pop_taste_cp_raster_inds,e_skip_dt,e_len_dt,dig_in_names,
+				 pop_taste_cp_raster_inds,bin_dt,dig_in_names,
 				 segment_times,segment_names,taste_num_deliv,taste_select_epoch,
 				 use_full,save_dir,max_decode,max_hz,seg_stat_bin,
 				 neuron_count_thresh,trial_start_frac=0,
@@ -1090,12 +1090,39 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 	epoch_seg_taste_percents = np.zeros((num_cp,num_segments,num_tastes))
 	epoch_seg_taste_percents_neur_cut = np.zeros((num_cp,num_segments,num_tastes))
 	epoch_seg_taste_percents_best = np.zeros((num_cp,num_segments,num_tastes))
+	half_bin_z_dt = np.floor(bin_dt/2).astype('int')
 	
 	if len(epochs_to_analyze) == 0:
 		epochs_to_analyze = np.arange(num_cp)
 	if len(segments_to_analyze) == 0:
 		segments_to_analyze = np.arange(num_segments)
-
+	
+	#Get taste segment z-score info
+	s_i_taste = np.nan*np.ones(1)
+	for s_i in range(len(segment_names)):
+		if segment_names[s_i].lower() == 'taste':
+			s_i_taste[0] = s_i
+	if not np.isnan(s_i_taste[0]):
+		s_i = int(s_i_taste[0])
+		seg_start = segment_times[s_i]
+		seg_end = segment_times[s_i+1]
+		seg_len = seg_end - seg_start
+		time_bin_starts = np.arange(seg_start+half_bin_z_dt,seg_end-half_bin_z_dt,half_bin_z_dt*2)
+		segment_spike_times_s_i = segment_spike_times[s_i]
+		segment_spike_times_s_i_bin = np.zeros((num_neur,seg_len+1))
+		for n_i in range(num_neur):
+			n_i_spike_times = np.array(segment_spike_times_s_i[n_i] - seg_start).astype('int')
+			segment_spike_times_s_i_bin[n_i,n_i_spike_times] = 1
+		tb_fr = np.zeros((num_neur,len(time_bin_starts)))
+		for tb_i,tb in enumerate(tqdm.tqdm(time_bin_starts)):
+			tb_fr[:,tb_i] = np.sum(segment_spike_times_s_i_bin[:,tb-seg_start-half_bin_z_dt:tb+half_bin_z_dt-seg_start],1)/(2*half_bin_z_dt*(1/1000))
+		mean_fr_taste = np.mean(tb_fr,1)
+		std_fr_taste = np.std(tb_fr,1)
+		std_fr_taste[std_fr_taste == 0] = 1 #to avoid nan calculations
+	else:
+		mean_fr_taste = np.zeros(num_neur)
+		std_fr_taste = np.ones(num_neur)
+	
 	#for e_i in range(num_cp): #By epoch conduct decoding
 	for e_i in epochs_to_analyze:
 		print('Plotting Decoding for Epoch ' + str(e_i))
@@ -1128,6 +1155,15 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 			for n_i in taste_select_neur:
 				n_i_spike_times = np.array(segment_spike_times_s_i[n_i] - seg_start).astype('int')
 				segment_spike_times_s_i_bin[n_i,n_i_spike_times] = 1
+			
+			#Z-score the segment
+			time_bin_starts = np.arange(seg_start+half_bin_z_dt,seg_end-half_bin_z_dt,half_bin_z_dt*2)
+			tb_fr = np.zeros((num_neur,len(time_bin_starts)))
+			for tb_i,tb in enumerate(tqdm.tqdm(time_bin_starts)):
+				tb_fr[:,tb_i] = np.sum(segment_spike_times_s_i_bin[:,tb-seg_start-half_bin_z_dt:tb+half_bin_z_dt-seg_start],1)/(2*half_bin_z_dt*(1/1000))
+			mean_fr = np.mean(tb_fr,1)
+			std_fr = np.std(tb_fr,1)
+			std_fr[std_fr == 0] = 1
 			
 			#Calculate maximally decoded taste
 			decoded_taste_max = np.argmax(seg_decode_epoch_prob,0)
@@ -1188,14 +1224,7 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 						else:
 							taste_epoch_fr_vecs[d_i-trial_start_ind,:] = np.sum(taste_spike_times_bin[d_i-trial_start_ind,:,taste_cp_times[d_i,e_i]:taste_cp_times[d_i,e_i+1]],1)/epoch_len_i #FR in HZ
 						#Calculate z-scored FR vector
-						if np.sum(pre_taste_spike_times_bin) > 0:
-							pre_deliv_fr_vecs = np.zeros((num_neur,pre_taste_dt-bin_pre_taste))
-							for bin_i in range(pre_taste_dt-bin_pre_taste):
-								pre_deliv_fr_vecs[:,bin_i] = np.sum(pre_taste_spike_times_bin[:,bin_i:bin_i+bin_pre_taste],1)/(bin_pre_taste/1000) #Converted to Hz
-							pre_deliv_mean = np.nanmean(pre_deliv_fr_vecs,1)
-							pre_deliv_std = np.nanstd(pre_deliv_fr_vecs,1)
-							pre_deliv_std[pre_deliv_std == 0] = 1 #Handle no spike situations
-							taste_epoch_fr_vecs_z[d_i-trial_start_ind,:] = (taste_epoch_fr_vecs[d_i-trial_start_ind,:].flatten() - pre_deliv_mean)/pre_deliv_std
+						taste_epoch_fr_vecs_z[d_i-trial_start_ind,:] = (taste_epoch_fr_vecs[d_i-trial_start_ind,:].flatten() - mean_fr_taste)/std_fr_taste
 						
 				all_taste_fr_vecs.append(taste_epoch_fr_vecs)
 				all_taste_fr_vecs_z.append(taste_epoch_fr_vecs_z)
@@ -1313,14 +1342,7 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 					d_fr_vec = np.sum(segment_spike_times_s_i_bin[:,d_start:d_end],1)/(d_len/1000)
 					decoded_fr_vecs.append(d_fr_vec)
 					#Grab z-scored decoded data
-					z_d_start = np.max(d_start - pre_taste_dt,0)
-					d_pre_fr_vec = np.zeros((num_neur,d_start-z_d_start-bin_pre_taste))
-					for z_i in np.arange(z_d_start,d_start-bin_pre_taste):
-						d_pre_fr_vec[:,z_i-z_d_start] = np.sum(segment_spike_times_s_i_bin[:,z_i:z_i+bin_pre_taste],1)/(bin_pre_taste/1000)
-					d_pre_fr_vec_mean = np.nanmean(d_pre_fr_vec,1)
-					d_pre_fr_vec_std = np.nanstd(d_pre_fr_vec,1)
-					d_pre_fr_vec_std[d_pre_fr_vec_std==0] = 1 #No spikes condition
-					d_fr_vec_z = (d_fr_vec-d_pre_fr_vec_mean)/d_pre_fr_vec_std
+					d_fr_vec_z = (d_fr_vec-mean_fr)/std_fr
 					decoded_z_fr_vecs.append(d_fr_vec_z)
 					#Grab correlation data
 					corr_decode_event = np.array([pearsonr(all_taste_fr_vecs_mean[t_i,:],d_fr_vec)[0] for t_i in range(num_tastes)])
