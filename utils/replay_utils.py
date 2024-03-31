@@ -104,21 +104,22 @@ class state_tracker():
 		
 	def get_state(self,):
 		try:
-			with open(os.path.join(self.data_path, 'state_tracker.csv'), newline='') as f:
+			with open(os.path.join(self.data_path, 'analysis_state_tracker.csv'), newline='') as f:
 				reader = csv.reader(f)
 				state_list = list(reader)
 			state_val = int(state_list[0][0])
 			self.state = state_val
 		except:
 			state_val = 0
-			with open(os.path.join(self.data_path, 'state_tracker.csv'), 'w') as f:
+			with open(os.path.join(self.data_path, 'analysis_state_tracker.csv'), 'w') as f:
 				# using csv.writer method from CSV package
 				write = csv.writer(f)
 				write.writerows([[state_val]])
+			self.state = state_val
 	
 	def increase_state(self,):
 		state_val = self.state + 1
-		with open(os.path.join(self.data_path, 'state_tracker.csv'), 'w') as f:
+		with open(os.path.join(self.data_path, 'analysis_state_tracker.csv'), 'w') as f:
 			# using csv.writer method from CSV package
 			write = csv.writer(f)
 			write.writerows([[state_val]])

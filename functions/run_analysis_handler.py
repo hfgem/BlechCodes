@@ -31,9 +31,9 @@ class run_analysis_steps():
 		state = self.state_dict['state']
 		if state == 0:
 			run_data_description_analysis([self.metadata,self.data_dict])
-		elif state == 1:
+		#elif state == 1:
 			
-		elif state == 2:
+		#elif state == 2:
 			
 		
 	

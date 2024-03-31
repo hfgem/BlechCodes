@@ -135,8 +135,11 @@ class import_data():
 		#Dig In Names
 		if len(dig_in_names) > 0:
 			atom = tables.Atom.from_dtype(np.dtype('U20')) #tables.StringAtom(itemsize=50)
-			blech_clust_h5.remove_node('/digital_in','dig_in_names')
-			dig_names = blech_clust_h5.create_earray('/digital_in','dig_in_names',atom,(0,))
+			try:
+				blech_clust_h5.remove_node('/digital_in','dig_in_names')
+				dig_names = blech_clust_h5.create_earray('/digital_in','dig_in_names',atom,(0,))
+			except:
+				dig_names = blech_clust_h5.create_earray('/digital_in','dig_in_names',atom,(0,))
 			dig_names.append(np.array(dig_in_names))
 		else:
 			try: #maybe they were saved before!
