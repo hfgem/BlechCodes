@@ -210,3 +210,5 @@ class import_data():
 			self.start_dig_in_times = start_dig_in_times
 			self.end_dig_in_times = end_dig_in_times
 			self.num_tastes = num_tastes
+		
+		

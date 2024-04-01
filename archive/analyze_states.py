@@ -132,65 +132,65 @@ import functions.decoding_funcs as df
 # 				  dig_in_names,taste_cp_raster_pop_save_dir)
 # 	af.add_data_to_hdf5(sorted_dir,data_group_name,'pop_taste_cp_raster_inds',pop_taste_cp_raster_inds)
 
-#%%
-#Plot taste delivery similarity across deliveries within epochs
-num_segments = len(segment_spike_times)
-taste_epoch_save_dir = data_save_dir + 'Taste_Delivery_Similarity/'
-if os.path.isdir(taste_epoch_save_dir) == False:
-	os.mkdir(taste_epoch_save_dir)
-data_group_name = 'taste_similarity_data'
-try:
-	epoch_trial_out_of_bounds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'epoch_out_of_bounds')
-except:
-	epoch_trial_out_of_bounds = pf.taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
-									tastant_spike_times,start_dig_in_times,
-									end_dig_in_times,pop_taste_cp_raster_inds,
-									post_taste_dt,dig_in_names,taste_epoch_save_dir)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'epoch_out_of_bounds',epoch_trial_out_of_bounds)
+# #%%
+# #Plot taste delivery similarity across deliveries within epochs
+# num_segments = len(segment_spike_times)
+# taste_epoch_save_dir = data_save_dir + 'Taste_Delivery_Similarity/'
+# if os.path.isdir(taste_epoch_save_dir) == False:
+# 	os.mkdir(taste_epoch_save_dir)
+# data_group_name = 'taste_similarity_data'
+# try:
+# 	epoch_trial_out_of_bounds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'epoch_out_of_bounds')
+# except:
+# 	epoch_trial_out_of_bounds = pf.taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
+# 									tastant_spike_times,start_dig_in_times,
+# 									end_dig_in_times,pop_taste_cp_raster_inds,
+# 									post_taste_dt,dig_in_names,taste_epoch_save_dir)
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'epoch_out_of_bounds',epoch_trial_out_of_bounds)
 
 
 #%%	
 
-#____Calculate which neurons are taste selective by bin size_____
+# #____Calculate which neurons are taste selective by bin size_____
 
-data_group_name = 'taste_selectivity'
+# data_group_name = 'taste_selectivity'
 
-#tastant_binned_frs = af.taste_cp_frs(taste_cp_raster_inds,tastant_spike_times,start_dig_in_times,end_dig_in_times,dig_in_names,num_neur,pre_taste_dt,post_taste_dt)
+# #tastant_binned_frs = af.taste_cp_frs(taste_cp_raster_inds,tastant_spike_times,start_dig_in_times,end_dig_in_times,dig_in_names,num_neur,pre_taste_dt,post_taste_dt)
 
-decoding_save_dir = data_save_dir + 'Taste_Selectivity/'
-if os.path.isdir(decoding_save_dir) == False:
-	os.mkdir(decoding_save_dir)
-	
-loo_distribution_save_dir = decoding_save_dir + 'LOO_Distributions/'
-if os.path.isdir(loo_distribution_save_dir) == False:
-	os.mkdir(loo_distribution_save_dir)
-	
-#_____Calculate taste decoding probabilities and success probabilities_____
-try:
-	taste_select_prob_joint = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint')[0]
-	taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
-	p_taste_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'p_taste_epoch')[0]
-	p_taste_joint = af.pull_data_from_hdf5(sorted_dir,data_group_name,'p_taste_joint')[0]
-	taste_select_neur_bin = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_neur_bin')[0]
-	taste_select_neur_epoch_bin = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
-except:
-	print("Using population changepoint indices to calculate taste selectivity by epoch.")
-	#p_taste_joint = prob of decoding each taste [num_neur x num_tastes x num_deliv]
-	#p_taste_epoch = prob of decoding each taste [num_neur x num_tastes x num_deliv x num_cp]
-	#taste_select_prob_joint = fraction of correctly decoded deliveries [num_neur, num_tastes]
-	#taste_select_prob_epoch = fraction of correctly decoded deliveries [num_cp, num_neur, num_tastes]
-	
-	p_taste_joint, p_taste_epoch, taste_select_prob_joint, taste_select_prob_epoch = df.taste_decoding_cp(tastant_spike_times,\
-												   pop_taste_cp_raster_inds,start_dig_in_times,end_dig_in_times,dig_in_names, \
-													   num_neur,pre_taste_dt,post_taste_dt,loo_distribution_save_dir)
-	#_____Calculate binary matrices of taste selective neurons / taste selective neurons by epoch_____
-	#On average, does the neuron decode neurons more often than chance?
-	taste_select_neur_bin = np.sum(taste_select_prob_joint,1) > 1/(num_tastes-1)
-	taste_select_neur_epoch_bin = np.sum(taste_select_prob_epoch,2) > 1/(num_tastes-1)
-	#Save
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'p_taste_joint',p_taste_joint)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint',taste_select_prob_joint)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'p_taste_epoch',p_taste_epoch)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch',taste_select_prob_epoch)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_neur_bin',taste_select_neur_bin)
-	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_neur_epoch_bin',taste_select_neur_epoch_bin)
+# decoding_save_dir = data_save_dir + 'Taste_Selectivity/'
+# if os.path.isdir(decoding_save_dir) == False:
+# 	os.mkdir(decoding_save_dir)
+# 	
+# loo_distribution_save_dir = decoding_save_dir + 'LOO_Distributions/'
+# if os.path.isdir(loo_distribution_save_dir) == False:
+# 	os.mkdir(loo_distribution_save_dir)
+# 	
+# #_____Calculate taste decoding probabilities and success probabilities_____
+# try:
+# 	taste_select_prob_joint = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint')[0]
+# 	taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
+# 	p_taste_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'p_taste_epoch')[0]
+# 	p_taste_joint = af.pull_data_from_hdf5(sorted_dir,data_group_name,'p_taste_joint')[0]
+# 	taste_select_neur_bin = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_neur_bin')[0]
+# 	taste_select_neur_epoch_bin = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
+# except:
+# 	print("Using population changepoint indices to calculate taste selectivity by epoch.")
+# 	#p_taste_joint = prob of decoding each taste [num_neur x num_tastes x num_deliv]
+# 	#p_taste_epoch = prob of decoding each taste [num_neur x num_tastes x num_deliv x num_cp]
+# 	#taste_select_prob_joint = fraction of correctly decoded deliveries [num_neur, num_tastes]
+# 	#taste_select_prob_epoch = fraction of correctly decoded deliveries [num_cp, num_neur, num_tastes]
+# 	
+# 	p_taste_joint, p_taste_epoch, taste_select_prob_joint, taste_select_prob_epoch = df.taste_decoding_cp(tastant_spike_times,\
+# 												   pop_taste_cp_raster_inds,start_dig_in_times,end_dig_in_times,dig_in_names, \
+# 													   num_neur,pre_taste_dt,post_taste_dt,loo_distribution_save_dir)
+# 	#_____Calculate binary matrices of taste selective neurons / taste selective neurons by epoch_____
+# 	#On average, does the neuron decode neurons more often than chance?
+# 	taste_select_neur_bin = np.sum(taste_select_prob_joint,1) > 1/(num_tastes-1)
+# 	taste_select_neur_epoch_bin = np.sum(taste_select_prob_epoch,2) > 1/(num_tastes-1)
+# 	#Save
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'p_taste_joint',p_taste_joint)
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_joint',taste_select_prob_joint)
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'p_taste_epoch',p_taste_epoch)
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch',taste_select_prob_epoch)
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_neur_bin',taste_select_neur_bin)
+# 	af.add_data_to_hdf5(sorted_dir,data_group_name,'taste_select_neur_epoch_bin',taste_select_neur_epoch_bin)

@@ -175,6 +175,21 @@ def calculate_dev_stats(rasters, times, iteration_names, save_dir, iterations_to
 
 	return length_dict, IDI_dict, num_spike_dict, num_neur_dict
 
+def calculate_dev_null_stats(all_rast,dev_times):
+	"""This function calculates statistics of deviation events for comparison 
+	between true data and null distributions"""
+	
+	num_neur = []
+	num_spikes = []
+	for nr in range(len(all_rast)):
+		num_spikes_n_i = np.sum(all_rast[nr],1)
+		num_spikes_i = np.sum(num_spikes_n_i)
+		num_spikes.append(num_spikes_i)
+		num_neur_i = np.sum((num_spikes_n_i > 0).astype('int'))
+		num_neur.append(num_neur_i)
+	all_len = dev_times[1,:] - dev_times[0,:]
+	
+	return num_neur, num_spikes, all_len
 
 def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 						   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
