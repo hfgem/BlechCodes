@@ -98,7 +98,6 @@ def add_data_to_hdf5(sorted_dir,data_group_name,data_name,data_array):
 			blech_clust_h5.remove_node('/'+data_group_name,data_name)
 			blech_clust_h5.create_earray('/'+data_group_name,data_name,atom,(0,)+np.shape(data_array[:]))
 			exec("blech_clust_h5.root."+data_group_name+"."+data_name+".append(np.expand_dims(data_array[:],0))")
-	
 	blech_clust_h5.close() #Always close the file
 #TODO: add handling of lists of lists with different sizes nested
 	

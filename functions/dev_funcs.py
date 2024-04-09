@@ -72,7 +72,7 @@ def run_dev_pull_parallelized(inputs):
 		f.write(json_bytes)
 
 def create_dev_rasters(num_iterations, spike_times,
-					   start_end_times, deviations, pre_z):
+					   start_end_times, deviations, pre_z, segments_to_analyze):
 	"""This function takes the spike times and creates binary matrices of 
 	rasters of spiking"""
 	dev_rasters = []

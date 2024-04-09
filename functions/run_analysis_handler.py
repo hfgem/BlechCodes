@@ -18,6 +18,8 @@ from functions.data_description_analysis import run_data_description_analysis
 from functions.changepoint_analysis import run_changepoint_detection
 from functions.deviation_analysis import run_find_deviations
 from functions.deviation_null_analysis import run_deviation_null_analysis
+from functions.data_null_analysis import run_data_null_analysis
+
 
 class run_analysis_steps():
 	
@@ -44,8 +46,12 @@ class run_analysis_steps():
 		elif state == 2:
 			#Compare population spike deviations in true data to null distribution data
 			run_deviation_null_analysis([self.metadata,self.data_dict])
-		#elif state == 3:
-			#
+		elif state == 3:
+			#Compare general data to null distributions
+			run_data_null_analysis([self.metadata,self.data_dict])
+		#elif state == 4:
+			#Run taste correlations to deviation events
+			
 	
 	def check_continue(self,):
 		state_handler = state_tracker([self.metadata['dir_name'],1]) #added list value of 1 flags the state tracker to increment

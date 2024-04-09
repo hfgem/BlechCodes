@@ -5,10 +5,11 @@ Created on Mon Apr  1 13:28:37 2024
 
 @author: Hannah Germaine
 
-This is the fourth step of the analysis pipeline: deviation events are compared to null shuffled distributions
+This is the fourth step of the analysis pipeline: deviation events are compared
+to null shuffled distributions deviation events.
 """
 
-import os, sys, tqdm, gzip, itertools
+import os, sys, tqdm, gzip, itertools, json
 from multiprocessing import Pool
 import numpy as np
 import scipy.stats as stats
@@ -29,6 +30,7 @@ class run_deviation_null_analysis():
 		self.convert_to_rasters()
 		
 	def gather_variables(self,):
+		self.num_neur = self.data_dict['num_neur']
 		self.pre_taste = self.metadata['params_dict']['pre_taste']
 		self.post_taste = self.metadata['params_dict']['post_taste']
 		self.segments_to_analyze = self.metadata['params_dict']['segments_to_analyze']
@@ -56,7 +58,7 @@ class run_deviation_null_analysis():
 	
 	def import_deviations(self,):
 		try: #test if the data exists by trying to import the last 
-			filepath = self.dev_dir + self.segment_names[-1] + '/deviations.json'
+			filepath = self.dev_dir + self.segment_names[self.segments_to_analyze[-1]] + '/deviations.json'
 			with gzip.GzipFile(filepath, mode="r") as f:
 				json_bytes = f.read()
 				json_str = json_bytes.decode('utf-8')
@@ -64,8 +66,8 @@ class run_deviation_null_analysis():
 				
 			print("Now importing calculated deviations")
 			segment_deviations = []
-			for s_i in tqdm.tqdm(range(num_segments)):
-				filepath = dev_dir + segment_names[s_i] + '/deviations.json'
+			for s_i in tqdm.tqdm(self.segments_to_analyze):
+				filepath = self.dev_dir + self.segment_names[s_i] + '/deviations.json'
 				with gzip.GzipFile(filepath, mode="r") as f:
 					json_bytes = f.read()
 					json_str = json_bytes.decode('utf-8')			
@@ -82,7 +84,7 @@ class run_deviation_null_analysis():
 	def gen_null_distributions(self,):
 		#_____Import or calculate null deviations for all segments_____
 		try: #test if the data exists by trying to import the last 
-			filepath = self.dev_dir + 'null_data/' + self.segment_names[-1] + '/null_0_deviations.json'
+			filepath = self.dev_dir + 'null_data/' + self.segment_names[self.segments_to_analyze[-1]]  + '/null_'+str(self.num_null)+'_deviations.json'
 			with gzip.GzipFile(filepath, mode="r") as f:
 				json_bytes = f.read()
 				json_str = json_bytes.decode('utf-8')
@@ -90,27 +92,39 @@ class run_deviation_null_analysis():
 		except:
 			print("\nNow calculating deviations")
 			for null_i in range(self.num_null):
-				seg_dirs = []
-				for s_i in range(self.num_segments):
-					#create storage directory
-					seg_dir = self.dev_dir + 'null_data/' + self.segment_names[s_i] + '/'
-					if os.path.isdir(seg_dir) == False:
-						os.mkdir(seg_dir)
-					seg_dir = self.dev_dir + 'null_data/' + self.segment_names[s_i] + '/null_' + str(null_i) + '_'
-					seg_dirs.append(seg_dir)
-				with Pool(processes=4) as pool:  # start 4 worker processes
-					pool.map(df.run_dev_pull_parallelized, zip(self.segment_spike_times,
-													 itertools.repeat(self.local_size),
-													 itertools.repeat(self.min_dev_size),
-													 self.segment_times_reshaped,
-													 self.seg_dirs))
-				pool.close()
+				try: #Not to have to restart if deviation calculation was interrupted partway
+					filepath = self.dev_dir + 'null_data/' + self.segment_names[self.segments_to_analyze[-1]]  + '/null_'+str(null_i)+'_deviations.json'
+					with gzip.GzipFile(filepath, mode="r") as f:
+						json_bytes = f.read()
+						json_str = json_bytes.decode('utf-8')
+						data = json.loads(json_str)
+					print("Null " + str(null_i) + " Previously Calculated.")
+					#Puts the onus on the user to delete the null deviations if they want them completely recalculated
+				except:
+					print("Calculating Null " + str(null_i))
+					seg_dirs = []
+					for s_i in self.segments_to_analyze:
+						#create storage directory
+						if os.path.isdir(self.dev_dir + 'null_data/') == False:
+							os.mkdir(self.dev_dir + 'null_data/')
+						seg_dir = self.dev_dir + 'null_data/' + self.segment_names[s_i] + '/'
+						if os.path.isdir(seg_dir) == False:
+							os.mkdir(seg_dir)
+						seg_dir = self.dev_dir + 'null_data/' + self.segment_names[s_i] + '/null_' + str(null_i) + '_'
+						seg_dirs.append(seg_dir)
+					with Pool(processes=4) as pool:  # start 4 worker processes
+						pool.map(df.run_dev_pull_parallelized, zip(self.segment_spike_times,
+														 itertools.repeat(self.local_size),
+														 itertools.repeat(self.min_dev_size),
+														 self.segment_times_reshaped,
+														 seg_dirs))
+					pool.close()
 		
 		print("Now importing calculated null deviations")
 		all_null_deviations = []
 		for null_i in tqdm.tqdm(range(self.num_null)):
 			null_segment_deviations = []
-			for s_i in range(self.num_segments):
+			for s_i in self.segments_to_analyze:
 				filepath = self.dev_dir + 'null_data/' + self.segment_names[s_i] + '/null_' + str(null_i) + '_deviations.json'
 				with gzip.GzipFile(filepath, mode="r") as f:
 					json_bytes = f.read()
@@ -125,8 +139,8 @@ class run_deviation_null_analysis():
 	def convert_to_rasters(self,):
 		#Calculate segment deviation spikes
 		print("Now pulling true deviation rasters")
-		segment_dev_rasters, segment_dev_times, segment_dev_rasters_zscore = df.create_dev_rasters(self.num_segments, self.segment_spike_times, 
-							   np.array(self.segment_times_reshaped), self.segment_deviations, self.pre_taste)
+		segment_dev_rasters, segment_dev_times, segment_dev_rasters_zscore = df.create_dev_rasters(len(self.segments_to_analyze), self.segment_spike_times[self.segments_to_analyze], 
+							   np.array(self.segment_times_reshaped)[self.segments_to_analyze,:], self.segment_deviations, self.pre_taste)
 		self.segment_dev_rasters = segment_dev_rasters
 		self.segment_dev_times = segment_dev_times
 		self.segment_dev_rasters_zscore = segment_dev_rasters_zscore
@@ -138,8 +152,8 @@ class run_deviation_null_analysis():
 		null_segment_dev_rasters_zscore = []
 		for null_i in tqdm.tqdm(range(self.num_null)):
 			null_segment_deviations = self.all_null_deviations[null_i]
-			null_segment_dev_rasters_i, null_segment_dev_times_i, null_segment_dev_rasters_zscore_i = df.create_dev_rasters(self.num_segments, self.segment_spike_times, 
-								   np.array(self.segment_times_reshaped), self.null_segment_deviations, self.pre_taste)
+			null_segment_dev_rasters_i, null_segment_dev_times_i, null_segment_dev_rasters_zscore_i = df.create_dev_rasters(len(self.segments_to_analyze), self.segment_spike_times[self.segments_to_analyze], 
+								   np.array(self.segment_times_reshaped)[self.segments_to_analyze,:], null_segment_deviations, self.pre_taste)
 			null_dev_rasters.append(null_segment_dev_rasters_i)
 			null_dev_times.append(null_segment_dev_times_i)
 			null_segment_dev_rasters_zscore.append(null_segment_dev_rasters_zscore_i)
@@ -162,20 +176,16 @@ class run_deviation_null_analysis():
 			neur_count_dict = dict()
 			neur_spike_dict = dict()
 			neur_len_dict = dict()
-			for s_i in tqdm.tqdm(self.segments_to_analyze):
+			for s_ind, s_i in tqdm.tqdm(enumerate(self.segments_to_analyze)):
 				#Gather data / parameters
 				seg_name = self.segment_names[s_i]
-				segment_spikes = self.segment_spike_times[s_i]
-				segment_start_time = self.segment_times[s_i]
-				segment_end_time = self.segment_times[s_i+1]
-				segment_length = segment_end_time - segment_start_time
 				#_____Gather null data deviation event stats_____
 				null_dev_lengths = []
 				null_dev_neuron_counts = []
 				null_dev_spike_counts = []
 				for null_i in range(self.num_null):
-					all_rast = self.null_dev_rasters[null_i][s_i]
-					null_i_num_neur, null_i_num_spikes, all_len = df.calculate_dev_null_stats(all_rast, self.null_dev_times[null_i][s_i])
+					all_rast = self.null_dev_rasters[null_i][s_ind]
+					null_i_num_neur, null_i_num_spikes, all_len = df.calculate_dev_null_stats(all_rast, self.null_dev_times[null_i][s_ind])
 					null_dev_neuron_counts.append(null_i_num_neur)
 					null_dev_spike_counts.append(null_i_num_spikes)
 					null_dev_lengths.append(all_len)
@@ -183,7 +193,7 @@ class run_deviation_null_analysis():
 				true_dev_neuron_counts = []
 				true_dev_spike_counts = []
 				all_rast = self.segment_dev_rasters[s_i]
-				true_dev_neuron_counts, true_dev_spike_counts, true_dev_lengths = df.calculate_dev_null_stats(all_rast, self.segment_dev_times[s_i])
+				true_dev_neuron_counts, true_dev_spike_counts, true_dev_lengths = df.calculate_dev_null_stats(all_rast, self.segment_dev_times[s_ind])
 				#_____Gather data as dictionary of number of events as a function of cutoff
 				#Neuron count data
 				null_max_neur_count = np.max([np.max(null_dev_neuron_counts[null_i]) for null_i in range(self.num_null)])
@@ -288,7 +298,7 @@ class run_deviation_null_analysis():
 		filepath = self.bin_dir + 'neur_spike_dict.npy'
 		neur_spike_dict = np.load(filepath, allow_pickle=True).item()
 		filepath = self.bin_dir + 'neur_len_dict.npy'
-		neur_spike_dict = np.load(filepath, allow_pickle=True).item()
+		neur_len_dict = np.load(filepath, allow_pickle=True).item()
 		
 		#_____Plotting_____
 		neur_true_count_x = []
@@ -306,7 +316,7 @@ class run_deviation_null_analysis():
 		neur_null_len_x = []
 		neur_null_len_mean = []
 		neur_null_len_std = []
-		for s_i in tqdm.tqdm(self.segments_to_analyze):
+		for s_ind, s_i in tqdm.tqdm(enumerate(self.segments_to_analyze)):
 			seg_name = self.segment_names[s_i]
 			segment_start_time = self.segment_times[s_i]
 			segment_end_time = self.segment_times[s_i+1]

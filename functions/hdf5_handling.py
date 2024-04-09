@@ -249,7 +249,7 @@ def save_downsampled_electrode_data(hf5_dir,e_data,e_ind):
 	atom = tables.FloatAtom()
 	hf5 = tables.open_file(hf5_dir, 'r+', title = hf5_dir[-1])
 	# First remove the node with this electrode's data
-	e_name = str(i)
+	e_name = str(e_ind)
 	hf5.remove_node(f'/raw/electrode_{e_name}',)
 	# Now make a new array replacing the node removed above with the referenced data
 	hf5.create_earray('/raw',f'electrode_{e_name}',atom,(0,))

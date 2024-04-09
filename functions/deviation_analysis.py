@@ -67,7 +67,7 @@ class run_find_deviations():
 					os.mkdir(seg_dir)
 				seg_dirs.append(seg_dir)
 			print("\n\tNow calculating deviations")
-			with Pool(processes=4) as pool:  # start 4 worker processes
+			with Pool(processes=3) as pool:  # start 4 worker processes
 				pool.map(df.run_dev_pull_parallelized, zip(segment_spike_times,
 												 itertools.repeat(local_size),
 												 itertools.repeat(min_dev_size),
