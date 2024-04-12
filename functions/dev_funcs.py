@@ -25,6 +25,7 @@ import functions.dev_plot_funcs as dpf
 from multiprocess import Pool
 from sklearn.decomposition import PCA
 import warnings
+warnings.filterwarnings("ignore")
 
 def run_dev_pull_parallelized(inputs):
 	"""
@@ -72,7 +73,7 @@ def run_dev_pull_parallelized(inputs):
 		f.write(json_bytes)
 
 def create_dev_rasters(num_iterations, spike_times,
-					   start_end_times, deviations, pre_z, segments_to_analyze):
+					   start_end_times, deviations, pre_z):
 	"""This function takes the spike times and creates binary matrices of 
 	rasters of spiking"""
 	dev_rasters = []

@@ -47,7 +47,7 @@ if __name__ == '__main__':
 	for var in vars(state_handler):
 		state_dict[var] = getattr(state_handler,var)
 	del state_handler
-	
+
 	# run analysis!
 	run_analysis_steps([metadata,data_dict,state_dict])
 	

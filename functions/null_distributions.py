@@ -12,8 +12,10 @@ import os, random, json, gzip, tqdm
 os.environ["OMP_NUM_THREADS"] = "4"
 import matplotlib.pyplot as plt
 import numpy as np
+np.seterr(divide = 'ignore', invalid = 'ignore') 
 import multiprocessing
 import warnings
+warnings.filterwarnings("ignore")
 
 def run_null_create_parallelized(inputs):
 	"""
@@ -81,14 +83,13 @@ def plot_indiv_truexnull(true_x_vals,null_x_vals,true_spike_counts,mean_null_spi
 	#True data
 	fig = plt.figure(figsize=(5,5))
 	plt.plot(true_x_vals,true_spike_counts,label='true bin counts',color='b')
-	if len(percentiles) > 0:
-		y_max = max(true_spike_counts)
-		y_text_buffer = y_max/100
-		for p_i in range(len(true_x_vals)):
-			try:
-				plt.text(true_x_vals[p_i],true_spike_counts[p_i]+y_text_buffer,str(percentiles[p_i]))
-			except:
-				pass
+# 	if len(percentiles) > 0:
+# 		y_max = max(true_spike_counts[true_spike_counts != np.nan])
+# 		y_text_buffer = y_max/100
+# 		for p_i in range(len(true_x_vals)):
+# 			if not np.isnan(true_x_vals[p_i]):
+# 				if not np.isnan(true_spike_counts[p_i]):
+# 					plt.text(true_x_vals[p_i],true_spike_counts[p_i]+y_text_buffer,str(percentiles[p_i]))
 	plt.fill_between(null_x_vals, 
 			   (np.array(mean_null_spike_counts)-std_null_spike_counts), 
 			  (mean_null_spike_counts+std_null_spike_counts),
@@ -106,14 +107,14 @@ def plot_indiv_truexnull(true_x_vals,null_x_vals,true_spike_counts,mean_null_spi
 	#Log scale
 	fig = plt.figure(figsize=(5,5))
 	plt.plot(true_x_vals,np.log(true_spike_counts),label='true bin counts',color='b')
-	if len(percentiles) > 0:
-		y_max = max(np.log(true_spike_counts))
-		y_text_buffer = y_max/100
-		for p_i in range(len(true_x_vals)):
-			try:
-				plt.text(true_x_vals[p_i],np.log(true_spike_counts[p_i])+y_text_buffer,str(percentiles[p_i]))
-			except:
-				pass
+# 	if len(percentiles) > 0:
+# 		log_spike_counts = np.log(true_spike_counts)
+# 		y_max = max(log_spike_counts[log_spike_counts != np.nan])
+# 		y_text_buffer = y_max/100
+# 		for p_i in range(len(true_x_vals)):
+# 			if not np.isnan(true_x_vals[p_i]):
+# 				if not np.isnan(np.log(true_spike_counts[p_i])):
+# 					plt.text(true_x_vals[p_i],np.log(true_spike_counts[p_i])+y_text_buffer,str(percentiles[p_i]))
 	plt.fill_between(null_x_vals, 
 			   (np.log(mean_null_spike_counts-std_null_spike_counts)), 
 			  (np.log(mean_null_spike_counts+std_null_spike_counts)),
@@ -131,14 +132,13 @@ def plot_indiv_truexnull(true_x_vals,null_x_vals,true_spike_counts,mean_null_spi
 	#Normalized data
 	fig = plt.figure(figsize=(5,5))
 	plt.plot(true_x_vals,true_spike_counts/norm_val,label='true bin counts',color='b')
-	if len(percentiles) > 0:
-		y_max = max(true_spike_counts/norm_val)
-		y_text_buffer = y_max/100
-		for p_i in range(len(true_x_vals)):
-			try:
-				plt.text(true_x_vals[p_i],true_spike_counts[p_i]/norm_val+y_text_buffer,str(percentiles[p_i]))
-			except:
-				pass
+# 	if len(percentiles) > 0:
+# 		y_max = max(true_spike_counts[true_spike_counts != np.nan]/norm_val)
+# 		y_text_buffer = y_max/100
+# 		for p_i in range(len(true_x_vals)):
+# 			if not np.isnan(true_x_vals[p_i]):
+# 				if not np.isnan(true_spike_counts[p_i]):
+# 					plt.text(true_x_vals[p_i],true_spike_counts[p_i]+y_text_buffer,str(percentiles[p_i]))
 	plt.fill_between(null_x_vals, 
 			   (mean_null_spike_counts-std_null_spike_counts)/norm_val, 
 			  (mean_null_spike_counts+std_null_spike_counts)/norm_val,
