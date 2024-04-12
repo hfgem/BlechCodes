@@ -24,7 +24,7 @@ class run_data_null_analysis():
 	def __init__(self,args):
 		self.metadata = args[0]
 		self.data_dict = args[1]
-		self.get_variables()
+		self.gather_variables()
 		self.compare_true_null()
 		self.plot_true_null()
 		
@@ -53,54 +53,92 @@ class run_data_null_analysis():
 		self.segment_times = self.data_dict['segment_times']
 		
 	def compare_true_null(self,):
-		try: #Import calculated dictionaries if they exist
+		try: #Import complete calculated dictionaries if they exist
 			filepath = self.bin_dir + 'neur_count_dict.npy'
 			neur_count_dict = np.load(filepath, allow_pickle=True).item()
 			filepath = self.bin_dir + 'neur_spike_dict.npy'
 			neur_spike_dict = np.load(filepath, allow_pickle=True).item()
-			print('\tImported thresholded datasets into memory')
-		except: #Calculate dictionaries
-			print("\tCalculating Null and True Data Stats")
-			neur_count_dict = dict()
-			neur_spike_dict = dict()
-			for s_i in tqdm.tqdm(range(self.num_segments)):
-				#Gather data / parameters
+			for s_i in self.segments_to_analyze:
 				seg_name = self.segment_names[s_i]
-				print('\t Now Generating Null Distributions for Segment ' + seg_name)
-				segment_spikes = self.segment_spike_times[s_i]
-				segment_start_time = self.segment_times[s_i]
-				segment_end_time = self.segment_times[s_i+1]
-				#Segment save dir
-				seg_null_dir = self.null_dir + self.segment_names[s_i] + '/'
-				if os.path.isdir(seg_null_dir) == False:
-					os.mkdir(seg_null_dir)
-				#Get null spike data
-				null_bin_spikes = self.get_null_spikes(seg_null_dir,segment_spikes,\
-									 segment_start_time,segment_end_time)
-				#Get true spike data
-				true_bin_spikes = self.get_true_spikes(segment_spikes,\
-										   segment_end_time,segment_start_time)
-				#Get stats
-				true_neur_counts, true_spike_counts, null_neur_counts, null_spike_counts = self.get_stats(null_bin_spikes,\
-																							  true_bin_spikes,segment_start_time,\
-																								  segment_end_time)
-				#Store the neuron count data
-				true_x_vals, true_neur_count_array, null_x_vals, mean_null_neur_counts, std_null_neur_counts, percentiles = self.summarize_data(true_neur_counts,null_neur_counts)
-				neur_count_dict[seg_name + '_true'] =  [list(true_x_vals),
-											   list(true_neur_count_array)]
-				neur_count_dict[seg_name + '_null'] =  [list(null_x_vals),
-											   list(mean_null_neur_counts),
-											   list(std_null_neur_counts)]
-				neur_count_dict[seg_name + '_percentile'] =  [list(true_x_vals),percentiles]
-				#Store the neuron spike count data
-				true_x_vals, true_spike_count_array, null_x_vals, mean_null_spike_counts, std_null_spike_counts, percentiles = self.summarize_data(true_spike_counts,null_spike_counts)
-				neur_spike_dict[seg_name + '_true'] =  [list(true_x_vals),
-											   list(true_spike_count_array)]
-				neur_spike_dict[seg_name + '_null'] =  [list(null_x_vals),
-											   list(mean_null_spike_counts),
-											   list(std_null_spike_counts)]
-				neur_spike_dict[seg_name + '_percentile'] =  [list(true_x_vals),percentiles]
-			#Save the dictionaries
+				neur_true_count_data = self.neur_count_dict[seg_name + '_true']
+				neur_null_count_data = self.neur_count_dict[seg_name + '_null']
+				percentile_count_data = self.neur_count_dict[seg_name + '_percentile']
+				neur_true_spike_data = self.neur_spike_dict[seg_name + '_true']
+				neur_null_spike_data = self.neur_spike_dict[seg_name + '_null']
+				percentile_spike_data = self.neur_spike_dict[seg_name + '_percentile']
+			del seg_name, neur_true_count_data, neur_null_count_data, percentile_count_data, neur_true_spike_data, neur_null_spike_data, percentile_spike_data
+			print('\tImported complete thresholded datasets into memory')
+		except: #Calculate dictionaries
+			print("\tImporting/Calculating Null and True Data Stats")
+			try:
+				filepath = self.bin_dir + 'neur_count_dict.npy'
+				neur_count_dict = np.load(filepath, allow_pickle=True).item()
+			except:
+				neur_count_dict = dict()
+			try:
+				filepath = self.bin_dir + 'neur_spike_dict.npy'
+				neur_spike_dict = np.load(filepath, allow_pickle=True).item()
+			except:
+				neur_spike_dict = dict()
+			for s_i in tqdm.tqdm(self.segments_to_analyze):
+				seg_name = self.segment_names[s_i]
+				try:
+					neur_true_count_data = self.neur_count_dict[seg_name + '_true']
+					neur_null_count_data = self.neur_count_dict[seg_name + '_null']
+					percentile_count_data = self.neur_count_dict[seg_name + '_percentile']
+					neur_true_spike_data = self.neur_spike_dict[seg_name + '_true']
+					neur_null_spike_data = self.neur_spike_dict[seg_name + '_null']
+					percentile_spike_data = self.neur_spike_dict[seg_name + '_percentile']
+					print('\t\tNull and True Statistics for Segment ' + seg_name + ' Previously Calculated')
+				except:
+					#Gather data / parameters
+					print('\t\tNow Calculating Null and True Statistics for Segment ' + seg_name)
+					segment_spikes = self.segment_spike_times[s_i]
+					segment_start_time = self.segment_times[s_i]
+					segment_end_time = self.segment_times[s_i+1]
+					#Segment save dir
+					seg_null_dir = self.null_dir + self.segment_names[s_i] + '/'
+					if os.path.isdir(seg_null_dir) == False:
+						os.mkdir(seg_null_dir)
+					#Get null spike data
+					null_bin_spikes = self.get_null_spikes(seg_null_dir,segment_spikes,\
+										 segment_start_time,segment_end_time)
+					#Get true spike data
+					true_bin_spikes = self.get_true_spikes(segment_spikes,\
+											   segment_end_time,segment_start_time)
+					#Get stats
+					true_neur_counts, true_spike_counts, null_neur_counts, null_spike_counts = self.get_stats(null_bin_spikes,\
+																								  true_bin_spikes,segment_start_time,\
+																									  segment_end_time)
+					#Store the neuron count data
+					true_x_vals, true_neur_count_array, null_x_vals, mean_null_neur_counts, std_null_neur_counts, percentiles = self.summarize_data(true_neur_counts,null_neur_counts)
+					neur_count_dict[seg_name + '_true'] =  [list(true_x_vals),
+												   list(true_neur_count_array)]
+					neur_count_dict[seg_name + '_null'] =  [list(null_x_vals),
+												   list(mean_null_neur_counts),
+												   list(std_null_neur_counts)]
+					neur_count_dict[seg_name + '_percentile'] =  [list(true_x_vals),percentiles]
+					#Store the neuron spike count data
+					true_x_vals, true_spike_count_array, null_x_vals, mean_null_spike_counts, std_null_spike_counts, percentiles = self.summarize_data(true_spike_counts,null_spike_counts)
+					neur_spike_dict[seg_name + '_true'] =  [list(true_x_vals),
+												   list(true_spike_count_array)]
+					neur_spike_dict[seg_name + '_null'] =  [list(null_x_vals),
+												   list(mean_null_spike_counts),
+												   list(std_null_spike_counts)]
+					neur_spike_dict[seg_name + '_percentile'] =  [list(true_x_vals),percentiles]
+					#Save the dictionaries in the current state
+					filepath = self.bin_dir + 'neur_count_dict.npy'
+					np.save(filepath, neur_count_dict)
+					self.neur_count_dict = neur_count_dict
+					filepath = self.bin_dir + 'neur_spike_dict.npy'
+					np.save(filepath, neur_spike_dict) 
+					self.neur_spike_dict = neur_spike_dict
+					#Clear memory
+					del segment_spikes, segment_start_time, segment_end_time, seg_null_dir, null_bin_spikes, true_bin_spikes
+					del true_neur_counts, true_spike_counts, null_neur_counts, null_spike_counts
+					del true_x_vals, true_neur_count_array, null_x_vals, mean_null_neur_counts, std_null_neur_counts, percentiles
+					del true_spike_count_array, mean_null_spike_counts, std_null_spike_counts
+			#Save the dictionaries in completion
 			filepath = self.bin_dir + 'neur_count_dict.npy'
 			np.save(filepath, neur_count_dict)
 			self.neur_count_dict = neur_count_dict
@@ -147,10 +185,10 @@ class run_data_null_analysis():
 		#_____Convert null data to binary spike matrix_____
 		null_bin_spikes = []
 		for n_n in range(self.num_null):
-			null_spikes = null_segment_spikes[n_n]
 			null_bin_spike = np.zeros((self.num_neur,segment_end_time-segment_start_time+1))
+			null_spikes = null_segment_spikes[n_n]
 			for n_i in range(self.num_neur):
-				spike_indices = (np.array(null_spikes[n_i]) - segment_start_time).astype('int')
+				spike_indices = (np.where((null_spikes[n_i] >= segment_start_time)*(null_spikes[n_i] <= segment_end_time))[0]).astype('int')
 				null_bin_spike[n_i,spike_indices] = 1
 			null_bin_spikes.append(null_bin_spike)
 		
@@ -164,6 +202,7 @@ class run_data_null_analysis():
 		return bin_spike
 	
 	def get_stats(self,null_bin_spikes,true_bin_spikes,segment_start_time,segment_end_time):
+		print('\tCalculating Neuron and Spike Statistics')
 		true_neur_counts, true_spike_counts = nd.high_bins([true_bin_spikes,segment_start_time,segment_end_time,self.bin_size,self.count_cutoff])
 		null_neur_counts, null_spike_counts = self.get_null_stats(segment_start_time,segment_end_time,null_bin_spikes)
 		

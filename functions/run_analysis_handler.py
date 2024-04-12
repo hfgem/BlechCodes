@@ -52,6 +52,7 @@ class run_analysis_steps():
 		#elif state == 4:
 			#Run taste correlations to deviation events
 			
+			
 	
 	def check_continue(self,):
 		state_handler = state_tracker([self.metadata['dir_name'],1]) #added list value of 1 flags the state tracker to increment
