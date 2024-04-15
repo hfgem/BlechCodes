@@ -19,6 +19,7 @@ from functions.changepoint_analysis import run_changepoint_detection
 from functions.deviation_analysis import run_find_deviations
 from functions.deviation_null_analysis import run_deviation_null_analysis
 from functions.data_null_analysis import run_data_null_analysis
+from functions.deviation_correlations import run_deviation_correlations
 
 
 class run_analysis_steps():
@@ -46,11 +47,15 @@ class run_analysis_steps():
 		elif state == 2:
 			#Compare population spike deviations in true data to null distribution data
 			run_deviation_null_analysis([self.metadata,self.data_dict])
+		#elif state == 3:
+		#	#Compare general data to null distributions
+		#	run_data_null_analysis([self.metadata,self.data_dict])
 		elif state == 3:
-			#Compare general data to null distributions
-			run_data_null_analysis([self.metadata,self.data_dict])
-		#elif state == 4:
 			#Run taste correlations to deviation events
+			run_deviation_correlations([self.metadata,self.data_dict])
+		#elif state == 4:
+			#Run bayesian decoding of all points in time
+			
 			
 			
 	

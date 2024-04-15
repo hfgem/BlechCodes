@@ -43,7 +43,7 @@ if __name__ == '__main__':
 													  pre_taste,post_taste,num_tastes,num_neur)
 	num_segments = len(segment_spike_times)
 	segment_times_reshaped = [[segment_times[i],segment_times[i+1]] for i in range(num_segments)]
-	
+#%%	
 	#Deviation storage directory
 	dev_dir = fig_save_dir + 'Deviations/'
 	
@@ -68,11 +68,12 @@ if __name__ == '__main__':
 	taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_cp_raster_inds')
 	pop_taste_cp_raster_inds = af.pull_data_from_hdf5(sorted_dir,data_group_name,'pop_taste_cp_raster_inds')
 	
+	
 	#Generate comparable binary matrix for regular data
-	num_cp = np.shape(taste_cp_raster_inds[0])[-1]
+	num_cp = np.shape(pop_taste_cp_raster_inds[0])[-1] - 1
 	for t_i in range(num_tastes-1):
-		if np.shape(taste_cp_raster_inds[t_i+1])[-1] < num_cp:
-			num_cp = np.shape(taste_cp_raster_inds[t_i+1])[-1]
+		if np.shape(pop_taste_cp_raster_inds[t_i+1])[-1] - 1 < num_cp:
+			num_cp = np.shape(pop_taste_cp_raster_inds[t_i+1])[-1] - 1
 	neuron_keep_indices = np.ones((num_neur,num_cp))
 
 	#_____Calculate correlation between taste and deviation rasters for individual neurons_____
@@ -97,8 +98,8 @@ if __name__ == '__main__':
 # 							   pop_taste_cp_raster_inds, all_neur_corr_dir) #For all neurons in dataset
 	df.calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 							   start_dig_in_times, end_dig_in_times, segment_names, 
-							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
-							   pop_taste_cp_raster_inds, all_neur_corr_dir, neuron_keep_indices, segments_to_analyze) #For all neurons in dataset
+							   dig_in_names, pre_taste, post_taste, pop_taste_cp_raster_inds, 
+							   all_neur_corr_dir, neuron_keep_indices, segments_to_analyze) #For all neurons in dataset
 	corr_dev_stats = df.pull_corr_dev_stats(segment_names, dig_in_names, all_neur_corr_dir,segments_to_analyze)
 	all_neur_plot_dir = all_neur_corr_dir + 'plots/'
 	if os.path.isdir(all_neur_plot_dir) == False:

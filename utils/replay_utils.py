@@ -8,7 +8,7 @@ Created on Fri Mar 29 14:57:17 2024
 This file contains utility functions to support replay analysis pipeline
 """
 
-import easygui, glob, os, json, csv
+import easygui, glob, os, json, csv, shutil
 
 class import_metadata():
 	
@@ -35,24 +35,39 @@ class import_metadata():
 			quit()
 		
 	def get_params_path(self,args):
-		file_list = glob.glob(os.path.join(args[0],'params','**.json'))
-		if len(file_list) > 0:
-			if len(file_list) > 1:
-				file_found = 0
-				for f_i in range(len(file_list)):
-					is_file = self.bool_input('Is ' + file_list[f_i] + ' the correct params file? ')
-					if is_file == 'y':
-						self.params_file_path = file_list[f_i]
-						file_found = 1
+		#First check data folder
+		self.params_file_path = os.path.join(self.dir_name,'analysis_params.json')
+		if os.path.exists(self.params_file_path) == False:
+			#Copy over from BlechCodes folder
+			file_list = glob.glob(os.path.join(args[0],'params','**.json'))
+			if len(file_list) > 0:
+				if len(file_list) > 1:
+					file_found = 0
+					for f_i in range(len(file_list)):
+						is_file = self.bool_input('Is ' + file_list[f_i] + ' the correct params file? ')
+						if is_file == 'y':
+							self.orig_params_file_path = file_list[f_i]
+							file_found = 1
+				else:
+					self.orig_params_file_path = file_list[0]
+					file_found = 1
+				if file_found == 0:
+					print('No PARAMS file found. Please ensure BlechCodes/params/ contains the params template json.')
+					quit()
+				else:
+					print('Copying params file to data folder for future use and editing.')
+					params_file_name = (self.orig_params_file_path).split('/')[-1]
+					shutil.copy(self.orig_params_file_path,self.params_file_path)
+					print('At this time, please edit the params as desired for analysis of your dataset.')
+					print('You can find the params file at:')
+					print(self.params_file_path)
+					val = self.bool_input(self,'When finished with the params file, type Y/y: ')
+					if val == 'n':
+						print('Why are you responding then?? Exiting program.')
+						quit()
 			else:
-				self.params_file_path = file_list[0]
-				file_found = 1
-			if file_found == 0:
-				print('No PARAMS file found. Please ensure BlechCodes/params/ contains the params template json.')
+				print('No template PARAMS file found. Please ensure BlechCodes/params/ contains the params template json.')
 				quit()
-		else:
-			print('No PARAMS file found. Please ensure BlechCodes/params/ contains the params template json.')
-			quit()
 	
 	def load_params(self,):
 		with open(self.params_file_path, 'r') as params_file:

@@ -91,14 +91,10 @@ if __name__ == '__main__':
 	if os.path.isdir(all_neur_z_corr_dir) == False:
 		os.mkdir(all_neur_z_corr_dir)
 	
-	df.calculate_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_times,
-							   start_dig_in_times, end_dig_in_times, segment_names, 
-							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
-							   pop_taste_cp_raster_inds, all_neur_z_corr_dir) #For all neurons in dataset
-	df.calculate_vec_correlations(segment_dev_rasters_zscore, tastant_spike_times,
-							   start_dig_in_times, end_dig_in_times, segment_names, 
-							   dig_in_names, pre_taste, post_taste, taste_cp_raster_inds, 
-							   pop_taste_cp_raster_inds, all_neur_z_corr_dir) #For all neurons in dataset
+	df.calculate_vec_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_times,
+							   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
+							   pre_taste, post_taste, taste_cp_raster_inds, pop_taste_cp_raster_inds,
+							   all_neur_z_corr_dir, neuron_keep_indices=[], segments_to_analyze=[])
 	corr_dev_stats = df.pull_corr_dev_stats(segment_names, dig_in_names, all_neur_z_corr_dir)
 	
 	all_neur_z_plot_dir = all_neur_z_corr_dir + 'plots/'

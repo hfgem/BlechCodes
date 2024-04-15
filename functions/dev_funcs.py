@@ -23,6 +23,8 @@ import functions.corr_dist_calc_parallel_zscore as cdcpz
 import functions.corr_dist_calc_parallel_pop_zscore as cdcppz
 import functions.dev_plot_funcs as dpf
 from multiprocess import Pool
+import multiprocess
+multiprocess.set_start_method('spawn')
 from sklearn.decomposition import PCA
 import warnings
 warnings.filterwarnings("ignore")
@@ -284,7 +286,7 @@ def calculate_correlations(segment_dev_rasters, tastant_spike_times,
 
 def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 						   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
-						   pre_taste, post_taste, taste_cp_raster_inds, pop_taste_cp_raster_inds,
+						   pre_taste, post_taste, pop_taste_cp_raster_inds,
 						   save_dir, neuron_keep_indices=[], segments_to_analyze=[]):
 	"""This function takes in deviation rasters, tastant delivery spikes, and
 	changepoint indices to calculate correlations of each deviation to each 
@@ -298,10 +300,10 @@ def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 	if len(segments_to_analyze) == 0:
 		segments_to_analyze = np.arange(num_segments)
 	
-	for s_i in segments_to_analyze:  #Loop through each segment
+	for s_ind, s_i in enumerate(segments_to_analyze):  #Loop through each segment
 		print("Beginning population vector correlation calcs for segment " + str(s_i))
 		#Gather segment data
-		seg_rast = segment_dev_rasters[s_i]
+		seg_rast = segment_dev_rasters[s_ind]
 		num_dev = len(seg_rast)
 			
 		for t_i in range(num_tastes):  #Loop through each taste
@@ -351,7 +353,7 @@ def calculate_vec_correlations(segment_dev_rasters, tastant_spike_times,
 
 def calculate_vec_correlations_zscore(segment_dev_rasters_zscore, tastant_spike_times,
 						   start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
-						   pre_taste, post_taste, taste_cp_raster_inds, pop_taste_cp_raster_inds,
+						   pre_taste, post_taste, pop_taste_cp_raster_inds,
 						   save_dir, neuron_keep_indices=[], segments_to_analyze=[]):
 	"""This function takes in deviation rasters, tastant delivery spikes, and
 	changepoint indices to calculate correlations of each deviation to each 

@@ -15,7 +15,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from scipy import interpolate
-from multiprocess import Pool
+import multiprocess
+multiprocess.set_start_method('spawn')
 import functions.decode_parallel as dp
 from scipy.stats import pearsonr
 from random import sample
@@ -81,9 +82,10 @@ def taste_decoding_cp(tastant_spike_times,pop_taste_cp_raster_inds, \
 					   itertools.repeat(t_i_dig_in_times),itertools.repeat(num_neur),
 					   itertools.repeat(taste_cp_pop),itertools.repeat(pre_taste_dt),
 					   itertools.repeat(post_taste_dt),itertools.repeat(num_cp))
-				pool = Pool(4)
+				pool = multiprocess.Pool(4)
 				deliv_epoch_hz_list = pool.map(dp.loo_taste_select_decode, inputs)
 				pool.close()
+				print('\n')
 				for d_i in range(num_deliv):
 					d_list = deliv_epoch_hz_list[d_i]
 					tastant_epoch_delivery[t_i,:,d_i,:] = d_list[:,:num_cp]
@@ -561,7 +563,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 					 itertools.repeat(fit_tastant_neur), itertools.repeat(joint_fit_neur), \
 					 itertools.repeat(p_taste),itertools.repeat(taste_select_neur))
 				tic = time.time()
-				pool = Pool(4)
+				pool = multiprocess.Pool(4)
 				tb_decode_prob = pool.map(dp.segment_taste_decode_parallelized, inputs)
 				pool.close()
 				toc = time.time()
@@ -961,7 +963,7 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 					 itertools.repeat(fit_tastant_neur), itertools.repeat(joint_fit_neur), \
 					 itertools.repeat(p_taste),itertools.repeat(taste_select_neur))
 				tic = time.time()
-				pool = Pool(4)
+				pool = multiprocess.Pool(4)
 				tb_decode_prob = pool.map(dp.segment_taste_decode_parallelized, inputs)
 				pool.close()
 				toc = time.time()
