@@ -95,7 +95,7 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
 				   segment_names,start_dig_in_times,taste_num_deliv,
-				   taste_select_epoch,use_full,max_hz,save_dir,
+				   taste_select_epoch,max_hz,save_dir,
 				   neuron_count_thresh,trial_start_frac=0,
 				   epochs_to_analyze=[],segments_to_analyze=[]):		
 	"""Decode taste from epoch-specific firing rates"""
@@ -155,7 +155,6 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 			seg_start = segment_times[s_i]
 			seg_end = segment_times[s_i+1]
 			seg_len = segment_times[s_i+1] - segment_times[s_i] #in dt = ms
-			#TODO: add code segment on what time bins to use based on running the full decoder first, if use_full == 1
 			new_time_bins = np.arange(seg_start+half_bin,seg_end-half_bin,e_skip_dt)
 			#Now pull epoch-specific probabilities
 			seg_decode_epoch_prob = np.zeros((num_tastes,seg_len))
@@ -411,7 +410,7 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 				   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,bin_dt,
 				   segment_names,start_dig_in_times,taste_num_deliv,
-				   taste_select_epoch,use_full,max_hz,save_dir,
+				   taste_select_epoch,max_hz,save_dir,
 				   neuron_count_thresh,trial_start_frac=0,
 				   epochs_to_analyze=[],segments_to_analyze=[]):		
 	"""Decode taste from epoch-specific firing rates"""
@@ -473,7 +472,6 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 			seg_start = segment_times[s_i]
 			seg_end = segment_times[s_i+1]
 			seg_len = segment_times[s_i+1] - segment_times[s_i] #in dt = ms
-			#TODO: add code segment on what time bins to use based on running the full decoder first, if use_full == 1
 			new_time_bins = np.arange(seg_start+half_bin,seg_end-half_bin,e_skip_dt)
 			#Now pull epoch-specific probabilities
 			seg_decode_epoch_prob = np.zeros((num_tastes,seg_len))

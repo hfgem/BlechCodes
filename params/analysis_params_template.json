@@ -8,6 +8,9 @@
         2,
         4
     ],
+    "epochs_to_analyze": [
+        1
+    ],
     "max_plot": 50,
     "local_size": 60000,
     "min_dev_size": 20,
@@ -21,7 +24,6 @@
     "bayes_params":{
         "pre_taste": 2,
         "post_taste": 2,
-        "use_full": 0,
         "skip_time": 0.05,
         "e_skip_time": 0.01,
         "e_len_time": 0.05,

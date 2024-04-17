@@ -61,7 +61,7 @@ class import_metadata():
 					print('At this time, please edit the params as desired for analysis of your dataset.')
 					print('You can find the params file at:')
 					print(self.params_file_path)
-					val = self.bool_input(self,'When finished with the params file, type Y/y: ')
+					val = self.bool_input('When finished with the params file, type Y/y: ')
 					if val == 'n':
 						print('Why are you responding then?? Exiting program.')
 						quit()

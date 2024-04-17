@@ -23,8 +23,6 @@ import functions.corr_dist_calc_parallel_zscore as cdcpz
 import functions.corr_dist_calc_parallel_pop_zscore as cdcppz
 import functions.dev_plot_funcs as dpf
 from multiprocess import Pool
-import multiprocess
-multiprocess.set_start_method('spawn')
 from sklearn.decomposition import PCA
 import warnings
 warnings.filterwarnings("ignore")
@@ -142,7 +140,7 @@ def calculate_dev_stats(rasters, times, iteration_names, save_dir, iterations_to
 		iter_name = iteration_names[it]
 		# Gather data
 		iter_rasters = rasters[it]
-		bout_times = times[it]
+		bout_times = np.array(times[it])
 		# Calculate segment lengths
 		seg_lengths = bout_times[1, :] - bout_times[0, :]
 		length_dict[it] = seg_lengths
@@ -169,6 +167,9 @@ def calculate_dev_stats(rasters, times, iteration_names, save_dir, iterations_to
 		data_name = iter_name + ' total neuron count'
 		dpf.plot_dev_stats(seg_neur_num, data_name, save_dir,
 					   x_label='deviation index', y_label='# neurons')
+	
+	#Plot rate of deviationsa cross iterations
+	
 		
 	#Now plot stats across iterations
 	dpf.plot_dev_stats_dict(length_dict, iteration_names_to_analyze, 'Deviation Lengths', save_dir, 'Segment', 'Length (ms)')

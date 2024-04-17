@@ -16,6 +16,9 @@ from functions.run_analysis_handler import run_analysis_steps
 
 if __name__ == '__main__':
 	
+	import multiprocess
+	multiprocess.set_start_method('spawn')
+	
 	# Grab current directory and data directory / metadata
 	script_path = os.path.realpath(__file__)
 	blechcodes_dir = os.path.dirname(script_path)

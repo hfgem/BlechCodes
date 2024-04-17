@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from scipy import interpolate
 import multiprocess
-multiprocess.set_start_method('spawn')
 import functions.decode_parallel as dp
 from scipy.stats import pearsonr
 from random import sample
@@ -85,7 +84,6 @@ def taste_decoding_cp(tastant_spike_times,pop_taste_cp_raster_inds, \
 				pool = multiprocess.Pool(4)
 				deliv_epoch_hz_list = pool.map(dp.loo_taste_select_decode, inputs)
 				pool.close()
-				print('\n')
 				for d_i in range(num_deliv):
 					d_list = deliv_epoch_hz_list[d_i]
 					tastant_epoch_delivery[t_i,:,d_i,:] = d_list[:,:num_cp]
@@ -99,7 +97,7 @@ def taste_decoding_cp(tastant_spike_times,pop_taste_cp_raster_inds, \
 			np.save(os.path.join(save_dir,'tastant_delivery'+str(d_i_o)+'.npy'),tastant_delivery)
 			np.save(os.path.join(save_dir,'tastant_epoch_delivery'+str(d_i_o)+'.npy'),tastant_epoch_delivery)
 			del tastant_delivery, tastant_epoch_delivery
-	
+	print('\n')
 	taste_select_success_joint = np.zeros((num_neur, num_tastes, max_num_deliv)) #mark with a 1 if successfully decoded
 	taste_select_success_epoch = np.zeros((num_cp, num_neur, num_tastes, max_num_deliv)) #mark with a 1 if successfully decoded
 	p_taste_epoch = np.zeros((num_neur, num_tastes, max_num_deliv, num_cp)) #by epoch
@@ -127,6 +125,7 @@ def taste_decoding_cp(tastant_spike_times,pop_taste_cp_raster_inds, \
 		
 		del hist_bins, x_vals, d_i, t_i, p_taste_fr_neur, taste_select_success_neur, hist_bins_cp, \
 			x_vals_cp, p_taste_fr_cp_neur, taste_success_fr_cp_neur, tastant_delivery, tastant_epoch_delivery
+	print('\n')
 	#Now calculate the probability of successfully decoding as the fraction of deliveries successful
 	taste_select_prob_joint = np.sum(taste_select_success_joint,axis=2)/taste_num_deliv
 	taste_select_prob_epoch = np.sum(taste_select_success_epoch,axis=3)/taste_num_deliv
@@ -1083,7 +1082,7 @@ def plot_decoded(fr_dist,num_tastes,num_neur,num_cp,segment_spike_times,tastant_
 				 use_full,save_dir,max_decode,max_hz,seg_stat_bin,
 				 neuron_count_thresh,trial_start_frac=0,
 				 epochs_to_analyze=[],segments_to_analyze=[],
-				 bin_pre_taste=100, decode_prob_cutoff=0.95):
+				 decode_prob_cutoff=0.95):
 	"""Function to plot the periods when something other than no taste is 
 	decoded"""
 	num_segments = len(segment_spike_times)

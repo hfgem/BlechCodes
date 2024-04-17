@@ -15,14 +15,12 @@ from random import sample
 
 def plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
 					 segment_times_reshaped,pre_taste,post_taste,min_dev_size,
-					 segment_names,dev_dir,segments_to_analyze=[],max_plot=50):
+					 segment_names,dev_dir,max_plot=50):
 	num_segments = len(segment_names)
-	if len(segments_to_analyze) == 0:
-		segments_to_analyze = np.arange(num_segments)
-
 	dev_buffer = 100 #ms before and after a deviation to plot
 	half_min_dev_size = int(np.ceil(min_dev_size/2))
-	for s_i in segments_to_analyze:
+	dev_rates = np.zeros(num_segments)
+	for s_i in range(num_segments):
 		print("Plotting deviations in segment " + segment_names[s_i])
 		filepath = dev_dir + segment_names[s_i] + '/'
 		indiv_dev_filepath = filepath + 'indiv_dev/'
@@ -45,8 +43,10 @@ def plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
 			#Plot individual segments with pre and post time
 			segment_rasters = segment_spike_times[s_i]
 			segment_times = segment_dev_times[s_i] + segment_times_reshaped[s_i][0]
+			segment_length = segment_times_reshaped[s_i][1] - segment_times_reshaped[s_i][0]
 			num_neur = len(segment_rasters)
 			num_deviations = len(segment_times[0,:])
+			dev_rates[s_i] = num_deviations/segment_length*(1000/1) #Converted to Hz
 			plot_dev_indices = sample(list(np.arange(num_deviations)),max_plot)
 			for dev_i in tqdm.tqdm(plot_dev_indices):
 				dev_times = segment_times[:,dev_i]
@@ -88,7 +88,18 @@ def plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
 				f1.savefig(fig_name + '.png')
 				f1.savefig(fig_name + '.svg')
 				plt.close(f1)
-		
+	f = plt.figure()
+	plt.scatter(np.arange(num_segments),dev_rates)
+	plt.plot(np.arange(num_segments),dev_rates)	
+	plt.xticks(np.arange(num_segments),segment_names)
+	for dr_i in range(num_segments):
+		plt.annotate(str(round(dev_rates[dr_i],2)),(dr_i,dev_rates[dr_i]))
+	plt.title('Deviation Rates')
+	plt.xlabel('Segment')
+	plt.ylabel('Rate (Hz)')
+	f.savefig(os.path.join(dev_dir,'Deviation_Rates.png'))
+	f.savefig(os.path.join(dev_dir,'Deviation_Rates.svg'))
+	plt.close(f)
 
 def plot_dev_stats(data, data_name, save_dir, x_label=[], y_label=[]):
 	"""General function to plot given statistics"""

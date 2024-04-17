@@ -5,7 +5,8 @@ Created on Sun Mar 31 16:24:35 2024
 
 @author: Hannah Germaine
 
-This is the third step of the analysis pipeline: deviation events are calculated and analyzed
+In this step of the analysis pipeline, deviation events are calculated and 
+analyzed for basic statistics.
 """
 import os,json,gzip,itertools,tqdm
 import numpy as np
@@ -40,6 +41,7 @@ class run_find_deviations():
 		segment_times = self.data_dict['segment_times']
 		segment_times_reshaped = [[segment_times[i],segment_times[i+1]] for i in range(num_segments)]
 		self.segment_times_reshaped = segment_times_reshaped
+		self.segments_to_analyze = self.metadata['params_dict']['segments_to_analyze']
 		#Create deviation storage directory
 		dev_dir = self.metadata['dir_name'] + 'Deviations/'
 		if os.path.isdir(dev_dir) == False:
@@ -60,18 +62,22 @@ class run_find_deviations():
 				data = json.loads(json_str)
 		except:
 			seg_dirs = []
-			for s_i in range(num_segments):
+			seg_spike_times = []
+			seg_times_reshaped = []
+			for s_i in self.segments_to_analyze:
 				#create storage directory
 				seg_dir = dev_dir + segment_names[s_i] + '/'
 				if os.path.isdir(seg_dir) == False:
 					os.mkdir(seg_dir)
 				seg_dirs.append(seg_dir)
+				seg_spike_times.append(segment_spike_times[s_i])
+				seg_times_reshaped.append(segment_times_reshaped[s_i])
 			print("\n\tNow calculating deviations")
 			with Pool(processes=3) as pool:  # start 4 worker processes
-				pool.map(df.run_dev_pull_parallelized, zip(segment_spike_times,
+				pool.map(df.run_dev_pull_parallelized, zip(seg_spike_times,
 												 itertools.repeat(local_size),
 												 itertools.repeat(min_dev_size),
-												 segment_times_reshaped,
+												 seg_times_reshaped,
 												 seg_dirs))
 			pool.close()
 	
@@ -82,7 +88,7 @@ class run_find_deviations():
 		
 		print("\tNow importing calculated deviations")
 		segment_deviations = []
-		for s_i in tqdm.tqdm(range(num_segments)):
+		for s_i in tqdm.tqdm(self.segments_to_analyze):
 			filepath = dev_dir + segment_names[s_i] + '/deviations.json'
 			with gzip.GzipFile(filepath, mode="r") as f:
 				json_bytes = f.read()
@@ -93,10 +99,10 @@ class run_find_deviations():
 		self.segment_deviations = segment_deviations
 		
 	def pull_devs(self,):
-		segment_names = self.data_dict['segment_names']
-		num_segments = len(segment_names)
-		segment_spike_times = self.data_dict['segment_spike_times']
-		segment_times_reshaped = self.segment_times_reshaped
+		segment_names = [self.data_dict['segment_names'][i] for i in self.segments_to_analyze]
+		num_segments = len(self.segments_to_analyze)
+		segment_spike_times = [self.data_dict['segment_spike_times'][i] for i in self.segments_to_analyze]
+		segment_times_reshaped = [self.segment_times_reshaped[i] for i in self.segments_to_analyze]
 		segment_deviations = self.segment_deviations
 		pre_taste = self.metadata['params_dict']['pre_taste']
 		#_____Pull rasters of deviations and plot_____
@@ -109,34 +115,29 @@ class run_find_deviations():
 		
 	def plot_devs(self,):
 		segment_deviations = self.segment_deviations
-		segment_spike_times = self.data_dict['segment_spike_times']
-		segment_dev_times = self.segment_dev_times
-		segment_times_reshaped = self.segment_times_reshaped
+		segment_spike_times = [self.data_dict['segment_spike_times'][i] for i in self.segments_to_analyze]
+		segment_times_reshaped = [self.segment_times_reshaped[i] for i in self.segments_to_analyze]
 		pre_taste = self.metadata['params_dict']['pre_taste']
 		post_taste = self.metadata['params_dict']['post_taste']
 		min_dev_size = self.metadata['params_dict']['min_dev_size']
-		segment_names = self.data_dict['segment_names']
+		segment_names = [self.data_dict['segment_names'][i] for i in self.segments_to_analyze]
 		dev_dir = self.dev_dir
-		segments_to_analyze = self.metadata['params_dict']['segments_to_analyze']
 		max_plot = self.metadata['params_dict']['max_plot']
 		
 		#Plot deviations
 		print("\tNow plotting deviations")
-		dpf.plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
+		dpf.plot_dev_rasters(segment_deviations,segment_spike_times,self.segment_dev_times,
 						  segment_times_reshaped,pre_taste,post_taste,min_dev_size,
-						  segment_names,dev_dir,segments_to_analyze,max_plot)
+						  segment_names,dev_dir,max_plot)
 		
 	def calc_dev_stats(self,):
-		segment_dev_times = self.segment_dev_times
-		segment_dev_rasters = self.segment_dev_rasters
-		segment_names = self.data_dict['segment_names']
+		segment_names = [self.data_dict['segment_names'][i] for i in self.segments_to_analyze]
 		dev_dir = self.dev_dir
-		segments_to_analyze = self.metadata['params_dict']['segments_to_analyze']
 		
 		#_____Calculate segment deviation statistics - length,IDI_____
 		print("\tNow calculating and plotting true deviation statistics")
-		segment_length_dict, segment_IDI_dict, segment_num_spike_dict, segment_num_neur_dict = df.calculate_dev_stats(segment_dev_rasters,
-																						   segment_dev_times,segment_names,dev_dir,segments_to_analyze)
+		segment_length_dict, segment_IDI_dict, segment_num_spike_dict, segment_num_neur_dict = df.calculate_dev_stats(self.segment_dev_rasters,
+																						   self.segment_dev_times,segment_names,dev_dir)
 
 	
 	
