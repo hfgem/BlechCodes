@@ -10,7 +10,7 @@ responses and then run on sweeping bins of the recorded activity to determine
 where taste-like activity occurs.
 """
 
-import os, tqdm
+import os
 
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
@@ -43,6 +43,8 @@ class run_dependent_bayes():
 		self.num_neur = self.data_dict['num_neur']
 		self.pre_taste = self.metadata['params_dict']['pre_taste']
 		self.post_taste = self.metadata['params_dict']['post_taste']
+		self.pre_taste_dt = np.ceil(self.pre_taste*1000).astype('int')
+		self.post_taste_dt = np.ceil(self.post_taste*1000).astype('int')
 		self.segments_to_analyze = self.metadata['params_dict']['segments_to_analyze']
 		self.epochs_to_analyze = self.metadata['params_dict']['epochs_to_analyze']
 		self.segment_names = self.data_dict['segment_names']

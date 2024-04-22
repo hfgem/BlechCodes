@@ -44,27 +44,6 @@ class run_analysis_steps():
 		state_exec_line = self.state_exec_dict[state]['exec']
 		print('Now beginning execution of analysis state: ' + state_name)
 		exec(state_exec_line)
-		
-# 		if state == 0:
-# 			#Calculate changepoints in true data
-# 			run_changepoint_detection([self.metadata,self.data_dict])
-# 		elif state == 1:
-# 			#Calculate population spike deviations in true data
-# 			run_find_deviations([self.metadata,self.data_dict])
-# 		elif state == 2:
-# 			#Compare population spike deviations in true data to null distribution data
-# 			run_deviation_null_analysis([self.metadata,self.data_dict])
-# 		#elif state == 3:
-# 		#	#Compare general data to null distributions
-# 		#	run_data_null_analysis([self.metadata,self.data_dict])
-# 		elif state == 3:
-# 			#Run taste correlations to deviation events
-# 			run_deviation_correlations([self.metadata,self.data_dict])
-# 		#elif state == 4:
-# 			#Run bayesian decoding of all points in time
-# 			
-			
-			
 	
 	def check_continue(self,):
 		state = self.state_dict['state']

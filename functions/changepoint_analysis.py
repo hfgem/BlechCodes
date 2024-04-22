@@ -103,6 +103,7 @@ class run_changepoint_detection():
 		start_dig_in_times = self.data_dict['start_dig_in_times']
 		end_dig_in_times = self.data_dict['end_dig_in_times']
 		dig_in_names = self.data_dict['dig_in_names']
+		num_cp = self.metadata['params_dict']['num_cp'] + 1
 		num_neur = self.data_dict['num_neur']
 		pre_taste_dt = int(np.ceil(self.metadata['params_dict']['pre_taste']*(1000/1)))
 		post_taste_dt = int(np.ceil(self.metadata['params_dict']['post_taste']*(1000/1)))
@@ -113,33 +114,27 @@ class run_changepoint_detection():
 		if os.path.isdir(decoding_save_dir) == False:
 			os.mkdir(decoding_save_dir)
 			
-		loo_distribution_save_dir = decoding_save_dir + 'LOO_Distributions/'
-		if os.path.isdir(loo_distribution_save_dir) == False:
-			os.mkdir(loo_distribution_save_dir)
-			
 		#_____Calculate taste decoding probabilities and success probabilities_____
 		try:
-			taste_select_prob_joint = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_select_prob_joint')[0]
 			taste_select_prob_epoch = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_select_prob_epoch')[0]
 			p_taste_epoch = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'p_taste_epoch')[0]
-			p_taste_joint = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'p_taste_joint')[0]
-			taste_select_neur_bin = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_select_neur_bin')[0]
 			taste_select_neur_epoch_bin = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
 		except:
 			print("\tUsing population changepoint indices to calculate taste selectivity by epoch.")
-			p_taste_joint, p_taste_epoch, taste_select_prob_joint, taste_select_prob_epoch = df.taste_decoding_cp(tastant_spike_times,\
+			p_taste_epoch, taste_select_prob_epoch = df.taste_decoding_cp(tastant_spike_times,\
 														   pop_taste_cp_raster_inds,start_dig_in_times,end_dig_in_times,dig_in_names, \
-															   num_neur,pre_taste_dt,post_taste_dt,loo_distribution_save_dir)
+															   num_neur,num_cp,num_tastes-1,pre_taste_dt,post_taste_dt,decoding_save_dir)
 			#_____Calculate binary matrices of taste selective neurons / taste selective neurons by epoch_____
 			#On average, does the neuron decode neurons more often than chance?
-			taste_select_neur_bin = np.sum(taste_select_prob_joint,1) > 1/(num_tastes-1)
-			taste_select_neur_epoch_bin = np.sum(taste_select_prob_epoch,2) > 1/(num_tastes-1)
+			taste_select_neur_epoch_count = np.zeros((num_cp,num_neur))
+			for t_i in range(num_tastes-1):
+				select_neur = (taste_select_prob_epoch[:,:,t_i] > 1/(num_tastes-1)).astype('int')
+				taste_select_neur_epoch_count += select_neur
+			taste_select_neur_epoch_bin = taste_select_neur_epoch_count > 0
+			
 			#Save
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'p_taste_joint',p_taste_joint)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_select_prob_joint',taste_select_prob_joint)
 			af.add_data_to_hdf5(hdf5_dir,data_group_name,'p_taste_epoch',p_taste_epoch)
 			af.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_select_prob_epoch',taste_select_prob_epoch)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_select_neur_bin',taste_select_neur_bin)
 			af.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_select_neur_epoch_bin',taste_select_neur_epoch_bin)
 	
 			

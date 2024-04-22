@@ -91,7 +91,7 @@ class run_deviation_correlations():
 			os.mkdir(self.current_corr_dir)
 		self.neuron_keep_indices = np.ones((self.num_neur,self.num_cp+1))
 		#Calculate correlations
-		df.calculate_vec_correlations(self.segment_dev_rasters, self.tastant_spike_times,
+		df.calculate_vec_correlations(self.num_neur, self.segment_dev_rasters, self.tastant_spike_times,
 								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, 
 								   self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds, 
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze) #For all neurons in dataset
@@ -103,14 +103,15 @@ class run_deviation_correlations():
 		print("\tCalculate correlations for taste selective neurons only")
 		#Import taste selectivity data
 		data_group_name = 'taste_selectivity'
-		taste_select_neur_epoch_bin = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
+		taste_select_prob_epoch = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_prob_epoch')[0]
+		taste_select_neur_epoch_bin = np.sum(taste_select_prob_epoch,0) > 1/(len(self.dig_in_names)-1)
 		self.neuron_keep_indices = taste_select_neur_epoch_bin.T
 		#Create storage directory
 		self.current_corr_dir = self.corr_dir + 'taste_select_neur/'
 		if os.path.isdir(self.current_corr_dir) == False:
 			os.mkdir(self.current_corr_dir)
 		#Calculate correlations
-		df.calculate_vec_correlations(self.segment_dev_rasters, self.tastant_spike_times,
+		df.calculate_vec_correlations(self.num_neur, self.segment_dev_rasters, self.tastant_spike_times,
 								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, 
 								   self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze) #For all neurons in dataset
@@ -126,7 +127,7 @@ class run_deviation_correlations():
 			os.mkdir(self.current_corr_dir)
 		self.neuron_keep_indices = np.ones((self.num_neur,self.num_cp+1))
 		#Calculate correlations
-		df.calculate_vec_correlations_zscore(self.segment_dev_rasters_zscore, self.tastant_spike_times,
+		df.calculate_vec_correlations_zscore(self.num_neur, self.segment_dev_rasters_zscore, self.tastant_spike_times,
 								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, self.dig_in_names,
 								   self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)
@@ -145,7 +146,7 @@ class run_deviation_correlations():
 		taste_select_neur_epoch_bin = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
 		self.neuron_keep_indices = taste_select_neur_epoch_bin.T
 		#Calculate correlations
-		df.calculate_vec_correlations_zscore(self.segment_dev_rasters_zscore, self.tastant_spike_times,
+		df.calculate_vec_correlations_zscore(self.num_neur, self.segment_dev_rasters_zscore, self.tastant_spike_times,
 								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, self.dig_in_names,
 								   self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)
