@@ -17,6 +17,7 @@ import functions.analysis_funcs as af
 import functions.changepoint_detection as cd
 import functions.plot_funcs as pf
 import functions.decoding_funcs as df
+import matplotlib.pyplot as plt
 
 class run_changepoint_detection():
 	
@@ -95,6 +96,40 @@ class run_changepoint_detection():
 											post_taste_dt,dig_in_names,taste_epoch_save_dir)
 			af.add_data_to_hdf5(hdf5_dir,data_group_name,'epoch_out_of_bounds',epoch_trial_out_of_bounds)
 				
+	
+	def test_taste_discriminability(self,):
+		"""Run an ANOVA on time and taste to determine neuron-by-neuron taste
+		discriminability across time"""
+		#Grab variables
+		hdf5_dir = self.metadata['hdf5_dir']
+		start_dig_in_times = self.data_dict['start_dig_in_times']
+		tastant_spike_times = self.data_dict['tastant_spike_times']
+		num_tastes = self.data_dict['num_tastes']
+		num_neur = self.data_dict['num_neur']
+		post_taste_dt = int(np.ceil(self.metadata['params_dict']['post_taste']*(1000/1)))
+		bin_size = self.metadata['params_dict']['cp_bin'] #ms to slide across - aligned with minimal state size
+		
+		#Set Storage Directory
+		discrim_save_dir = self.metadata['dir_name'] + 'Taste_Delivery_Discriminability/'
+		if os.path.isdir(discrim_save_dir) == False:
+			os.mkdir(discrim_save_dir)
+		#Get results
+		data_group_name = 'taste_discriminability'
+		try:
+			anova_results_all = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'anova_results_all')
+			anova_results_true = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'anova_results_true')
+			peak_epochs = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'peak_epochs')
+			discrim_neur = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'discrim_neur')
+		except:
+			anova_results_all, anova_results_true, peak_epochs, discrim_neur = af.taste_discriminability_test(post_taste_dt,
+																		 num_tastes,tastant_spike_times,
+																		 num_neur,start_dig_in_times,
+																		 bin_size,discrim_save_dir)
+			af.add_data_to_hdf5(hdf5_dir,data_group_name,'anova_results_all',anova_results_all)
+			af.add_data_to_hdf5(hdf5_dir,data_group_name,'anova_results_true',anova_results_true)
+			af.add_data_to_hdf5(hdf5_dir,data_group_name,'peak_epochs',peak_epochs)
+			af.add_data_to_hdf5(hdf5_dir,data_group_name,'discrim_neur',discrim_neur)
+	
 	def test_neuron_taste_selectivity(self,):
 		hdf5_dir = self.metadata['hdf5_dir']
 		num_tastes = self.data_dict['num_tastes']
@@ -130,7 +165,7 @@ class run_changepoint_detection():
 			for t_i in range(num_tastes-1):
 				select_neur = (taste_select_prob_epoch[:,:,t_i] > 1/(num_tastes-1)).astype('int')
 				taste_select_neur_epoch_count += select_neur
-			taste_select_neur_epoch_bin = taste_select_neur_epoch_count > 0
+			taste_select_neur_epoch_bin = taste_select_neur_epoch_count > 1
 			
 			#Save
 			af.add_data_to_hdf5(hdf5_dir,data_group_name,'p_taste_epoch',p_taste_epoch)

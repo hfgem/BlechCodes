@@ -14,6 +14,7 @@ import functions.data_processing as dp
 import scipy.stats as stats
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from scipy.signal import find_peaks, savgol_filter
 
 def add_no_taste(start_dig_in_times, end_dig_in_times, dig_in_names):
 	
@@ -184,4 +185,128 @@ def taste_responsivity_raster(tastant_spike_times,start_dig_in_times,end_dig_in_
 	plt.legend()
 	
 	return taste_responsivity_probability, taste_responsivity_binary
+
+def taste_discriminability_test(post_taste_dt,num_tastes,tastant_spike_times,
+								num_neur,start_dig_in_times,bin_size,discrim_save_dir):
+	#Pull spike rasters to use in ANOVA
+	taste_fr_data = []
+	for t_i in range(num_tastes):
+		t_st = tastant_spike_times[t_i]
+		num_deliv = len(t_st)
+		deliv_rasters = np.zeros((num_deliv,num_neur,post_taste_dt+1))
+		for d_i in range(num_deliv):
+			st_d_i = start_dig_in_times[t_i][d_i]
+			for n_i in range(num_neur):
+				st_n_d_i = (t_st[d_i][n_i] - st_d_i).astype('int')
+				st_n_d_i = st_n_d_i[st_n_d_i>=0]
+				st_n_d_i = st_n_d_i[st_n_d_i<post_taste_dt]
+				deliv_rasters[d_i,n_i,st_n_d_i] = 1
+		taste_fr_data.append(deliv_rasters)
+	#Run ANOVA on time bins of taste response
+	anova_results_all = np.zeros((num_neur,post_taste_dt)) #including "none" taste
+	anova_results_true = np.zeros((num_neur,post_taste_dt)) #only true tastes
+	for b_i in np.arange(post_taste_dt):
+		for n_i in range(num_neur):
+			t_fr = []
+			for t_i in range(num_tastes):
+				start_bin = np.max([np.floor(b_i - bin_size/2).astype('int'),0])
+				end_bin = np.min([post_taste_dt,np.floor(b_i + bin_size/2).astype('int')])
+				rast_data = np.squeeze(taste_fr_data[t_i][:,n_i,start_bin:end_bin])
+				fr_data = np.sum(rast_data,1)/(bin_size/1000) #converted to Hz
+				t_fr.append(list(fr_data))
+			eval_string = 'stats.f_oneway('
+			for t_i in range(num_tastes):
+				eval_string += 't_fr[' + str(t_i) + ']'
+				if t_i < num_tastes-1:
+					eval_string+= ','
+				else:
+					eval_string += ')'
+			a_stat, a_pval = eval(eval_string)
+			if a_pval <= 0.05:
+				anova_results_all[n_i,b_i] = 1
+			eval_string = 'stats.f_oneway('
+			for t_i in range(num_tastes-1):
+				eval_string += 't_fr[' + str(t_i) + ']'
+				if t_i < num_tastes-2:
+					eval_string+= ','
+				else:
+					eval_string += ')'
+			a_stat, a_pval = eval(eval_string)
+			if a_pval <= 0.05:
+				anova_results_true[n_i,b_i] = 1
+		
+	#Plot the anova significant difference results
+	f = plt.figure(figsize=(5,5))
+	plt.imshow(anova_results_all,aspect='auto')
+	plt.title('Anova of all tastes in sliding bins')
+	plt.xlabel('Time post-taste delivery (ms)')
+	plt.ylabel('Neuron Index')
+	plt.tight_layout()
+	f.savefig(os.path.join(discrim_save_dir,'anova_all.png'))
+	f.savefig(os.path.join(discrim_save_dir,'anova_all.svg'))
+	plt.close(f)
+	f = plt.figure(figsize=(5,5))
+	plt.imshow(anova_results_true,aspect='auto')
+	plt.title('Anova of true tastes in sliding bins')
+	plt.xlabel('Time post-taste delivery (ms)')
+	plt.ylabel('Neuron Index')
+	plt.tight_layout()
+	f.savefig(os.path.join(discrim_save_dir,'anova_true.png'))
+	f.savefig(os.path.join(discrim_save_dir,'anova_true.svg'))
+	plt.close(f)
+	f, ax = plt.subplots(3,1,figsize=(5,5))
+	ax[0].plot(np.sum(anova_results_all,0))
+	ax[0].set_title('Summed ANOVA All')
+	ax[1].plot(np.sum(anova_results_true,0))
+	ax[1].set_title('Summed ANOVA True')
+	ax[2].plot(np.sum(anova_results_all,0) + np.sum(anova_results_true,0))
+	ax[2].set_title('Summed ANOVA All + True')
+	plt.tight_layout()
+	f.savefig(os.path.join(discrim_save_dir,'summed_anovas.png'))
+	f.savefig(os.path.join(discrim_save_dir,'summed_anovas.svg'))
+	plt.close(f)
+			
+	#Now pull intervals of taste discriminability based on true
+	discrim_true = np.sum(anova_results_true,0)
+	smooth_discrim = savgol_filter(discrim_true, int(bin_size/2), 1)
+	smooth_discrim2 = savgol_filter(smooth_discrim, int(bin_size/2), 1)
+	[peaks,_] = find_peaks(smooth_discrim2,distance=bin_size,rel_height=1)
+	[troughs,_] = find_peaks(-smooth_discrim2,distance=bin_size,rel_height=1)
+	if troughs[0] > peaks[0]:
+		troughs = np.concatenate((np.zeros(1),troughs))
+	if len(troughs) <= len(peaks):
+		troughs = np.concatenate((troughs,post_taste_dt*np.ones(1)))
+	peak_epochs = troughs.astype('int')
+	discriminable_segments = np.zeros(post_taste_dt)
+	for p_i in range(len(peaks)):
+		discriminable_segments[peak_epochs[p_i]:peak_epochs[p_i+1]] = p_i+1
+	
+	f,ax = plt.subplots(3,1,figsize=(5,5))
+	ax[0].plot(discrim_true)
+	ax[0].set_title('Summed ANOVA True')
+	ax[1].plot(smooth_discrim2)
+	ax[1].set_title('Smoothed ANOVA True')
+	ax[2].plot(discriminable_segments)
+	ax[2].set_title('Segmented Smoothed ANOVA True')
+	plt.tight_layout()
+	f.savefig(os.path.join(discrim_save_dir,'discriminable_intervals.png'))
+	f.savefig(os.path.join(discrim_save_dir,'discriminable_intervals.svg'))
+	plt.close(f)
+	
+	#Determine which neurons are most discriminative in each interval
+	discrim_neur = np.zeros((len(peaks),num_neur))
+	for e_i in range(len(peaks)):
+		best_neur = np.where(np.sum(anova_results_true[:,peak_epochs[e_i]:peak_epochs[e_i+1]],1) > 0)[0]
+		discrim_neur[e_i,best_neur] = 1
+	f = plt.figure(figsize=(5,5))
+	plt.imshow(discrim_neur,aspect='auto')	
+	plt.xlabel('Neuron Index')
+	plt.ylabel('Discriminability Epoch')
+	plt.tight_layout()
+	f.savefig(os.path.join(discrim_save_dir,'discriminable_neurons.png'))
+	f.savefig(os.path.join(discrim_save_dir,'discriminable_neurons.svg'))
+	plt.close(f)
+	
+	return anova_results_all, anova_results_true, peak_epochs, discrim_neur
+
 

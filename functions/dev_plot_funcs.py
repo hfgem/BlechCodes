@@ -321,15 +321,17 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 			plt.subplot(2,1,1)
 			for c_p in range(num_cp):
 				all_dist_cp = (pop_vec_data_storage[:,:,c_p]).flatten()
+				all_dist_cp = all_dist_cp[~np.isnan(all_dist_cp)]
 				cp_data.append(all_dist_cp)
-				plt.hist(all_dist_cp[~np.isnan(all_dist_cp)],density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
+				plt.hist(all_dist_cp,density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel(dist_name)
 			plt.legend()
 			plt.title('Probability Mass Function - ' + dist_name)
 			plt.subplot(2,1,2)
 			for c_p in range(num_cp):
 				all_dist_cp = cp_data[c_p]
-				plt.hist(all_dist_cp[~np.isnan(all_dist_cp)],bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
+				all_dist_cp = all_dist_cp[~np.isnan(all_dist_cp)]
+				plt.hist(all_dist_cp,bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
 			plt.xlabel(dist_name)
 			plt.legend()
 			plt.title('Cumulative Mass Function - ' + dist_name)
@@ -349,6 +351,7 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = (pop_vec_data_storage[:,:,c_p]).flatten()
+					all_dist_cp = all_dist_cp[~np.isnan(all_dist_cp)]
 					cp_data.append(all_dist_cp)
 					hist_vals = plt.hist(all_dist_cp,density=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 					max_x_val = np.max(np.abs(hist_vals[1]))
@@ -377,6 +380,7 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = cp_data[c_p]
+					all_dist_cp = all_dist_cp[~np.isnan(all_dist_cp)]
 					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
 					max_x_val = np.max(np.abs(hist_vals[1]))
 					half_max_x = np.floor(max_x_val/2)
@@ -410,6 +414,7 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				plt.subplot(2,1,1)
 				for c_p in range(num_cp):
 					all_dist_cp = (pop_vec_data_storage[:,:,c_p]).flatten()
+					all_dist_cp = all_dist_cp[~np.isnan(all_dist_cp)]
 					cp_data.append(all_dist_cp)
 					plt.hist(all_dist_cp,density=True,log=True,cumulative=False,histtype='step',label='Epoch ' + str(c_p))
 				plt.xlabel(dist_name)
@@ -422,6 +427,7 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 				max_x = 0
 				for c_p in range(num_cp):
 					all_dist_cp = cp_data[c_p]
+					all_dist_cp = all_dist_cp[~np.isnan(all_dist_cp)]
 					hist_vals = plt.hist(all_dist_cp,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Epoch ' + str(c_p))
 					max_x_val = np.max(np.abs(hist_vals[1]))
 					half_max_x = np.floor(max_x_val/2)
@@ -530,7 +536,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_vec_data[t_i][c_p]
-						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						hist_vals = plt.hist(data[~np.isnan(data)],density=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
 						max_x_val = np.max(np.abs(hist_vals[1]))
 						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
@@ -560,7 +566,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_vec_data[t_i][c_p]
-						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						hist_vals = plt.hist(data[~np.isnan(data)],bins=1000,density=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
 						max_x_val = np.max(np.abs(hist_vals[1]))
 						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
@@ -598,7 +604,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_vec_data[t_i][c_p]
-						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
+						hist_vals = plt.hist(data[~np.isnan(data)],density=True,log=True,cumulative=False,histtype='step',label='Taste ' + dig_in_names[t_i])
 						max_x_val = np.max(np.abs(hist_vals[1]))
 						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
@@ -628,7 +634,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for t_i in range(num_tastes):
 					try:
 						data = taste_pop_vec_data[t_i][c_p]
-						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
+						hist_vals = plt.hist(data[~np.isnan(data)],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Taste ' + dig_in_names[t_i])
 						max_x_val = np.max(np.abs(hist_vals[1]))
 						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
@@ -698,7 +704,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_vec_data[s_i][t_i][c_p]
-						hist_vals = plt.hist(data,density=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						hist_vals = plt.hist(data[~np.isnan(data)],density=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
 						max_x_val = np.max(np.abs(hist_vals[1]))
 						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
@@ -728,7 +734,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_vec_data[s_i][t_i][c_p]
-						hist_vals = plt.hist(data,bins=1000,density=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						hist_vals = plt.hist(data[~np.isnan(data)],bins=1000,density=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
 						max_x_val = np.max(np.abs(hist_vals[1]))
 						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
@@ -766,7 +772,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_vec_data[s_i][t_i][c_p]
-						hist_vals = plt.hist(data,density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
+						hist_vals = plt.hist(data[~np.isnan(data)],density=True,log=True,cumulative=False,histtype='step',label='Segment ' + segment_names[s_i])
 						max_x_val = np.max(np.abs(hist_vals[1]))
 						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
@@ -796,7 +802,7 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 				for s_i in range(num_segments):
 					try:
 						data = segment_pop_vec_data[s_i][t_i][c_p]
-						hist_vals = plt.hist(data,bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
+						hist_vals = plt.hist(data[~np.isnan(data)],bins=1000,density=True,log=True,cumulative=True,histtype='step',label='Segment ' + segment_names[s_i])
 						max_x_val = np.max(np.abs(hist_vals[1]))
 						half_max_x = np.floor(max_x_val/2)
 						bin_05 = np.argmin(np.abs(hist_vals[1] - 0.5))
