@@ -105,11 +105,14 @@ class run_find_deviations():
 		segment_times_reshaped = [self.segment_times_reshaped[i] for i in self.segments_to_analyze]
 		segment_deviations = self.segment_deviations
 		pre_taste = self.metadata['params_dict']['pre_taste']
+		z_bin = self.metadata['params_dict']['z_bin']
 		#_____Pull rasters of deviations and plot_____
 		#Calculate segment deviation spikes
 		print("\tNow pulling true deviation rasters")
-		segment_dev_rasters, segment_dev_times, segment_dev_rasters_zscore = df.create_dev_rasters(num_segments, segment_spike_times, 
-							   np.array(segment_times_reshaped), segment_deviations, pre_taste)
+		segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments, 
+																	segment_spike_times,
+																	segment_times_reshaped,
+																	segment_deviations,z_bin)
 		self.segment_dev_times = segment_dev_times
 		self.segment_dev_rasters = segment_dev_rasters
 		

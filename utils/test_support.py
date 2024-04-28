@@ -50,4 +50,3 @@ tastant_spike_times = af.calc_tastant_spike_times(data_dict['segment_times'],dat
 data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
-

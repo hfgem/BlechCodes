@@ -203,14 +203,27 @@ def taste_discriminability_test(post_taste_dt,num_tastes,tastant_spike_times,
 				deliv_rasters[d_i,n_i,st_n_d_i] = 1
 		taste_fr_data.append(deliv_rasters)
 	#Run ANOVA on time bins of taste response
+	x_gauss = np.arange(bin_size)
+	interval_gauss = np.exp(-(x_gauss - bin_size/2)**2/(2*(bin_size/6)**2))
 	anova_results_all = np.zeros((num_neur,post_taste_dt)) #including "none" taste
 	anova_results_true = np.zeros((num_neur,post_taste_dt)) #only true tastes
 	for b_i in np.arange(post_taste_dt):
+		start_bin = np.max([np.floor(b_i - bin_size/2).astype('int'),0])
+		start_bin_diff = np.abs(np.floor(b_i - bin_size/2).astype('int')-0)
+		end_bin = np.min([post_taste_dt,np.floor(b_i + bin_size/2).astype('int')])
+		end_bin_diff = np.abs(post_taste_dt-np.floor(b_i + bin_size/2).astype('int'))
+		if start_bin == 0:
+			gauss_cut = interval_gauss[start_bin_diff:]
+		elif end_bin == post_taste_dt:
+			if end_bin_diff > 0:
+				gauss_cut = interval_gauss[:-1*end_bin_diff]
+			else:
+				gauss_cut = interval_gauss
+		else:
+			gauss_cut = interval_gauss
 		for n_i in range(num_neur):
 			t_fr = []
 			for t_i in range(num_tastes):
-				start_bin = np.max([np.floor(b_i - bin_size/2).astype('int'),0])
-				end_bin = np.min([post_taste_dt,np.floor(b_i + bin_size/2).astype('int')])
 				rast_data = np.squeeze(taste_fr_data[t_i][:,n_i,start_bin:end_bin])
 				fr_data = np.sum(rast_data,1)/(bin_size/1000) #converted to Hz
 				t_fr.append(list(fr_data))
@@ -223,7 +236,7 @@ def taste_discriminability_test(post_taste_dt,num_tastes,tastant_spike_times,
 					eval_string += ')'
 			a_stat, a_pval = eval(eval_string)
 			if a_pval <= 0.05:
-				anova_results_all[n_i,b_i] = 1
+				anova_results_all[n_i,start_bin:end_bin] += gauss_cut
 			eval_string = 'stats.f_oneway('
 			for t_i in range(num_tastes-1):
 				eval_string += 't_fr[' + str(t_i) + ']'
@@ -233,7 +246,7 @@ def taste_discriminability_test(post_taste_dt,num_tastes,tastant_spike_times,
 					eval_string += ')'
 			a_stat, a_pval = eval(eval_string)
 			if a_pval <= 0.05:
-				anova_results_true[n_i,b_i] = 1
+				anova_results_true[n_i,start_bin:end_bin] += gauss_cut
 		
 	#Plot the anova significant difference results
 	f = plt.figure(figsize=(5,5))
@@ -254,13 +267,11 @@ def taste_discriminability_test(post_taste_dt,num_tastes,tastant_spike_times,
 	f.savefig(os.path.join(discrim_save_dir,'anova_true.png'))
 	f.savefig(os.path.join(discrim_save_dir,'anova_true.svg'))
 	plt.close(f)
-	f, ax = plt.subplots(3,1,figsize=(5,5))
+	f, ax = plt.subplots(2,1,figsize=(5,5))
 	ax[0].plot(np.sum(anova_results_all,0))
 	ax[0].set_title('Summed ANOVA All')
 	ax[1].plot(np.sum(anova_results_true,0))
 	ax[1].set_title('Summed ANOVA True')
-	ax[2].plot(np.sum(anova_results_all,0) + np.sum(anova_results_true,0))
-	ax[2].set_title('Summed ANOVA All + True')
 	plt.tight_layout()
 	f.savefig(os.path.join(discrim_save_dir,'summed_anovas.png'))
 	f.savefig(os.path.join(discrim_save_dir,'summed_anovas.svg'))
@@ -269,13 +280,16 @@ def taste_discriminability_test(post_taste_dt,num_tastes,tastant_spike_times,
 	#Now pull intervals of taste discriminability based on true
 	discrim_true = np.sum(anova_results_true,0)
 	smooth_discrim = savgol_filter(discrim_true, int(bin_size/2), 1)
-	smooth_discrim2 = savgol_filter(smooth_discrim, int(bin_size/2), 1)
-	[peaks,_] = find_peaks(smooth_discrim2,distance=bin_size,rel_height=1)
-	[troughs,_] = find_peaks(-smooth_discrim2,distance=bin_size,rel_height=1)
+	#smooth_discrim2 = savgol_filter(smooth_discrim, int(bin_size/2), 1)
+	[peaks,_] = find_peaks(smooth_discrim,distance=bin_size,rel_height=1)
+	[troughs,_] = find_peaks(-smooth_discrim,distance=bin_size,rel_height=1)
 	if troughs[0] > peaks[0]:
 		troughs = np.concatenate((np.zeros(1),troughs))
 	if len(troughs) <= len(peaks):
 		troughs = np.concatenate((troughs,post_taste_dt*np.ones(1)))
+	if troughs[0] != 0:
+		peaks = np.concatenate((np.ceil(troughs[0]/2).astype('int')*np.ones(1),peaks))
+		troughs = np.concatenate((np.zeros(1),troughs))
 	peak_epochs = troughs.astype('int')
 	discriminable_segments = np.zeros(post_taste_dt)
 	for p_i in range(len(peaks)):
@@ -284,7 +298,11 @@ def taste_discriminability_test(post_taste_dt,num_tastes,tastant_spike_times,
 	f,ax = plt.subplots(3,1,figsize=(5,5))
 	ax[0].plot(discrim_true)
 	ax[0].set_title('Summed ANOVA True')
-	ax[1].plot(smooth_discrim2)
+	ax[1].plot(smooth_discrim)
+	for p_i in peaks:
+		ax[1].axvline(p_i,linestyle='dashed',alpha=0.5,color='b')
+	for t_i in troughs:
+		ax[1].axvline(t_i,linestyle='dashed',alpha=0.5,color='r')
 	ax[1].set_title('Smoothed ANOVA True')
 	ax[2].plot(discriminable_segments)
 	ax[2].set_title('Segmented Smoothed ANOVA True')

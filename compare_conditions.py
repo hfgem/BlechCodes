@@ -21,13 +21,15 @@ def int_input(prompt):
 	return int_val
 
 if __name__ == '__main__':
-
-	import os, easygui, pickle
-	import numpy as np
-	import functions.analysis_funcs as af
-	import functions.dev_funcs as df
-	import functions.hdf5_handling as hf5
-	import functions.compare_conditions_funcs as ccf
+	
+	import os
+	from utils.replay_utils import import_metadata
+	from utils.data_utils import import_data
+	from functions.compare_conditions_analysis import run_compare_conditions_analysis
+	
+	# Grab current directory and data directory / metadata
+	script_path = os.path.realpath(__file__)
+	blechcodes_dir = os.path.dirname(script_path)
 	
 	#_____Prompt user for the number of datasets needed in the analysis_____
 	print("Conditions include across days and across animals (the number of separate spike sorted datasets).")
@@ -38,118 +40,45 @@ if __name__ == '__main__':
 		print("Single file import selected.")
 
 	#_____Pull all data into a dictionary_____
-	data_dict = dict()
-	data_ind = 0
+	all_data_dict = dict()
 	for nc in range(num_cond):
-		cond_dict = dict()
 		#_____Get the directory of the hdf5 file_____
 		print("Please select the folder where the data # " + str(nc+1) + " is stored.")
-		sorted_dir, segment_dir, cleaned_dir = hf5.sorted_data_import() #Program will automatically quit if file not found in given folder
-		fig_save_dir = ('/').join(sorted_dir.split('/')[0:-1]) + '/'
-		data_name = fig_save_dir.split('/')[-2]
-		print("Give a more colloquial name to the dataset.")
-		given_name = input("How would you rename " + data_name + "? ")
 		
 		#_____Import relevant data_____
-		num_neur, _, _, dig_in_names, segment_times, segment_names, _, _, _ = af.import_data(sorted_dir, segment_dir, fig_save_dir)
-		data_group_name = 'taste_selectivity'
-		taste_select_prob_epoch = af.pull_data_from_hdf5(sorted_dir,data_group_name,'taste_select_prob_epoch')[0]
+		metadata_handler = import_metadata([blechcodes_dir])
+		try:
+			dig_in_names = metadata_handler.info_dict['taste_params']['tastes']
+		except:
+			dig_in_names = []
 		
-		#_____Establish storage directories and import correlation results_____
-		#All directories must already exist from prior calculations
-		comp_dir = fig_save_dir + 'dev_x_taste/'
-		corr_dir = comp_dir + 'corr/'
-		#Find the number of correlation calculation directories are within this directory
-		num_corr_types = os.listdir(corr_dir)
-		for nct_i in range(len(num_corr_types)):
-			nct = num_corr_types[nct_i]
-			result_dir = corr_dir + nct + '/'
-			try:
-				corr_dev_stats = df.pull_corr_dev_stats(segment_names, dig_in_names, result_dir)
-				corr_dict = dict()
-				corr_dict['fig_save_dir'] = fig_save_dir
-				corr_dict['data_name'] = data_name
-				corr_dict['given_name'] = given_name
-				corr_dict['taste_select_prob_epoch'] = taste_select_prob_epoch
-				corr_dict['corr_name'] = nct
-				corr_dict['corr_dev_stats'] = corr_dev_stats
-				data_dict[data_ind] = corr_dict
-				data_ind += 1
-			except:
-				print("No data in directory " + result_dir)
-			
-	#_____Analysis Storage Directory_____
-	print('Please select a directory to save all results from this set of analyses.')
-	#DO NOT use the same directory as where the correlation analysis results are stored
-	results_dir = easygui.diropenbox(title='Please select the storage folder.')
-	#Save the dictionary of data
-	dict_save_dir = os.path.join(results_dir,'data_dict.pkl')
-	f = open(dict_save_dir,"wb")
-	pickle.dump(data_dict,f)
+		# import data from hdf5
+		data_handler = import_data([metadata_handler.dir_name, metadata_handler.hdf5_dir, dig_in_names])
 		
-	#_____Grab Unique Groupings_____
-	num_datasets = len(data_dict)
-	unique_given_names = [data_dict[i]['given_name'] for i in range(num_datasets)] #How many datasets
-	unique_given_indices = np.sort(np.unique(unique_given_names, return_index=True)[1])
-	unique_given_names = [unique_given_names[i] for i in unique_given_indices]
-	unique_corr_names = [data_dict[i]['corr_name'] for i in range(num_datasets)] #How many types of correlation analyses
-	unique_corr_indices = np.sort(np.unique(unique_corr_names, return_index=True)[1])
-	unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
-	unique_segment_names = []
-	unique_taste_names = []
-	for d_i in range(num_datasets):
-		corr_dev_stats = data_dict[d_i]['corr_dev_stats']
-		num_seg = len(corr_dev_stats)
-		for ns in range(num_seg):
-			unique_segment_names.append(corr_dev_stats[ns][0]['segment'])
-			num_tastes = len(corr_dev_stats[ns])
-			for nt in range(num_tastes):
-				unique_taste_names.append(corr_dev_stats[ns][nt]['taste'])
-	unique_segment_indices = np.sort(np.unique(unique_segment_names, return_index=True)[1])
-	unique_segment_names = [unique_segment_names[i] for i in unique_segment_indices]
-	unique_taste_indices = np.sort(np.unique(unique_taste_names, return_index=True)[1])
-	unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
-	
-	#_____Plot Results Across Conditions_____
-	print("Beginning Plots.")
-	if num_cond > 1:
-		#Cross-Dataset: different given names on the same axes
-		cross_data_dir = os.path.join(results_dir,'cross_data_plots')
-		if os.path.isdir(cross_data_dir) == False:
-			os.mkdir(cross_data_dir)
-		print("\tCross Dataset Plots.")
-		ccf.cross_data(data_dict,cross_data_dir,unique_given_names,unique_corr_names,unique_segment_names,unique_taste_names)
+		# repackage data from all handlers
+		metadata = dict()
+		for var in vars(metadata_handler):
+			metadata[var] = getattr(metadata_handler,var)
+		del metadata_handler
 		
-	else:
-		#Cross-Corr: all neur, taste selective, all neuron z-score, and taste selective z-score on same axes
-		cross_corr_dir = os.path.join(results_dir,'cross_corr_plots')
-		if os.path.isdir(cross_corr_dir) == False:
-			os.mkdir(cross_corr_dir)
-		print("\tCross Condition Plots.")
-		ccf.cross_corr_name(data_dict,cross_corr_dir,unique_given_names,unique_corr_names,\
-					  unique_segment_names,unique_taste_names)
+		data_dict = dict()
+		for var in vars(data_handler):
+			data_dict[var] = getattr(data_handler,var)
+		del data_handler
 		
-		#Cross-Segment: different segments on the same axes
-		cross_segment_dir = os.path.join(results_dir,'cross_segment_plots')
-		if os.path.isdir(cross_segment_dir) == False:
-			os.mkdir(cross_segment_dir)
-		print("\tCross Segment Plots.")
-		ccf.cross_segment(data_dict,cross_segment_dir,unique_given_names,unique_corr_names,unique_segment_names,unique_taste_names)
+		#Grab colloquial name
+		print("Give a more colloquial name to the dataset.")
+		data_name = data_dict['data_path'].split('/')[-2]
+		given_name = input("How would you rename " + data_name + "? ")
 		
-		#Cross-Taste: different tastes on the same axes
-		cross_taste_dir = os.path.join(results_dir,'cross_taste_plots')
-		if os.path.isdir(cross_taste_dir) == False:
-			os.mkdir(cross_taste_dir)
-		print("\tCross Taste Plots.")
-		ccf.cross_taste(data_dict,cross_taste_dir,unique_given_names,unique_corr_names,unique_segment_names,unique_taste_names)
+		all_data_dict[given_name] = dict()
+		all_data_dict[given_name]['data'] = data_dict
+		all_data_dict[given_name]['metadata'] = metadata
 		
-		#Cross-Epoch: different epochs on the same axes
-		cross_epoch_dir = os.path.join(results_dir,'cross_epoch_plots')
-		if os.path.isdir(cross_epoch_dir) == False:
-			os.mkdir(cross_epoch_dir)
-		print("\tCross Epoch Plots.")
-		ccf.cross_epoch(data_dict,cross_epoch_dir,unique_given_names,unique_corr_names,unique_segment_names,unique_taste_names)
-	
-	print("Done.")
+		del data_dict, data_name, given_name, metadata, dig_in_names
+	del nc
+
+	#_____Pass Data to Analysis_____
+	run_compare_conditions_analysis([all_data_dict])
 		
 	

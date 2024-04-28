@@ -24,6 +24,7 @@ class run_deviation_correlations():
 		self.data_dict = args[1]
 		self.gather_variables()
 		self.import_deviations_and_cp()
+		print('\n')
 		self.calculate_correlations_all()
 		self.calculate_correlations_selective()
 		self.calculate_correlations_all_zscore()
@@ -54,9 +55,10 @@ class run_deviation_correlations():
 		self.start_dig_in_times = self.data_dict['start_dig_in_times']
 		self.end_dig_in_times = self.data_dict['end_dig_in_times']
 		self.dig_in_names = self.data_dict['dig_in_names']
+		self.z_bin = self.metadata['params_dict']['z_bin']
 		
 	def import_deviations_and_cp(self,):
-		print("Now importing calculated deviations")
+		print("\tNow importing calculated deviations")
 		segment_deviations = []
 		for s_i in tqdm.tqdm(self.segments_to_analyze):
 			filepath = self.dev_dir + self.segment_names[s_i] + '/deviations.json'
@@ -65,23 +67,39 @@ class run_deviation_correlations():
 				json_str = json_bytes.decode('utf-8')			
 				data = json.loads(json_str) 
 				segment_deviations.append(data)
-		print("Now pulling true deviation rasters")
+		print("\tNow pulling true deviation rasters")
 		num_segments = len(self.segments_to_analyze)
 		segment_spike_times = [self.segment_spike_times[i] for i in self.segments_to_analyze]
 		segment_times_reshaped = np.array([self.segment_times_reshaped[i] for i in self.segments_to_analyze])
-		segment_dev_rasters, segment_dev_times, segment_dev_rasters_zscore = df.create_dev_rasters(num_segments, 
+		segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments, 
 																	segment_spike_times,
 																	segment_times_reshaped,
-																	segment_deviations,
-																	self.pre_taste)
+																	segment_deviations,self.z_bin)
 		self.segment_dev_rasters = segment_dev_rasters
 		self.segment_dev_times = segment_dev_times
-		self.segment_dev_rasters_zscore = segment_dev_rasters_zscore
-		print("Now pulling changepoints")
+		self.segment_dev_vec = segment_dev_vec
+		self.segment_dev_vec_zscore = segment_dev_vec_zscore
+		print("\tNow pulling changepoints")
 		#Import changepoint data
 		data_group_name = 'changepoint_data'
 		pop_taste_cp_raster_inds = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'pop_taste_cp_raster_inds')
 		self.pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
+		num_pt_cp = self.num_cp + 2
+		#Import discriminability data
+		data_group_name = 'taste_discriminability'
+		peak_epochs = np.squeeze(af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'peak_epochs'))
+		discrim_neur = np.squeeze(af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'discrim_neur'))
+		#Convert discriminatory neuron data into pop_taste_cp_raster_inds shape
+		#TODO: Test this first, then if going with this rework functions to fit instead!
+		num_discrim_cp = np.shape(discrim_neur)[0]
+		discrim_cp_raster_inds = []
+		for t_i in range(len(self.dig_in_names)):
+			t_cp_vec = np.ones((np.shape(pop_taste_cp_raster_inds[t_i])[0],num_discrim_cp+1))
+			t_cp_vec = (peak_epochs[:num_pt_cp] + int(self.pre_taste*1000))*t_cp_vec
+			discrim_cp_raster_inds.append(t_cp_vec)
+		self.num_discrim_cp = len(peak_epochs)
+		self.discrim_neur = discrim_neur
+		self.discrim_cp_raster_inds = discrim_cp_raster_inds
 		
 	def calculate_correlations_all(self,):
 		print("\tCalculate correlations for all neurons")
@@ -89,11 +107,12 @@ class run_deviation_correlations():
 		self.current_corr_dir = self.corr_dir + 'all_neur/'
 		if os.path.isdir(self.current_corr_dir) == False:
 			os.mkdir(self.current_corr_dir)
-		self.neuron_keep_indices = np.ones((self.num_neur,self.num_cp+1))
+		#self.neuron_keep_indices = np.ones((self.num_neur,self.num_cp+1))
+		self.neuron_keep_indices = np.ones((self.num_neur,self.num_discrim_cp))
 		#Calculate correlations
-		df.calculate_vec_correlations(self.num_neur, self.segment_dev_rasters, self.tastant_spike_times,
+		df.calculate_vec_correlations(self.num_neur, self.segment_dev_vec, self.tastant_spike_times,
 								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, 
-								   self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds, 
+								   self.dig_in_names, self.pre_taste, self.post_taste, self.discrim_cp_raster_inds, 
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze) #For all neurons in dataset
 		#Now plot and calculate significance!
 		self.calculate_plot_corr_stats()
@@ -102,18 +121,18 @@ class run_deviation_correlations():
 	def calculate_correlations_selective(self,):
 		print("\tCalculate correlations for taste selective neurons only")
 		#Import taste selectivity data
-		data_group_name = 'taste_selectivity'
-		taste_select_prob_epoch = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_prob_epoch')[0]
-		taste_select_neur_epoch_bin = np.sum(taste_select_prob_epoch,0) > 1/(len(self.dig_in_names)-1)
-		self.neuron_keep_indices = taste_select_neur_epoch_bin.T
+		#data_group_name = 'taste_selectivity'
+		#taste_select_neur_epoch_bin = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
+		#self.neuron_keep_indices = taste_select_neur_epoch_bin.T
+		self.neuron_keep_indices = (self.discrim_neur).T
 		#Create storage directory
 		self.current_corr_dir = self.corr_dir + 'taste_select_neur/'
 		if os.path.isdir(self.current_corr_dir) == False:
 			os.mkdir(self.current_corr_dir)
 		#Calculate correlations
-		df.calculate_vec_correlations(self.num_neur, self.segment_dev_rasters, self.tastant_spike_times,
+		df.calculate_vec_correlations(self.num_neur, self.segment_dev_vec, self.tastant_spike_times,
 								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, 
-								   self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
+								   self.dig_in_names, self.pre_taste, self.post_taste, self.discrim_cp_raster_inds,
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze) #For all neurons in dataset
 		#Now plot and calculate significance!
 		self.calculate_plot_corr_stats()
@@ -127,9 +146,9 @@ class run_deviation_correlations():
 			os.mkdir(self.current_corr_dir)
 		self.neuron_keep_indices = np.ones((self.num_neur,self.num_cp+1))
 		#Calculate correlations
-		df.calculate_vec_correlations_zscore(self.num_neur, self.segment_dev_rasters_zscore, self.tastant_spike_times,
-								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, self.dig_in_names,
-								   self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
+		df.calculate_vec_correlations_zscore(self.num_neur, self.z_bin, self.segment_dev_vec_zscore, self.tastant_spike_times,
+								   self.segment_times, self.segment_spike_times, self.start_dig_in_times, self.end_dig_in_times, 
+								   self.segment_names, self.dig_in_names, self.pre_taste, self.post_taste, self.discrim_cp_raster_inds,
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)
 		#Now plot and calculate significance!
 		self.calculate_plot_corr_stats()
@@ -142,13 +161,14 @@ class run_deviation_correlations():
 		if os.path.isdir(self.current_corr_dir) == False:
 			os.mkdir(self.current_corr_dir)
 		#Import taste selectivity data
-		data_group_name = 'taste_selectivity'
-		taste_select_neur_epoch_bin = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
-		self.neuron_keep_indices = taste_select_neur_epoch_bin.T
+		#data_group_name = 'taste_selectivity'
+		#taste_select_neur_epoch_bin = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
+		#self.neuron_keep_indices = taste_select_neur_epoch_bin.T
+		self.neuron_keep_indices = (self.discrim_neur).T
 		#Calculate correlations
-		df.calculate_vec_correlations_zscore(self.num_neur, self.segment_dev_rasters_zscore, self.tastant_spike_times,
-								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, self.dig_in_names,
-								   self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
+		df.calculate_vec_correlations_zscore(self.num_neur, self.z_bin, self.segment_dev_vec_zscore, self.tastant_spike_times,
+								   self.segment_times, self.segment_spike_times, self.start_dig_in_times, self.end_dig_in_times, 
+								   self.segment_names, self.dig_in_names, self.pre_taste, self.post_taste, self.discrim_cp_raster_inds,
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)
 		#Now plot and calculate significance!
 		self.calculate_plot_corr_stats()
@@ -184,7 +204,7 @@ class run_deviation_correlations():
 		
 		#T-test less
 		df.stat_significance_ttest_less(self.segment_pop_vec_data, self.segment_names, \
-									self. dig_in_names, self.current_stats_dir, 
+									self.dig_in_names, self.current_stats_dir, 
 									 'population_vec_correlation_ttest_less', self.segments_to_analyze)
 		
 		#T-test more

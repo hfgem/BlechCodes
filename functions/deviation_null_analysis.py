@@ -205,30 +205,31 @@ class run_deviation_null_analysis():
 		num_seg = len(self.segments_to_analyze)
 		seg_spike_times = [self.segment_spike_times[i] for i in self.segments_to_analyze]
 		seg_times_reshaped = np.array(self.segment_times_reshaped)[self.segments_to_analyze,:]
-		segment_dev_rasters, segment_dev_times, segment_dev_rasters_zscore = df.create_dev_rasters(num_seg, seg_spike_times, 
-							   seg_times_reshaped, self.segment_deviations, self.pre_taste)
+		z_bin = self.metadata['params_dict']['z_bin']
+		segment_dev_rasters, segment_dev_times, _, _ = df.create_dev_rasters(num_seg, 
+																	seg_spike_times,
+																	seg_times_reshaped,
+																	self.segment_deviations,z_bin)
 		self.segment_dev_rasters = segment_dev_rasters
 		self.segment_dev_times = segment_dev_times
-		self.segment_dev_rasters_zscore = segment_dev_rasters_zscore
 		
 		#Calculate segment deviation spikes
 		print("\tNow pulling null deviation rasters")
 		null_dev_rasters = []
 		null_dev_times = []
-		null_segment_dev_rasters_zscore = []
 		for null_i in tqdm.tqdm(range(self.num_null)):
 			null_segment_deviations = self.all_null_deviations[null_i]
 			null_segment_spike_times = self.all_null_segment_spike_times[null_i]
-			null_segment_dev_rasters_i, null_segment_dev_times_i, null_segment_dev_rasters_zscore_i = df.create_dev_rasters(num_seg, null_segment_spike_times, 
-								   seg_times_reshaped, null_segment_deviations, self.pre_taste)
+			null_segment_dev_rasters_i, null_segment_dev_times_i, _, _ = df.create_dev_rasters(num_seg, 
+																		null_segment_spike_times,
+																		seg_times_reshaped,
+																		null_segment_deviations,z_bin)
 			null_dev_rasters.append(null_segment_dev_rasters_i)
 			null_dev_times.append(null_segment_dev_times_i)
-			null_segment_dev_rasters_zscore.append(null_segment_dev_rasters_zscore_i)
 			
 		self.__dict__.pop('all_null_deviations',None)
 		self.null_dev_rasters = null_dev_rasters
 		self.null_dev_times = null_dev_times
-		self.null_segment_dev_rasters_zscore = null_segment_dev_rasters_zscore
 		
 	def calc_statistics(self,):
 		try: #Import calculated dictionaries if they exist
