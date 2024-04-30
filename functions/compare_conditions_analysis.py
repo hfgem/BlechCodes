@@ -8,7 +8,7 @@ Created on Sun Apr 28 13:18:06 2024
 Functions to support compare_conditions.py in running cross-dataset analyses.
 """
 
-import os, warnings
+import os, warnings, easygui, pickle
 
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
@@ -17,18 +17,30 @@ os.chdir(blech_codes_path)
 import numpy as np
 warnings.filterwarnings("ignore")
 import functions.analysis_funcs as af
-
-import os, easygui, pickle
 import functions.dev_funcs as df
 import functions.compare_conditions_funcs as ccf
+import functions.compare_datasets_funcs as cdf
 
 class run_compare_conditions_analysis():
 	
 	def __init__(self,args):
 		self.all_data_dict = args[0]
-		self.gather_data()
+		self.corr_dir = args[1]
+		if len(self.corr_dir) > 0:
+			self.import_corr()
+		else:
+			self.gather_data()
 		self.find_groupings()
 		self.plot_results()
+		
+	def import_corr(self,):
+		"""Import previously saved correlation data"""
+		dict_save_dir = os.path.join(self.corr_dir,'corr_data.pkl')
+		file = open(dict_save_dir, 'rb')
+		corr_data = pickle.load(file)
+		file.close()
+		self.corr_data = corr_data
+		self.results_dir = self.corr_dir
 		
 	def gather_data(self,):
 		"""Import the relevant data from each dataset to be analyzed. This 
@@ -88,7 +100,7 @@ class run_compare_conditions_analysis():
 		dict_save_dir = os.path.join(results_dir,'corr_data.pkl')
 		f = open(dict_save_dir,"wb")
 		pickle.dump(corr_data,f)
-		self.save_dir = results_dir
+		self.results_dir = results_dir
 
 	def find_groupings(self,):
 		"""Across the different datasets, get the unique data names/indices,
@@ -128,17 +140,23 @@ class run_compare_conditions_analysis():
 	
 	def plot_results(self,):
 		num_cond = len(self.corr_data)
-		results_dir = self.save_dir
+		results_dir = self.results_dir
 		
 		print("Beginning Plots.")
 		if num_cond > 1:
 			#Cross-Dataset: different given names on the same axes
-			cross_data_dir = os.path.join(results_dir,'cross_data_plots')
-			if os.path.isdir(cross_data_dir) == False:
-				os.mkdir(cross_data_dir)
-			print("\tCross Dataset Plots.")
-			ccf.cross_data(self.corr_data,cross_data_dir,self.unique_given_names,\
-				  self.unique_corr_names,self.unique_segment_names,self.unique_taste_names)
+# 			cross_segment_dir = os.path.join(results_dir,'cross_segment_plots')
+# 			if os.path.isdir(cross_segment_dir) == False:
+# 				os.mkdir(cross_segment_dir)
+# 			print("\tComparing Segments")
+# 			cdf.cross_segment_diffs(self.corr_data,cross_segment_dir,self.unique_given_names,\
+# 					   self.unique_corr_names,self.unique_segment_names,self.unique_taste_names)
+			cross_taste_dir = os.path.join(results_dir,'cross_taste_plots')
+			if os.path.isdir(cross_taste_dir) == False:
+				os.mkdir(cross_taste_dir)
+			print("\tComparing Tastes")
+			cdf.cross_taste_diffs(self.corr_data,cross_taste_dir,self.unique_given_names,\
+						 self.unique_corr_names,self.unique_segment_names,self.unique_taste_names)
 			
 		else:
 			#Cross-Corr: all neur, taste selective, all neuron z-score, and taste selective z-score on same axes
