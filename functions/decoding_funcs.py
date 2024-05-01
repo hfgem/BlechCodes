@@ -738,11 +738,6 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 		except:
 			joint_fit_neur = np.zeros((num_neur,len(x_vals)))
 			for n_i in taste_select_neur:
-				#____Baby decoder block____
-#				all_taste_fr = (tastant_fr_dist_z[:,n_i,:,e_i]).flatten()
-#				all_taste_fr = all_taste_fr[~np.isnan(all_taste_fr)]
-				#____
-				#____Toddler decoder block____
 				all_taste_fr = []
 				for t_i in range(num_tastes):
 					for d_i in range(max_num_deliv):

@@ -283,13 +283,25 @@ def taste_discriminability_test(post_taste_dt,num_tastes,tastant_spike_times,
 	#smooth_discrim2 = savgol_filter(smooth_discrim, int(bin_size/2), 1)
 	[peaks,_] = find_peaks(smooth_discrim,distance=bin_size,rel_height=1)
 	[troughs,_] = find_peaks(-smooth_discrim,distance=bin_size,rel_height=1)
+	#Make sure there's a trough location between all consecutive peaks
+	for p_i in range(len(peaks)-1):
+		trough_ind = np.where((troughs < peaks[p_i+1])*(troughs > peaks[p_i]))[0]
+		if len(trough_ind) == 0:
+			troughs = np.sort(np.concatenate((troughs,((peaks[p_i] + (peaks[p_i+1] - peaks[p_i])/2)*np.ones(1)).astype('int'))))
+	#Make sure there's a peak location between all consecutive troughs
+	for t_i in range(len(troughs)-1):
+		peak_ind = np.where((peaks < troughs[t_i+1])*(peaks > troughs[t_i]))[0]
+		if len(peak_ind) == 0:
+			peaks = np.sort(np.concatenate((peaks,((troughs[t_i] + (troughs[t_i+1] - troughs[t_i])/2)*np.ones(1)).astype('int'))))
+	#Add a trouch at 0
 	if troughs[0] > peaks[0]:
 		troughs = np.concatenate((np.zeros(1),troughs))
+	#Add an ending trough
+	if troughs[-1] < peaks[-1]:
+		troughs = np.concatenate((troughs,post_taste_dt*np.ones(1)))
 	if len(troughs) <= len(peaks):
 		troughs = np.concatenate((troughs,post_taste_dt*np.ones(1)))
-	if troughs[0] != 0:
-		peaks = np.concatenate((np.ceil(troughs[0]/2).astype('int')*np.ones(1),peaks))
-		troughs = np.concatenate((np.zeros(1),troughs))
+	#Now pull where the epochs start and end using the troughs
 	peak_epochs = troughs.astype('int')
 	discriminable_segments = np.zeros(post_taste_dt)
 	for p_i in range(len(peaks)):

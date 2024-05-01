@@ -131,7 +131,7 @@ if __name__ == '__main__':
     ddf.decode_epochs(tastant_fr_dist_pop, segment_spike_times, post_taste_dt,
                       skip_dt, e_skip_dt, e_len_dt, dig_in_names, segment_times,
                       segment_names, start_dig_in_times, taste_num_deliv,
-                      select_neur, use_full, max_hz_pop, bayes_dir_all,
+                      select_neur, max_hz_pop, bayes_dir_all,
                       neuron_count_thresh, trial_start_frac, epochs_to_analyze,
                       segments_to_analyze)
 
@@ -143,7 +143,7 @@ if __name__ == '__main__':
                     start_dig_in_times, end_dig_in_times, post_taste_dt, pre_taste_dt,
                     pop_taste_cp_raster_inds,dig_in_names, segment_times,
                     segment_names, taste_num_deliv, select_neur,
-                    use_full, bayes_dir_all, max_decode, max_hz_pop, seg_stat_bin,
+                    bayes_dir_all, max_decode, max_hz_pop, seg_stat_bin,
                     neuron_count_thresh, trial_start_frac, epochs_to_analyze,
                     segments_to_analyze, decode_prob_cutoff)
 
@@ -153,7 +153,7 @@ if __name__ == '__main__':
                             start_dig_in_times, end_dig_in_times, post_taste_dt, pop_taste_cp_raster_inds,
                             e_skip_dt, e_len_dt, dig_in_names, segment_times,
                             segment_names, taste_num_deliv, select_neur,
-                            use_full, bayes_dir_all, max_decode, max_hz_pop, seg_stat_bin,
+                            bayes_dir_all, max_decode, max_hz_pop, seg_stat_bin,
                             epochs_to_analyze, segments_to_analyze)
 
     print("Plotting Results as a Function of Co-Active Neurons")
@@ -162,7 +162,7 @@ if __name__ == '__main__':
                             start_dig_in_times, end_dig_in_times, post_taste_dt, pop_taste_cp_raster_inds,
                             e_skip_dt, e_len_dt, dig_in_names, segment_times,
                             segment_names, taste_num_deliv, select_neur,
-                            use_full, bayes_dir_all, max_decode, max_hz_pop, seg_stat_bin,
+                            bayes_dir_all, max_decode, max_hz_pop, seg_stat_bin,
                             epochs_to_analyze, segments_to_analyze)
 
 # %%

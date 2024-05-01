@@ -110,8 +110,10 @@ def cross_corr_name(corr_data,save_dir,unique_given_names,unique_corr_names,\
 					data_names = []
 					for corr_name in unique_corr_names:
 						for given_name in unique_given_names:
-							data_storage_collection.append(unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'][:,e_i])
-							data_names.extend([given_name + '_' + corr_name])
+							dataset = unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'][:,e_i]
+							if len(dataset[~np.isnan(dataset)]) > 0:
+								data_storage_collection.append(dataset)
+								data_names.extend([given_name + '_' + corr_name])
 					ax_pop_vec[i_2,i_3].hist(data_storage_collection,bins=1000,histtype='step',density=True,cumulative=True,label=data_names)
 					ax_pop_vec[i_2,i_3].legend(fontsize='12', loc ='lower right')
 					ax_pop_vec[i_2,i_3].set_xlim([0,1.1])
@@ -228,14 +230,20 @@ def cross_segment(corr_data,save_dir,unique_given_names,unique_corr_names,\
 								 unique_given_names,unique_taste_names,\
 									 unique_epochs)
 						pop_vec_data_storage_collection = []
+						seg_used = []
 						corr_name = att.corr_name
 						given_name = att.given_name
 						taste_name = att.taste_name
 						e_i = att.e_i
+						#Only keep datasets that contain actual data!
 						for seg_name in unique_segment_names:
-							 pop_vec_data_storage_collection.append(unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'][:,e_i])
+							seg_data = unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'][:,e_i]
+							if len(seg_data[~np.isnan(seg_data)]):
+								pop_vec_data_storage_collection.append(seg_data)
+								seg_used.append(seg_name)
+						labels = [seg_used[i] + ' (' + str(i) + ')' for i in range(len(seg_used))]
 						#Pairwise significance tests
-						sig_ind_pairs = list(combinations(np.arange(len(unique_segment_names)),2))
+						sig_ind_pairs = list(combinations(np.arange(len(seg_used)),2))
 						sig_titles = 'i1,  i2,  KS*,  T*, 1v2'
 						pop_vec_sig_pair_results = sig_titles
 						for sip_i in range(len(sig_ind_pairs)):
@@ -244,25 +252,25 @@ def cross_segment(corr_data,save_dir,unique_given_names,unique_corr_names,\
 							pop_vec_sig_text =  '\n' + str(sip[0]) + ',  ' + str(sip[1])
 							data_1 = pop_vec_data_storage_collection[sip[0]]
 							data_2 = pop_vec_data_storage_collection[sip[1]]
-							result = ks_2samp(data_1[~np.isnan(data_1)],data_2[~np.isnan(data_2)])
-							if result[1] < 0.05:
-								pop_vec_sig_text = pop_vec_sig_text + ',  ' + '*'
-							else:
-								pop_vec_sig_text = pop_vec_sig_text + ',  ' + 'n.s.'
-							result = ttest_ind(data_1,data_2,nan_policy='omit',alternative='two-sided')
-							if result[1] < 0.05:
-								pop_vec_sig_text = pop_vec_sig_text + ',  ' + '*'
-								result = (np.nanmean(data_1) < np.nanmean(data_2)).astype('int') #ttest_ind(data_1,data_2,nan_policy='omit',alternative='less')
-								if result == 1: #<
-									pop_vec_sig_text = pop_vec_sig_text + ',  ' + '<'
-								elif result == 0: #>
-									pop_vec_sig_text = pop_vec_sig_text + ',  ' + '>'
-							else:
-								pop_vec_sig_text = pop_vec_sig_text + ',  ' + 'n.s.' + ',  ' + 'n.a.'
-							pop_vec_sig_pair_results = pop_vec_sig_pair_results + pop_vec_sig_text
+							if (len(data_1[~np.isnan(data_1)]) > 0)*(len(data_2[~np.isnan(data_2)]) > 0):
+								result = ks_2samp(data_1[~np.isnan(data_1)],data_2[~np.isnan(data_2)])
+								if result[1] < 0.05:
+									pop_vec_sig_text = pop_vec_sig_text + ',  ' + '*'
+								else:
+									pop_vec_sig_text = pop_vec_sig_text + ',  ' + 'n.s.'
+								result = ttest_ind(data_1,data_2,nan_policy='omit',alternative='two-sided')
+								if result[1] < 0.05:
+									pop_vec_sig_text = pop_vec_sig_text + ',  ' + '*'
+									result = (np.nanmean(data_1) < np.nanmean(data_2)).astype('int') #ttest_ind(data_1,data_2,nan_policy='omit',alternative='less')
+									if result == 1: #<
+										pop_vec_sig_text = pop_vec_sig_text + ',  ' + '<'
+									elif result == 0: #>
+										pop_vec_sig_text = pop_vec_sig_text + ',  ' + '>'
+								else:
+									pop_vec_sig_text = pop_vec_sig_text + ',  ' + 'n.s.' + ',  ' + 'n.a.'
+								pop_vec_sig_pair_results = pop_vec_sig_pair_results + pop_vec_sig_text
 						#Plot results
 						txt_props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-						labels = [unique_segment_names[i] + ' (' + str(i) + ')' for i in range(len(unique_segment_names))]
 						if (combo_lengths[2] == 1)*(combo_lengths[3] > 1):
 							#pop_vec
 							ax_pop_vec[i_4].hist(pop_vec_data_storage_collection,bins=1000,histtype='step',density=True,cumulative=True,label=labels)
@@ -401,14 +409,18 @@ def cross_taste(corr_data,save_dir,unique_given_names,unique_corr_names,\
 								 unique_given_names,unique_segment_names,\
 									 unique_epochs)
 						pop_vec_data_storage_collection = []
+						taste_used = []
 						corr_name = att.corr_name
 						seg_name = att.seg_name
 						given_name = att.given_name
 						e_i = att.e_i
 						for taste_name in unique_taste_names:
-							 pop_vec_data_storage_collection.append(unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'][:,e_i])
+							dataset = unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'][:,e_i]
+							if len(dataset[~np.isnan(dataset)])>0:
+								pop_vec_data_storage_collection.append(dataset)
+								taste_used.append(taste_name)
 						#Pairwise significance tests
-						sig_ind_pairs = list(combinations(np.arange(len(unique_taste_names)),2))
+						sig_ind_pairs = list(combinations(np.arange(len(taste_used)),2))
 						sig_titles = 'i1,  i2,  KS*,  T*, 1v2'
 						pop_vec_sig_pair_results = sig_titles
 						for sip_i in range(len(sig_ind_pairs)):
@@ -435,7 +447,7 @@ def cross_taste(corr_data,save_dir,unique_given_names,unique_corr_names,\
 							pop_vec_sig_pair_results = pop_vec_sig_pair_results + pop_vec_sig_text
 						#Plot results
 						txt_props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-						labels = [unique_taste_names[i] + ' (' + str(i) + ')' for i in range(len(unique_taste_names))]
+						labels = [taste_used[i] + ' (' + str(i) + ')' for i in range(len(taste_used))]
 						if (combo_lengths[2] == 1)*(combo_lengths[3] > 1):
 							#pop_vec
 							ax_pop_vec[i_4].hist(pop_vec_data_storage_collection,bins=1000,histtype='step',density=True,cumulative=True,label=labels)
@@ -574,14 +586,18 @@ def cross_epoch(corr_data,save_dir,unique_given_names,unique_corr_names,\
 								 unique_given_names,unique_segment_names,\
 									 unique_taste_names)
 						pop_vec_data_storage_collection = []
+						epoch_used = []
 						corr_name = att.corr_name
 						seg_name = att.seg_name
 						taste_name = att.taste_name
 						given_name = att.given_name
 						for e_i in unique_epochs:
-							 pop_vec_data_storage_collection.append(unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'][:,e_i])
+							dataset = unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'][:,e_i]
+							if len(dataset[~np.isnan(dataset)]) > 0:
+								pop_vec_data_storage_collection.append(dataset)
+								epoch_used.append('epoch ' + str(e_i))
 						#Pairwise significance tests
-						sig_ind_pairs = list(combinations(np.arange(len(unique_epochs)),2))
+						sig_ind_pairs = list(combinations(np.arange(len(epoch_used)),2))
 						sig_titles = 'i1,  i2,  KS*,  T*, 1v2'
 						pop_vec_sig_pair_results = sig_titles
 						for sip_i in range(len(sig_ind_pairs)):
@@ -610,7 +626,7 @@ def cross_epoch(corr_data,save_dir,unique_given_names,unique_corr_names,\
 						txt_props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
 						if (combo_lengths[2] == 1)*(combo_lengths[3] > 1):
 							#pop_vec
-							ax_pop_vec[i_4].hist(pop_vec_data_storage_collection,bins=1000,histtype='step',density=True,cumulative=True,label=unique_epochs)
+							ax_pop_vec[i_4].hist(pop_vec_data_storage_collection,bins=1000,histtype='step',density=True,cumulative=True,label=epoch_used)
 							ax_pop_vec[i_4].legend(fontsize='12', loc ='lower right')
 							ax_pop_vec[i_4].set_xlim([0,1.1])
 							ax_pop_vec[i_4].set_ylim([0,1.1])
@@ -619,7 +635,7 @@ def cross_epoch(corr_data,save_dir,unique_given_names,unique_corr_names,\
 							ax_pop_vec[i_4].text(0.05, 1, pop_vec_sig_pair_results, fontsize=12, verticalalignment='top', bbox=txt_props)
 						elif (combo_lengths[2] > 1)*(combo_lengths[3] == 1):
 							#pop_vec
-							ax_pop_vec[i_3].hist(pop_vec_data_storage_collection,bins=1000,histtype='step',density=True,cumulative=True,label=unique_epochs)
+							ax_pop_vec[i_3].hist(pop_vec_data_storage_collection,bins=1000,histtype='step',density=True,cumulative=True,label=epoch_used)
 							ax_pop_vec[i_3].legend(fontsize='12', loc ='lower right')
 							ax_pop_vec[i_3].set_xlim([0,1.1])
 							ax_pop_vec[i_3].set_ylim([0,1.1])
@@ -628,7 +644,7 @@ def cross_epoch(corr_data,save_dir,unique_given_names,unique_corr_names,\
 							ax_pop_vec[i_3].text(0.05, 1, pop_vec_sig_pair_results, fontsize=12, verticalalignment='top', bbox=txt_props)
 						else:
 							#pop_vec
-							ax_pop_vec[i_3,i_4].hist(pop_vec_data_storage_collection,bins=1000,histtype='step',density=True,cumulative=True,label=unique_epochs)
+							ax_pop_vec[i_3,i_4].hist(pop_vec_data_storage_collection,bins=1000,histtype='step',density=True,cumulative=True,label=epoch_used)
 							ax_pop_vec[i_3,i_4].legend(fontsize='12', loc ='lower right')
 							ax_pop_vec[i_3,i_4].set_xlim([0,1.1])
 							ax_pop_vec[i_3,i_4].set_ylim([0,1.1])

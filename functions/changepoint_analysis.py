@@ -26,6 +26,7 @@ class run_changepoint_detection():
 		self.data_dict = args[1]
 		self.get_changepoints()
 		self.test_taste_similarity()
+		self.test_taste_discriminability()
 		self.test_neuron_taste_selectivity()
 		
 	def get_changepoints(self,):

@@ -21,7 +21,7 @@ def plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
 	half_min_dev_size = int(np.ceil(min_dev_size/2))
 	dev_rates = np.zeros(num_segments)
 	for s_i in range(num_segments):
-		print("Plotting deviations in segment " + segment_names[s_i])
+		print("\t\tPlotting deviations in segment " + segment_names[s_i])
 		filepath = dev_dir + segment_names[s_i] + '/'
 		indiv_dev_filepath = filepath + 'indiv_dev/'
 		if os.path.isdir(indiv_dev_filepath) == False:
@@ -301,11 +301,11 @@ def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
 		segments_to_analyze = np.arange(len(segment_names))
 	num_segments = len(segments_to_analyze)
 	for s_i in segments_to_analyze:  #Loop through each segment
-		print("Beginning plot calcs for segment " + str(s_i))
+		print("\t\tBeginning plot calcs for segment " + str(s_i))
 		seg_name = segment_names[s_i]
 		seg_stats = dev_stats[seg_name]
 		for t_i in range(num_tastes):  #Loop through each taste
-			print("\tTaste #" + str(t_i + 1))
+			print("\t\t\tTaste #" + str(t_i + 1))
 			taste_stats = seg_stats[t_i]
 			#_____Population Vector CP Calculations_____
 			#Import correlation numpy array
@@ -480,10 +480,10 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 	for s_i, s_ind in enumerate(segments_to_analyze):  #Loop through each segment
 		seg_name = segment_names[s_i]
 		seg_stats = dev_stats[seg_name]
-		print("Beginning combined plot calcs for segment " + seg_name)
+		print("\t\tBeginning combined plot calcs for segment " + seg_name)
 		taste_pop_vec_data = []
 		for t_i in range(num_tastes):  #Loop through each taste
-			print("\tTaste #" + str(t_i + 1))
+			print("\t\t\tTaste #" + str(t_i + 1))
 			taste_stats = seg_stats[t_i]
 			#Import distance numpy array
 			pop_vec_data_storage = taste_stats['pop_vec_data_storage']

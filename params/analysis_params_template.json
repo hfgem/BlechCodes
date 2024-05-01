@@ -24,7 +24,6 @@
     "bayes_params":{
         "pre_taste": 2,
         "post_taste": 2,
-        "skip_time": 0.05,
         "e_skip_time": 0.01,
         "e_len_time": 0.05,
         "neuron_count_thresh": 0.333,

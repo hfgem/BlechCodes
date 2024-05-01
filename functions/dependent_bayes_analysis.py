@@ -58,7 +58,7 @@ class run_dependent_bayes():
 		self.end_dig_in_times = self.data_dict['end_dig_in_times']
 		self.dig_in_names = self.data_dict['dig_in_names']
 		self.num_tastes = len(self.dig_in_names)
-		#Bayes Params/Variabls
+		#Bayes Params/Variables
 		self.skip_time = self.metadata['params_dict']['bayes_params']['skip_time']
 		self.skip_dt = np.ceil(self.skip_time*1000).astype('int')
 		self.e_skip_time = self.metadata['params_dict']['bayes_params']['e_skip_time']
@@ -72,14 +72,35 @@ class run_dependent_bayes():
 		self.decode_prob_cutoff = self.metadata['params_dict']['bayes_params']['decode_prob_cutoff']
 		self.bin_time = self.metadata['params_dict']['bayes_params']['bin_time']
 		self.bin_dt = np.ceil(self.bin_time*1000).astype('int')
-		pop_taste_cp_raster_inds = af.pull_data_from_hdf5(self.hdf5_dir, 'changepoint_data', 'pop_taste_cp_raster_inds')
+		#Import changepoint data
+		pop_taste_cp_raster_inds = af.pull_data_from_hdf5(self.hdf5_dir,'changepoint_data','pop_taste_cp_raster_inds')
 		self.pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
+		num_pt_cp = self.num_cp + 2
+		#Import taste selectivity data
+		try:
+			select_neur = af.pull_data_from_hdf5(self.hdf5_dir, 'taste_selectivity', 'taste_select_neur_epoch_bin')[0]
+			self.select_neur = select_neur
+		except:
+			print("\tNo taste selectivity data found. Skipping.")
+		#Import discriminability data
+		peak_epochs = np.squeeze(af.pull_data_from_hdf5(self.hdf5_dir,'taste_discriminability','peak_epochs'))
+		discrim_neur = np.squeeze(af.pull_data_from_hdf5(self.hdf5_dir,'taste_discriminability','discrim_neur'))
+		#Convert discriminatory neuron changepoint data into pop_taste_cp_raster_inds shape
+		#TODO: Add a flag for a user to select whether to use discriminatory neurons or selective neurons
+		num_discrim_cp = np.shape(peak_epochs)[0]
+		discrim_cp_raster_inds = []
+		for t_i in range(len(self.dig_in_names)):
+			t_cp_vec = np.ones((np.shape(pop_taste_cp_raster_inds[t_i])[0],num_discrim_cp+1))
+			t_cp_vec = (peak_epochs[:num_pt_cp] + int(self.pre_taste*1000))*t_cp_vec
+			discrim_cp_raster_inds.append(t_cp_vec)
+		self.discrim_cp_raster_inds = discrim_cp_raster_inds
+		self.discrim_neur = discrim_neur
 	   
 	def pull_fr_dist(self,):
 		print("\tPulling FR Distributions")
 		tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur,
 	                                                                         self.num_cp, self.tastant_spike_times,
-	                                                                         self.pop_taste_cp_raster_inds,
+	                                                                         self.discrim_cp_raster_inds,
 	                                                                         self.start_dig_in_times, self.pre_taste_dt,
 	                                                                         self.post_taste_dt, self.trial_start_frac)
 		self.tastant_fr_dist_pop = tastant_fr_dist_pop
@@ -88,7 +109,7 @@ class run_dependent_bayes():
 		tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(self.num_neur,
 	                                                                                                  self.num_cp, self.tastant_spike_times,
 	                                                                                                  self.segment_spike_times, self.segment_names,
-	                                                                                                  self.segment_times, self.pop_taste_cp_raster_inds,
+	                                                                                                  self.segment_times, self.discrim_cp_raster_inds,
 	                                                                                                  self.start_dig_in_times, self.pre_taste_dt,
 	                                                                                                  self.post_taste_dt, self.bin_dt, self.trial_start_frac)
 		self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
@@ -102,25 +123,21 @@ class run_dependent_bayes():
 		if os.path.isdir(self.decode_dir) == False:
 			os.mkdir(self.decode_dir)
 		self.cur_dist = self.tastant_fr_dist_pop
-		self.select_neur = np.ones((self.num_cp, self.num_neur))
+		self.select_neur = np.ones(np.shape(self.discrim_neur))
 		
 		ddf.decode_epochs(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
-	                      self.skip_dt, self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
-	                      self.segment_names, self.start_dig_in_times, self.taste_num_deliv,
-	                      self.select_neur, self.max_hz_pop, self.decode_dir,
-	                      self.neuron_count_thresh, self.trial_start_frac, self.epochs_to_analyze,
-	                      self.segments_to_analyze)
+	                      self.e_skip_dt, self.e_len_dt, self.dig_in_names, 
+						  self.segment_times, self.segment_names, self.start_dig_in_times,
+						  self.taste_num_deliv, self.select_neur, self.max_hz_pop,
+						  self.decode_dir, self.neuron_count_thresh, self.trial_start_frac,
+						  self.epochs_to_analyze, self.segments_to_analyze)
 		
 		self.plot_decode_results()
 		
 	def decode_selective_neurons(self,):
 		print("\tDecoding taste selective neurons")
 		
-		try:
-			self.select_neur = af.pull_data_from_hdf5(self.hdf5_dir, 'taste_selectivity', 'taste_select_neur_epoch_bin')[0]
-		except:
-			print("ERROR: No taste selective data found.")
-			quit()
+		self.select_neur = self.discrim_neur
 		
 		self.decode_dir = self.bayes_dir + 'Taste_Selective/'
 		if os.path.isdir(self.decode_dir) == False:
@@ -128,11 +145,10 @@ class run_dependent_bayes():
 		self.cur_dist = self.tastant_fr_dist_pop
 		
 		ddf.decode_epochs(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
-	                      self.skip_dt, self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
-	                      self.segment_names, self.start_dig_in_times, self.taste_num_deliv,
-	                      self.select_neur, self.max_hz_pop, self.decode_dir,
-	                      self.neuron_count_thresh, self.trial_start_frac, self.epochs_to_analyze,
-	                      self.segments_to_analyze)
+					self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
+					self.segment_names, self.start_dig_in_times, self.taste_num_deliv,
+					self.select_neur, self.max_hz_pop, self.decode_dir, self.neuron_count_thresh,
+					self.trial_start_frac, self.epochs_to_analyze, self.segments_to_analyze)
 		
 		self.plot_decode_results()
 		
@@ -142,21 +158,21 @@ class run_dependent_bayes():
 		if os.path.isdir(self.decode_dir) == False:
 			os.mkdir(self.decode_dir)
 		self.cur_dist = self.tastant_fr_dist_z_pop
-		self.select_neur = np.ones((self.num_cp, self.num_neur))
+		self.select_neur = np.ones(np.shape(self.discrim_neur))
 		
 		ddf.decode_epochs_zscore(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
-	                      self.skip_dt, self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
-						  self.bin_dt, self.segment_names, self.start_dig_in_times, self.taste_num_deliv,
-	                      self.select_neur, self.max_hz_z_pop, self.decode_dir,
-	                      self.neuron_count_thresh, self.trial_start_frac, self.epochs_to_analyze,
-	                      self.segments_to_analyze)
+	                      self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
+						  self.bin_dt, self.segment_names, self.start_dig_in_times, 
+						  self.taste_num_deliv, self.select_neur, self.max_hz_z_pop,
+						  self.decode_dir, self.neuron_count_thresh, self.trial_start_frac,
+						  self.epochs_to_analyze,self.segments_to_analyze)
 		
 		self.plot_decode_results()
 		
 	def decode_selective_neurons_zscored(self,):
 		print("\tDecoding taste selective neurons")
 		
-		self.select_neur = af.pull_data_from_hdf5(self.hdf5_dir, 'taste_selectivity', 'taste_select_neur_epoch_bin')[0]
+		self.select_neur = self.discrim_neur
 		
 		self.decode_dir = self.bayes_dir + 'Taste_Selective/'
 		if os.path.isdir(self.decode_dir) == False:
@@ -164,11 +180,11 @@ class run_dependent_bayes():
 		self.cur_dist = self.tastant_fr_dist_z_pop
 		
 		ddf.decode_epochs_zscore(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
-	                      self.skip_dt, self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
-						  self.bin_dt, self.segment_names, self.start_dig_in_times, self.taste_num_deliv,
-	                      self.select_neur, self.max_hz_z_pop, self.decode_dir,
-	                      self.neuron_count_thresh, self.trial_start_frac, self.epochs_to_analyze,
-	                      self.segments_to_analyze)
+	                     self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
+						  self.bin_dt, self.segment_names, self.start_dig_in_times, 
+						  self.taste_num_deliv, self.select_neur, self.max_hz_z_pop, 
+						  self.decode_dir, self.neuron_count_thresh, self.trial_start_frac, 
+						  self.epochs_to_analyze, self.segments_to_analyze)
 		
 		self.plot_decode_results()
 		
@@ -177,7 +193,7 @@ class run_dependent_bayes():
 		df.plot_decoded(self.cur_dist, self.num_tastes, self.num_neur, self.num_cp,
 	                    self.segment_spike_times, self.tastant_spike_times, self.start_dig_in_times, 
 						self.end_dig_in_times, self.post_taste_dt, self.pre_taste_dt,
-	                    self.pop_taste_cp_raster_inds, self.dig_in_names, self.segment_times,
+	                    self.discrim_cp_raster_inds, self.dig_in_names, self.segment_times,
 	                    self.segment_names, self.taste_num_deliv, self.select_neur,
 	                    self.decode_dir, self.max_decode, self.max_hz_pop, self.seg_stat_bin,
 	                    self.neuron_count_thresh, self.trial_start_frac, self.epochs_to_analyze,
@@ -185,14 +201,14 @@ class run_dependent_bayes():
 		df.plot_decoded_func_p(self.cur_dist, self.num_tastes, self.num_neur, 
 						 self.num_cp, self.segment_spike_times, self.tastant_spike_times,
 						 self.start_dig_in_times, self.end_dig_in_times, self.post_taste_dt, 
-						 self.pop_taste_cp_raster_inds, self.e_skip_dt, self.e_len_dt, 
+						 self.discrim_cp_raster_inds, self.e_skip_dt, self.e_len_dt, 
 						 self.dig_in_names, self.segment_times, self.segment_names, 
 						 self.taste_num_deliv, self.select_neur, self.decode_dir, 
 						 self.max_decode, self.max_hz_pop, self.seg_stat_bin,
 						 self.epochs_to_analyze, self.segments_to_analyze)
 		df.plot_decoded_func_n(self.cur_dist, self.num_tastes, self.num_neur, self.num_cp, 
 						 self.segment_spike_times, self.tastant_spike_times, self.start_dig_in_times, 
-						 self.end_dig_in_times, self.post_taste_dt, self.pop_taste_cp_raster_inds,
+						 self.end_dig_in_times, self.post_taste_dt, self.discrim_cp_raster_inds,
 						 self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
 						 self.segment_names, self.taste_num_deliv, self.select_neur,
 						 self.decode_dir, self.max_decode, self.max_hz_pop, self.seg_stat_bin,

@@ -94,7 +94,7 @@ class run_deviation_correlations():
 		num_discrim_cp = np.shape(discrim_neur)[0]
 		discrim_cp_raster_inds = []
 		for t_i in range(len(self.dig_in_names)):
-			t_cp_vec = np.ones((np.shape(pop_taste_cp_raster_inds[t_i])[0],num_discrim_cp+1))
+			t_cp_vec = np.ones((np.shape(pop_taste_cp_raster_inds[t_i])[0],num_discrim_cp))
 			t_cp_vec = (peak_epochs[:num_pt_cp] + int(self.pre_taste*1000))*t_cp_vec
 			discrim_cp_raster_inds.append(t_cp_vec)
 		self.num_discrim_cp = len(peak_epochs)
@@ -108,7 +108,7 @@ class run_deviation_correlations():
 		if os.path.isdir(self.current_corr_dir) == False:
 			os.mkdir(self.current_corr_dir)
 		#self.neuron_keep_indices = np.ones((self.num_neur,self.num_cp+1))
-		self.neuron_keep_indices = np.ones((self.num_neur,self.num_discrim_cp))
+		self.neuron_keep_indices = np.ones(np.shape(self.discrim_neur))
 		#Calculate correlations
 		df.calculate_vec_correlations(self.num_neur, self.segment_dev_vec, self.tastant_spike_times,
 								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, 
@@ -124,7 +124,7 @@ class run_deviation_correlations():
 		#data_group_name = 'taste_selectivity'
 		#taste_select_neur_epoch_bin = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
 		#self.neuron_keep_indices = taste_select_neur_epoch_bin.T
-		self.neuron_keep_indices = (self.discrim_neur).T
+		self.neuron_keep_indices = self.discrim_neur
 		#Create storage directory
 		self.current_corr_dir = self.corr_dir + 'taste_select_neur/'
 		if os.path.isdir(self.current_corr_dir) == False:
@@ -144,7 +144,7 @@ class run_deviation_correlations():
 		self.current_corr_dir = self.corr_dir + 'all_neur_zscore/'
 		if os.path.isdir(self.current_corr_dir) == False:
 			os.mkdir(self.current_corr_dir)
-		self.neuron_keep_indices = np.ones((self.num_neur,self.num_cp+1))
+		self.neuron_keep_indices = np.ones(np.shape(self.discrim_neur))
 		#Calculate correlations
 		df.calculate_vec_correlations_zscore(self.num_neur, self.z_bin, self.segment_dev_vec_zscore, self.tastant_spike_times,
 								   self.segment_times, self.segment_spike_times, self.start_dig_in_times, self.end_dig_in_times, 
@@ -164,7 +164,7 @@ class run_deviation_correlations():
 		#data_group_name = 'taste_selectivity'
 		#taste_select_neur_epoch_bin = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
 		#self.neuron_keep_indices = taste_select_neur_epoch_bin.T
-		self.neuron_keep_indices = (self.discrim_neur).T
+		self.neuron_keep_indices = self.discrim_neur
 		#Calculate correlations
 		df.calculate_vec_correlations_zscore(self.num_neur, self.z_bin, self.segment_dev_vec_zscore, self.tastant_spike_times,
 								   self.segment_times, self.segment_spike_times, self.start_dig_in_times, self.end_dig_in_times, 
@@ -183,10 +183,10 @@ class run_deviation_correlations():
 		#Calculate stats
 		print("\tCalculating Correlation Statistics")
 		corr_dev_stats = df.pull_corr_dev_stats(self.segment_names, self.dig_in_names, self.current_corr_dir, self.segments_to_analyze)
-		print("Plotting Correlation Statistics")
+		print("\tPlotting Correlation Statistics")
 		dpf.plot_stats(corr_dev_stats, self.segment_names, self.dig_in_names, self.plot_dir, 
 				 'Correlation', self.neuron_keep_indices, self.segments_to_analyze)
-		print("Plotting Combined Correlation Statistics")
+		print("\tPlotting Combined Correlation Statistics")
 		segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, self.segment_names, self.dig_in_names, \
 													self.plot_dir, 'Correlation',self.neuron_keep_indices,self.segments_to_analyze)
 		self.segment_pop_vec_data = segment_pop_vec_data

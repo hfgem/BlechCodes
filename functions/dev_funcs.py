@@ -36,7 +36,7 @@ def run_dev_pull_parallelized(inputs):
 	save_dir = inputs[4]  # directory to save data
 	# calculate the deviations
 	num_neur = len(spikes)
-	num_dt = segment_times_i[1] - segment_times_i[0] + 1
+	num_dt = (segment_times_i[1] - segment_times_i[0]).astype('int') + 1
 	spikes_bin = np.zeros((num_neur, num_dt))
 	for n_i in range(num_neur):
 		n_spikes = np.array(spikes[n_i]).astype('int') - int(segment_times_i[0])
@@ -292,25 +292,26 @@ def calculate_vec_correlations(num_neur, segment_dev_vectors, tastant_spike_time
 						#neuron_keep_indices = taste_select_neur_epoch_bin = num_cp x num_neur
 						total_num_neur = np.sum(neuron_keep_indices[:,cp_i]).astype('int')
 						taste_keep_ind = (np.where(((neuron_keep_indices[:,cp_i]).astype('int')).flatten())[0]).astype('int')
-					dev_fr_vecs_keep_neur = dev_fr_vecs[:,taste_keep_ind]
-					cp_deliv_fr_vecs = np.squeeze(taste_deliv_fr_vecs[:,cp_i,taste_keep_ind]) #numpy array of num_deliv x total_num_neur
-					#deliv - mean(deliv)
-					cp_deliv_mean_sub_vecs = cp_deliv_fr_vecs - np.expand_dims(np.mean(cp_deliv_fr_vecs,1),1)*np.ones(np.shape(cp_deliv_fr_vecs))
-					#dev - mean(dev)
-					cp_dev_mean_sub_vecs = dev_fr_vecs_keep_neur - np.expand_dims(np.mean(dev_fr_vecs_keep_neur,1),1)*np.ones(np.shape(dev_fr_vecs_keep_neur))
-					#(deliv-mean(deliv))**2
-					cp_deliv_mean_sub_vecs_squared = np.square(cp_deliv_mean_sub_vecs)
-					#(dev - mean(dev))**2
-					cp_dev_mean_sub_vecs_squared = np.square(cp_dev_mean_sub_vecs)
-					
-					#Now pairwise calculate the pearson's correlation coefficients
-					for dev_i in range(num_dev):
-						dev_sub_mat = cp_dev_mean_sub_vecs[dev_i,:] * np.ones((num_deliv,total_num_neur))
-						dev_square_mat = cp_dev_mean_sub_vecs_squared[dev_i,:] * np.ones((num_deliv,total_num_neur))
-						pearson_num = np.sum(np.multiply(dev_sub_mat,cp_deliv_mean_sub_vecs),1)
-						pearson_denom = np.sqrt(np.sum(dev_square_mat,1))*np.sqrt(np.sum(cp_deliv_mean_sub_vecs_squared,1))
-						neuron_pop_vec_corr_storage[dev_i,:,cp_i] = pearson_num/pearson_denom
-					np.save(filename_pop_vec,neuron_pop_vec_corr_storage)
+					if len(taste_keep_ind) > 1: #Otherwise it's not worth it, so just leave it as nans
+						dev_fr_vecs_keep_neur = dev_fr_vecs[:,taste_keep_ind]
+						cp_deliv_fr_vecs = np.squeeze(taste_deliv_fr_vecs[:,cp_i,taste_keep_ind]) #numpy array of num_deliv x total_num_neur
+						#deliv - mean(deliv)
+						cp_deliv_mean_sub_vecs = cp_deliv_fr_vecs - np.expand_dims(np.mean(cp_deliv_fr_vecs,1),1)*np.ones(np.shape(cp_deliv_fr_vecs))
+						#dev - mean(dev)
+						cp_dev_mean_sub_vecs = dev_fr_vecs_keep_neur - np.expand_dims(np.mean(dev_fr_vecs_keep_neur,1),1)*np.ones(np.shape(dev_fr_vecs_keep_neur))
+						#(deliv-mean(deliv))**2
+						cp_deliv_mean_sub_vecs_squared = np.square(cp_deliv_mean_sub_vecs)
+						#(dev - mean(dev))**2
+						cp_dev_mean_sub_vecs_squared = np.square(cp_dev_mean_sub_vecs)
+						
+						#Now pairwise calculate the pearson's correlation coefficients
+						for dev_i in range(num_dev):
+							dev_sub_mat = cp_dev_mean_sub_vecs[dev_i,:] * np.ones((num_deliv,total_num_neur))
+							dev_square_mat = cp_dev_mean_sub_vecs_squared[dev_i,:] * np.ones((num_deliv,total_num_neur))
+							pearson_num = np.sum(np.multiply(dev_sub_mat,cp_deliv_mean_sub_vecs),1)
+							pearson_denom = np.sqrt(np.sum(dev_square_mat,1))*np.sqrt(np.sum(cp_deliv_mean_sub_vecs_squared,1))
+							neuron_pop_vec_corr_storage[dev_i,:,cp_i] = pearson_num/pearson_denom
+						np.save(filename_pop_vec,neuron_pop_vec_corr_storage)
 				np.save(filename_pop_vec,neuron_pop_vec_corr_storage)
 
 def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, tastant_spike_times,
@@ -435,6 +436,36 @@ def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, 
 					np.save(filename_pop_vec,neuron_pop_vec_corr_storage)
 				np.save(filename_pop_vec,neuron_pop_vec_corr_storage)
 
+def pull_corr_dev_stats(segment_names, dig_in_names, save_dir, segments_to_analyze=[]):
+	"""For each epoch and each segment pull out the top 10 most correlated deviation 
+	bins and plot side-by-side with the epoch they are correlated with"""
+	
+	#Grab parameters
+	dev_stats = dict()
+	num_tastes = len(dig_in_names)
+	if len(segments_to_analyze) == 0:
+		segments_to_analyze = np.arange(len(segment_names))
+	num_segments = len(segments_to_analyze)
+		
+	for s_i in segments_to_analyze:  #Loop through each segment
+		segment_stats = dict()
+		seg_name = segment_names[s_i]
+		for t_i in range(num_tastes):  #Loop through each taste
+			#Import distance numpy array
+			filename_pop_vec = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec.npy'
+			population_vec_data_storage = np.load(filename_pop_vec)
+			#Calculate statistics
+			data_dict = dict()
+			data_dict['segment'] = seg_name
+			data_dict['taste'] = dig_in_names[t_i]
+			num_dev, num_deliv, num_cp = np.shape(population_vec_data_storage)
+			data_dict['num_dev'] = num_dev
+			data_dict['pop_vec_data_storage'] = np.abs(population_vec_data_storage)
+			segment_stats[t_i] = data_dict
+		dev_stats[seg_name] = segment_stats
+
+	return dev_stats
+
 def stat_significance(segment_data, segment_names, dig_in_names, save_dir, dist_name, segments_to_analyze=[]):
 	
 	#Grab parameters
@@ -458,7 +489,7 @@ def stat_significance(segment_data, segment_names, dig_in_names, save_dir, dist_
 	pair_significances = np.zeros(len(pair_combinations))
 	pair_significance_statements = []
 	
-	print("Calculating Significance for All Combinations")
+	print("\t\tCalculating Significance for All Combinations")
 	for p_i in tqdm.tqdm(range(len(pair_combinations))):
 		try:
 			ind_1 = pair_combinations[p_i][0]
@@ -508,7 +539,7 @@ def stat_significance_ttest_less(segment_data, segment_names, dig_in_names,
 	save_file = save_dir + dist_name + '_significance.txt'
 	pair_significance_statements = []
 	
-	print("Calculating Significance for All Combinations")
+	print("\t\tCalculating Significance for All Combinations")
 	for p_i in tqdm.tqdm(range(len(pair_combinations))):
 		try:
 			ind_1 = pair_combinations[p_i][0]
@@ -557,7 +588,7 @@ def stat_significance_ttest_more(segment_data, segment_names, dig_in_names,
 	save_file = save_dir + dist_name + '_significance.txt'
 	pair_significance_statements = []
 	
-	print("Calculating Significance for All Combinations")
+	print("\t\tCalculating Significance for All Combinations")
 	for p_i in tqdm.tqdm(range(len(pair_combinations))):
 		try:
 			ind_1 = pair_combinations[p_i][0]
@@ -607,7 +638,7 @@ def mean_compare(segment_data, segment_names, dig_in_names, save_dir,
 	save_file = save_dir + dist_name + '.txt'
 	pair_mean_statements = []
 	
-	print("Calculating Significance for All Combinations")
+	print("\t\tCalculating Significance for All Combinations")
 	for p_i in tqdm.tqdm(range(len(pair_combinations))):
 		try:
 			ind_1 = pair_combinations[p_i][0]
@@ -651,11 +682,11 @@ def top_dev_corr_bins(dev_stats,segment_names,dig_in_names,save_dir,
 	for s_i, s_true_i in enumerate(segments_to_analyze):  #Loop through each segment
 		seg_name = segment_names[s_i]
 		seg_stats = dev_stats[seg_name]
-		print("Beginning calcs for segment " + str(s_true_i))
+		print("\t\tBeginning calcs for segment " + str(s_true_i))
 		for t_i in range(num_tastes):  #Loop through each taste
 			pop_vec_save_file = save_dir + segment_names[s_i] + '_' + dig_in_names[t_i] + '_top_corr_combos_pop_vec.txt'
 			corr_pop_vec_data = []
-			print("\tTaste #" + str(t_i + 1))
+			print("\t\t\tTaste #" + str(t_i + 1))
 			taste_stats = seg_stats[t_i]
 			#Import distance numpy array
 			pop_vec_data_storage = taste_stats['pop_vec_data_storage']

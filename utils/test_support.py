@@ -31,6 +31,8 @@ except:
 # import data from hdf5
 data_handler = import_data([metadata_handler.dir_name, metadata_handler.hdf5_dir, dig_in_names])
 
+state_handler = state_tracker([metadata_handler.dir_name])
+
 # repackage data from all handlers
 metadata = dict()
 for var in vars(metadata_handler):
@@ -41,6 +43,11 @@ data_dict = dict()
 for var in vars(data_handler):
 	data_dict[var] = getattr(data_handler,var)
 del data_handler
+
+state_dict = dict()
+for var in vars(state_handler):
+	state_dict[var] = getattr(state_handler,var)
+del state_handler
 
 import functions.analysis_funcs as af
 segment_spike_times = af.calc_segment_spike_times(data_dict['segment_times'],data_dict['spike_times'],data_dict['num_neur'])

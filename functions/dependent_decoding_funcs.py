@@ -10,13 +10,11 @@ treated as dependent
 """
 
 import numpy as np
-import tqdm, os, warnings, itertools, time, random
+import tqdm, os, itertools, time
 #file_path = ('/').join(os.path.abspath(__file__).split('/')[0:-1])
 #os.chdir(file_path)
 import matplotlib.pyplot as plt
-from scipy import interpolate
 from multiprocess import Pool
-from p_tqdm import p_map
 import functions.decode_parallel as dp
 from sklearn.mixture import GaussianMixture as gmm
 
@@ -93,7 +91,7 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 	return tastant_fr_dist, taste_num_deliv, max_hz
 	
 def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
-				   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,
+				   e_skip_dt,e_len_dt,dig_in_names,segment_times,
 				   segment_names,start_dig_in_times,taste_num_deliv,
 				   taste_select_epoch,max_hz,save_dir,
 				   neuron_count_thresh,trial_start_frac=0,
@@ -117,8 +115,6 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 
 	#If trial_start_frac > 0 use only trials after that threshold
 	trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
-	new_max_num_deliv = max_num_deliv - trial_start_ind
-
 	for e_i in epochs_to_analyze: #By epoch conduct decoding
 		print('Decoding Epoch ' + str(e_i))
 		
@@ -132,7 +128,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 			for d_i in range(max_num_deliv):
 				if d_i >= trial_start_ind:
 					full_data.extend(list(tastant_fr_dist[t_i][d_i-trial_start_ind][e_i].T))
-			gm = gmm(n_components=1, n_init=3).fit(np.array(full_data))
+			gm = gmm(n_components=1, n_init=10).fit(np.array(full_data))
 			fit_tastant_neur[t_i] = gm
 		
 		#Fit gmm distribution to fr of all tastes
@@ -197,8 +193,8 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				print('\t\tTime to decode = ' + str(np.round((toc-tic)/60,2)) + ' (min)')
 				tb_decode_array = np.squeeze(np.array(tb_decode_prob)).T
 				#___
-				for e_dt in range(e_skip_dt): #The whole skip interval should have the same decode probability
-					seg_decode_epoch_prob[:,new_time_bins - seg_start + e_dt] = tb_decode_array
+				for s_dt in range(e_skip_dt): #The whole skip interval should have the same decode probability
+					seg_decode_epoch_prob[:,new_time_bins - seg_start + s_dt] = tb_decode_array
 				#Save decoding probabilities
 				np.save(epoch_decode_save_dir + 'segment_' + str(s_i) + '.npy',seg_decode_epoch_prob)
 			#Create plots
@@ -408,7 +404,7 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 
 
 def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
-				   skip_dt,e_skip_dt,e_len_dt,dig_in_names,segment_times,bin_dt,
+				   e_skip_dt,e_len_dt,dig_in_names,segment_times,bin_dt,
 				   segment_names,start_dig_in_times,taste_num_deliv,
 				   taste_select_epoch,max_hz,save_dir,
 				   neuron_count_thresh,trial_start_frac=0,
@@ -523,8 +519,8 @@ def decode_epochs_zscore(tastant_fr_dist_z,segment_spike_times,post_taste_dt,
 				toc = time.time()
 				print('\t\tTime to decode = ' + str(np.round((toc-tic)/60,2)) + ' (min)')
 				tb_decode_array = np.squeeze(np.array(tb_decode_prob)).T
-				for e_dt in range(e_skip_dt): #The whole skip interval should have the same decode probability
-					seg_decode_epoch_prob[:,new_time_bins - seg_start + e_dt] = tb_decode_array
+				for s_dt in range(e_skip_dt): #The whole skip interval should have the same decode probability
+					seg_decode_epoch_prob[:,new_time_bins - seg_start + s_dt] = tb_decode_array
 				#Save decoding probabilities
 				np.save(epoch_decode_save_dir + 'segment_' + str(s_i) + '.npy',seg_decode_epoch_prob)
 			#Create plots
