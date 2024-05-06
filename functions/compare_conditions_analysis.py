@@ -147,17 +147,22 @@ class run_compare_conditions_analysis():
 			#Cross-Dataset: different given names on the same axes
 			cross_segment_dir = os.path.join(results_dir,'cross_segment_plots')
 			if os.path.isdir(cross_segment_dir) == False:
-				os.mkdir(cross_segment_dir)
+				 os.mkdir(cross_segment_dir)
 			print("\tComparing Segments")
 			cdf.cross_segment_diffs(self.corr_data,cross_segment_dir,self.unique_given_names,\
-					   self.unique_corr_names,self.unique_segment_names,self.unique_taste_names)
+							self.unique_corr_names,self.unique_segment_names,self.unique_taste_names)
 			cross_taste_dir = os.path.join(results_dir,'cross_taste_plots')
 			if os.path.isdir(cross_taste_dir) == False:
-				os.mkdir(cross_taste_dir)
+				 os.mkdir(cross_taste_dir)
 			print("\tComparing Tastes")
 			cdf.cross_taste_diffs(self.corr_data,cross_taste_dir,self.unique_given_names,\
+						  self.unique_corr_names,self.unique_segment_names,self.unique_taste_names)
+			cross_epoch_dir = os.path.join(results_dir,'cross_epoch_plots')
+			if os.path.isdir(cross_epoch_dir) == False:
+				os.mkdir(cross_epoch_dir)
+			print("\tComparing Epochs")
+			cdf.cross_epoch_diffs(self.corr_data,cross_epoch_dir,self.unique_given_names,\
 						 self.unique_corr_names,self.unique_segment_names,self.unique_taste_names)
-			
 		else:
 			#Cross-Corr: all neur, taste selective, all neuron z-score, and taste selective z-score on same axes
 			cross_corr_dir = os.path.join(results_dir,'cross_corr_plots')

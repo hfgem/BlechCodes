@@ -106,15 +106,15 @@ def cross_corr_name(corr_data,save_dir,unique_given_names,unique_corr_names,\
 					seg_name = att.seg_name
 					taste_name = att.taste_name
 					e_i = att.e_i
-					data_storage_collection = []
+					data_storage = []
 					data_names = []
 					for corr_name in unique_corr_names:
 						for given_name in unique_given_names:
 							dataset = unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'][:,e_i]
 							if len(dataset[~np.isnan(dataset)]) > 0:
-								data_storage_collection.append(dataset)
+								data_storage.append(dataset)
 								data_names.extend([given_name + '_' + corr_name])
-					ax_pop_vec[i_2,i_3].hist(data_storage_collection,bins=1000,histtype='step',density=True,cumulative=True,label=data_names)
+					ax_pop_vec[i_2,i_3].hist(data_storage,bins=1000,histtype='step',density=True,cumulative=True,label=data_names)
 					ax_pop_vec[i_2,i_3].legend(fontsize='12', loc ='lower right')
 					ax_pop_vec[i_2,i_3].set_xlim([0,1.1])
 					ax_pop_vec[i_2,i_3].set_ylim([0,1.1])

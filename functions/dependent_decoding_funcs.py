@@ -18,12 +18,13 @@ from multiprocess import Pool
 import functions.decode_parallel as dp
 from sklearn.mixture import GaussianMixture as gmm
 
-def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
+def taste_fr_dist(num_neur, tastant_spike_times, cp_raster_inds,
 				  start_dig_in_times, pre_taste_dt, post_taste_dt, trial_start_frac=0):
 	"""Calculate the multidimensional distributions of firing rates maintaining
 	dependencies between neurons"""
 	
 	num_tastes = len(tastant_spike_times)
+	num_cp = np.shape(cp_raster_inds[0])[-1] - 1
 	max_num_deliv = 0 #Find the maximum number of deliveries across tastants
 	for t_i in range(num_tastes):
 		num_deliv = len(tastant_spike_times[t_i])
@@ -55,7 +56,7 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 	max_hz = 0
 	for t_i in range(num_tastes):
 		num_deliv = int(taste_num_deliv[t_i])
-		taste_cp = pop_taste_cp_raster_inds[t_i]
+		taste_cp = cp_raster_inds[t_i]
 		for d_i in range(num_deliv): #index for that taste
 			if d_i >= trial_start_ind:
 				#grab spiking information
@@ -73,20 +74,21 @@ def taste_fr_dist(num_neur,num_cp,tastant_spike_times,pop_taste_cp_raster_inds,
 						start_epoch = int(deliv_cp[cp_i])
 						end_epoch = int(deliv_cp[cp_i+1])
 						epoch_len = end_epoch - start_epoch
-						all_hz_bst = []
-						for binsize in np.arange(50,epoch_len):
-							bin_edges = np.arange(start_epoch,end_epoch,binsize).astype('int') #bin the epoch
-							if len(bin_edges) != 0:
-								if (bin_edges[-1] != end_epoch)*(end_epoch-bin_edges[-1]>10):
-									bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
-								bst_hz = np.array([np.sum(bin_post_taste[:,bin_edges[b_i]:bin_edges[b_i+1]],1)/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)])
-								all_hz_bst.extend(list(bst_hz)) #nxnum_neur transposed
-						all_hz_bst = np.array(all_hz_bst) #all_nxnum_neur
-						#Store the firing rate vectors
-						tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = all_hz_bst.T #num_neurxall_n
-						#Store maximum firing rate
-						if np.max(all_hz_bst) > max_hz:
-							max_hz = np.max(all_hz_bst)
+						if epoch_len > 0: 
+							all_hz_bst = []
+							for binsize in np.arange(50,epoch_len):
+								bin_edges = np.arange(start_epoch,end_epoch,binsize).astype('int') #bin the epoch
+								if len(bin_edges) != 0:
+									if (bin_edges[-1] != end_epoch)*(end_epoch-bin_edges[-1]>10):
+										bin_edges = np.concatenate((bin_edges,end_epoch*np.ones(1).astype('int')))
+									bst_hz = np.array([np.sum(bin_post_taste[:,bin_edges[b_i]:bin_edges[b_i+1]],1)/((bin_edges[b_i+1] - bin_edges[b_i])*(1/1000)) for b_i in range(len(bin_edges)-1)])
+									all_hz_bst.extend(list(bst_hz)) #nxnum_neur transposed
+							all_hz_bst = np.array(all_hz_bst) #all_nxnum_neur
+							#Store the firing rate vectors
+							tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = all_hz_bst.T #num_neurxall_n
+							#Store maximum firing rate
+							if np.max(all_hz_bst) > max_hz:
+								max_hz = np.max(all_hz_bst)
 					
 	return tastant_fr_dist, taste_num_deliv, max_hz
 	
@@ -298,14 +300,15 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 						plt.close(f4)
 						
 
-def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times,
-				  segment_names,segment_times,pop_taste_cp_raster_inds,
+def taste_fr_dist_zscore(num_neur,tastant_spike_times,segment_spike_times,
+				  segment_names,segment_times,cp_raster_inds,
 				  start_dig_in_times,pre_taste_dt,post_taste_dt,bin_dt,trial_start_frac=0):
 	
 	"""This function calculates spike count distributions for each neuron for
 	each taste delivery for each epoch"""
 	
 	num_tastes = len(tastant_spike_times)
+	num_cp = np.shape(cp_raster_inds[0])[-1] - 1
 	half_bin = np.floor(bin_dt/2).astype('int')
 	max_num_deliv = 0 #Find the maximum number of deliveries across tastants
 	for t_i in range(num_tastes):
@@ -366,7 +369,7 @@ def taste_fr_dist_zscore(num_neur,num_cp,tastant_spike_times,segment_spike_times
 	min_hz = 0
 	for t_i in range(num_tastes):
 		num_deliv = (taste_num_deliv[t_i]).astype('int')
-		taste_cp = pop_taste_cp_raster_inds[t_i]
+		taste_cp = cp_raster_inds[t_i]
 		for d_i in range(num_deliv): #index for that taste
 			if d_i >= trial_start_ind:
 				raster_times = tastant_spike_times[t_i][d_i]

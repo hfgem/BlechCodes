@@ -88,26 +88,25 @@ class run_dependent_bayes():
 		#Convert discriminatory neuron changepoint data into pop_taste_cp_raster_inds shape
 		#TODO: Add a flag for a user to select whether to use discriminatory neurons or selective neurons
 		num_discrim_cp = np.shape(peak_epochs)[0]
+		min_cp = np.min((num_pt_cp,num_discrim_cp))
 		discrim_cp_raster_inds = []
 		for t_i in range(len(self.dig_in_names)):
 			t_cp_vec = np.ones((np.shape(pop_taste_cp_raster_inds[t_i])[0],num_discrim_cp+1))
-			t_cp_vec = (peak_epochs[:num_pt_cp] + int(self.pre_taste*1000))*t_cp_vec
+			t_cp_vec = (peak_epochs[:min_cp] + int(self.pre_taste*1000))*t_cp_vec[:,:min_cp]
 			discrim_cp_raster_inds.append(t_cp_vec)
 		self.discrim_cp_raster_inds = discrim_cp_raster_inds
 		self.discrim_neur = discrim_neur
 	   
 	def pull_fr_dist(self,):
 		print("\tPulling FR Distributions")
-		tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur,
-	                                                                         self.num_cp, self.tastant_spike_times,
+		tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur, self.tastant_spike_times,
 	                                                                         self.discrim_cp_raster_inds,
 	                                                                         self.start_dig_in_times, self.pre_taste_dt,
 	                                                                         self.post_taste_dt, self.trial_start_frac)
 		self.tastant_fr_dist_pop = tastant_fr_dist_pop
 		self.taste_num_deliv = taste_num_deliv
 		self.max_hz_pop = max_hz_pop
-		tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(self.num_neur,
-	                                                                                                  self.num_cp, self.tastant_spike_times,
+		tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(self.num_neur, self.tastant_spike_times,
 	                                                                                                  self.segment_spike_times, self.segment_names,
 	                                                                                                  self.segment_times, self.discrim_cp_raster_inds,
 	                                                                                                  self.start_dig_in_times, self.pre_taste_dt,
@@ -190,23 +189,23 @@ class run_dependent_bayes():
 		
 	def plot_decode_results(self,):
 		print("\t\tPlotting results")
-		df.plot_decoded(self.cur_dist, self.num_tastes, self.num_neur, self.num_cp,
-	                    self.segment_spike_times, self.tastant_spike_times, self.start_dig_in_times, 
+		df.plot_decoded(self.cur_dist, self.num_tastes, self.num_neur, self.segment_spike_times,
+	                    self.tastant_spike_times, self.start_dig_in_times, 
 						self.end_dig_in_times, self.post_taste_dt, self.pre_taste_dt,
-	                    self.discrim_cp_raster_inds, self.dig_in_names, self.segment_times,
+	                    self.discrim_cp_raster_inds, self.bin_dt, self.dig_in_names, self.segment_times,
 	                    self.segment_names, self.taste_num_deliv, self.select_neur,
 	                    self.decode_dir, self.max_decode, self.max_hz_pop, self.seg_stat_bin,
 	                    self.neuron_count_thresh, self.trial_start_frac, self.epochs_to_analyze,
 	                    self.segments_to_analyze, self.decode_prob_cutoff)
 		df.plot_decoded_func_p(self.cur_dist, self.num_tastes, self.num_neur, 
-						 self.num_cp, self.segment_spike_times, self.tastant_spike_times,
+						 self.segment_spike_times, self.tastant_spike_times,
 						 self.start_dig_in_times, self.end_dig_in_times, self.post_taste_dt, 
 						 self.discrim_cp_raster_inds, self.e_skip_dt, self.e_len_dt, 
 						 self.dig_in_names, self.segment_times, self.segment_names, 
 						 self.taste_num_deliv, self.select_neur, self.decode_dir, 
 						 self.max_decode, self.max_hz_pop, self.seg_stat_bin,
 						 self.epochs_to_analyze, self.segments_to_analyze)
-		df.plot_decoded_func_n(self.cur_dist, self.num_tastes, self.num_neur, self.num_cp, 
+		df.plot_decoded_func_n(self.cur_dist, self.num_tastes, self.num_neur, 
 						 self.segment_spike_times, self.tastant_spike_times, self.start_dig_in_times, 
 						 self.end_dig_in_times, self.post_taste_dt, self.discrim_cp_raster_inds,
 						 self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,

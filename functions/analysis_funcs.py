@@ -299,8 +299,6 @@ def taste_discriminability_test(post_taste_dt,num_tastes,tastant_spike_times,
 	#Add an ending trough
 	if troughs[-1] < peaks[-1]:
 		troughs = np.concatenate((troughs,post_taste_dt*np.ones(1)))
-	if len(troughs) <= len(peaks):
-		troughs = np.concatenate((troughs,post_taste_dt*np.ones(1)))
 	#Now pull where the epochs start and end using the troughs
 	peak_epochs = troughs.astype('int')
 	discriminable_segments = np.zeros(post_taste_dt)
