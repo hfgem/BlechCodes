@@ -868,88 +868,44 @@ def plot_decoded(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_spike_t
 						f.savefig(taste_decode_save_dir + 'event_' + str(nd_i) + '.png')
 						f.savefig(taste_decode_save_dir + 'event_' + str(nd_i) + '.svg')
 						plt.close(f)
-					
-				
-#			#Taste event scatter plots
-#			save_name = 'all_events_avg_taste_scat'
-#			title='Deviation Events x Average Taste Response'
-#			plot_scatter_fr_vecs_taste_mean(num_tastes,dig_in_names,all_taste_event_fr_vecs,
-#									all_taste_fr_vecs_mean,taste_colors,save_name,title,
-#									seg_decode_save_dir)
-#			
-#			#Taste event z-scored scatter plots
-#			save_name = 'all_events_avg_taste_z_scat'
-#			title='Z-Scored Deviation Events x Average Z-Scored Taste Response'
-#			plot_scatter_fr_vecs_taste_mean(num_tastes,dig_in_names,all_taste_event_fr_vecs_z,
-#									all_taste_fr_vecs_mean_z,taste_colors,save_name,title,
-#									seg_decode_save_dir)
-#			
-#			#Taste event scatter plots
-#			save_name = 'neur_cutoff_events_avg_taste_scat'
-#			title='Deviation Events x Average Taste Response'
-#			plot_scatter_fr_vecs_taste_mean(num_tastes,dig_in_names,all_taste_event_fr_vecs_neur_cut,
-#									all_taste_fr_vecs_mean,taste_colors,save_name,title,
-#									seg_decode_save_dir)
-#			
-#			#Taste event z-scored scatter plots
-#			save_name = 'neur_cutoff_events_avg_taste_z_scat'
-#			title='Z-Scored Deviation Events x Average Z-Scored Taste Response'
-#			plot_scatter_fr_vecs_taste_mean(num_tastes,dig_in_names,all_taste_event_fr_vecs_z_neur_cut,
-#									all_taste_fr_vecs_mean_z,taste_colors,save_name,title,
-#									seg_decode_save_dir)
-#			
-#			#Taste event scatter plots
-#			save_name = 'best_events_avg_taste_scat'
-#			title='Deviation Events x Average Taste Response'
-#			plot_scatter_fr_vecs_taste_mean(num_tastes,dig_in_names,all_taste_event_fr_vecs_best,
-#									all_taste_fr_vecs_mean,taste_colors,save_name,title,
-#									seg_decode_save_dir)
-#			
-#			#Taste event z-scored scatter plots
-#			save_name = 'best_cutoff_events_avg_taste_z_scat'
-#			title='Z-Scored Deviation Events x Average Z-Scored Taste Response'
-#			plot_scatter_fr_vecs_taste_mean(num_tastes,dig_in_names,all_taste_event_fr_vecs_z_best,
-#									all_taste_fr_vecs_mean_z,taste_colors,save_name,title,
-#									seg_decode_save_dir)
-#			
 			
 			#Taste event deviation plots
-			save_name = 'all_events_violin'
+			save_name = 'all_events'
 			title='Deviation Events x Individual Taste Response'
 			plot_violin_fr_vecs_taste_all(num_tastes,dig_in_names,all_taste_event_fr_vecs,
 									all_taste_fr_vecs,taste_colors,num_neur,save_name,title,
 									seg_decode_save_dir)
 			
 			#Taste event deviation plots z-scored
-			save_name = 'all_events_z_violin'
+			save_name = 'all_events_z'
 			title='Z-Scored Deviation Events x Individual Z-Scored Taste Response'
 			plot_violin_fr_vecs_taste_all(num_tastes,dig_in_names,all_taste_event_fr_vecs_z,
 									all_taste_fr_vecs_z,taste_colors,num_neur,save_name,title,
 									seg_decode_save_dir)
 			
 			#Taste event deviation plots
-			save_name = 'neur_cutoff_events_violin'
+			save_name = 'neur_cutoff_events'
 			title='Deviation Events x Individual Taste Response'
 			plot_violin_fr_vecs_taste_all(num_tastes,dig_in_names,all_taste_event_fr_vecs_neur_cut,
 									all_taste_fr_vecs,taste_colors,num_neur,save_name,title,
 									seg_decode_save_dir)
 			
 			#Taste event deviation plots z-scored
-			save_name = 'neur_cutoff_events_z_violin'
+			save_name = 'neur_cutoff_events_z'
 			title='Z-Scored Deviation Events x Individual Z-Scored Taste Response'
 			plot_violin_fr_vecs_taste_all(num_tastes,dig_in_names,all_taste_event_fr_vecs_z_neur_cut,
 									all_taste_fr_vecs_z,taste_colors,num_neur,save_name,title,
 									seg_decode_save_dir)
 			
 			#Taste event deviation plots
-			save_name = 'best_events_violin'
+			save_name = 'best_events'
 			title='Deviation Events x Individual Taste Response'
 			plot_violin_fr_vecs_taste_all(num_tastes,dig_in_names,all_taste_event_fr_vecs_best,
 									all_taste_fr_vecs,taste_colors,num_neur,save_name,title,
 									seg_decode_save_dir)
 			
 			#Taste event deviation plots z-scored
-			save_name = 'best_events_z_violin'
+			save_name = 'best_events_z'
 			title='Z-Scored Deviation Events x Individual Z-Scored Taste Response'
 			plot_violin_fr_vecs_taste_all(num_tastes,dig_in_names,all_taste_event_fr_vecs_z_best,
 									all_taste_fr_vecs_z,taste_colors,num_neur,save_name,title,
@@ -957,57 +913,45 @@ def plot_decoded(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_spike_t
 			
 			
 	#Summary Plot of Percent of Each Taste Decoded Across Epochs and Segments		
-	f = plt.figure(figsize=(8,8))
-	plot_ind = 1
-	for e_i in epochs_to_analyze:
+	f, ax = plt.subplots(nrows = len(epochs_to_analyze), ncols = num_tastes, figsize=(num_tastes*4,len(epochs_to_analyze)*4))
+	for e_ind, e_i in enumerate(epochs_to_analyze):
 		for t_i in range(num_tastes):
-			plt.subplot(num_cp,num_tastes,plot_ind)
-			plt.plot(segments_to_analyze,(epoch_seg_taste_percents[e_i,segments_to_analyze,t_i]).flatten())
+			ax[e_ind,t_i].plot(segments_to_analyze,(epoch_seg_taste_percents[e_i,segments_to_analyze,t_i]).flatten())
 			seg_labels = [segment_names[a] for a in segments_to_analyze]
-			plt.xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
+			ax[e_ind,t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
 			if t_i == 0:
-				plt.ylabel('Epoch ' + str(e_i))
-			if e_i == 0:
-				plt.title('Taste ' + dig_in_names[t_i])
-			plot_ind += 1
+				ax[e_ind,t_i].set_ylabel('Epoch ' + str(e_i))
+			ax[e_ind,t_i].title('Taste ' + dig_in_names[t_i])
 	plt.tight_layout()
 	f.savefig(save_dir + 'Decoding_Percents.png')
 	f.savefig(save_dir + 'Decoding_Percents.svg')
 	plt.close(f)
 	
 	#Summary Plot of Percent of Each Taste Decoded Across Epochs and Segments		
-	f = plt.figure(figsize=(8,8))
-	plot_ind = 1
-	for e_i in epochs_to_analyze:
+	f, ax = plt.subplots(nrows = len(epochs_to_analyze), ncols = num_tastes, figsize=(num_tastes*4,len(epochs_to_analyze)*4))
+	for e_ind, e_i in enumerate(epochs_to_analyze):
 		for t_i in range(num_tastes):
-			plt.subplot(num_cp,num_tastes,plot_ind)
-			plt.plot(segments_to_analyze,(epoch_seg_taste_percents_neur_cut[e_i,segments_to_analyze,t_i]).flatten())
+			ax[e_ind,t_i].plot(segments_to_analyze,(epoch_seg_taste_percents_neur_cut[e_i,segments_to_analyze,t_i]).flatten())
 			seg_labels = [segment_names[a] for a in segments_to_analyze]
-			plt.xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
+			ax[e_ind,t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
 			if t_i == 0:
-				plt.ylabel('Epoch ' + str(e_i))
-			if e_i == 0:
-				plt.title('Taste ' + dig_in_names[t_i])
-			plot_ind += 1
+				ax[e_ind,t_i].set_ylabel('Epoch ' + str(e_i))
+			ax[e_ind,t_i].title('Taste ' + dig_in_names[t_i])
 	plt.tight_layout()
 	f.savefig(save_dir + 'Decoding_Percents_Neuron_Cutoff.png')
 	f.savefig(save_dir + 'Decoding_Percents_Neuron_Cutoff.svg')
 	plt.close(f)
 	
 	#Summary Plot of Percent of Each Taste Decoded Across Epochs and Segments		
-	f = plt.figure(figsize=(8,8))
-	plot_ind = 1
-	for e_i in epochs_to_analyze:
+	f, ax = plt.subplots(nrows = len(epochs_to_analyze), ncols = num_tastes, figsize=(num_tastes*4,len(epochs_to_analyze)*4))
+	for e_ind, e_i in enumerate(epochs_to_analyze):
 		for t_i in range(num_tastes):
-			plt.subplot(num_cp,num_tastes,plot_ind)
-			plt.plot(segments_to_analyze,(epoch_seg_taste_percents_best[e_i,segments_to_analyze,t_i]).flatten())
+			ax[e_ind,t_i].plot(segments_to_analyze,(epoch_seg_taste_percents_best[e_i,segments_to_analyze,t_i]).flatten())
 			seg_labels = [segment_names[a] for a in segments_to_analyze]
-			plt.xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
+			ax[e_ind,t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
 			if t_i == 0:
-				plt.ylabel('Epoch ' + str(e_i))
-			if e_i == 0:
-				plt.title('Taste ' + dig_in_names[t_i])
-			plot_ind += 1
+				ax[e_ind,t_i].set_ylabel('Epoch ' + str(e_i))
+			ax[e_ind,t_i].title('Taste ' + dig_in_names[t_i])
 	plt.tight_layout()
 	f.savefig(save_dir + 'Decoding_Percents_Best.png')
 	f.savefig(save_dir + 'Decoding_Percents_Best.svg')
@@ -1154,21 +1098,36 @@ def plot_decoded_func_p(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_
 	#Summary Plot of Percent of Each Taste Decoded Across Epochs and Segments	
 	sum_width_ratios = np.concatenate((10*np.ones(len(segments_to_analyze)),np.ones(1)))
 	max_decoding_percent = np.max(epoch_seg_taste_percents)
-	f, ax = plt.subplots(num_cp,len(segments_to_analyze) + 1,figsize=(10,10),width_ratios=sum_width_ratios)
-	gs = ax[0,-1].get_gridspec()
-	for e_i in epochs_to_analyze:
-		for s_i in segments_to_analyze:
-			ax[e_i,s_i].set_ylim([0,max_decoding_percent+10])
-			for t_i in range(num_tastes):
-				ax[e_i,s_i].plot(prob_cutoffs,(epoch_seg_taste_percents[:,e_i,s_i,t_i]).flatten(),color=taste_colors[t_i,:],alpha=0.8)
-			if s_i == 0:
-				ax[e_i,s_i].set_ylabel('Epoch ' + str(e_i))
-			if e_i == 0:
-				ax[e_i,s_i].set_title(segment_names[s_i])
-			if e_i == num_cp-1:
-				ax[e_i,s_i].set_xlabel('Probability Cutoff')
-	for ax_i in ax[:,-1]:
-		ax_i.remove() #remove the underlying axes
+	f, ax = plt.subplots(len(epochs_to_analyze),len(segments_to_analyze) + 1,figsize=((len(segments_to_analyze) + 1)*4,len(epochs_to_analyze)*4),width_ratios=sum_width_ratios)
+	if len(epochs_to_analyze) > 1:
+		gs = ax[0,-1].get_gridspec()
+		for e_ind, e_i in enumerate(epochs_to_analyze):
+			for s_ind, s_i in enumerate(segments_to_analyze):
+				ax[e_ind,s_ind].set_ylim([0,max_decoding_percent+10])
+				for t_i in range(num_tastes):
+					ax[e_ind,s_ind].plot(prob_cutoffs,(epoch_seg_taste_percents[:,e_i,s_i,t_i]).flatten(),color=taste_colors[t_i,:],alpha=0.8)
+				if s_ind == 0:
+					ax[e_ind,s_ind].set_ylabel('Epoch ' + str(e_i))
+				if e_ind == 0:
+					ax[e_ind,s_ind].set_title(segment_names[s_i])
+				if e_ind == num_cp-1:
+					ax[e_ind,s_ind].set_xlabel('Probability Cutoff')
+		for ax_i in ax[:,-1]:
+			ax_i.remove() #remove the underlying axes
+	else:
+		gs = ax[-1].get_gridspec()
+		for e_ind, e_i in enumerate(epochs_to_analyze):
+			for s_ind, s_i in enumerate(segments_to_analyze):
+				ax[s_ind].set_ylim([0,max_decoding_percent+10])
+				for t_i in range(num_tastes):
+					ax[s_ind].plot(prob_cutoffs,(epoch_seg_taste_percents[:,e_i,s_i,t_i]).flatten(),color=taste_colors[t_i,:],alpha=0.8)
+				if s_ind == 0:
+					ax[s_ind].set_ylabel('Epoch ' + str(e_i))
+				if e_ind == 0:
+					ax[s_ind].set_title(segment_names[s_i])
+				if e_ind == num_cp-1:
+					ax[s_ind].set_xlabel('Probability Cutoff')
+		ax[-1].remove() #remove the underlying axes
 	axbig = f.add_subplot(gs[:,-1])
 	cbar = plt.colorbar(cm.ScalarMappable(cmap='viridis'),cax=axbig,ticks=np.linspace(0,1,num_tastes),orientation='vertical')
 	cbar.ax.set_yticklabels(dig_in_names)
@@ -1196,7 +1155,7 @@ def plot_decoded_func_n(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_
 	
 	if len(epochs_to_analyze) == 0:
 		epochs_to_analyze = np.arange(num_cp)
-	if len(segments_to_analyze == 0):
+	if len(segments_to_analyze) == 0:
 		segments_to_analyze = np.arange(num_segments)
 
 	for e_i in epochs_to_analyze: #By epoch conduct decoding
@@ -1327,21 +1286,36 @@ def plot_decoded_func_n(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_
 	#Summary Plot of Percent of Each Taste Decoded Across Epochs and Segments	
 	sum_width_ratios = np.concatenate((10*np.ones(len(segments_to_analyze)),np.ones(1)))
 	max_decoding_percent = np.max(epoch_seg_taste_percents)
-	f, ax = plt.subplots(num_cp,num_segments + 1,figsize=(10,10),width_ratios=sum_width_ratios)
-	gs = ax[0,-1].get_gridspec()
-	for e_i in epochs_to_analyze:
-		for s_i in segments_to_analyze:
-			ax[e_i,s_i].set_ylim([0,max_decoding_percent+10])
-			for t_i in range(num_tastes):
-				ax[e_i,s_i].plot(neur_cutoffs,(epoch_seg_taste_percents[:,e_i,s_i,t_i]).flatten(),color=taste_colors[t_i,:],alpha=0.8)
-			if s_i == 0:
-				ax[e_i,s_i].set_ylabel('Epoch ' + str(e_i))
-			if e_i == 0:
-				ax[e_i,s_i].set_title(segment_names[s_i])
-			if e_i == num_cp-1:
-				ax[e_i,s_i].set_xlabel('Neuron Cutoff')
-	for ax_i in ax[:,-1]:
-		ax_i.remove() #remove the underlying axes
+	f, ax = plt.subplots(len(epochs_to_analyze),len(segments_to_analyze) + 1,figsize=((len(segments_to_analyze) + 1)*4,len(epochs_to_analyze)*4),width_ratios=sum_width_ratios)
+	if len(epochs_to_analyze) > 1:
+		gs = ax[0,-1].get_gridspec()
+		for e_ind, e_i in enumerate(epochs_to_analyze):
+			for s_ind, s_i in enumerate(segments_to_analyze):
+				ax[e_ind,s_ind].set_ylim([0,max_decoding_percent+10])
+				for t_i in range(num_tastes):
+					ax[e_ind,s_ind].plot(neur_cutoffs,(epoch_seg_taste_percents[:,e_i,s_i,t_i]).flatten(),color=taste_colors[t_i,:],alpha=0.8)
+				if s_ind == 0:
+					ax[e_ind,s_ind].set_ylabel('Epoch ' + str(e_i))
+				if e_ind == 0:
+					ax[e_ind,s_ind].set_title(segment_names[s_i])
+				if e_ind == num_cp-1:
+					ax[e_ind,s_ind].set_xlabel('Neuron Cutoff')
+		for ax_i in ax[:,-1]:
+			ax_i.remove() #remove the underlying axes
+	else:
+		gs = ax[-1].get_gridspec()
+		for e_ind, e_i in enumerate(epochs_to_analyze):
+			for s_ind, s_i in enumerate(segments_to_analyze):
+				ax[s_ind].set_ylim([0,max_decoding_percent+10])
+				for t_i in range(num_tastes):
+					ax[s_ind].plot(neur_cutoffs,(epoch_seg_taste_percents[:,e_i,s_i,t_i]).flatten(),color=taste_colors[t_i,:],alpha=0.8)
+				if s_ind == 0: 
+					ax[s_ind].set_ylabel('Epoch ' + str(e_i))
+				if e_ind == 0:
+					ax[s_ind].set_title(segment_names[s_i])
+				if e_ind == num_cp-1:
+					ax[s_ind].set_xlabel('Neuron Cutoff')
+		ax[-1].remove() #remove the underlying axes
 	axbig = f.add_subplot(gs[:,-1])
 	cbar = plt.colorbar(cm.ScalarMappable(cmap='viridis'),cax=axbig,ticks=np.linspace(0,1,num_tastes),orientation='vertical')
 	cbar.ax.set_yticklabels(dig_in_names)
@@ -1444,12 +1418,14 @@ def plot_violin_fr_vecs_taste_all(num_tastes,dig_in_names,all_taste_event_fr_vec
 	f_corr, ax_corr = plt.subplots(nrows=num_tastes, ncols=num_tastes, figsize=(num_tastes*4,num_tastes*4), gridspec_kw=dict(width_ratios=list(6*np.ones(num_tastes))))
 	max_x = 0
 	all_diff_tastes = []
+	all_corr_tastes = []
+	max_density = 0
 	for t_i in range(num_tastes): #Event Taste
 		all_diff_taste = []
 		all_corr_taste = []
 		taste_event_fr_vecs = all_taste_event_fr_vecs[t_i]
 		ax_dist[t_i,0].set_ylabel('Firing Rate Difference')
-		ax_corr[t_i,0].set_ylabel('Firing Rate Correlation')
+		ax_corr[t_i,0].set_ylabel(dig_in_names[t_i])
 		for t_i_c in range(num_tastes): #Average Taste
 			#Calculate max fr of taste response
 			ax_dist[t_i,t_i_c].set_title('Decoded ' + dig_in_names[t_i] +' - Delivery ' + dig_in_names[t_i_c] )
@@ -1466,24 +1442,29 @@ def plot_violin_fr_vecs_taste_all(num_tastes,dig_in_names,all_taste_event_fr_vec
 				all_corr = []
 				for td_i in range(num_taste_deliv):
 					diff = np.abs(taste_event_fr_vecs - taste_fr_vecs[td_i,:])
-					corr = [corr_calculator(taste_fr_vecs[td_i,:], decode_fr_vec) for decode_fr_vec in taste_event_fr_vecs]
+					corr = corr_calculator(taste_fr_vecs[td_i,:], taste_event_fr_vecs)
 					all_diff[td_i*num_events:(td_i+1)*num_events,:] = diff
 					all_corr.extend(corr)
 				all_diff_taste.append(all_diff.flatten())
-				all_corr_taste.append(np.array(all_corr))
+				all_corr_taste.append(all_corr)
 				ax_dist[t_i,t_i_c].violinplot(all_diff,x_vals,showmedians=True,showextrema=False)
-				ax_corr[t_i,t_i_c].violinplot(np.array(all_corr).flatten(),showmedians=True,showextrema=False)
+				hist_results = ax_corr[t_i,t_i_c].hist(np.array(all_corr),density=True,histtype='step',bins=np.arange(-1,1,0.025))
+				if np.max(hist_results[0]) > max_density:
+					max_density = np.max(hist_results[0])
+				ax_corr[t_i,t_i_c].axvline(np.nanmean(all_corr),linestyle='dashed',color='k',alpha=0.7)
+				ax_corr[t_i,t_i_c].text(np.nanmean(all_corr)+0.1,0,str(np.round(np.nanmean(all_corr),2)),rotation=90)
 				ax_dist[t_i,t_i_c].set_xlabel('Neuron Index')
-				ax_corr[t_i,t_i_c].set_xlabel(dig_in_names[t_i])
+				ax_corr[t_i,t_i_c].set_xlabel(dig_in_names[t_i_c])
 			else:
 				all_diff_taste.append([])
 				all_corr_taste.append([])
 		all_diff_tastes.append(all_diff_taste)
+		all_corr_tastes.append(all_corr_taste)
 	for t_i in range(num_tastes):
 		for t_i_c in range(num_tastes):
-			ax_dist[t_i,t_i_c].plot(np.arange(num_neur),np.zeros(num_neur),alpha=0.5,color='k',linestyle='dashed')
+			ax_dist[t_i,t_i_c].axhline(0,alpha=0.5,color='k',linestyle='dashed')
 			ax_dist[t_i,t_i_c].set_ylim([-10,100])
-			ax_corr[t_i,t_i_c].set_ylim([-0.1,1.1])
+			ax_corr[t_i,t_i_c].set_ylim([-0.1,max_density])
 			if t_i == t_i_c:
 				for child in ax_dist[t_i,t_i_c].get_children():
 					if isinstance(child, matplotlib.spines.Spine):
@@ -1511,11 +1492,11 @@ def plot_violin_fr_vecs_taste_all(num_tastes,dig_in_names,all_taste_event_fr_vec
 		ax2_dist[t_i].set_xlim([0,100])
 		ax2_dist[t_i].set_xlabel('|Distance|')
 		ax2_dist[t_i].set_title('Decoded ' + dig_in_names[t_i])
-		ax2_corr[t_i].hist(all_corr_taste[t_i],bins=1000,histtype='step',density=True,cumulative=True,label=dig_in_names)
+		ax2_corr[t_i].hist(all_corr_tastes[t_i],bins=1000,histtype='step',density=True,cumulative=True,label=dig_in_names)
 		ax2_corr[t_i].legend()
 		ax2_corr[t_i].set_ylim([-0.1,1.1])
 		ax2_corr[t_i].set_xlim([-0.1,1.1])
-		ax2_corr[t_i].set_xlabel('Correlartion')
+		ax2_corr[t_i].set_xlabel('Correlation')
 		ax2_corr[t_i].set_title('Decoded ' + dig_in_names[t_i])
 	ax2_dist[0].set_ylabel('Cumulative Density')
 	ax2_corr[0].set_ylabel('Cumulative Density')
@@ -1530,14 +1511,37 @@ def plot_violin_fr_vecs_taste_all(num_tastes,dig_in_names,all_taste_event_fr_vec
 	f2_corr.savefig(seg_decode_save_dir + save_name + '_population_corr.svg')
 	plt.close(f2_corr)
 	
-def corr_calculator(deliv_fr_vec, decode_fr_vec):
-	deliv_mean_sub = deliv_fr_vec - np.mean(deliv_fr_vec)*np.ones(np.shape(deliv_fr_vec))
-	decode_mean_sub = decode_fr_vec - np.mean(decode_fr_vec)*np.ones(np.shape(decode_fr_vec))
+def corr_calculator(deliv_fr_vec, decode_fr_mat):
+	"""
+	This function calculates correlations between a matrix of firing rate vectors
+	and a single firing rate vector. Note, this function assumes the length of
+	the vectors is equivalent (i.e. the number of neurons).
+	
+	INPUTS:
+		- deliv_fr_vec: single vector of taste delivery firing rate vector
+		- decode_fr_mat: matrix with rows of individual decoded event firing 
+			rate vectors
+	OUTPUTS:
+		- list of correlations of each decoded event to the given delivery event
+	"""
+	#First convert single vector into a matrix
+	deliv_fr_mat = deliv_fr_vec*np.ones(np.shape(decode_fr_mat))
+	
+	#Calculate the mean-subtracted vectors
+	deliv_mean_sub = deliv_fr_mat - np.expand_dims(np.mean(deliv_fr_mat,1),1)*np.ones(np.shape(deliv_fr_mat))
+	decode_mean_sub = decode_fr_mat - np.expand_dims(np.mean(decode_fr_mat,1),1)*np.ones(np.shape(decode_fr_mat))
+	
+	#Calculate the squares of the mean-subtracted vectors
 	deliv_mean_sub_squared = np.square(deliv_mean_sub)
 	decode_mean_sub_squared = np.square(decode_mean_sub)
-	pearson_num = np.sum(np.multiply(deliv_mean_sub,decode_mean_sub))
-	pearson_denom = np.sqrt(np.sum(deliv_mean_sub_squared))*np.sqrt(np.sum(decode_mean_sub_squared))
 	
-	return pearson_num/pearson_denom
+	#Calculate the numerators and denominators of the pearson's correlation calculation
+	pearson_num = np.sum(np.multiply(deliv_mean_sub,decode_mean_sub),1)
+	pearson_denom = np.sqrt(np.sum(deliv_mean_sub_squared,1))*np.sqrt(np.sum(decode_mean_sub_squared,1))
+	
+	#Convert to list
+	pearson_correlations = list(np.divide(pearson_num,pearson_denom))
+	
+	return pearson_correlations
 	
 	
