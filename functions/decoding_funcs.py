@@ -914,14 +914,23 @@ def plot_decoded(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_spike_t
 			
 	#Summary Plot of Percent of Each Taste Decoded Across Epochs and Segments		
 	f, ax = plt.subplots(nrows = len(epochs_to_analyze), ncols = num_tastes, figsize=(num_tastes*4,len(epochs_to_analyze)*4))
-	for e_ind, e_i in enumerate(epochs_to_analyze):
+	if len(epochs_to_analyze) > 1:
+		for e_ind, e_i in enumerate(epochs_to_analyze):
+			for t_i in range(num_tastes):
+				ax[e_ind,t_i].plot(segments_to_analyze,(epoch_seg_taste_percents[e_i,segments_to_analyze,t_i]).flatten())
+				seg_labels = [segment_names[a] for a in segments_to_analyze]
+				ax[e_ind,t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
+				if t_i == 0:
+					ax[e_ind,t_i].set_ylabel('Epoch ' + str(e_i))
+				ax[e_ind,t_i].title('Taste ' + dig_in_names[t_i])
+	else:
 		for t_i in range(num_tastes):
-			ax[e_ind,t_i].plot(segments_to_analyze,(epoch_seg_taste_percents[e_i,segments_to_analyze,t_i]).flatten())
+			ax[t_i].plot(segments_to_analyze,(epoch_seg_taste_percents[epochs_to_analyze[0],segments_to_analyze,t_i]).flatten())
 			seg_labels = [segment_names[a] for a in segments_to_analyze]
-			ax[e_ind,t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
+			ax[t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
 			if t_i == 0:
-				ax[e_ind,t_i].set_ylabel('Epoch ' + str(e_i))
-			ax[e_ind,t_i].title('Taste ' + dig_in_names[t_i])
+				ax[t_i].set_ylabel('Epoch ' + str(epochs_to_analyze[0]))
+			ax[t_i].title('Taste ' + dig_in_names[t_i])
 	plt.tight_layout()
 	f.savefig(save_dir + 'Decoding_Percents.png')
 	f.savefig(save_dir + 'Decoding_Percents.svg')
@@ -929,14 +938,23 @@ def plot_decoded(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_spike_t
 	
 	#Summary Plot of Percent of Each Taste Decoded Across Epochs and Segments		
 	f, ax = plt.subplots(nrows = len(epochs_to_analyze), ncols = num_tastes, figsize=(num_tastes*4,len(epochs_to_analyze)*4))
-	for e_ind, e_i in enumerate(epochs_to_analyze):
+	if len(epochs_to_analyze) > 1:
+		for e_ind, e_i in enumerate(epochs_to_analyze):
+			for t_i in range(num_tastes):
+				ax[e_ind,t_i].plot(segments_to_analyze,(epoch_seg_taste_percents_neur_cut[e_i,segments_to_analyze,t_i]).flatten())
+				seg_labels = [segment_names[a] for a in segments_to_analyze]
+				ax[e_ind,t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
+				if t_i == 0:
+					ax[e_ind,t_i].set_ylabel('Epoch ' + str(e_i))
+				ax[e_ind,t_i].title('Taste ' + dig_in_names[t_i])
+	else:
 		for t_i in range(num_tastes):
-			ax[e_ind,t_i].plot(segments_to_analyze,(epoch_seg_taste_percents_neur_cut[e_i,segments_to_analyze,t_i]).flatten())
+			ax[t_i].plot(segments_to_analyze,(epoch_seg_taste_percents_neur_cut[epochs_to_analyze[0],segments_to_analyze,t_i]).flatten())
 			seg_labels = [segment_names[a] for a in segments_to_analyze]
-			ax[e_ind,t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
+			ax[t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
 			if t_i == 0:
-				ax[e_ind,t_i].set_ylabel('Epoch ' + str(e_i))
-			ax[e_ind,t_i].title('Taste ' + dig_in_names[t_i])
+				ax[t_i].set_ylabel('Epoch ' + str(epochs_to_analyze[0]))
+			ax[t_i].title('Taste ' + dig_in_names[t_i])
 	plt.tight_layout()
 	f.savefig(save_dir + 'Decoding_Percents_Neuron_Cutoff.png')
 	f.savefig(save_dir + 'Decoding_Percents_Neuron_Cutoff.svg')
@@ -944,14 +962,23 @@ def plot_decoded(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_spike_t
 	
 	#Summary Plot of Percent of Each Taste Decoded Across Epochs and Segments		
 	f, ax = plt.subplots(nrows = len(epochs_to_analyze), ncols = num_tastes, figsize=(num_tastes*4,len(epochs_to_analyze)*4))
-	for e_ind, e_i in enumerate(epochs_to_analyze):
+	if len(epochs_to_analyze) > 1:
+		for e_ind, e_i in enumerate(epochs_to_analyze):
+			for t_i in range(num_tastes):
+				ax[e_ind,t_i].plot(segments_to_analyze,(epoch_seg_taste_percents_best[e_i,segments_to_analyze,t_i]).flatten())
+				seg_labels = [segment_names[a] for a in segments_to_analyze]
+				ax[e_ind,t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
+				if t_i == 0:
+					ax[e_ind,t_i].set_ylabel('Epoch ' + str(e_i))
+				ax[e_ind,t_i].title('Taste ' + dig_in_names[t_i])
+	else:
 		for t_i in range(num_tastes):
-			ax[e_ind,t_i].plot(segments_to_analyze,(epoch_seg_taste_percents_best[e_i,segments_to_analyze,t_i]).flatten())
+			ax[t_i].plot(segments_to_analyze,(epoch_seg_taste_percents_best[epochs_to_analyze[0],segments_to_analyze,t_i]).flatten())
 			seg_labels = [segment_names[a] for a in segments_to_analyze]
-			ax[e_ind,t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
+			ax[t_i].set_xticks(segments_to_analyze,labels=seg_labels,rotation=-45)
 			if t_i == 0:
-				ax[e_ind,t_i].set_ylabel('Epoch ' + str(e_i))
-			ax[e_ind,t_i].title('Taste ' + dig_in_names[t_i])
+				ax[t_i].set_ylabel('Epoch ' + str(epochs_to_analyze[0]))
+			ax[t_i].title('Taste ' + dig_in_names[t_i])
 	plt.tight_layout()
 	f.savefig(save_dir + 'Decoding_Percents_Best.png')
 	f.savefig(save_dir + 'Decoding_Percents_Best.svg')
