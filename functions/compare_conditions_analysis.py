@@ -145,6 +145,25 @@ class run_compare_conditions_analysis():
 		print("Beginning Plots.")
 		if num_cond > 1:
 			#Cross-Dataset: different given names on the same axes
+			#____Deviation Event Frequencies____
+			dev_freq_dir = os.path.join(results_dir,'dev_frequency_plots')
+			if os.path.isdir(dev_freq_dir) == False:
+				 os.mkdir(dev_freq_dir)
+			print("\tCalculating Cross-Taste Deviation Frequencies")
+			taste_dev_freq_dir = os.path.join(dev_freq_dir,'cross_tastes')
+			if os.path.isdir(taste_dev_freq_dir) == False:
+				 os.mkdir(taste_dev_freq_dir)
+			cdf.cross_dataset_dev_freq_taste(self.corr_data,self.unique_given_names,\
+							self.unique_corr_names,self.unique_segment_names,\
+								self.unique_taste_names,taste_dev_freq_dir)
+			print("\tCalculating Cross-Segment Deviation Frequencies")
+			seg_dev_freq_dir = os.path.join(dev_freq_dir,'cross_segments')
+			if os.path.isdir(seg_dev_freq_dir) == False:
+				 os.mkdir(seg_dev_freq_dir)
+			cdf.cross_dataset_dev_freq_seg(self.corr_data,self.unique_given_names,\
+							self.unique_corr_names,self.unique_segment_names,\
+								self.unique_taste_names,seg_dev_freq_dir)
+			#____Correlation Distributions____
 			cross_segment_dir = os.path.join(results_dir,'cross_segment_plots')
 			if os.path.isdir(cross_segment_dir) == False:
 				 os.mkdir(cross_segment_dir)

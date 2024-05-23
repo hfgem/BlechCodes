@@ -337,4 +337,37 @@ def taste_discriminability_test(post_taste_dt,num_tastes,tastant_spike_times,
 	
 	return anova_results_all, anova_results_true, peak_epochs, discrim_neur
 
-
+def full_taste_interval_2way_anova(num_tastes,num_neur,tastant_spike_times,
+								start_dig_in_times,bin_size,max_time,
+								anova_save_dir):
+	"""This function runs a 2-way anova on taste responses for 1.5 seconds
+	following taste delivery - binned into 250 ms bins. The goal is to find the
+	significance across tastes, across time, and the interaction term.
+	INPUTS:
+		- 
+		- 
+	OUTPUTS:
+		- 
+	"""
+	
+	#Pull spike rasters to use in ANOVA
+	taste_fr_data = []
+	for t_i in range(num_tastes):
+		t_st = tastant_spike_times[t_i]
+		num_deliv = len(t_st)
+		deliv_rasters = np.zeros((num_deliv,num_neur,max_time+1))
+		for d_i in range(num_deliv):
+			st_d_i = start_dig_in_times[t_i][d_i]
+			for n_i in range(num_neur):
+				st_n_d_i = (t_st[d_i][n_i] - st_d_i).astype('int')
+				st_n_d_i = st_n_d_i[st_n_d_i>=0]
+				st_n_d_i = st_n_d_i[st_n_d_i<max_time]
+				deliv_rasters[d_i,n_i,st_n_d_i] = 1
+		taste_fr_data.append(deliv_rasters)
+		
+	#Convert spike rasters to firing rate vectors
+	
+	
+	
+	
+	

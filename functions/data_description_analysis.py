@@ -96,6 +96,26 @@ class run_data_description_analysis():
 			os.mkdir(all_sc_save_dir)
 			sc.bin_spike_counts(all_sc_save_dir,self.data_dict['segment_spike_times'],self.data_dict['segment_names'],self.data_dict['segment_times'])
 			
+	def taste_anova(self,):
+		print('\tComparing Taste Deliveries')
+		data_save_dir = self.metadata['dir_name']
+		num_neur = self.data_dict['num_neur']
+		num_tastes = self.data_dict['num_tastes']
+		tastant_spike_times = self.data_dict['tastant_spike_times']
+		start_dig_in_times = self.data_dict['start_dig_in_times']
+		end_dig_in_times = self.data_dict['end_dig_in_times']
+		bin_size = 250
+		max_time = 1500
+		
+		#_____Grab and plot firing rate distributions and comparisons (by segment)_____
+		tds_save_dir = data_save_dir + 'Taste_Delivery_Similarity/'
+		if os.path.isdir(tds_save_dir) == False:
+			os.mkdir(tds_save_dir)
+			
+		#Full taste response
+		af.full_taste_interval_2way_anova(num_tastes,num_neur,tastant_spike_times,
+										start_dig_in_times,bin_size,max_time,
+										tds_save_dir)
 	
 	
 		

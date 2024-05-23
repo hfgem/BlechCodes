@@ -50,25 +50,25 @@ def segment_taste_decode_dependent_parallelized(inputs):
 	#Grab parameters/data
 	tb_fr_i = np.expand_dims(inputs[0],0)
 	num_tastes = inputs[1]
-	num_neur = inputs[2]
-	x_vals = inputs[3]
-	fit_tastant_neur = inputs[4]
-	p_fr_gmm = inputs[5] #fit_all_neur
-	p_taste = inputs[6]
-	taste_select_neur = inputs[7]
-
-	#Calculate decoding probability
+	fit_tastant_neur = inputs[2] #list of trained gmms
+	p_taste = inputs[3]
+	
+	#Calculate decoding probability using Gamma mixture models
+	
+	
 	decode_prob = np.nan*np.ones(num_tastes)
-	p_fr_taste_vec = np.nan*np.ones(num_tastes)
+	log_likelihood_fr_taste_vec = np.nan*np.ones(num_tastes)
 	for t_i in range(num_tastes):
 		p_fr_taste_gmm = fit_tastant_neur[t_i]
-		p_fr_taste = np.exp(p_fr_taste_gmm.score(tb_fr_i))
-		p_fr_taste_vec[t_i] = p_fr_taste
-		#P(taste|fr) = (P(fr|taste)*P(taste))/P(fr)
-		decode_prob[t_i] = p_fr_taste*p_taste[t_i]
-	p_fr = np.nansum(p_fr_taste_vec)/num_tastes
+		#Calculate log likelihood of given vector
+		log_likelihood_fr_taste_vec[t_i] = p_fr_taste_gmm.score(tb_fr_i)	
+	p_fr_taste = np.exp(log_likelihood_fr_taste_vec)	/np.nansum(np.exp(log_likelihood_fr_taste_vec))
+	#p_fr_taste = log_likelihood_fr_taste_vec/np.nansum(log_likelihood_fr_taste_vec) #Relative Approximation Through Log Likelihood Rescaling
+	#P(fr|taste)*P(taste)
+	p_fr_taste_taste = p_fr_taste*p_taste
+	p_fr = np.nansum(p_fr_taste)/num_tastes
 	if p_fr > 0:
-		decode_prob = decode_prob/p_fr
+		decode_prob = p_fr_taste_taste/p_fr
 	else:
 		#Do nothing
 		pass

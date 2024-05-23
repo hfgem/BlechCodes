@@ -53,7 +53,7 @@ def plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
 				dev_start = int(dev_times[0])
 				dev_len = dev_times[1] - dev_start
 				dev_rast_ind = []
-				raster_len = 2*dev_buffer + dev_len
+				raster_len = np.ceil(2*dev_buffer + dev_len).astype('int')
 				dev_binary = np.zeros((num_neur,raster_len))
 				for n_i in range(num_neur):
 					segment_neur_rast = np.array(segment_rasters[n_i])
