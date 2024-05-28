@@ -20,6 +20,7 @@ import numpy as np
 import functions.analysis_funcs as af
 import functions.dependent_decoding_funcs as ddf
 import functions.decoding_funcs as df
+import functions.decoder_tuning as dt
 
 class run_dependent_bayes():
 	
@@ -29,9 +30,9 @@ class run_dependent_bayes():
 		self.gather_variables()
 		self.pull_fr_dist()
 		self.decode_all_neurons()
-		self.decode_selective_neurons()
+		#self.decode_selective_neurons()
 		self.decode_all_neurons_zscored()
-		self.decode_selective_neurons_zscored()
+		#self.decode_selective_neurons_zscored()
 		
 	def gather_variables(self,):
 		#Directories
@@ -116,15 +117,42 @@ class run_dependent_bayes():
 		self.max_hz_z_pop = max_hz_z_pop
 		self.min_hz_z_pop = min_hz_z_pop
 		
+	def run_decoder_tuning(self,):
+		print("\tRunning decoder success calculations")
+		
+		
 	def decode_all_neurons(self,):
 		print("\tDecoding all neurons")
-		self.decode_dir = self.bayes_dir + 'All_Neurons/'
-		if os.path.isdir(self.decode_dir) == False:
-			os.mkdir(self.decode_dir)
+		self.main_decode_dir = self.bayes_dir + 'All_Neurons/'
+		if os.path.isdir(self.main_decode_dir) == False:
+			os.mkdir(self.main_decode_dir)
 		self.cur_dist = self.tastant_fr_dist_pop
 		self.select_neur = np.ones(np.shape(self.discrim_neur))
 		
+		#Run the decoder success tests first
+		dt.test_decoder_params(self.dig_in_names, self.start_dig_in_times, self.num_neur, 
+						 self.tastant_spike_times, self.cur_dist,
+						 self.discrim_cp_raster_inds, self.pre_taste_dt, self.post_taste_dt, 
+						 self.select_neur, self.e_skip_dt, self.e_len_dt, self.main_decode_dir)
+		
+		#Run gmm decoder over rest intervals
+		self.decode_dir = self.main_decode_dir + 'gmm/'
+		if os.path.isdir(self.decode_dir) == False:
+			os.mkdir(self.decode_dir)
 		ddf.decode_epochs(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
+	                      self.e_skip_dt, self.e_len_dt, self.dig_in_names, 
+						  self.segment_times, self.segment_names, self.start_dig_in_times,
+						  self.taste_num_deliv, self.select_neur, self.max_hz_pop,
+						  self.decode_dir, self.neuron_count_thresh, self.trial_start_frac,
+						  self.epochs_to_analyze, self.segments_to_analyze)
+		
+		self.plot_decode_results()
+		
+		#Run nb decoder over rest intervals
+		self.decode_dir = self.main_decode_dir + 'nb/'
+		if os.path.isdir(self.decode_dir) == False:
+			os.mkdir(self.decode_dir)
+		ddf.decode_epochs_nb(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
 	                      self.e_skip_dt, self.e_len_dt, self.dig_in_names, 
 						  self.segment_times, self.segment_names, self.start_dig_in_times,
 						  self.taste_num_deliv, self.select_neur, self.max_hz_pop,
@@ -153,13 +181,37 @@ class run_dependent_bayes():
 		
 	def decode_all_neurons_zscored(self,):
 		print("\tDecoding all neurons")
-		self.decode_dir = self.bayes_dir + 'All_Neurons_ZScored/'
-		if os.path.isdir(self.decode_dir) == False:
-			os.mkdir(self.decode_dir)
+		self.main_decode_dir = self.bayes_dir + 'All_Neurons_ZScored/'
+		if os.path.isdir(self.main_decode_dir) == False:
+			os.mkdir(self.main_decode_dir)
 		self.cur_dist = self.tastant_fr_dist_z_pop
 		self.select_neur = np.ones(np.shape(self.discrim_neur))
 		
+		#Run the decoder success tests first
+		dt.test_decoder_params(self.dig_in_names, self.start_dig_in_times, self.num_neur, 
+						 self.tastant_spike_times, self.cur_dist,
+						 self.discrim_cp_raster_inds, self.pre_taste_dt, self.post_taste_dt, 
+						 self.epochs_to_analyze, self.select_neur, self.e_skip_dt, 
+						 self.e_len_dt, self.main_decode_dir)
+		
+		#Run gmm decoder over rest intervals
+		self.decode_dir = self.main_decode_dir + 'gmm/'
+		if os.path.isdir(self.decode_dir) == False:
+			os.mkdir(self.decode_dir)
 		ddf.decode_epochs_zscore(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
+	                      self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
+						  self.bin_dt, self.segment_names, self.start_dig_in_times, 
+						  self.taste_num_deliv, self.select_neur, self.max_hz_z_pop,
+						  self.decode_dir, self.neuron_count_thresh, self.trial_start_frac,
+						  self.epochs_to_analyze,self.segments_to_analyze)
+		
+		self.plot_decode_results()
+		
+		#Run nb decoder over rest intervals
+		self.decode_dir = self.main_decode_dir + 'nb/'
+		if os.path.isdir(self.decode_dir) == False:
+			os.mkdir(self.decode_dir)
+		ddf.decode_epochs_nb_zscore(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
 	                      self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
 						  self.bin_dt, self.segment_names, self.start_dig_in_times, 
 						  self.taste_num_deliv, self.select_neur, self.max_hz_z_pop,

@@ -155,4 +155,3 @@ tastant_fr_dist = cur_dist
 max_hz = max_hz_pop
 cp_raster_inds = discrim_cp_raster_inds
 
-	

@@ -53,9 +53,7 @@ def segment_taste_decode_dependent_parallelized(inputs):
 	fit_tastant_neur = inputs[2] #list of trained gmms
 	p_taste = inputs[3]
 	
-	#Calculate decoding probability using Gamma mixture models
-	
-	
+	#Calculate decoding probability using Gaussian mixture models	
 	decode_prob = np.nan*np.ones(num_tastes)
 	log_likelihood_fr_taste_vec = np.nan*np.ones(num_tastes)
 	for t_i in range(num_tastes):
