@@ -134,7 +134,9 @@ def cross_dataset_dev_freq_taste(corr_data,unique_given_names,unique_corr_names,
 					ax_all[i_3].axhline(0,label='_',alpha=0.2,color='k',linestyle='dashed')
 					ax_best[i_3].axhline(0,label='_',alpha=0.2,color='k',linestyle='dashed')
 					all_taste_data = []
+					all_taste_data_indices = []
 					all_best_taste_data = []
+					all_best_taste_data_indices = []
 					for t_i, t_name in enumerate(unique_taste_names):
 						#all data
 						taste_rates = []
@@ -143,11 +145,13 @@ def cross_dataset_dev_freq_taste(corr_data,unique_given_names,unique_corr_names,
 								taste_rates.extend([dev_freq_dict[g_n][t_name]['all']])
 							except:
 								print("Skipping dataset.")
-						ax_all[i_3].scatter(np.random.normal(t_i+1,0.04,size=len(taste_rates)),taste_rates,color='g',alpha=0.2)
-						ax_all[i_3].boxplot([taste_rates],positions=[t_i+1],sym='',meanline=True,medianprops=dict(linestyle='-',color='blue'),showcaps=True,showbox=True)
-						if np.max(taste_rates) > max_freq:
-							max_freq = np.max(taste_rates)
-						all_taste_data.append(taste_rates)
+						if len(taste_rates) > 0:
+							ax_all[i_3].scatter(np.random.normal(t_i+1,0.04,size=len(taste_rates)),taste_rates,color='g',alpha=0.2)
+							ax_all[i_3].boxplot([taste_rates],positions=[t_i+1],sym='',meanline=True,medianprops=dict(linestyle='-',color='blue'),showcaps=True,showbox=True)
+							if np.max(taste_rates) > max_freq:
+								max_freq = np.max(taste_rates)
+							all_taste_data.append(taste_rates)
+							all_taste_data_indices.extend([t_i])
 						#best data
 						best_taste_rates = []
 						for g_n in unique_given_names:
@@ -155,11 +159,13 @@ def cross_dataset_dev_freq_taste(corr_data,unique_given_names,unique_corr_names,
 								best_taste_rates.extend([dev_freq_dict[g_n][t_name]['best']])
 							except:
 								print("Skipping dataset.")
-						ax_best[i_3].scatter(np.random.normal(t_i+1,0.04,size=len(best_taste_rates)),best_taste_rates,color='g',alpha=0.2)
-						ax_best[i_3].boxplot([best_taste_rates],positions=[t_i+1],sym='',meanline=True,medianprops=dict(linestyle='-',color='blue'),showcaps=True,showbox=True)
-						if np.max(best_taste_rates) > max_best_freq:
-							max_best_freq = np.max(best_taste_rates)
-						all_best_taste_data.append(best_taste_rates)
+						if len(best_taste_rates) > 0:
+							ax_best[i_3].scatter(np.random.normal(t_i+1,0.04,size=len(best_taste_rates)),best_taste_rates,color='g',alpha=0.2)
+							ax_best[i_3].boxplot([best_taste_rates],positions=[t_i+1],sym='',meanline=True,medianprops=dict(linestyle='-',color='blue'),showcaps=True,showbox=True)
+							if np.max(best_taste_rates) > max_best_freq:
+								max_best_freq = np.max(best_taste_rates)
+							all_best_taste_data.append(best_taste_rates)
+							all_best_taste_data_indices.extend([t_i])
 					ax_all[i_3].set_xticks(np.arange(1,len(unique_taste_names)+1),unique_taste_names)
 					ax_all[i_3].set_xlabel(i3_label)
 					ax_all[i_3].set_ylabel('Frequency (Hz)')
@@ -167,7 +173,7 @@ def cross_dataset_dev_freq_taste(corr_data,unique_given_names,unique_corr_names,
 					ax_best[i_3].set_xlabel(i3_label)
 					ax_best[i_3].set_ylabel('Frequency (Hz)')
 					#Test pairwise significance #TTEST
-					pair_nums = list(combinations(np.arange(len(unique_taste_names)),2))
+					pair_nums = list(combinations(all_taste_data_indices,2))
 					for pair_i, pair in enumerate(pair_nums):
 						data_1 = all_taste_data[pair[0]]
 						data_2 = all_taste_data[pair[1]]
@@ -179,6 +185,8 @@ def cross_dataset_dev_freq_taste(corr_data,unique_given_names,unique_corr_names,
 								significance_storage[i_3][pair_i] = dict()
 								significance_storage[i_3][pair_i]['ind_1'] = ind_1
 								significance_storage[i_3][pair_i]['ind_2'] = ind_2
+					pair_nums = list(combinations(all_best_taste_data_indices,2))
+					for pair_i, pair in enumerate(pair_nums):
 						data_1 = all_best_taste_data[pair[0]]
 						data_2 = all_best_taste_data[pair[1]]
 						if (len(data_1) > 0)*(len(data_2) > 0):
@@ -353,7 +361,9 @@ def cross_dataset_dev_freq_seg(corr_data,unique_given_names,unique_corr_names,\
 					ax_all[i_3].axhline(0,label='_',alpha=0.2,color='k',linestyle='dashed')
 					ax_best[i_3].axhline(0,label='_',alpha=0.2,color='k',linestyle='dashed')
 					all_segment_data = []
+					all_segment_data_indices = []
 					all_best_segment_data = []
+					all_best_segment_data_indices = []
 					for s_i, s_name in enumerate(unique_segment_names):
 						#all data
 						segment_rates = []
@@ -364,9 +374,11 @@ def cross_dataset_dev_freq_seg(corr_data,unique_given_names,unique_corr_names,\
 								print("Skipping dataset.")
 						ax_all[i_3].scatter(np.random.normal(s_i+1,0.04,size=len(segment_rates)),segment_rates,color='g',alpha=0.2)
 						ax_all[i_3].boxplot([segment_rates],positions=[s_i+1],sym='',meanline=True,medianprops=dict(linestyle='-',color='blue'),showcaps=True,showbox=True)
-						if np.max(segment_rates) > max_freq:
-							max_freq = np.max(segment_rates)
-						all_segment_data.append(segment_rates)
+						if len(segment_rates) > 0:
+							if np.max(segment_rates) > max_freq:
+								max_freq = np.max(segment_rates)
+							all_segment_data.append(segment_rates)
+							all_segment_data_indices.append([s_i])
 						#best data
 						best_segment_rates = []
 						for g_n in unique_given_names:
@@ -374,11 +386,13 @@ def cross_dataset_dev_freq_seg(corr_data,unique_given_names,unique_corr_names,\
 								best_segment_rates.extend([dev_freq_dict[g_n][s_name]['best']])
 							except:
 								print("Skipping dataset.")
-						ax_best[i_3].scatter(np.random.normal(s_i+1,0.04,size=len(best_segment_rates)),best_segment_rates,color='g',alpha=0.2)
-						ax_best[i_3].boxplot([best_segment_rates],positions=[s_i+1],sym='',meanline=True,medianprops=dict(linestyle='-',color='blue'),showcaps=True,showbox=True)
-						if np.max(best_segment_rates) > max_best_freq:
-							max_best_freq = np.max(best_segment_rates)
-						all_best_segment_data.append(best_segment_rates)
+						if len(best_segment_rates) > 0:
+							ax_best[i_3].scatter(np.random.normal(s_i+1,0.04,size=len(best_segment_rates)),best_segment_rates,color='g',alpha=0.2)
+							ax_best[i_3].boxplot([best_segment_rates],positions=[s_i+1],sym='',meanline=True,medianprops=dict(linestyle='-',color='blue'),showcaps=True,showbox=True)
+							if np.max(best_segment_rates) > max_best_freq:
+								max_best_freq = np.max(best_segment_rates)
+							all_best_segment_data.append(best_segment_rates)
+							all_best_segment_data_indices.append([s_i])
 					ax_all[i_3].set_xticks(np.arange(1,len(unique_segment_names)+1),unique_segment_names)
 					ax_all[i_3].set_xlabel(i3_label)
 					ax_all[i_3].set_ylabel('Frequency (Hz)')
@@ -386,28 +400,36 @@ def cross_dataset_dev_freq_seg(corr_data,unique_given_names,unique_corr_names,\
 					ax_best[i_3].set_xlabel(i3_label)
 					ax_best[i_3].set_ylabel('Frequency (Hz)')
 					#Test pairwise significance #TTEST
-					pair_nums = list(combinations(np.arange(len(unique_taste_names)),2))
+					pair_nums = list(combinations(all_segment_data_indices,2))
 					for pair_i, pair in enumerate(pair_nums):
-						data_1 = all_segment_data[pair[0]]
-						data_2 = all_segment_data[pair[1]]
-						if (len(data_1) > 0)*(len(data_2) > 0):
-							result = ttest_ind(data_1,data_2)
-							if result[1] <= 0.05:
-								ind_1 = pair[0] + 1
-								ind_2 = pair[1] + 1
-								significance_storage[i_3][pair_i] = dict()
-								significance_storage[i_3][pair_i]['ind_1'] = ind_1
-								significance_storage[i_3][pair_i]['ind_2'] = ind_2
-						data_1 = all_best_segment_data[pair[0]]
-						data_2 = all_best_segment_data[pair[1]]
-						if (len(data_1) > 0)*(len(data_2) > 0):
-							result = ks_2samp(data_1,data_2)
-							if result[1] <= 0.05:
-								ind_1 = pair[0] + 1
-								ind_2 = pair[1] + 1
-								best_significance_storage[i_3][pair_i] = dict()
-								best_significance_storage[i_3][pair_i]['ind_1'] = ind_1
-								best_significance_storage[i_3][pair_i]['ind_2'] = ind_2
+						try:
+							data_1 = all_segment_data[pair[0]]
+							data_2 = all_segment_data[pair[1]]
+							if (len(data_1) > 0)*(len(data_2) > 0):
+								result = ttest_ind(data_1,data_2)
+								if result[1] <= 0.05:
+									ind_1 = pair[0] + 1
+									ind_2 = pair[1] + 1
+									significance_storage[i_3][pair_i] = dict()
+									significance_storage[i_3][pair_i]['ind_1'] = ind_1
+									significance_storage[i_3][pair_i]['ind_2'] = ind_2
+						except:
+							"Do Nothing"
+					pair_nums = list(combinations(all_best_segment_data_indices,2))
+					for pair_i, pair in enumerate(pair_nums):
+						try:
+							data_1 = all_best_segment_data[pair[0]]
+							data_2 = all_best_segment_data[pair[1]]
+							if (len(data_1) > 0)*(len(data_2) > 0):
+								result = ks_2samp(data_1,data_2)
+								if result[1] <= 0.05:
+									ind_1 = pair[0] + 1
+									ind_2 = pair[1] + 1
+									best_significance_storage[i_3][pair_i] = dict()
+									best_significance_storage[i_3][pair_i]['ind_1'] = ind_1
+									best_significance_storage[i_3][pair_i]['ind_2'] = ind_2
+						except:
+							"Do Nothing"
 				for i_3 in range(combo_lengths[2]):
 					#Add significance data
 					step = max_freq/10
@@ -624,10 +646,6 @@ def cross_segment_diffs(corr_data,save_dir,unique_given_names,unique_corr_names,
 							ax_mean[i_3,sp_i].fill_between(bin_x_vals,std_y_low,std_y_high,alpha=0.2,color='k',label='Std')
 							ax_mean[i_3,sp_i].plot(bin_x_vals,mean_cum_dist,linewidth=3, linestyle='--', color='k',label='Mean')
 							ax_mean[i_3,sp_i].plot(bin_x_vals,half_means,linewidth=3, linestyle='dotted', color='k',label='Mean-Binned')
-						ax[i_3,sp_i].legend(fontsize='8', loc ='lower left')
-						ax[i_3,sp_i].set_xlim([0,1.1])
-						ax[i_3,sp_i].set_xlabel(xlabel)
-						ax[i_3,sp_i].set_title(title)
 						#Plot normalized distribution differences: |max diff| = 1
 						ax_norm[i_3,sp_i].axhline(0,label='_',alpha=0.2,color='k')
 						ax_norm[i_3,sp_i].axvline(0.5,label='_',alpha=0.2,color='k')
@@ -657,19 +675,6 @@ def cross_segment_diffs(corr_data,save_dir,unique_given_names,unique_corr_names,
 							ax_mean_norm[i_3,sp_i].plot(bin_x_vals,half_means_norm,linewidth=3, linestyle='dotted', color='k',label='Mean-Binned')
 						except:
 							print("\tNo Mean Plotted.")
-						ax_norm[i_3,sp_i].legend(fontsize='8', loc ='lower left')
-						ax_norm[i_3,sp_i].set_xlim([0,1.1])
-						ax_norm[i_3,sp_i].set_xlabel(xlabel)
-						ax_norm[i_3,sp_i].set_title(title)
-						#Mean plots cleanups
-						ax_mean[i_3,sp_i].legend(fontsize='8', loc ='lower left')
-						ax_mean[i_3,sp_i].set_xlim([0,1.1])
-						ax_mean[i_3,sp_i].set_xlabel(xlabel)
-						ax_mean[i_3,sp_i].set_title(title)
-						ax_mean_norm[i_3,sp_i].legend(fontsize='8', loc ='lower left')
-						ax_mean_norm[i_3,sp_i].set_xlim([0,1.1])
-						ax_mean_norm[i_3,sp_i].set_xlabel(xlabel)
-						ax_mean_norm[i_3,sp_i].set_title(title)
 						#Calculate distribution differences significance above 0 using percentile
 						true_sig_bins = np.zeros(len(bin_x_vals)+2)
 						norm_sig_bins = np.zeros(len(bin_x_vals)+2)
@@ -694,14 +699,31 @@ def cross_segment_diffs(corr_data,save_dir,unique_given_names,unique_corr_names,
 							for tb_i in range(len(true_bin_starts)):
 								start_i = bin_x_vals[true_bin_starts[tb_i]]
 								end_i = bin_x_vals[true_bin_ends[tb_i]]
-								ax[i_3,sp_i].fill_betweenx(np.array([-1,1]),start_i,end_i,alpha=0.2,color='yellow')
-								ax_mean[i_3,sp_i].fill_betweenx(np.array([-1,1]),start_i,end_i,alpha=0.2,color='yellow')
+								ax[i_3,sp_i].fill_betweenx(np.array([-1,1]),start_i,end_i,alpha=0.2,color='yellow',label='Sig')
+								ax_mean[i_3,sp_i].fill_betweenx(np.array([-1,1]),start_i,end_i,alpha=0.2,color='yellow',label='Sig')
 						if len(norm_bin_starts) > 0:
 							for nb_i in range(len(norm_bin_starts)):
 								start_i = bin_x_vals[norm_bin_starts[nb_i]]
 								end_i = bin_x_vals[norm_bin_ends[nb_i]]
-								ax_norm[i_3,sp_i].fill_betweenx(np.array([-1,1]),start_i,end_i,alpha=0.2,color='yellow')
-								ax_mean_norm[i_3,sp_i].fill_betweenx(np.array([-1,1]),start_i,end_i,alpha=0.2,color='yellow')
+								ax_norm[i_3,sp_i].fill_betweenx(np.array([-1,1]),start_i,end_i,alpha=0.2,color='yellow',label='Sig')
+								ax_mean_norm[i_3,sp_i].fill_betweenx(np.array([-1,1]),start_i,end_i,alpha=0.2,color='yellow',label='Sig')
+						#Plot cleanups
+						ax[i_3,sp_i].legend(fontsize='8', loc ='lower left')
+						ax[i_3,sp_i].set_xlim([0,1.1])
+						ax[i_3,sp_i].set_xlabel(xlabel)
+						ax[i_3,sp_i].set_title(title)
+						ax_norm[i_3,sp_i].legend(fontsize='8', loc ='lower left')
+						ax_norm[i_3,sp_i].set_xlim([0,1.1])
+						ax_norm[i_3,sp_i].set_xlabel(xlabel)
+						ax_norm[i_3,sp_i].set_title(title)
+						ax_mean[i_3,sp_i].legend(fontsize='8', loc ='lower left')
+						ax_mean[i_3,sp_i].set_xlim([0,1.1])
+						ax_mean[i_3,sp_i].set_xlabel(xlabel)
+						ax_mean[i_3,sp_i].set_title(title)
+						ax_mean_norm[i_3,sp_i].legend(fontsize='8', loc ='lower left')
+						ax_mean_norm[i_3,sp_i].set_xlim([0,1.1])
+						ax_mean_norm[i_3,sp_i].set_xlabel(xlabel)
+						ax_mean_norm[i_3,sp_i].set_title(title)
 					#Plot box plots and trends of mean correlation differences with significance
 					ax_mean_diff[0,i_3].axhline(0,label='_',alpha=0.2,color='k',linestyle='dashed')
 					points_boxplot = []

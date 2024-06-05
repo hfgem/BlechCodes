@@ -18,8 +18,9 @@ from multiprocess import Pool
 import functions.decode_parallel as dp
 from sklearn.mixture import GaussianMixture as gmm
 from sklearn.naive_bayes import GaussianNB
+from sklearn.decomposition import PCA
 
-def taste_fr_dist(num_neur, tastant_spike_times, cp_raster_inds,
+def taste_fr_dist(num_neur, tastant_spike_times, cp_raster_inds, fr_bins,
 				  start_dig_in_times, pre_taste_dt, post_taste_dt, trial_start_frac=0):
 	"""Calculate the multidimensional distributions of firing rates maintaining
 	dependencies between neurons"""
@@ -73,7 +74,6 @@ def taste_fr_dist(num_neur, tastant_spike_times, cp_raster_inds,
 					sdi = start_taste_i + start_epoch
 					edi = start_taste_i + end_epoch
 					epoch_len = end_epoch - start_epoch
-					new_time_bins = np.arange(50,epoch_len-50,25)
 					if epoch_len > 0: 
 						td_i_bin  = np.zeros((num_neur,epoch_len+1))
 						for n_i in range(num_neur):
@@ -81,14 +81,23 @@ def taste_fr_dist(num_neur, tastant_spike_times, cp_raster_inds,
 							keep_spike_times = n_i_spike_times[np.where((0 <= n_i_spike_times)*(epoch_len >= n_i_spike_times))[0]]
 							td_i_bin[n_i,keep_spike_times] = 1
 						#Calculate the firing rate vectors for these bins
-						tb_fr = np.zeros((num_neur,len(new_time_bins)))
-						for tb_i,tb in enumerate(new_time_bins):
-							tb_fr[:,tb_i] = np.sum(td_i_bin[:,tb-50:tb+50],1)/(100/1000)
+						all_tb_fr = []
+						for fr_bin_size in fr_bins:
+							fr_half_bin = np.ceil(fr_bin_size*500).astype('int') #Convert to  milliseconds
+							quart_bin = np.ceil(fr_half_bin/2).astype('int')
+							fr_bin_dt = np.ceil(fr_half_bin*2).astype('int')
+							new_time_bins = np.arange(fr_half_bin,epoch_len-fr_half_bin,quart_bin)
+							#Calculate the firing rate vectors for these bins
+							tb_fr = np.zeros((num_neur,len(new_time_bins)))
+							for tb_i,tb in enumerate(new_time_bins):
+								tb_fr[:,tb_i] = np.sum(td_i_bin[:,tb-fr_half_bin:tb+fr_half_bin],1)/(fr_bin_dt/1000)
+							all_tb_fr.extend(list(tb_fr.T))
+						all_tb_fr = np.array(all_tb_fr).T
 						#Store the firing rate vectors
-						tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = tb_fr
+						tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = all_tb_fr
 						#Store maximum firing rate
-						if np.max(tb_fr) > max_hz:
-							max_hz = np.max(tb_fr)
+						if np.max(all_tb_fr) > max_hz:
+							max_hz = np.max(all_tb_fr)
 					
 	return tastant_fr_dist, taste_num_deliv, max_hz
 	
@@ -99,6 +108,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				   neuron_count_thresh,trial_start_frac=0,
 				   epochs_to_analyze=[],segments_to_analyze=[]):		
 	"""Decode taste from epoch-specific firing rates"""
+	print('\t\tRunning GMM Decoder')
 	#Variables
 	num_tastes = len(start_dig_in_times)
 	num_neur = len(segment_spike_times[0])
@@ -118,24 +128,40 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 	#If trial_start_frac > 0 use only trials after that threshold
 	trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
 	for e_i in epochs_to_analyze: #By epoch conduct decoding
-		print('Decoding Epoch ' + str(e_i))
+		print('\t\t\tDecoding Epoch ' + str(e_i))
 		
 		taste_select_neur = np.where(taste_select_epoch[e_i,:] == 1)[0]
+		
+		#Collect fr of each population for each taste
+		train_data = []
+		all_train_data = []
+		#taste_bic_scores = np.zeros((len(component_counts),num_tastes))
+		for t_i in range(num_tastes):
+			train_taste_data = []
+			taste_num_deliv = len(tastant_fr_dist[t_i])
+			for d_i in range(taste_num_deliv):
+				train_taste_data.extend(list(tastant_fr_dist[t_i][d_i][e_i].T))
+			train_data.append(np.array(train_taste_data))
+			all_train_data.extend(train_taste_data)
+		
+		#Run PCA transform
+		pca = PCA()
+		pca.fit(np.array(all_train_data))
+		exp_var = pca.explained_variance_ratio_
+		num_components = np.where(np.cumsum(exp_var) >= 0.9)[0][0]
+		pca_reduce = PCA(num_components)
+		pca_reduce.fit(np.array(all_train_data))
+		all_transformed = pca_reduce.transform(np.array(all_train_data))
 		
 		#Fit gmm distributions to fr of each population for each taste
 		#P(firing rate | taste) w/ inter-neuron dependencies
 		fit_tastant_neur = dict()
 		for t_i in range(num_tastes):
-			full_data = []
-			for d_i in range(max_num_deliv):
-				if d_i >= trial_start_ind:
-					full_data.extend(list(tastant_fr_dist[t_i][d_i-trial_start_ind][e_i].T))
-			#Since Gaussian distribution fits to both positive and negative, add negative data for better fit
-			train_expansion_taste_data = []
-			train_expansion_taste_data.extend(full_data)
-			train_expansion_taste_data.extend(list(-1*np.array(full_data)))
+			train_taste_data = train_data[t_i]
+			#PCA transform data
+			transformed_test_taste_data = pca_reduce.transform(np.array(train_taste_data))
 			#Train the gmm
-			gm = gmm(n_components=1, n_init=10).fit(np.array(train_expansion_taste_data))
+			gm = gmm(n_components=1, n_init=10).fit(np.array(transformed_test_taste_data))
 			fit_tastant_neur[t_i] = gm
 		
 		#Segment-by-segment use full taste decoding times to zoom in and test 
@@ -162,11 +188,11 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 			try:
 				seg_decode_epoch_prob = np.load(epoch_decode_save_dir + 'segment_' + str(s_i) + '.npy')
 				tb_fr = np.load(epoch_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy')
-				print('\tSegment ' + str(s_i) + ' Previously Decoded')
+				print('\t\t\t\tSegment ' + str(s_i) + ' Previously Decoded')
 			except:
-				print('\tDecoding Segment ' + str(s_i))
+				print('\t\t\t\tDecoding Segment ' + str(s_i))
 				#Perform parallel computation for each time bin
-				print('\t\tCalculate firing rates for time bins')
+				print('\t\t\t\t\tCalculate firing rates for time bins')
 				try:
 					tb_fr = np.load(epoch_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy')
 				except:
@@ -175,7 +201,8 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 						tb_fr[:,tb_i] = np.sum(segment_spike_times_s_i_bin[:,tb-seg_start-half_bin:tb+half_bin-seg_start],1)/(2*half_bin*(1/1000))
 					np.save(epoch_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy',tb_fr)
 					del tb_i, tb
-				list_tb_fr = list(tb_fr.T)
+				tb_fr_pca = pca_reduce.transform(tb_fr.T)
+				list_tb_fr = list(tb_fr_pca)
 				del tb_fr
 				#Pass inputs to parallel computation on probabilities
 				inputs = zip(list_tb_fr, itertools.repeat(num_tastes), \
@@ -185,7 +212,7 @@ def decode_epochs(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				tb_decode_prob = pool.map(dp.segment_taste_decode_dependent_parallelized, inputs)
 				pool.close()
 				toc = time.time()
-				print('\t\tTime to decode = ' + str(np.round((toc-tic)/60,2)) + ' (min)')
+				print('\t\t\t\t\tTime to decode = ' + str(np.round((toc-tic)/60,2)) + ' (min)')
 				tb_decode_array = np.squeeze(np.array(tb_decode_prob)).T
 				for s_dt in range(e_skip_dt): #The whole skip interval should have the same decode probability
 					seg_decode_epoch_prob[:,new_time_bins - seg_start + s_dt] = tb_decode_array
@@ -299,6 +326,7 @@ def decode_epochs_nb(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				   epochs_to_analyze=[],segments_to_analyze=[]):		
 	"""Decode taste from epoch-specific firing rates using a naive-bayes
 	decoder."""
+	print('\t\tRunning NB Decoder')
 	#Variables
 	num_tastes = len(start_dig_in_times)
 	num_neur = len(segment_spike_times[0])
@@ -318,7 +346,7 @@ def decode_epochs_nb(tastant_fr_dist,segment_spike_times,post_taste_dt,
 	#If trial_start_frac > 0 use only trials after that threshold
 	trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
 	for e_i in epochs_to_analyze: #By epoch conduct decoding
-		print('Decoding Epoch ' + str(e_i))
+		print('\t\t\tDecoding Epoch ' + str(e_i))
 		
 		taste_select_neur = np.where(taste_select_epoch[e_i,:] == 1)[0]
 		
@@ -365,11 +393,11 @@ def decode_epochs_nb(tastant_fr_dist,segment_spike_times,post_taste_dt,
 			try:
 				seg_decode_epoch_prob = np.load(epoch_decode_save_dir + 'segment_' + str(s_i) + '.npy')
 				tb_fr = np.load(epoch_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy')
-				print('\tSegment ' + str(s_i) + ' Previously Decoded')
+				print('\t\t\t\tSegment ' + str(s_i) + ' Previously Decoded')
 			except:
-				print('\tDecoding Segment ' + str(s_i))
+				print('\t\t\t\tDecoding Segment ' + str(s_i))
 				#Perform parallel computation for each time bin
-				print('\t\tCalculate firing rates for time bins')
+				print('\t\t\t\t\tCalculate firing rates for time bins')
 				try:
 					tb_fr = np.load(epoch_decode_save_dir + 'segment_' + str(s_i) + '_tb_fr.npy')
 				except:
@@ -384,7 +412,7 @@ def decode_epochs_nb(tastant_fr_dist,segment_spike_times,post_taste_dt,
 				tic = time.time()
 				tb_decode_prob = gnb.predict_proba(list_tb_fr)
 				toc = time.time()
-				print('\t\tTime to decode = ' + str(np.round((toc-tic)/60,2)) + ' (min)')
+				print('\t\t\t\t\tTime to decode = ' + str(np.round((toc-tic)/60,2)) + ' (min)')
 				tb_decode_array = np.squeeze(np.array(tb_decode_prob)).T
 				for s_dt in range(e_skip_dt): #The whole skip interval should have the same decode probability
 					seg_decode_epoch_prob[:,new_time_bins - seg_start + s_dt] = tb_decode_array
@@ -492,7 +520,7 @@ def decode_epochs_nb(tastant_fr_dist,segment_spike_times,post_taste_dt,
 						
 
 def taste_fr_dist_zscore(num_neur,tastant_spike_times,segment_spike_times,
-				  segment_names,segment_times,cp_raster_inds,
+				  segment_names,segment_times,cp_raster_inds,fr_bins,
 				  start_dig_in_times,pre_taste_dt,post_taste_dt,bin_dt,trial_start_frac=0):
 	
 	"""This function calculates spike count distributions for each neuron for
@@ -584,13 +612,20 @@ def taste_fr_dist_zscore(num_neur,tastant_spike_times,segment_spike_times,
 							n_i_spike_times = np.array(raster_times[n_i] - sdi).astype('int')
 							keep_spike_times = n_i_spike_times[np.where((0 <= n_i_spike_times)*(epoch_len >= n_i_spike_times))[0]]
 							td_i_bin[n_i,keep_spike_times] = 1
-						new_time_bins = np.arange(50,epoch_len-50,25)
-						#Calculate the firing rate vectors for these bins
-						tb_fr = np.zeros((num_neur,len(new_time_bins)))
-						for tb_i,tb in enumerate(new_time_bins):
-							tb_fr[:,tb_i] = np.sum(td_i_bin[:,tb-50:tb+50],1)/(100/1000)
-						#Z-score firing rates
-						bst_hz_z = (np.array(tb_fr) - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+						all_tb_fr = []
+						for fr_bin_size in fr_bins:
+							fr_half_bin = np.ceil(fr_bin_size*500).astype('int') #Convert to  milliseconds
+							quart_bin = np.ceil(fr_half_bin/2).astype('int')
+							fr_bin_dt = np.ceil(fr_half_bin*2).astype('int')
+							new_time_bins = np.arange(fr_half_bin,epoch_len-fr_half_bin,quart_bin)
+							#Calculate the firing rate vectors for these bins
+							tb_fr = np.zeros((num_neur,len(new_time_bins)))
+							for tb_i,tb in enumerate(new_time_bins):
+								tb_fr[:,tb_i] = np.sum(td_i_bin[:,tb-fr_half_bin:tb+fr_half_bin],1)/(fr_bin_dt/1000)
+							all_tb_fr.extend(list(tb_fr.T))
+						all_tb_fr = np.array(all_tb_fr).T
+						#Z-score firing rates 
+						bst_hz_z = (np.array(all_tb_fr) - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
 						tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = np.array(bst_hz_z).T #num_neurxall_n
 						if np.max(bst_hz_z) > max_hz:
 							max_hz = np.max(bst_hz_z)

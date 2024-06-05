@@ -20,6 +20,11 @@
         "lag_min": 2,
         "lag_max": 100
     },
+    "fr_bins": [
+        0.02,
+        0.05,
+        0.1
+    ],
     "z_bin": 0.05,
     "bayes_params":{
         "pre_taste": 2,

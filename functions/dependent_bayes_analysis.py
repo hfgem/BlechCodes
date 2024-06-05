@@ -31,7 +31,7 @@ class run_dependent_bayes():
 		self.pull_fr_dist()
 		self.decode_all_neurons()
 		#self.decode_selective_neurons()
-		self.decode_all_neurons_zscored()
+		#self.decode_all_neurons_zscored()
 		#self.decode_selective_neurons_zscored()
 		
 	def gather_variables(self,):
@@ -59,6 +59,7 @@ class run_dependent_bayes():
 		self.end_dig_in_times = self.data_dict['end_dig_in_times']
 		self.dig_in_names = self.data_dict['dig_in_names']
 		self.num_tastes = len(self.dig_in_names)
+		self.fr_bins = self.metadata['params_dict']['fr_bins']
 		#Bayes Params/Variables
 		self.skip_time = self.metadata['params_dict']['bayes_params']['skip_time']
 		self.skip_dt = np.ceil(self.skip_time*1000).astype('int')
@@ -101,7 +102,7 @@ class run_dependent_bayes():
 	def pull_fr_dist(self,):
 		print("\tPulling FR Distributions")
 		tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur, self.tastant_spike_times,
-	                                                                         self.discrim_cp_raster_inds,
+	                                                                         self.discrim_cp_raster_inds, self.fr_bins,
 	                                                                         self.start_dig_in_times, self.pre_taste_dt,
 	                                                                         self.post_taste_dt, self.trial_start_frac)
 		self.tastant_fr_dist_pop = tastant_fr_dist_pop
@@ -110,7 +111,7 @@ class run_dependent_bayes():
 		tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(self.num_neur, self.tastant_spike_times,
 	                                                                                                  self.segment_spike_times, self.segment_names,
 	                                                                                                  self.segment_times, self.discrim_cp_raster_inds,
-	                                                                                                  self.start_dig_in_times, self.pre_taste_dt,
+	                                                                                                  self.fr_bins, self.start_dig_in_times, self.pre_taste_dt,
 	                                                                                                  self.post_taste_dt, self.bin_dt, self.trial_start_frac)
 		self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
 		self.taste_num_deliv = taste_num_deliv
@@ -133,7 +134,8 @@ class run_dependent_bayes():
 		dt.test_decoder_params(self.dig_in_names, self.start_dig_in_times, self.num_neur, 
 						 self.tastant_spike_times, self.cur_dist,
 						 self.discrim_cp_raster_inds, self.pre_taste_dt, self.post_taste_dt, 
-						 self.select_neur, self.e_skip_dt, self.e_len_dt, self.main_decode_dir)
+						 self.epochs_to_analyze, self.select_neur, self.e_skip_dt, 
+						 self.e_len_dt, self.main_decode_dir)
 		
 		#Run gmm decoder over rest intervals
 		self.decode_dir = self.main_decode_dir + 'gmm/'

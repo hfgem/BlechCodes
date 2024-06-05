@@ -93,6 +93,7 @@ start_dig_in_times = data_dict['start_dig_in_times']
 end_dig_in_times = data_dict['end_dig_in_times']
 dig_in_names = data_dict['dig_in_names']
 num_tastes = len(dig_in_names)
+fr_bins = metadata['params_dict']['fr_bins']
 #Bayes Params/Variables
 skip_time = metadata['params_dict']['bayes_params']['skip_time']
 skip_dt = np.ceil(skip_time*1000).astype('int')
@@ -133,17 +134,17 @@ discrim_cp_raster_inds = discrim_cp_raster_inds
 discrim_neur = discrim_neur
 
 tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(num_neur, tastant_spike_times,
-                                                                        discrim_cp_raster_inds,
+                                                                        discrim_cp_raster_inds,fr_bins,
                                                                         start_dig_in_times, pre_taste_dt,
                                                                         post_taste_dt, trial_start_frac)
 tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(num_neur, tastant_spike_times,
                                                                                                  segment_spike_times, segment_names,
                                                                                                  segment_times, discrim_cp_raster_inds,
-                                                                                                 start_dig_in_times, pre_taste_dt,
+                                                                                                 fr_bins,start_dig_in_times, pre_taste_dt,
                                                                                                  post_taste_dt, bin_dt, trial_start_frac)
 
 print("\tDecoding all neurons")
-decode_dir = bayes_dir + 'All_Neurons/'
+decode_dir = bayes_dir + 'All_Neurons/' + 'gmm/'
 if os.path.isdir(decode_dir) == False:
 	os.mkdir(decode_dir)
 cur_dist = tastant_fr_dist_pop
@@ -154,4 +155,3 @@ save_dir = decode_dir
 tastant_fr_dist = cur_dist
 max_hz = max_hz_pop
 cp_raster_inds = discrim_cp_raster_inds
-

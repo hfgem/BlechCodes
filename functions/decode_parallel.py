@@ -61,7 +61,9 @@ def segment_taste_decode_dependent_parallelized(inputs):
 		#Calculate log likelihood of given vector
 		log_likelihood_fr_taste_vec[t_i] = p_fr_taste_gmm.score(tb_fr_i)	
 	p_fr_taste = np.exp(log_likelihood_fr_taste_vec)	/np.nansum(np.exp(log_likelihood_fr_taste_vec))
-	#p_fr_taste = log_likelihood_fr_taste_vec/np.nansum(log_likelihood_fr_taste_vec) #Relative Approximation Through Log Likelihood Rescaling
+	if len(np.where(np.isnan(p_fr_taste))[0]) > 0: #Handle nan exception
+		log_likelihood_fr_taste_vec_rescale = log_likelihood_fr_taste_vec/np.nansum(log_likelihood_fr_taste_vec) #Relative Approximation Through Log Likelihood Rescaling
+		p_fr_taste = np.exp(log_likelihood_fr_taste_vec_rescale)	/np.nansum(np.exp(log_likelihood_fr_taste_vec_rescale))
 	#P(fr|taste)*P(taste)
 	p_fr_taste_taste = p_fr_taste*p_taste
 	p_fr = np.nansum(p_fr_taste)/num_tastes
