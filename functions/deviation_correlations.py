@@ -26,8 +26,8 @@ class run_deviation_correlations():
 		self.import_deviations_and_cp()
 		print('\n')
 		self.calculate_correlations_all()
-		self.calculate_correlations_selective()
-		self.calculate_correlations_all_zscore()
+		#self.calculate_correlations_selective()
+		#self.calculate_correlations_all_zscore()
 		
 		
 	def gather_variables(self,):
@@ -45,6 +45,7 @@ class run_deviation_correlations():
 		self.pre_taste = self.metadata['params_dict']['pre_taste']
 		self.post_taste = self.metadata['params_dict']['post_taste']
 		self.segments_to_analyze = self.metadata['params_dict']['segments_to_analyze']
+		self.epochs_to_analyze = self.metadata['params_dict']['epochs_to_analyze']
 		self.segment_names = self.data_dict['segment_names']
 		self.num_segments = len(self.segment_names)
 		self.segment_spike_times = self.data_dict['segment_spike_times']
@@ -112,11 +113,12 @@ class run_deviation_correlations():
 		#Calculate correlations
 		df.calculate_vec_correlations(self.num_neur, self.segment_dev_vec, self.tastant_spike_times,
 								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, 
-								   self.dig_in_names, self.pre_taste, self.post_taste, self.discrim_cp_raster_inds, 
+								   self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds, 
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze) #For all neurons in dataset
 		#Now plot and calculate significance!
 		self.calculate_plot_corr_stats()
 		self.calculate_significance()
+		self.best_corr()
 		
 	def calculate_correlations_selective(self,):
 		print("\tCalculate correlations for taste selective neurons only")
@@ -132,11 +134,12 @@ class run_deviation_correlations():
 		#Calculate correlations
 		df.calculate_vec_correlations(self.num_neur, self.segment_dev_vec, self.tastant_spike_times,
 								   self.start_dig_in_times, self.end_dig_in_times, self.segment_names, 
-								   self.dig_in_names, self.pre_taste, self.post_taste, self.discrim_cp_raster_inds,
+								   self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze) #For all neurons in dataset
 		#Now plot and calculate significance!
 		self.calculate_plot_corr_stats()
 		self.calculate_significance()
+		self.best_corr()
 		
 	def calculate_correlations_all_zscore(self,):
 		print("\tCalculate correlations for all neurons z-scored")
@@ -148,11 +151,12 @@ class run_deviation_correlations():
 		#Calculate correlations
 		df.calculate_vec_correlations_zscore(self.num_neur, self.z_bin, self.segment_dev_vec_zscore, self.tastant_spike_times,
 								   self.segment_times, self.segment_spike_times, self.start_dig_in_times, self.end_dig_in_times, 
-								   self.segment_names, self.dig_in_names, self.pre_taste, self.post_taste, self.discrim_cp_raster_inds,
+								   self.segment_names, self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)
 		#Now plot and calculate significance!
 		self.calculate_plot_corr_stats()
 		self.calculate_significance()
+		self.best_corr()
 		
 	def calculate_correlations_selective_zscore(self,):
 		print("\tCalculate correlations for taste selective neurons z-scored")
@@ -168,11 +172,12 @@ class run_deviation_correlations():
 		#Calculate correlations
 		df.calculate_vec_correlations_zscore(self.num_neur, self.z_bin, self.segment_dev_vec_zscore, self.tastant_spike_times,
 								   self.segment_times, self.segment_spike_times, self.start_dig_in_times, self.end_dig_in_times, 
-								   self.segment_names, self.dig_in_names, self.pre_taste, self.post_taste, self.discrim_cp_raster_inds,
+								   self.segment_names, self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
 								   self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)
 		#Now plot and calculate significance!
 		self.calculate_plot_corr_stats()
 		self.calculate_significance()
+		self.best_corr()
 		
 	def calculate_plot_corr_stats(self,):
 		#Plot dir setup
@@ -215,8 +220,14 @@ class run_deviation_correlations():
 		#Mean compare
 		df.mean_compare(self.segment_pop_vec_data, self.segment_names, self.dig_in_names, self.current_stats_dir, 'population_vec_mean_difference', self.segments_to_analyze)
 		
-	
-	
-		
-		
+	def best_corr(self,):
+		print("\tDetermine best correlation per deviation and plot stats.")
+		self.best_dir = self.current_corr_dir + 'best/'
+		if os.path.isdir(self.best_dir) == False:
+			os.mkdir(self.best_dir)
+			
+		dpf.best_corr_calc_plot(self.dig_in_names,self.epochs_to_analyze,
+						  self.segments_to_analyze,self.segment_names,
+						  self.segment_deviations,self.segment_dev_times,
+						  self.dev_dir,self.current_corr_dir,self.best_dir)
 		

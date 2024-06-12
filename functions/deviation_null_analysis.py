@@ -17,6 +17,7 @@ current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 import functions.dev_funcs as df
+import functions.dev_plot_funcs as dpf
 import functions.null_distributions as nd
 import warnings
 warnings.filterwarnings("ignore")
@@ -248,6 +249,10 @@ class run_deviation_null_analysis():
 			for s_ind, s_i in tqdm.tqdm(enumerate(self.segments_to_analyze)):
 				#Gather data / parameters
 				seg_name = self.segment_names[s_i]
+				#Create segment save dir for figures
+				seg_fig_save_dir = os.path.join(self.bin_dir,seg_name)
+				if not os.path.isdir(seg_fig_save_dir):
+					os.mkdir(seg_fig_save_dir)
 				#_____Gather null data deviation event stats_____
 				null_dev_lengths = []
 				null_dev_neuron_counts = []
@@ -280,11 +285,14 @@ class run_deviation_null_analysis():
 					null_neur_x_val_counts_all.append(null_neur_x_val_counts)
 					null_neur_x_val_counts_mean[n_cut_i] = np.nanmean(null_neur_x_val_counts)
 					null_neur_x_val_counts_std[n_cut_i] = np.nanstd(null_neur_x_val_counts)
+					#Plot the individual distribution
+					dpf.plot_dev_x_null_single_dist(null_neur_x_val_counts,true_neur_x_val_counts[n_cut_i],'neur_count_cutoff_' + str(n_cut),seg_fig_save_dir)
 				neur_count_dict[seg_name + '_true'] =  [list(neur_x_vals),
 											   list(true_neur_x_val_counts)]
 				neur_count_dict[seg_name + '_null'] =  [list(neur_x_vals),
 											   list(null_neur_x_val_counts_mean),
 											   list(null_neur_x_val_counts_std)]
+				#Calculate percentiles
 				percentiles = [] #Calculate percentile of true data point in null data distribution
 				for n_cut in neur_x_vals:
 					try:
@@ -309,6 +317,8 @@ class run_deviation_null_analysis():
 					null_neur_x_val_spikes_all.append(null_neur_x_val_spikes)
 					null_neur_x_val_spikes_mean[s_cut_i] = np.nanmean(null_neur_x_val_spikes)
 					null_neur_x_val_spikes_std[s_cut_i] = np.nanstd(null_neur_x_val_spikes)
+					#Plot the individual distribution
+					dpf.plot_dev_x_null_single_dist(null_neur_x_val_spikes,true_neur_x_val_spikes[s_cut_i],'spike_count_cutoff_' + str(s_cut),seg_fig_save_dir)
 				neur_spike_dict[seg_name + '_true'] =  [list(spike_x_vals),
 											   list(true_neur_x_val_spikes)]
 				neur_spike_dict[seg_name + '_null'] =  [list(spike_x_vals),
@@ -339,6 +349,8 @@ class run_deviation_null_analysis():
 					null_neur_x_val_lengths_all.append(null_neur_x_val_lengths)
 					null_neur_x_val_lengths_mean[l_cut_i] = np.nanmean(null_neur_x_val_lengths)
 					null_neur_x_val_lengths_std[l_cut_i] = np.nanstd(null_neur_x_val_lengths)
+					#Plot the individual distribution
+					dpf.plot_dev_x_null_single_dist(null_neur_x_val_lengths,true_neur_x_val_lengths[l_cut_i],'length_cutoff_' + str(l_cut),seg_fig_save_dir)
 				neur_len_dict[seg_name + '_true'] =  [list(len_x_vals),
 											   list(true_neur_x_val_lengths)]
 				neur_len_dict[seg_name + '_null'] =  [list(len_x_vals),

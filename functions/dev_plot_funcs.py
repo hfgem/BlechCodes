@@ -12,6 +12,8 @@ import numpy as np
 from scipy.stats import pearsonr, ks_2samp, ttest_ind, kruskal
 import warnings
 from random import sample
+import matplotlib.cm as cm
+from itertools import combinations
 
 def plot_dev_rasters(segment_deviations,segment_spike_times,segment_dev_times,
 					 segment_times_reshaped,pre_taste,post_taste,min_dev_size,
@@ -835,3 +837,254 @@ def plot_combined_stats(dev_stats, segment_names, dig_in_names, save_dir,
 	return segment_pop_vec_data
 		
 
+def plot_dev_x_null_single_dist(null_data,true_val,plot_name,save_dir):
+	"""This function plots the individual null distribution with a vertical
+	line of the true data point"""
+	
+	f = plt.figure(figsize=(5,5))
+	plt.hist(null_data,color='k',alpha=0.5,label='Null Data')
+	plt.axvline(true_val,color='r',label='True Count')
+	f.savefig(os.path.join(save_dir,plot_name + '.png'))
+	f.savefig(os.path.join(save_dir,plot_name + '.svg'))
+
+def best_corr_calc_plot(dig_in_names,epochs_to_analyze,segments_to_analyze,
+						segment_names,segment_deviations,segment_dev_times,dev_dir,
+						corr_data_dir,save_dir):
+	"""This function calculates which deviation is correlated most to which
+	condition and plots"""
+
+	num_tastes = len(dig_in_names)
+
+	best_corr_labels = []
+	best_corr_tastes = []
+	best_corr_epochs = []
+	for t_i in range(num_tastes):
+		for e_ind, e_i in enumerate(epochs_to_analyze):
+			best_corr_labels.append(dig_in_names[t_i] + '_' + str(e_i))
+			best_corr_tastes.extend([t_i])
+			best_corr_epochs.extend([e_ind])
+	
+	label_colors = cm.plasma(np.linspace(0,1,len(best_corr_labels)))
+	taste_colors = cm.jet(np.linspace(0,1,num_tastes))
+	epoch_colors = cm.cool(np.linspace(0,1,len(epochs_to_analyze)))
+	segment_colors = cm.cividis(np.linspace(0,1,len(segments_to_analyze)))
+	
+	seg_data = dict()
+	
+	#Calculate which deviation event is correlated to which taste/epoch most
+	f_frac, ax_frac = plt.subplots(nrows=3,ncols=1,figsize=(8,8))
+	for s_ind, s_i in enumerate(segments_to_analyze): #By rest interval
+		#Store deviation events by sorted categories
+		dev_label_ind = []
+		dev_sorting = dict()
+		for l_ind,l_name in enumerate(best_corr_labels):
+			dev_sorting[l_name] = dict()
+			dev_sorting[l_name]['taste'] = best_corr_tastes[l_ind]
+			dev_sorting[l_name]['epoch'] = best_corr_epochs[l_ind]
+			dev_sorting[l_name]['num_dev'] = 0
+			dev_sorting[l_name]['start_times'] = []
+			dev_sorting[l_name]['end_times'] = []
+			dev_sorting[l_name]['corr_vals'] = []
+		
+		#Get deviation data
+		seg_dev_times = segment_dev_times[s_ind]
+		start_dev_bouts = seg_dev_times[0,:].flatten()
+		end_dev_bouts = seg_dev_times[1,:].flatten()
+		num_dev = len(start_dev_bouts)
+		
+		#Import deviation correlation data
+		num_trial_per_taste = []
+		all_taste_corr = [] #num tastes x num dev x num trials x num cp
+		mean_taste_corr = [] #num tastes x num dev x num cp
+		for t_i in range(num_tastes):
+			t_data = np.load(os.path.join(corr_data_dir,segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec.npy'))
+			[_,num_trials_i,_] = np.shape(t_data)
+			num_trial_per_taste.append([num_trials_i])
+			all_taste_corr.append(t_data)
+			mean_taste_corr.append(np.mean(t_data,1))
+		
+		#Sort the deviation events by best correlation
+		for d_i in range(num_dev):
+			corr_vals = []
+			for t_i in range(num_tastes):
+				for e_ind, e_i in enumerate(epochs_to_analyze):
+					corr_vals.append([mean_taste_corr[t_i][d_i][e_i]])
+			best_ind = np.argmax(corr_vals)
+			best_taste = best_corr_tastes[best_ind]
+			best_epoch = best_corr_epochs[best_ind]
+			dev_label_ind.extend([best_ind])
+			l_name = best_corr_labels[best_ind]
+			dev_sorting[l_name]['num_dev'] += 1
+			dev_sorting[l_name]['start_times'].extend([start_dev_bouts[d_i]])
+			dev_sorting[l_name]['end_times'].extend([end_dev_bouts[d_i]])
+			dev_sorting[l_name]['corr_vals'].extend([corr_vals[best_ind]])
+		
+		#Calculate the fractions
+		count_per_label = np.zeros(len(best_corr_labels))
+		count_per_taste = np.zeros(num_tastes)
+		count_per_epoch = np.zeros(len(epochs_to_analyze))
+		for l_ind,l_name in enumerate(best_corr_labels):
+			count_per_label[l_ind] = dev_sorting[l_name]['num_dev']
+			taste_ind = dev_sorting[l_name]['taste']
+			epoch_ind = dev_sorting[l_name]['epoch']
+			count_per_taste[taste_ind] += dev_sorting[l_name]['num_dev']
+			count_per_epoch[epoch_ind] += dev_sorting[l_name]['num_dev']
+		fraction_per_label = count_per_label/np.sum(count_per_label)
+		fraction_per_taste = count_per_taste/np.sum(count_per_taste)
+		fraction_per_epoch = count_per_epoch/np.sum(count_per_epoch)
+		
+		ax_frac[0].plot(np.arange(len(best_corr_labels)),fraction_per_label*100,label=segment_names[s_i])
+		ax_frac[1].plot(np.arange(num_tastes),fraction_per_taste*100,label=segment_names[s_i])
+		ax_frac[2].plot(np.arange(len(epochs_to_analyze)),fraction_per_epoch*100,label=segment_names[s_i])
+		
+		seg_data[s_i] = dev_sorting
+	ax_frac[0].set_ylabel('Percent of Deviation Events')
+	ax_frac[0].set_xticks(np.arange(len(best_corr_labels)),best_corr_labels,rotation=45)
+	ax_frac[0].legend(loc='upper right')
+	ax_frac[1].set_xticks(np.arange(num_tastes),dig_in_names)
+	ax_frac[1].set_ylabel('Percent of Deviation Events')
+	ax_frac[2].set_xticks(np.arange(len(epochs_to_analyze)),['Epoch ' + str(e_i) for e_i in epochs_to_analyze])
+	ax_frac[2].set_ylabel('Percent of Deviation Events')
+	f_frac.suptitle('Deviation Correlation Percents')
+	plt.tight_layout()
+	#Save figure
+	f_frac.savefig(os.path.join(save_dir,'best_corr_percents.png'))
+	f_frac.savefig(os.path.join(save_dir,'best_corr_percents.svg'))
+	plt.close(f_frac)
+	
+	#Plot the cumulative distribution functions by segment and the density differences
+	density_x_vals = np.arange(0,1.1,0.1)
+	density_bins = np.arange(-0.05,1.15,0.1)
+	taste_pairs = list(combinations(np.arange(num_tastes),2))
+	epoch_pairs = list(combinations(np.arange(len(epochs_to_analyze)),2))
+	
+	f_cum, ax_cum = plt.subplots(nrows=len(segments_to_analyze),ncols=2,figsize=(8,8))
+	f_dens, ax_dens = plt.subplots(nrows=len(segments_to_analyze),ncols=2,figsize=(8,8))
+	f_diff_taste, ax_diff_taste = plt.subplots(nrows=1,ncols=len(taste_pairs),figsize=(15,5))
+	max_taste_diff = 0
+	min_taste_diff = 0
+	f_diff_epoch, ax_diff_epoch = plt.subplots(nrows=1,ncols=len(epoch_pairs),figsize=(15,5))
+	max_epoch_diff = 0
+	min_epoch_diff = 0
+	for s_ind, s_i in enumerate(segments_to_analyze): #By rest interval
+		dev_sorting = seg_data[s_i]
+		#Taste data
+		taste_density = []
+		for t_i in range(num_tastes):
+			taste_corr = []
+			for l_ind,l_name in enumerate(best_corr_labels):
+				if dev_sorting[l_name]['taste'] == t_i:
+					taste_corr.extend(dev_sorting[l_name]['corr_vals'])
+			taste_corr = np.array(taste_corr).squeeze()
+			density_hist_data = np.histogram(taste_corr,bins=density_bins,density=True)
+			norm_dens = density_hist_data[0]/max(density_hist_data[0])
+			taste_density.append(norm_dens)
+			ax_cum[s_ind,0].hist(taste_corr,bins=density_bins,histtype='step',density=True,cumulative=True,color=taste_colors[t_i,:],label=dig_in_names[t_i])
+			ax_cum[s_ind,0].set_ylim([-0.05,1.05])
+			ax_cum[s_ind,0].set_xlim([-0.05,1.05])
+			ax_dens[s_ind,0].plot(density_x_vals,norm_dens,color=taste_colors[t_i,:],label=dig_in_names[t_i])
+			ax_dens[s_ind,0].set_ylim([-0.05,1.05])
+			ax_dens[s_ind,0].set_xlim([-0.05,1.05])
+		for tp_ind, t_pair in enumerate(taste_pairs):
+			t_1 = t_pair[1]
+			t_2 = t_pair[0]
+			t_1_name = dig_in_names[t_1]
+			t_2_name = dig_in_names[t_2]
+			hist_diff = taste_density[t_2] - taste_density[t_1]
+			if s_ind == 0:
+				ax_diff_taste[tp_ind].set_title(t_2_name + ' - ' + t_1_name)
+				ax_diff_taste[tp_ind].set_xlabel('Correlation')
+				if tp_ind == 0:
+					ax_diff_taste[tp_ind].set_ylabel('Density Difference')
+			if max(hist_diff) > max_taste_diff:
+				max_taste_diff = max(hist_diff)
+			if min(hist_diff) < min_taste_diff:
+				min_taste_diff = min(hist_diff)
+			ax_diff_taste[tp_ind].plot(density_x_vals,hist_diff,label=segment_names[s_i],color=segment_colors[s_ind,:])
+		#Epoch data
+		epoch_density = []
+		for e_ind, e_i in enumerate(epochs_to_analyze):
+			epoch_corr = []
+			for l_ind,l_name in enumerate(best_corr_labels):
+				if dev_sorting[l_name]['epoch'] == e_ind:
+					epoch_corr.extend(dev_sorting[l_name]['corr_vals'])
+			epoch_corr = np.array(epoch_corr).squeeze()
+			density_hist_data = np.histogram(epoch_corr,bins=density_bins,density=True)
+			norm_dens = density_hist_data[0]/max(density_hist_data[0])
+			epoch_density.append(norm_dens)
+			ax_cum[s_ind,1].hist(epoch_corr,bins=density_bins,histtype='step',density=True,cumulative=True,color=epoch_colors[e_ind,:],label='Epoch ' + str(e_i))
+			ax_cum[s_ind,1].set_ylim([-0.05,1.05])
+			ax_cum[s_ind,1].set_xlim([-0.05,1.05])
+			ax_dens[s_ind,1].plot(density_x_vals,norm_dens,color=epoch_colors[e_ind,:],label='Epoch ' + str(e_i))
+			ax_dens[s_ind,1].set_ylim([-0.05,1.05])
+			ax_dens[s_ind,1].set_xlim([-0.05,1.05])
+		for ep_ind, e_pair in enumerate(epoch_pairs):
+			e_1 = e_pair[0]
+			e_2 = e_pair[1]
+			e_1_name = 'Epoch ' + str(e_1)
+			e_2_name = 'Epoch ' + str(e_2)
+			hist_diff = epoch_density[e_2] - epoch_density[e_1]
+			if s_ind == 0:
+				ax_diff_epoch[ep_ind].set_title(e_2_name + ' - ' + e_1_name)
+				ax_diff_epoch[ep_ind].set_xlabel('Correlation')
+				if ep_ind == 0:
+					ax_diff_epoch[ep_ind].set_ylabel('Density Difference')
+			if max(hist_diff) > max_epoch_diff:
+				max_epoch_diff = max(hist_diff)
+			if min(hist_diff) < min_epoch_diff:
+				min_epoch_diff = min(hist_diff)
+			ax_diff_epoch[ep_ind].plot(density_x_vals,hist_diff,label=segment_names[s_i],color=segment_colors[s_ind,:])
+		#Plot cleanups
+		ax_cum[s_ind,0].set_ylabel(segment_names[s_i])
+		ax_dens[s_ind,0].set_ylabel(segment_names[s_i])
+	#Cumulative plot cleanups
+	ax_cum[0,0].set_title('Taste Correlations')
+	ax_cum[0,1].set_title('Epoch Correlations')
+	ax_cum[0,0].legend()
+	ax_cum[0,1].legend()
+	ax_cum[-1,0].set_xlabel('Correlation')
+	ax_cum[-1,1].set_xlabel('Correlation')
+	f_cum.suptitle('Cumulative Correlations of Best Events')
+	plt.tight_layout()
+	f_cum.savefig(os.path.join(save_dir,'best_corr_cum_hist.png'))
+	f_cum.savefig(os.path.join(save_dir,'best_corr_cum_hist.svg'))
+	plt.close(f_cum)
+	#Density plot cleanups
+	ax_dens[0,0].set_title('Taste Correlations')
+	ax_dens[0,1].set_title('Epoch Correlations')
+	ax_dens[0,0].legend()
+	ax_dens[0,1].legend()
+	ax_dens[-1,0].set_xlabel('Correlation')
+	ax_dens[-1,1].set_xlabel('Correlation')
+	f_dens.suptitle('Normalized Density Correlations of Best Events')
+	plt.tight_layout()
+	f_dens.savefig(os.path.join(save_dir,'best_corr_norm_dens_hist.png'))
+	f_dens.savefig(os.path.join(save_dir,'best_corr_norm_dens_hist.svg'))
+	plt.close(f_dens)
+	#Taste diff plot cleanups
+	ax_diff_taste[0].legend(loc='upper left')
+	for tp_ind in range(len(taste_pairs)):
+		ax_diff_taste[tp_ind].axhline(0,alpha=0.5,color='k',linestyle='dashed',label='_')
+		ax_diff_taste[tp_ind].axvline(0.5,alpha=0.5,color='k',linestyle='dashed',label='_')
+		ax_diff_taste[tp_ind].set_xlim([-0.05,1.05])
+		ax_diff_taste[tp_ind].set_ylim([min_taste_diff - 0.1*min_taste_diff,max_taste_diff + 0.1*max_taste_diff])
+	f_diff_taste.suptitle('Taste Density Differences of Best Events')
+	plt.tight_layout()
+	f_diff_taste.savefig(os.path.join(save_dir,'best_corr_taste_diff.png'))
+	f_diff_taste.savefig(os.path.join(save_dir,'best_corr_taste_diff.svg'))
+	plt.close(f_diff_taste)
+	#Epoch diff plot cleanups
+	ax_diff_epoch[0].legend(loc='upper left')
+	for ep_ind in range(len(epoch_pairs)):
+		ax_diff_epoch[ep_ind].axhline(0,alpha=0.5,color='k',linestyle='dashed',label='_')
+		ax_diff_epoch[ep_ind].axvline(0.5,alpha=0.5,color='k',linestyle='dashed',label='_')
+		ax_diff_epoch[ep_ind].set_xlim([-0.05,1.05])
+		ax_diff_epoch[ep_ind].set_ylim([min_epoch_diff + 0.1*min_epoch_diff,max_epoch_diff + 0.1*max_epoch_diff])
+	f_diff_epoch.suptitle('Epoch Density Differences of Best Events')
+	plt.tight_layout()
+	f_diff_epoch.savefig(os.path.join(save_dir,'best_corr_epoch_diff.png'))
+	f_diff_epoch.savefig(os.path.join(save_dir,'best_corr_epoch_diff.svg'))
+	plt.close(f_diff_epoch)
+	
+	
+	

@@ -266,3 +266,12 @@ class run_dependent_bayes():
 						 self.segment_names, self.taste_num_deliv, self.select_neur,
 						 self.decode_dir, self.max_decode, self.max_hz_pop, self.seg_stat_bin,
 						 self.epochs_to_analyze, self.segments_to_analyze)
+		df.plot_combined_decoded(self.cur_dist,self.num_tastes, self.num_neur, self.segment_spike_times,
+						self.tastant_spike_times, self.start_dig_in_times, 
+						self.end_dig_in_times, self.post_taste_dt, self.pre_taste_dt,
+	                    self.discrim_cp_raster_inds, self.bin_dt, self.dig_in_names, 
+						self.segment_times,self.segment_names, self.taste_num_deliv, 
+						self.select_neur, self.decode_dir, self.max_decode, 
+						self.max_hz_pop, self.seg_stat_bin, self.neuron_count_thresh, 
+						self.e_len_dt,self.trial_start_frac, self.epochs_to_analyze,
+	                    self.segments_to_analyze, self.decode_prob_cutoff)

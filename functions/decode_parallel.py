@@ -49,29 +49,24 @@ def segment_taste_decode_dependent_parallelized(inputs):
 	
 	#Grab parameters/data
 	tb_fr_i = np.expand_dims(inputs[0],0)
-	num_tastes = inputs[1]
+	num_categories = inputs[1]
 	fit_tastant_neur = inputs[2] #list of trained gmms
-	p_taste = inputs[3]
+	p_category = inputs[3]
 	
 	#Calculate decoding probability using Gaussian mixture models	
-	decode_prob = np.nan*np.ones(num_tastes)
-	log_likelihood_fr_taste_vec = np.nan*np.ones(num_tastes)
-	for t_i in range(num_tastes):
-		p_fr_taste_gmm = fit_tastant_neur[t_i]
+	decode_prob = np.nan*np.ones(num_categories)
+	log_likelihood_fr_cat_vec = np.nan*np.ones(num_categories)
+	for c_i in range(num_categories):
+		p_fr_taste_gmm = fit_tastant_neur[c_i]
 		#Calculate log likelihood of given vector
-		log_likelihood_fr_taste_vec[t_i] = p_fr_taste_gmm.score(tb_fr_i)	
-	p_fr_taste = np.exp(log_likelihood_fr_taste_vec)	/np.nansum(np.exp(log_likelihood_fr_taste_vec))
-	if len(np.where(np.isnan(p_fr_taste))[0]) > 0: #Handle nan exception
-		log_likelihood_fr_taste_vec_rescale = log_likelihood_fr_taste_vec/np.nansum(log_likelihood_fr_taste_vec) #Relative Approximation Through Log Likelihood Rescaling
-		p_fr_taste = np.exp(log_likelihood_fr_taste_vec_rescale)	/np.nansum(np.exp(log_likelihood_fr_taste_vec_rescale))
+		log_likelihood_fr_cat_vec[c_i] = p_fr_taste_gmm.score(tb_fr_i)	
+	p_fr_cat = np.exp(log_likelihood_fr_cat_vec)	/np.nansum(np.exp(log_likelihood_fr_cat_vec))
+	if len(np.where(np.isnan(p_fr_cat))[0]) > 0: #Handle nan exception
+		log_likelihood_fr_cat_vec_rescale = log_likelihood_fr_cat_vec/np.nansum(log_likelihood_fr_cat_vec) #Relative Approximation Through Log Likelihood Rescaling
+		p_fr_cat = np.exp(log_likelihood_fr_cat_vec_rescale)	/np.nansum(np.exp(log_likelihood_fr_cat_vec_rescale))
 	#P(fr|taste)*P(taste)
-	p_fr_taste_taste = p_fr_taste*p_taste
-	p_fr = np.nansum(p_fr_taste)/num_tastes
-	if p_fr > 0:
-		decode_prob = p_fr_taste_taste/p_fr
-	else:
-		#Do nothing
-		pass
+	p_fr_cat_p_cat = p_fr_cat*p_category
+	decode_prob = p_fr_cat_p_cat/np.sum(p_fr_cat_p_cat)
 	
 	return decode_prob
 

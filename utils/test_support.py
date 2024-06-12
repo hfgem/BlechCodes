@@ -56,7 +56,7 @@ tastant_spike_times = af.calc_tastant_spike_times(data_dict['segment_times'],dat
 data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
-#%%
+#%% Decoding support
 
 import os
 
@@ -144,7 +144,7 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
                                                                                                  post_taste_dt, bin_dt, trial_start_frac)
 
 print("\tDecoding all neurons")
-decode_dir = bayes_dir + 'All_Neurons/' + 'gmm/'
+decode_dir = bayes_dir + 'All_Neurons/'# + 'gmm/'
 if os.path.isdir(decode_dir) == False:
 	os.mkdir(decode_dir)
 cur_dist = tastant_fr_dist_pop
@@ -155,3 +155,80 @@ save_dir = decode_dir
 tastant_fr_dist = cur_dist
 max_hz = max_hz_pop
 cp_raster_inds = discrim_cp_raster_inds
+
+#%% Deviation correlation support
+
+import numpy as np
+import functions.analysis_funcs as af
+import functions.dev_funcs as df
+import functions.dev_plot_funcs as dpf
+import functions.hdf5_handling as hf5
+import os,json,gzip,tqdm
+
+dev_dir = metadata['dir_name'] + 'Deviations/'
+hdf5_dir = metadata['hdf5_dir']
+comp_dir = metadata['dir_name'] + 'dev_x_taste/'
+if os.path.isdir(comp_dir) == False:
+	os.mkdir(comp_dir)
+corr_dir = comp_dir + 'corr/'
+if os.path.isdir(corr_dir) == False:
+	os.mkdir(corr_dir)
+#Params/Variables
+num_neur = data_dict['num_neur']
+pre_taste = metadata['params_dict']['pre_taste']
+post_taste = metadata['params_dict']['post_taste']
+epochs_to_analyze = metadata['params_dict']['epochs_to_analyze']
+segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+segment_names = data_dict['segment_names']
+num_segments = len(segment_names)
+segment_spike_times = data_dict['segment_spike_times']
+segment_times = data_dict['segment_times']
+segment_times_reshaped = [[segment_times[i],segment_times[i+1]] for i in range(num_segments)]
+num_cp = metadata['params_dict']['num_cp'] #Remember this is 1 less than the number of epochs
+tastant_spike_times = data_dict['tastant_spike_times']
+start_dig_in_times = data_dict['start_dig_in_times']
+end_dig_in_times = data_dict['end_dig_in_times']
+dig_in_names = data_dict['dig_in_names']
+z_bin = metadata['params_dict']['z_bin']
+
+print("\tNow importing calculated deviations")
+segment_deviations = []
+for s_i in tqdm.tqdm(segments_to_analyze):
+	filepath = dev_dir + segment_names[s_i] + '/deviations.json'
+	with gzip.GzipFile(filepath, mode="r") as f:
+		json_bytes = f.read()
+		json_str = json_bytes.decode('utf-8')			
+		data = json.loads(json_str) 
+		segment_deviations.append(data)
+print("\tNow pulling true deviation rasters")
+num_segments = len(segments_to_analyze)
+segment_spike_times = [segment_spike_times[i] for i in segments_to_analyze]
+segment_times_reshaped = np.array([segment_times_reshaped[i] for i in segments_to_analyze])
+segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments, 
+															segment_spike_times,
+															segment_times_reshaped,
+															segment_deviations,z_bin)
+
+data_group_name = 'changepoint_data'
+pop_taste_cp_raster_inds = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'pop_taste_cp_raster_inds')
+pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
+num_pt_cp = num_cp + 2
+#Import discriminability data
+data_group_name = 'taste_discriminability'
+peak_epochs = np.squeeze(af.pull_data_from_hdf5(hdf5_dir,data_group_name,'peak_epochs'))
+discrim_neur = np.squeeze(af.pull_data_from_hdf5(hdf5_dir,data_group_name,'discrim_neur'))
+#Convert discriminatory neuron data into pop_taste_cp_raster_inds shape
+#TODO: Test this first, then if going with this rework functions to fit instead!
+num_discrim_cp = np.shape(discrim_neur)[0]
+discrim_cp_raster_inds = []
+for t_i in range(len(dig_in_names)):
+	t_cp_vec = np.ones((np.shape(pop_taste_cp_raster_inds[t_i])[0],num_discrim_cp))
+	t_cp_vec = (peak_epochs[:num_pt_cp] + int(pre_taste*1000))*t_cp_vec
+	discrim_cp_raster_inds.append(t_cp_vec)
+num_discrim_cp = len(peak_epochs)
+
+current_corr_dir = corr_dir + 'all_neur/'
+if os.path.isdir(current_corr_dir) == False:
+	os.mkdir(current_corr_dir)
+#neuron_keep_indices = np.ones((num_neur,num_cp+1))
+neuron_keep_indices = np.ones(np.shape(discrim_neur))

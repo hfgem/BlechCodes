@@ -1137,20 +1137,20 @@ def plot_decoded(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_spike_t
 	plt.close(f)
 	
 
-def plot_combined_decoded(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_spike_times,
-				start_dig_in_times,end_dig_in_times,post_taste_dt,pre_taste_dt,
-				cp_raster_inds,bin_dt,dig_in_names,segment_times,
-				segment_names,taste_num_deliv,taste_select_epoch,
-				save_dir,max_decode,max_hz,seg_stat_bin,
-				neuron_count_thresh,trial_start_frac=0,
-				epochs_to_analyze=[],segments_to_analyze=[],
-				decode_prob_cutoff=0.95):
+def plot_combined_decoded(fr_dist,num_tastes,num_neur,segment_spike_times,
+				tastant_spike_times,start_dig_in_times,end_dig_in_times,
+				post_taste_dt,pre_taste_dt,cp_raster_inds,bin_dt,dig_in_names,
+				segment_times,segment_names,taste_num_deliv,taste_select_epoch,
+				save_dir,max_decode,max_hz,seg_stat_bin,neuron_count_thresh,
+				e_len_dt,trial_start_frac=0,epochs_to_analyze=[],
+				segments_to_analyze=[],decode_prob_cutoff=0.95):
 	"""Function to plot the periods when something other than no taste is 
 	decoded"""
 	num_cp = np.shape(cp_raster_inds[0])[-1] - 1
 	num_segments = len(segment_spike_times)
 	half_bin_z_dt = np.floor(bin_dt/2).astype('int')
 	plot_len = 500 #in ms (dt) --> 6 seconds
+	half_bin = np.floor(e_len_dt/2).astype('int') #Decoding half bin size
 	hatch_types = ['//','','o','..','','**','\\\\','--','','OO','||','/','','\\','++','|','oo','-','+','O','.','*']
 	if len(epochs_to_analyze) == 0:
 		epochs_to_analyze = np.arange(num_cp)
@@ -1218,12 +1218,13 @@ def plot_combined_decoded(fr_dist,num_tastes,num_neur,segment_spike_times,tastan
 		epoch_progression_plots(num_tastes,dig_in_names,all_epoch_decode_prob,
 									seg_len,plot_len,hatch_types,decode_prob_cutoff,
 									max_decode,segment_spike_times_s_i_bin,num_neur,
-									seg_decode_save_dir)
+									half_bin,seg_decode_save_dir)
 		
 		#Plot decodings of taste progressions - merge all epochs together to just be a taste
 		taste_progression_plots(seg_len, plot_len, num_tastes, hatch_types,all_epoch_decode_prob,
 									 dig_in_names, decode_prob_cutoff, max_decode, epochs_to_analyze,
-									 segment_spike_times_s_i_bin, num_neur, seg_decode_save_dir)
+									 segment_spike_times_s_i_bin, num_neur, half_bin,
+									 seg_decode_save_dir)
 			
 
 def plot_decoded_func_p(fr_dist,num_tastes,num_neur,segment_spike_times,tastant_spike_times,
@@ -1815,7 +1816,7 @@ def corr_calculator(deliv_fr_vec, decode_fr_mat):
 def epoch_progression_plots(num_tastes,dig_in_names,all_epoch_decode_prob,
 							seg_len,plot_len,hatch_types,decode_prob_cutoff,
 							max_decode,segment_spike_times_s_i_bin,num_neur,
-							seg_decode_save_dir):
+							half_bin, seg_decode_save_dir):
 	"""This function plots rasters and firing rates with overlaid decoding probabilities
 	for a single taste but all epochs. It allows the user to see the progression of
 	decoded epochs
@@ -1835,7 +1836,7 @@ def epoch_progression_plots(num_tastes,dig_in_names,all_epoch_decode_prob,
 		taste_probabilities = all_epoch_decode_prob[dig_in_names[t_i]]['Probabilities']
 		taste_probabilities_array = np.array(taste_probabilities)
 		taste_labels = all_epoch_decode_prob[dig_in_names[t_i]]['Labels']
-		plot_starts = np.arange(0,seg_len,plot_len)
+		plot_starts = np.arange(0,seg_len,np.ceil(plot_len/2).astype('int'))
 		num_decode_labels = len(taste_labels)
 		decode_colors = cm.gist_rainbow(np.linspace(0,1,num_decode_labels))
 		decode_hatches = hatch_types[:num_decode_labels]
@@ -1880,9 +1881,12 @@ def epoch_progression_plots(num_tastes,dig_in_names,all_epoch_decode_prob,
 			ax2.set_ylim([0,1])
 			for dl in range(len(taste_labels)):
 				plot_probability = taste_probabilities_array[dl,start:end]
-				probability_high = np.where(taste_probabilities_array[dl,start:end] >= decode_prob_cutoff)[0]
+				probability_high = np.where(plot_probability >= decode_prob_cutoff)[0]
 				plot_probability_fill = np.zeros(plot_len)
-				plot_probability_fill[probability_high] = taste_probabilities_array[dl,start+probability_high]
+				for ph in probability_high:
+					min_ph = max(ph-half_bin,0)
+					max_ph = min(ph+half_bin,seg_len)
+					plot_probability_fill[min_ph:max_ph] = taste_probabilities_array[dl,start+ph]
 				#ax2.plot(np.arange(plot_len),plot_probability,color=decode_colors[dl,:],alpha=1/num_decode_labels,label='_')
 				if decode_hatches[dl] == '':
 					face_color = decode_colors[dl,:]
@@ -1907,9 +1911,12 @@ def epoch_progression_plots(num_tastes,dig_in_names,all_epoch_decode_prob,
 			ax3.set_ylim([0,1])
 			for dl in range(len(taste_labels)):
 				plot_probability = taste_probabilities_array[dl,start:end]
-				probability_high = np.where(taste_probabilities_array[dl,start:end] >= decode_prob_cutoff)[0]
+				probability_high = np.where(plot_probability >= decode_prob_cutoff)[0]
 				plot_probability_fill = np.zeros(plot_len)
-				plot_probability_fill[probability_high] = taste_probabilities_array[dl,start+probability_high]
+				for ph in probability_high:
+					min_ph = max(ph-half_bin,0)
+					max_ph = min(ph+half_bin,seg_len)
+					plot_probability_fill[min_ph:max_ph] = taste_probabilities_array[dl,start+ph]
 				#ax3.plot(np.arange(plot_len),plot_probability,color=decode_colors[dl,:],alpha=1/num_decode_labels,label='_')
 				if decode_hatches[dl] == '':
 					face_color = decode_colors[dl,:]
@@ -1927,7 +1934,7 @@ def epoch_progression_plots(num_tastes,dig_in_names,all_epoch_decode_prob,
 
 def taste_progression_plots(seg_len, plot_len, num_tastes, hatch_types,all_epoch_decode_prob,
 							 dig_in_names, decode_prob_cutoff, max_decode,epochs_to_analyze, 
-							 segment_spike_times_s_i_bin, num_neur, seg_decode_save_dir):
+							 segment_spike_times_s_i_bin, num_neur, half_bin, seg_decode_save_dir):
 	"""This function plots rasters and firing rates with overlaid decoding 
 	probabilities for all tastes. Epochs are collapsed and the highest decoding
 	probability across epochs is kept as the decoding probability of the taste
@@ -1940,7 +1947,7 @@ def taste_progression_plots(seg_len, plot_len, num_tastes, hatch_types,all_epoch
 	
 	"""
 	
-	plot_starts = np.arange(0,seg_len,plot_len)
+	plot_starts = np.arange(0,seg_len,np.ceil(plot_len/2).astype('int'))
 	decode_colors = cm.gist_rainbow(np.linspace(0,1,num_tastes))
 	decode_hatches = hatch_types[:num_tastes]
 	#Collapse across epochs taste probabilities
@@ -2003,7 +2010,10 @@ def taste_progression_plots(seg_len, plot_len, num_tastes, hatch_types,all_epoch
 					plot_probability = collapsed_taste_probabilities[t_i,start:end]
 					probability_high = np.where(plot_probability >= decode_prob_cutoff)[0]
 					plot_probability_fill = np.zeros(plot_len)
-					plot_probability_fill[probability_high] = collapsed_taste_probabilities[t_i,start+probability_high]
+					for ph in probability_high:
+						min_ph = max(ph-half_bin,0)
+						max_ph = min(ph+half_bin,seg_len)
+						plot_probability_fill[min_ph:max_ph] = collapsed_taste_probabilities[t_i,start+ph]
 					#ax2.plot(np.arange(plot_len),plot_probability,color=decode_colors[dl,:],alpha=1/num_decode_labels,label='_')
 					if decode_hatches[t_i] == '':
 						face_color = decode_colors[t_i,:]
@@ -2030,7 +2040,10 @@ def taste_progression_plots(seg_len, plot_len, num_tastes, hatch_types,all_epoch
 					plot_probability = collapsed_taste_probabilities[t_i,start:end]
 					probability_high = np.where(plot_probability >= decode_prob_cutoff)[0]
 					plot_probability_fill = np.zeros(plot_len)
-					plot_probability_fill[probability_high] = collapsed_taste_probabilities[t_i,start+probability_high]
+					for ph in probability_high:
+						min_ph = max(ph-half_bin,0)
+						max_ph = min(ph+half_bin,seg_len)
+						plot_probability_fill[min_ph:max_ph] = collapsed_taste_probabilities[t_i,start+ph]
 					#ax2.plot(np.arange(plot_len),plot_probability,color=decode_colors[dl,:],alpha=1/num_decode_labels,label='_')
 					if decode_hatches[t_i] == '':
 						face_color = decode_colors[t_i,:]
