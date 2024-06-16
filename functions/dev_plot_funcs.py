@@ -1067,7 +1067,7 @@ def best_corr_calc_plot(dig_in_names,epochs_to_analyze,segments_to_analyze,
 		ax_diff_taste[tp_ind].axhline(0,alpha=0.5,color='k',linestyle='dashed',label='_')
 		ax_diff_taste[tp_ind].axvline(0.5,alpha=0.5,color='k',linestyle='dashed',label='_')
 		ax_diff_taste[tp_ind].set_xlim([-0.05,1.05])
-		ax_diff_taste[tp_ind].set_ylim([min_taste_diff - 0.1*min_taste_diff,max_taste_diff + 0.1*max_taste_diff])
+		ax_diff_taste[tp_ind].set_ylim([min_taste_diff + 0.1*min_taste_diff,max_taste_diff + 0.1*max_taste_diff])
 	f_diff_taste.suptitle('Taste Density Differences of Best Events')
 	plt.tight_layout()
 	f_diff_taste.savefig(os.path.join(save_dir,'best_corr_taste_diff.png'))
