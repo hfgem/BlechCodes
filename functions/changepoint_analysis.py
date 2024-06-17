@@ -13,11 +13,11 @@ import numpy as np
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
+
 import functions.analysis_funcs as af
 import functions.changepoint_detection as cd
 import functions.plot_funcs as pf
 import functions.decoding_funcs as df
-import matplotlib.pyplot as plt
 
 class run_changepoint_detection():
 	

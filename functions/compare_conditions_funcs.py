@@ -8,11 +8,11 @@ Plot and analysis functions to support compare_conditions.py
 """
 
 import os
+import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
 from scipy.stats import ks_2samp, ttest_ind
-import warnings
 		
 
 def cross_corr_name(corr_data,save_dir,unique_given_names,unique_corr_names,\

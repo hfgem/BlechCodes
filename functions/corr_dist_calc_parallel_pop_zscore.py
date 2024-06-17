@@ -7,9 +7,9 @@ Created on Wed Sep 20 14:50:37 2023
 Correlation calculations for population vectors zscored
 """
 
+import warnings
 import numpy as np
 from scipy.stats import pearsonr
-import warnings
 import matplotlib.pyplot as plt
 
 def deliv_corr_population_parallelized(inputs):

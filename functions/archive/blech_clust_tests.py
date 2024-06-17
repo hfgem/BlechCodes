@@ -14,15 +14,10 @@ import tkinter as tk
 import tkinter.filedialog as fd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.fftpack import rfft, fftfreq
-from scipy.signal import find_peaks
-from sklearn.preprocessing import normalize
-from sklearn.decomposition import PCA
 try:
 	from functions.postsort import collision_func
 except:
 	from postsort import collision_func
-from numba import jit
 
 #Get the directory of the hdf5 files
 print("\n INPUT REQUESTED: Select directory with blech_clust .h5 file.")

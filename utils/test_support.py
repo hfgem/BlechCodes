@@ -15,7 +15,6 @@ blech_codes_path = '/'.join(current_path.split('/')[:-2]) + '/'
 os.chdir(blech_codes_path)
 from utils.replay_utils import import_metadata, state_tracker
 from utils.data_utils import import_data
-from functions.run_analysis_handler import run_analysis_steps
 
 # Grab current directory and data directory / metadata
 script_path = os.path.realpath(__file__)
@@ -158,12 +157,9 @@ cp_raster_inds = discrim_cp_raster_inds
 
 #%% Deviation correlation support
 
+import os,json,gzip,tqdm
 import numpy as np
 import functions.analysis_funcs as af
-import functions.dev_funcs as df
-import functions.dev_plot_funcs as dpf
-import functions.hdf5_handling as hf5
-import os,json,gzip,tqdm
 
 dev_dir = metadata['dir_name'] + 'Deviations/'
 hdf5_dir = metadata['hdf5_dir']

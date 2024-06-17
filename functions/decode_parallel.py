@@ -7,8 +7,8 @@ Created on Thu Jan  4 11:42:31 2024
 Parallelized code for decoding taste from segments - to be used with 
 decoding_funcs.py
 """
-import numpy as np
 import warnings
+import numpy as np
 
 def segment_taste_decode_parallelized(inputs):
 	"""Parallelizes the independent decoding calculation for individual 
@@ -70,36 +70,4 @@ def segment_taste_decode_dependent_parallelized(inputs):
 	
 	return decode_prob
 
-def segment_burst_decode_dependent_parallelized(inputs):
-	"""Parallelizes the dependent decoding calculation for individual 
-	segment samples"""
-	warnings.filterwarnings('ignore')
-	
-	#Grab parameters/data
-	burst_fr_i = np.expand_dims(inputs[0],0) #Matrix of num_neur
-	num_tastes = inputs[1]
-	num_neur = inputs[2]
-	x_vals = inputs[3]
-	fit_tastant_neur = inputs[4]
-	p_fr_gmm = inputs[5] #fit_all_neur
-	p_taste = inputs[6]
-	taste_select_neur = inputs[7]
-
-	#Calculate decoding probability
-	decode_prob = np.nan*np.ones(num_tastes)
-	p_fr_taste_vec = np.nan*np.ones(num_tastes)
-	for t_i in range(num_tastes):
-		p_fr_taste_gmm = fit_tastant_neur[t_i]
-		p_fr_taste = np.exp(p_fr_taste_gmm.score(burst_fr_i))
-		p_fr_taste_vec[t_i] = p_fr_taste
-		#P(taste|fr) = (P(fr|taste)*P(taste))/P(fr)
-		decode_prob[t_i] = p_fr_taste*p_taste[t_i]
-	p_fr = np.nansum(p_fr_taste_vec)/num_tastes
-	if p_fr > 0:
-		decode_prob = decode_prob/p_fr
-	else:
-		#Do nothing
-		pass
-	
-	return decode_prob
 	
