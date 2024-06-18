@@ -10,9 +10,17 @@ Script to grab data for testing new code out of the pipeline.
 
 #Import necessary packages and functions
 import os
+import json
+import gzip
+import tqdm
+import numpy as np
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-2]) + '/'
 os.chdir(blech_codes_path)
+import functions.analysis_funcs as af
+import functions.hdf5_handling as hf5
+import functions.dependent_decoding_funcs as ddf
+import functions.decoding_funcs as df
 from utils.replay_utils import import_metadata, state_tracker
 from utils.data_utils import import_data
 
@@ -47,7 +55,7 @@ for var in vars(state_handler):
 	state_dict[var] = getattr(state_handler,var)
 del state_handler
 
-import functions.analysis_funcs as af
+
 segment_spike_times = af.calc_segment_spike_times(data_dict['segment_times'],data_dict['spike_times'],data_dict['num_neur'])
 tastant_spike_times = af.calc_tastant_spike_times(data_dict['segment_times'],data_dict['spike_times'],
 						  data_dict['start_dig_in_times'],data_dict['end_dig_in_times'],
@@ -56,17 +64,6 @@ data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
 #%% Decoding support
-
-import os
-
-current_path = os.path.realpath(__file__)
-blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
-os.chdir(blech_codes_path)
-
-import numpy as np
-import functions.analysis_funcs as af
-import functions.dependent_decoding_funcs as ddf
-import functions.decoding_funcs as df
 
 #Directories
 hdf5_dir = metadata['hdf5_dir']
@@ -108,18 +105,18 @@ decode_prob_cutoff = metadata['params_dict']['bayes_params']['decode_prob_cutoff
 bin_time = metadata['params_dict']['bayes_params']['bin_time']
 bin_dt = np.ceil(bin_time*1000).astype('int')
 #Import changepoint data
-pop_taste_cp_raster_inds = af.pull_data_from_hdf5(hdf5_dir,'changepoint_data','pop_taste_cp_raster_inds')
+pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir,'changepoint_data','pop_taste_cp_raster_inds')
 pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
 num_pt_cp = num_cp + 2
 #Import taste selectivity data
 try:
-	select_neur = af.pull_data_from_hdf5(hdf5_dir, 'taste_selectivity', 'taste_select_neur_epoch_bin')[0]
+	select_neur = hf5.pull_data_from_hdf5(hdf5_dir, 'taste_selectivity', 'taste_select_neur_epoch_bin')[0]
 	select_neur = select_neur
 except:
 	print("\tNo taste selectivity data found. Skipping.")
 #Import discriminability data
-peak_epochs = np.squeeze(af.pull_data_from_hdf5(hdf5_dir,'taste_discriminability','peak_epochs'))
-discrim_neur = np.squeeze(af.pull_data_from_hdf5(hdf5_dir,'taste_discriminability','discrim_neur'))
+peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(hdf5_dir,'taste_discriminability','peak_epochs'))
+discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(hdf5_dir,'taste_discriminability','discrim_neur'))
 #Convert discriminatory neuron changepoint data into pop_taste_cp_raster_inds shape
 #TODO: Add a flag for a user to select whether to use discriminatory neurons or selective neurons
 num_discrim_cp = np.shape(peak_epochs)[0]
@@ -156,10 +153,6 @@ max_hz = max_hz_pop
 cp_raster_inds = discrim_cp_raster_inds
 
 #%% Deviation correlation support
-
-import os,json,gzip,tqdm
-import numpy as np
-import functions.analysis_funcs as af
 
 dev_dir = metadata['dir_name'] + 'Deviations/'
 hdf5_dir = metadata['hdf5_dir']
@@ -206,13 +199,13 @@ segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore 
 															segment_deviations,z_bin)
 
 data_group_name = 'changepoint_data'
-pop_taste_cp_raster_inds = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'pop_taste_cp_raster_inds')
+pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'pop_taste_cp_raster_inds')
 pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
 num_pt_cp = num_cp + 2
 #Import discriminability data
 data_group_name = 'taste_discriminability'
-peak_epochs = np.squeeze(af.pull_data_from_hdf5(hdf5_dir,data_group_name,'peak_epochs'))
-discrim_neur = np.squeeze(af.pull_data_from_hdf5(hdf5_dir,data_group_name,'discrim_neur'))
+peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'peak_epochs'))
+discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'discrim_neur'))
 #Convert discriminatory neuron data into pop_taste_cp_raster_inds shape
 #TODO: Test this first, then if going with this rework functions to fit instead!
 num_discrim_cp = np.shape(discrim_neur)[0]

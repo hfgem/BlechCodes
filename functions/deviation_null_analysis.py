@@ -19,13 +19,15 @@ import json
 from multiprocessing import Pool
 import numpy as np
 import scipy.stats as stats
-import functions.null_distributions as nd
-import functions.dev_plot_funcs as dpf
-import functions.dev_funcs as df
 
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
+
+import functions.null_distributions as nd
+import functions.dev_plot_funcs as dpf
+import functions.dev_funcs as df
+
 warnings.filterwarnings("ignore")
 
 

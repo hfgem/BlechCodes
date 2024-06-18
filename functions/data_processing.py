@@ -18,7 +18,6 @@ import tkinter.filedialog as fd
 
 # Functions
 
-
 def file_names():
     """This function pulls .dat file names"""
     print("Select folder with .dat files from recording")

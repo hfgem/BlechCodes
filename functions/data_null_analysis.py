@@ -9,7 +9,6 @@ This is the fifth step of the analysis pipeline: statistics of the recording
 are compared against null distributions.
 """
 
-import functions.null_distributions as nd
 import os
 import tqdm
 import gzip
@@ -23,6 +22,7 @@ current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
+import functions.null_distributions as nd
 
 class run_data_null_analysis():
 

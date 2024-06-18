@@ -9,6 +9,11 @@ Pipeline run handler
 """
 
 import os
+
+current_path = os.path.realpath(__file__)
+blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
+os.chdir(blech_codes_path)
+
 from functions.dependent_bayes_analysis import run_dependent_bayes
 from functions.deviation_correlations import run_deviation_correlations
 from functions.data_null_analysis import run_data_null_analysis
@@ -18,9 +23,6 @@ from functions.changepoint_analysis import run_changepoint_detection
 from functions.data_description_analysis import run_data_description_analysis
 from utils.replay_utils import state_tracker
 
-current_path = os.path.realpath(__file__)
-blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
-os.chdir(blech_codes_path)
 
 
 class run_analysis_steps():

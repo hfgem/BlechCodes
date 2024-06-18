@@ -15,6 +15,7 @@ blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
 import functions.analysis_funcs as af
+import functions.hdf5_handling as hf5
 import functions.changepoint_detection as cd
 import functions.plot_funcs as pf
 import functions.decoding_funcs as df
@@ -52,8 +53,8 @@ class run_changepoint_detection():
 		data_group_name = 'changepoint_data'
 		#Raster Poisson Bayes Changepoint Calcs Indiv Neurons
 		try:
-			taste_cp_raster_inds = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_cp_raster_inds')
-			pop_taste_cp_raster_inds = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'pop_taste_cp_raster_inds')
+			taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_cp_raster_inds')
+			pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'pop_taste_cp_raster_inds')
 		except:	
 			taste_cp_raster_save_dir = taste_cp_save_dir + 'neur/'
 			if os.path.isdir(taste_cp_raster_save_dir) == False:
@@ -61,7 +62,7 @@ class run_changepoint_detection():
 			taste_cp_raster_inds = cd.calc_cp_iter(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 						  end_dig_in_times,before_taste,after_taste,
 						  dig_in_names,taste_cp_raster_save_dir)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_cp_raster_inds',taste_cp_raster_inds)
+			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_cp_raster_inds',taste_cp_raster_inds)
 			
 			taste_cp_raster_pop_save_dir = taste_cp_save_dir + 'pop/'
 			if os.path.isdir(taste_cp_raster_pop_save_dir) == False:
@@ -69,7 +70,7 @@ class run_changepoint_detection():
 			pop_taste_cp_raster_inds = cd.calc_cp_iter_pop(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
 						  end_dig_in_times,before_taste,after_taste,
 						  dig_in_names,taste_cp_raster_pop_save_dir)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'pop_taste_cp_raster_inds',pop_taste_cp_raster_inds)
+			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'pop_taste_cp_raster_inds',pop_taste_cp_raster_inds)
 		self.pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
 
 	def test_taste_similarity(self,):
@@ -89,13 +90,13 @@ class run_changepoint_detection():
 			os.mkdir(taste_epoch_save_dir)
 		data_group_name = 'taste_similarity_data'
 		try:
-			epoch_trial_out_of_bounds = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'epoch_out_of_bounds')
+			epoch_trial_out_of_bounds = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'epoch_out_of_bounds')
 		except:
 			epoch_trial_out_of_bounds = pf.taste_response_similarity_plots(num_tastes,num_cp,num_neur,num_segments,
 											tastant_spike_times,start_dig_in_times,
 											end_dig_in_times,pop_taste_cp_raster_inds,
 											post_taste_dt,dig_in_names,taste_epoch_save_dir)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'epoch_out_of_bounds',epoch_trial_out_of_bounds)
+			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'epoch_out_of_bounds',epoch_trial_out_of_bounds)
 				
 	
 	def test_taste_discriminability(self,):
@@ -117,19 +118,19 @@ class run_changepoint_detection():
 		#Get results
 		data_group_name = 'taste_discriminability'
 		try:
-			anova_results_all = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'anova_results_all')
-			anova_results_true = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'anova_results_true')
-			peak_epochs = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'peak_epochs')
-			discrim_neur = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'discrim_neur')
+			anova_results_all = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'anova_results_all')
+			anova_results_true = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'anova_results_true')
+			peak_epochs = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'peak_epochs')
+			discrim_neur = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'discrim_neur')
 		except:
 			anova_results_all, anova_results_true, peak_epochs, discrim_neur = af.taste_discriminability_test(post_taste_dt,
 																		 num_tastes,tastant_spike_times,
 																		 num_neur,start_dig_in_times,
 																		 bin_size,discrim_save_dir)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'anova_results_all',anova_results_all)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'anova_results_true',anova_results_true)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'peak_epochs',peak_epochs)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'discrim_neur',discrim_neur)
+			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'anova_results_all',anova_results_all)
+			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'anova_results_true',anova_results_true)
+			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'peak_epochs',peak_epochs)
+			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'discrim_neur',discrim_neur)
 	
 	def test_neuron_taste_selectivity(self,):
 		hdf5_dir = self.metadata['hdf5_dir']
@@ -152,9 +153,9 @@ class run_changepoint_detection():
 			
 		#_____Calculate taste decoding probabilities and success probabilities_____
 		try:
-			taste_select_prob_epoch = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_select_prob_epoch')[0]
-			p_taste_epoch = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'p_taste_epoch')[0]
-			taste_select_neur_epoch_bin = af.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
+			taste_select_prob_epoch = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_select_prob_epoch')[0]
+			p_taste_epoch = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'p_taste_epoch')[0]
+			taste_select_neur_epoch_bin = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
 		except:
 			print("\tUsing population changepoint indices to calculate taste selectivity by epoch.")
 			p_taste_epoch, taste_select_prob_epoch = df.taste_decoding_cp(tastant_spike_times,\
@@ -169,8 +170,8 @@ class run_changepoint_detection():
 			taste_select_neur_epoch_bin = taste_select_neur_epoch_count > 1
 			
 			#Save
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'p_taste_epoch',p_taste_epoch)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_select_prob_epoch',taste_select_prob_epoch)
-			af.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_select_neur_epoch_bin',taste_select_neur_epoch_bin)
+			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'p_taste_epoch',p_taste_epoch)
+			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_select_prob_epoch',taste_select_prob_epoch)
+			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_select_neur_epoch_bin',taste_select_neur_epoch_bin)
 	
 			

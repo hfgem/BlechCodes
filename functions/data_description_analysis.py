@@ -18,6 +18,7 @@ os.chdir(blech_codes_path)
 import functions.seg_compare as sc
 import functions.plot_funcs as pf
 import functions.analysis_funcs as af
+import functions.hdf5_handling as hf5
 
 class run_data_description_analysis():
 
@@ -54,13 +55,13 @@ class run_data_description_analysis():
         bin_step = 25  # Step size in ms to take in PSTH calculation
         data_group_name = 'PSTH_data'
         try:
-            tastant_PSTH = af.pull_data_from_hdf5(
+            tastant_PSTH = hf5.pull_data_from_hdf5(
                 hdf5_dir, data_group_name, 'tastant_PSTH')
-            PSTH_times = af.pull_data_from_hdf5(
+            PSTH_times = hf5.pull_data_from_hdf5(
                 hdf5_dir, data_group_name, 'PSTH_times')
-            PSTH_taste_deliv_times = af.pull_data_from_hdf5(
+            PSTH_taste_deliv_times = hf5.pull_data_from_hdf5(
                 hdf5_dir, data_group_name, 'PSTH_taste_deliv_times')
-            avg_tastant_PSTH = af.pull_data_from_hdf5(
+            avg_tastant_PSTH = hf5.pull_data_from_hdf5(
                 hdf5_dir, data_group_name, 'avg_tastant_PSTH')
             print("\t\tPreviously Completed")
         except:
@@ -84,13 +85,13 @@ class run_data_description_analysis():
                                                                                                pre_taste_dt, post_taste_dt,
                                                                                                segment_times, segment_spike_times,
                                                                                                bin_width, bin_step)
-            af.add_data_to_hdf5(hdf5_dir, data_group_name,
+            hf5.add_data_to_hdf5(hdf5_dir, data_group_name,
                                 'tastant_PSTH', tastant_PSTH)
-            af.add_data_to_hdf5(hdf5_dir, data_group_name,
+            hf5.add_data_to_hdf5(hdf5_dir, data_group_name,
                                 'PSTH_times', PSTH_times)
-            af.add_data_to_hdf5(hdf5_dir, data_group_name,
+            hf5.add_data_to_hdf5(hdf5_dir, data_group_name,
                                 'PSTH_taste_deliv_times', PSTH_taste_deliv_times)
-            af.add_data_to_hdf5(hdf5_dir, data_group_name,
+            hf5.add_data_to_hdf5(hdf5_dir, data_group_name,
                                 'avg_tastant_PSTH', avg_tastant_PSTH)
             print("\t\tPlots Completed")
 
