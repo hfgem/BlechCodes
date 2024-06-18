@@ -33,6 +33,7 @@ class run_deviation_dependent_bayes():
         self.gather_variables()
         self.import_deviations()
         self.pull_fr_dist()
+        self.decode_all_neurons()
 
     def gather_variables(self,):
         # Directories
