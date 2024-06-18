@@ -86,67 +86,6 @@ def calc_tastant_spike_times(segment_times, spike_times, start_dig_in_times, end
 
     return tastant_spike_times
 
-
-def add_data_to_hdf5(sorted_dir, data_group_name, data_name, data_array):
-    "Note, this assumes the data is a float"
-    blech_clust_h5 = tables.open_file(sorted_dir, 'r+', title=sorted_dir[-1])
-    try:
-        blech_clust_h5.create_group('/', data_group_name)
-    except:
-        print("\n\t" + data_group_name + " group already exists in .h5 file")
-    atom = tables.FloatAtom()
-    if type(data_array) == list:
-        num_vals = len(data_array)
-        for l_i in range(num_vals):
-            try:
-                blech_clust_h5.create_earray('/'+data_group_name, data_name+'_'+str(
-                    l_i), atom, (0,)+np.shape(np.array(data_array[l_i][:])))
-                exec("blech_clust_h5.root."+data_group_name+"."+data_name+"_" +
-                     str(l_i)+".append(np.expand_dims(np.array(data_array[l_i][:]),0))")
-            except:
-                blech_clust_h5.remove_node(
-                    '/'+data_group_name, data_name+"_"+str(l_i))
-                blech_clust_h5.create_earray('/'+data_group_name, data_name+'_'+str(
-                    l_i), atom, (0,)+np.shape(np.array(data_array[l_i][:])))
-                exec("blech_clust_h5.root."+data_group_name+"."+data_name+"_" +
-                     str(l_i)+".append(np.expand_dims(np.array(data_array[l_i][:]),0))")
-    elif type(data_array) == np.ndarray:
-        try:
-            blech_clust_h5.create_earray(
-                '/'+data_group_name, data_name, atom, (0,)+np.shape(data_array[:]))
-            exec("blech_clust_h5.root."+data_group_name+"." +
-                 data_name+".append(np.expand_dims(data_array[:],0))")
-        except:
-            blech_clust_h5.remove_node('/'+data_group_name, data_name)
-            blech_clust_h5.create_earray(
-                '/'+data_group_name, data_name, atom, (0,)+np.shape(data_array[:]))
-            exec("blech_clust_h5.root."+data_group_name+"." +
-                 data_name+".append(np.expand_dims(data_array[:],0))")
-    blech_clust_h5.close()  # Always close the file
-# TODO: add handling of lists of lists with different sizes nested
-
-
-def pull_data_from_hdf5(sorted_dir, data_group_name, data_name):
-    "Note, this assumes the data is a float"
-    blech_clust_h5 = tables.open_file(sorted_dir, 'r+', title=sorted_dir[-1])
-    data_names = blech_clust_h5.list_nodes("/"+data_group_name)
-    data_list = []
-    for datum in data_names:
-        if datum.name[0:len(data_name)] == data_name:
-            data_list.append(datum[0][:])
-    blech_clust_h5.close()
-    if len(data_list) >= 1:
-        if len(data_list) == 1:
-            data = np.array(data_list)
-        else:
-            data = data_list
-    else:
-        raise Exception(
-            data_name + " does not exist in group " + data_group_name)
-
-    return data
-
-
 def taste_responsivity_PSTH(PSTH_times, PSTH_taste_deliv_times, tastant_PSTH):
     """A test of whether or not each neuron is taste responsive by looking at
     PSTH activity before and after taste delivery and calculating if there is a 

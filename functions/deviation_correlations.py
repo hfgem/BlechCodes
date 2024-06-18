@@ -17,7 +17,7 @@ os.chdir(blech_codes_path)
 
 import functions.dev_plot_funcs as dpf
 import functions.dev_funcs as df
-import functions.analysis_funcs as af
+import functions.hdf5_handling as hf5
 
 class run_deviation_correlations():
 
@@ -90,15 +90,15 @@ class run_deviation_correlations():
         print("\tNow pulling changepoints")
         # Import changepoint data
         data_group_name = 'changepoint_data'
-        pop_taste_cp_raster_inds = af.pull_data_from_hdf5(
+        pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
             self.hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
         self.pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
         num_pt_cp = self.num_cp + 2
         # Import discriminability data
         data_group_name = 'taste_discriminability'
-        peak_epochs = np.squeeze(af.pull_data_from_hdf5(
+        peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(
             self.hdf5_dir, data_group_name, 'peak_epochs'))
-        discrim_neur = np.squeeze(af.pull_data_from_hdf5(
+        discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
             self.hdf5_dir, data_group_name, 'discrim_neur'))
         # Convert discriminatory neuron data into pop_taste_cp_raster_inds shape
         # TODO: Test this first, then if going with this rework functions to fit instead!
@@ -136,7 +136,7 @@ class run_deviation_correlations():
         print("\tCalculate correlations for taste selective neurons only")
         # Import taste selectivity data
         #data_group_name = 'taste_selectivity'
-        #taste_select_neur_epoch_bin = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
+        #taste_select_neur_epoch_bin = hf5.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
         #self.neuron_keep_indices = taste_select_neur_epoch_bin.T
         self.neuron_keep_indices = self.discrim_neur
         # Create storage directory
@@ -178,7 +178,7 @@ class run_deviation_correlations():
             os.mkdir(self.current_corr_dir)
         # Import taste selectivity data
         #data_group_name = 'taste_selectivity'
-        #taste_select_neur_epoch_bin = af.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
+        #taste_select_neur_epoch_bin = hf5.pull_data_from_hdf5(self.hdf5_dir,data_group_name,'taste_select_neur_epoch_bin')[0]
         #self.neuron_keep_indices = taste_select_neur_epoch_bin.T
         self.neuron_keep_indices = self.discrim_neur
         # Calculate correlations

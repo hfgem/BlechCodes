@@ -23,7 +23,7 @@ os.chdir(blech_codes_path)
 import functions.decoding_funcs as df
 import functions.dependent_decoding_funcs as ddf
 import functions.dev_funcs as dev_f
-import functions.analysis_funcs as af
+import functions.hdf5_handling as hf5
 
 class run_deviation_dependent_bayes():
 
@@ -78,21 +78,21 @@ class run_deviation_dependent_bayes():
         self.bin_time = self.metadata['params_dict']['bayes_params']['bin_time']
         self.bin_dt = np.ceil(self.bin_time*1000).astype('int')
         # Import changepoint data
-        pop_taste_cp_raster_inds = af.pull_data_from_hdf5(
+        pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
             self.hdf5_dir, 'changepoint_data', 'pop_taste_cp_raster_inds')
         self.pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
         num_pt_cp = self.num_cp + 2
         # Import taste selectivity data
         try:
-            select_neur = af.pull_data_from_hdf5(
+            select_neur = hf5.pull_data_from_hdf5(
                 self.hdf5_dir, 'taste_selectivity', 'taste_select_neur_epoch_bin')[0]
             self.select_neur = select_neur
         except:
             print("\tNo taste selectivity data found. Skipping.")
         # Import discriminability data
-        peak_epochs = np.squeeze(af.pull_data_from_hdf5(
+        peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(
             self.hdf5_dir, 'taste_discriminability', 'peak_epochs'))
-        discrim_neur = np.squeeze(af.pull_data_from_hdf5(
+        discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
             self.hdf5_dir, 'taste_discriminability', 'discrim_neur'))
         # Convert discriminatory neuron changepoint data into pop_taste_cp_raster_inds shape
         # TODO: Add a flag for a user to select whether to use discriminatory neurons or selective neurons

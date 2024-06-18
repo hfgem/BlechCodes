@@ -7,11 +7,14 @@ Created on Fri Mar 29 15:39:29 2024
 
 Data Import Utils
 """
-import tables, os, csv
+
+import os
+import tables
+import csv
+import numpy as np
 import functions.load_intan_rhd_format.load_intan_rhd_format as rhd
 import functions.data_processing as dp
 import functions.analysis_funcs as af
-import numpy as np
 
 class import_data():
 	
