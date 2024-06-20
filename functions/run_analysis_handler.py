@@ -87,12 +87,17 @@ class run_analysis_steps():
         state_exec_dict[2]['name'] = 'Deviation Null Analysis'
         state_exec_dict[2]['exec'] = 'run_deviation_null_analysis([self.metadata,self.data_dict])'
         state_exec_dict[3] = dict()
-        state_exec_dict[3]['name'] = 'Deviation x Taste Correlations'
-        state_exec_dict[3]['exec'] = 'run_deviation_correlations([self.metadata,self.data_dict])'
+        state_exec_dict[3]['name'] = 'Null Deviation x Taste Correlations'
+        state_exec_dict[3]['exec'] = 'run_dependent_bayes([self.metadata,self.data_dict])'
         state_exec_dict[4] = dict()
-        state_exec_dict[4]['name'] = 'Bayesian Replay Decoding'
-        state_exec_dict[4]['exec'] = 'run_dependent_bayes([self.metadata,self.data_dict])'
+        state_exec_dict[4]['name'] = 'Deviation x Taste Correlations'
+        state_exec_dict[4]['exec'] = 'run_deviation_correlations([self.metadata,self.data_dict])'
+        
+        
         state_exec_dict[5] = dict()
-        state_exec_dict[5]['name'] = 'Bayesian Deviation Decoding'
-        state_exec_dict[5]['exec'] = ''
+        state_exec_dict[5]['name'] = 'Bayesian Replay Decoding'
+        state_exec_dict[5]['exec'] = 'run_dependent_bayes([self.metadata,self.data_dict])'
+        state_exec_dict[6] = dict()
+        state_exec_dict[6]['name'] = 'Bayesian Deviation Decoding'
+        state_exec_dict[6]['exec'] = ''
         self.state_exec_dict = state_exec_dict

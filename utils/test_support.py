@@ -221,3 +221,129 @@ if os.path.isdir(current_corr_dir) == False:
 	os.mkdir(current_corr_dir)
 #neuron_keep_indices = np.ones((num_neur,num_cp+1))
 neuron_keep_indices = np.ones(np.shape(discrim_neur))
+
+#%% Null dev corr
+
+#These directories should already exist
+hdf5_dir = metadata['hdf5_dir']
+null_dir = metadata['dir_name'] + 'null_data/'
+dev_dir = metadata['dir_name'] + 'Deviations/'
+comp_dir = metadata['dir_name'] + 'dev_x_taste/'
+if os.path.isdir(comp_dir) == False:
+    os.mkdir(comp_dir)
+corr_dir = comp_dir + 'corr/'
+if os.path.isdir(corr_dir) == False:
+    os.mkdir(corr_dir)
+
+num_neur = data_dict['num_neur']
+tastant_spike_times = data_dict['tastant_spike_times']
+start_dig_in_times = data_dict['start_dig_in_times']
+end_dig_in_times = data_dict['end_dig_in_times']
+dig_in_names = data_dict['dig_in_names']
+segment_names = data_dict['segment_names']
+num_segments = len(segment_names)
+pre_taste = metadata['params_dict']['pre_taste']
+post_taste = metadata['params_dict']['post_taste']
+# Import changepoint data
+data_group_name = 'changepoint_data'
+pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
+pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
+num_null = metadata['params_dict']['num_null']
+segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+segment_names = data_dict['segment_names']
+segment_times = data_dict['segment_times']
+segment_times_reshaped = [
+    [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+z_bin = metadata['params_dict']['z_bin']
+
+try:  # test if the data exists by trying to import the last from each segment
+    null_i = num_null - 1
+    for s_i in tqdm.tqdm(segments_to_analyze):
+        filepath = dev_dir + 'null_data/' + \
+             segment_names[s_i] + '/null_' + \
+                 str(null_i) + '_deviations.json'
+        with gzip.GzipFile(filepath, mode="r") as f:
+            json_bytes = f.read()
+            json_str = json_bytes.decode('utf-8')
+            data = json.loads(json_str)
+except:
+    print("ERROR! ERROR! ERROR!")
+    print("Null deviations were not calculated previously as expected.")
+    print("Something went wrong in the analysis pipeline.")
+    print("Please try reverting your analysis_state_tracker.csv to 2 to rerun.")
+    print("If issues persist, contact Hannah.")
+    #sys.exit()
+
+print("\tNow importing calculated null deviations")
+all_null_deviations = []
+for null_i in tqdm.tqdm(range(num_null)):
+     null_segment_deviations = []
+     for s_i in segments_to_analyze:
+         filepath = dev_dir + 'null_data/' + \
+             segment_names[s_i] + '/null_' + \
+             str(null_i) + '_deviations.json'
+         with gzip.GzipFile(filepath, mode="r") as f:
+             json_bytes = f.read()
+             json_str = json_bytes.decode('utf-8')
+             data = json.loads(json_str)
+             null_segment_deviations.append(data)
+     all_null_deviations.append(null_segment_deviations)
+del null_i, null_segment_deviations, s_i, filepath, json_bytes, json_str, data
+
+print('\tCalculating null distribution spike times')
+# _____Grab null dataset spike times_____
+all_null_segment_spike_times = []
+for null_i in range(num_null):
+    null_segment_spike_times = []
+    
+    for s_i in segments_to_analyze:
+        seg_null_dir = null_dir + segment_names[s_i] + '/'
+        # Import the null distribution into memory
+        filepath = seg_null_dir + 'null_' + str(null_i) + '.json'
+        with gzip.GzipFile(filepath, mode="r") as f:
+            json_bytes = f.read()
+            json_str = json_bytes.decode('utf-8')
+            data = json.loads(json_str)
+
+        seg_null_dir = null_dir + segment_names[s_i] + '/'
+
+        seg_start = segment_times_reshaped[s_i][0]
+        seg_end = segment_times_reshaped[s_i][1]
+        null_seg_st = []
+        for n_i in range(num_neur):
+            seg_spike_inds = np.where(
+                (data[n_i] >= seg_start)*(data[n_i] <= seg_end))[0]
+            null_seg_st.append(
+                list(np.array(data[n_i])[seg_spike_inds]))
+        null_segment_spike_times.append(null_seg_st)
+    all_null_segment_spike_times.append(null_segment_spike_times)
+all_null_segment_spike_times = all_null_segment_spike_times
+
+print("\tNow pulling null deviation rasters")
+num_seg = len(segments_to_analyze)
+seg_times_reshaped = np.array(segment_times_reshaped)[
+    segments_to_analyze, :]
+
+null_dev_vecs = []
+for null_i in tqdm.tqdm(range(num_null)):
+    null_segment_deviations = all_null_deviations[null_i]
+    null_segment_spike_times = all_null_segment_spike_times[null_i]
+    _, _, null_segment_dev_vecs_i, _ = df.create_dev_rasters(num_seg,
+                                                             null_segment_spike_times,
+                                                             seg_times_reshaped,
+                                                             null_segment_deviations,
+                                                             z_bin)
+    #Compiled all into a single group, rather than keeping separated by null dist
+    null_dev_vecs.extend(null_segment_dev_vecs_i)
+
+current_corr_dir = corr_dir + 'all_neur/' + 'null/'
+if os.path.isdir(current_corr_dir) == False:
+    os.mkdir(current_corr_dir)
+neuron_keep_indices = np.ones(np.shape(discrim_neur))
+# Calculate correlations
+df.calculate_vec_correlations(num_neur, null_dev_vecs, tastant_spike_times,
+                              start_dig_in_times, end_dig_in_times, segment_names,
+                              dig_in_names, pre_taste, post_taste, pop_taste_cp_raster_inds,
+                              current_corr_dir, neuron_keep_indices, segments_to_analyze)  # For all neurons in dataset
+

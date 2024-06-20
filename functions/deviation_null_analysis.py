@@ -60,9 +60,6 @@ class run_deviation_null_analysis():
         self.max_plot = self.metadata['params_dict']['max_plot']
         self.count_cutoff = np.arange(1, self.num_neur)
         self.bin_size = self.metadata['params_dict']['compare_null_params']['bin_size']
-        lag_min = self.metadata['params_dict']['compare_null_params']['lag_min']
-        lag_max = self.metadata['params_dict']['compare_null_params']['lag_max']
-        self.lag_vals = np.arange(lag_min, lag_max).astype('int')
         self.dev_dir = self.metadata['dir_name'] + 'Deviations/'
         self.null_dir = self.metadata['dir_name'] + 'null_data/'
         if os.path.isdir(self.null_dir) == False:
@@ -134,14 +131,16 @@ class run_deviation_null_analysis():
         all_null_segment_spike_times = []
         for null_i in range(self.num_null):
             null_segment_spike_times = []
-            # Import the null distribution into memory
-            filepath = seg_null_dir + 'null_' + str(null_i) + '.json'
-            with gzip.GzipFile(filepath, mode="r") as f:
-                json_bytes = f.read()
-                json_str = json_bytes.decode('utf-8')
-                data = json.loads(json_str)
-
+            
             for s_i in self.segments_to_analyze:
+                seg_null_dir = self.null_dir + self.segment_names[s_i] + '/'
+                # Import the null distribution into memory
+                filepath = seg_null_dir + 'null_' + str(null_i) + '.json'
+                with gzip.GzipFile(filepath, mode="r") as f:
+                    json_bytes = f.read()
+                    json_str = json_bytes.decode('utf-8')
+                    data = json.loads(json_str)
+    
                 seg_null_dir = self.null_dir + self.segment_names[s_i] + '/'
 
                 seg_start = self.segment_times_reshaped[s_i][0]
