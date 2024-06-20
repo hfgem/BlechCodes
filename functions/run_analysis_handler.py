@@ -92,8 +92,6 @@ class run_analysis_steps():
         state_exec_dict[4] = dict()
         state_exec_dict[4]['name'] = 'Deviation x Taste Correlations'
         state_exec_dict[4]['exec'] = 'run_deviation_correlations([self.metadata,self.data_dict])'
-        
-        
         state_exec_dict[5] = dict()
         state_exec_dict[5]['name'] = 'Bayesian Replay Decoding'
         state_exec_dict[5]['exec'] = 'run_dependent_bayes([self.metadata,self.data_dict])'

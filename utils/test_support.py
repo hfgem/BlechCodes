@@ -245,10 +245,14 @@ num_segments = len(segment_names)
 pre_taste = metadata['params_dict']['pre_taste']
 post_taste = metadata['params_dict']['post_taste']
 # Import changepoint data
+num_cp = metadata['params_dict']['num_cp']
 data_group_name = 'changepoint_data'
 pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
     hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
 pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
+data_group_name = 'taste_discriminability'
+discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'discrim_neur'))
 num_null = metadata['params_dict']['num_null']
 segments_to_analyze = metadata['params_dict']['segments_to_analyze']
 segment_names = data_dict['segment_names']
@@ -326,6 +330,8 @@ seg_times_reshaped = np.array(segment_times_reshaped)[
     segments_to_analyze, :]
 
 null_dev_vecs = []
+for s_i in range(num_seg):
+    null_dev_vecs.append([])
 for null_i in tqdm.tqdm(range(num_null)):
     null_segment_deviations = all_null_deviations[null_i]
     null_segment_spike_times = all_null_segment_spike_times[null_i]
@@ -335,7 +341,8 @@ for null_i in tqdm.tqdm(range(num_null)):
                                                              null_segment_deviations,
                                                              z_bin)
     #Compiled all into a single group, rather than keeping separated by null dist
-    null_dev_vecs.extend(null_segment_dev_vecs_i)
+    for s_i in range(num_seg):
+        null_dev_vecs[s_i].extend(null_segment_dev_vecs_i[s_i])
 
 current_corr_dir = corr_dir + 'all_neur/' + 'null/'
 if os.path.isdir(current_corr_dir) == False:

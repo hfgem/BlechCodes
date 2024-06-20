@@ -313,11 +313,8 @@ def plot_null_v_true_stats(true_data, null_data, data_name, save_dir, x_label=[]
 
 def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
                neuron_indices, segments_to_analyze):
-    """This function takes in deviation rasters, tastant delivery spikes, and
-    changepoint indices to calculate correlations of each deviation to each 
-    changepoint interval. Outputs are saved .npy files with name indicating
-    segment and taste containing matrices of shape [num_dev, num_deliv, num_neur, num_cp]
-    with the correlations stored.
+    """This function takes in deviation correlations and plots the distributions.
+    Outputs are saved as .png and .svg files.
 
     neuron_indices should be binary and shaped num_neur x num_cp
     """
@@ -1049,14 +1046,14 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
             taste_corr = np.array(taste_corr).squeeze()
             density_hist_data = np.histogram(
                 taste_corr, bins=density_bins, density=True)
-            norm_dens = density_hist_data[0]/max(density_hist_data[0])
-            taste_density.append(norm_dens)
+            #norm_dens = density_hist_data[0]/max(density_hist_data[0])
+            taste_density.append(density_hist_data[0])
             ax_cum[s_ind, 0].hist(taste_corr, bins=density_bins, histtype='step', density=True,
                                   cumulative=True, color=taste_colors[t_i, :], label=dig_in_names[t_i])
             ax_cum[s_ind, 0].set_ylim([-0.05, 1.05])
             ax_cum[s_ind, 0].set_xlim([-0.05, 1.05])
             ax_dens[s_ind, 0].plot(
-                density_x_vals, norm_dens, color=taste_colors[t_i, :], label=dig_in_names[t_i])
+                density_x_vals, density_hist_data[0], color=taste_colors[t_i, :], label=dig_in_names[t_i])
             ax_dens[s_ind, 0].set_ylim([-0.05, 1.05])
             ax_dens[s_ind, 0].set_xlim([-0.05, 1.05])
         for tp_ind, t_pair in enumerate(taste_pairs):

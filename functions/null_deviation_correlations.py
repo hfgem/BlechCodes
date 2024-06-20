@@ -23,6 +23,7 @@ blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
 import functions.dev_funcs as df
+import functions.dev_plot_funcs as dpf
 import functions.hdf5_handling as hf5
 
 
@@ -58,10 +59,15 @@ class run_null_deviation_correlations():
         self.pre_taste = self.metadata['params_dict']['pre_taste']
         self.post_taste = self.metadata['params_dict']['post_taste']
         # Import changepoint data
+        self.num_cp = self.metadata['params_dict']['num_cp']+ 1
         data_group_name = 'changepoint_data'
         pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
             self.hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
         self.pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
+        data_group_name = 'taste_discriminability'
+        discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
+            self.hdf5_dir, data_group_name, 'discrim_neur'))
+        self.discrim_neur = discrim_neur
         self.num_null = self.metadata['params_dict']['num_null']
         self.segments_to_analyze = self.metadata['params_dict']['segments_to_analyze']
         self.segment_names = self.data_dict['segment_names']
@@ -162,6 +168,7 @@ class run_null_deviation_correlations():
         self.null_dev_vecs = null_dev_vecs
     
     def calculate_correlations_all_null(self,):
+        print('\tCalculating null correlation distributions')
         self.current_corr_dir = self.corr_dir + 'all_neur/' + 'null/'
         if os.path.isdir(self.current_corr_dir) == False:
             os.mkdir(self.current_corr_dir)
@@ -172,12 +179,23 @@ class run_null_deviation_correlations():
                                       self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
                                       self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)  # For all neurons in dataset
         # Now plot and calculate significance!
-        self.calculate_plot_corr_stats()
-        self.calculate_significance()
-        self.best_corr()
+        self.stats_plots()
     
-    
-    
+    def stats_plots(self,):
+        # Plot dir setup
+        print('\tPlotting null correlation distributions')
+        plot_dir = self.current_corr_dir + 'plots/'
+        if os.path.isdir(plot_dir) == False:
+            os.mkdir(plot_dir)
+        self.plot_dir = plot_dir
+        corr_dev_stats = df.pull_corr_dev_stats(
+            self.segment_names, self.dig_in_names, self.current_corr_dir, self.segments_to_analyze)
+        dpf.plot_stats(corr_dev_stats, self.segment_names, self.dig_in_names, self.plot_dir,
+                       'Correlation', self.neuron_keep_indices, self.segments_to_analyze)
+        segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, self.segment_names, self.dig_in_names,
+                                                       self.plot_dir, 'Correlation', self.neuron_keep_indices, self.segments_to_analyze)
+        null_corr_percentiles = df.null_dev_corr_90_percentiles(corr_dev_stats, self.segment_names, self.dig_in_names, 
+                                         self.num_cp, self.current_corr_dir, self.segments_to_analyze)
     
     
     

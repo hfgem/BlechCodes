@@ -10,11 +10,12 @@ etc... the deviations in true and null datasets.
 """
 
 import os
+import warnings
 import json
 import gzip
 import tqdm
 import itertools
-import warnings
+import pickle
 import numpy as np
 #import matplotlib.pyplot as plt
 #from scipy.signal import find_peaks
@@ -535,6 +536,35 @@ def pull_corr_dev_stats(segment_names, dig_in_names, save_dir, segments_to_analy
 
     return dev_stats
 
+def null_dev_corr_90_percentiles(dev_stats, segment_names, dig_in_names, 
+                                 num_cp, save_dir, segments_to_analyze = []):
+    """Given correlation data calculated for all null distribution deviation
+    events, calculate the 90th percentiles for each distribution to use in 
+    determining significant deviation events from true data"""
+    
+    num_tastes = len(dig_in_names)
+    if len(segments_to_analyze) == 0:
+        segments_to_analyze = np.arange(len(segment_names))
+    num_segments = len(segments_to_analyze)
+    
+    null_corr_percentiles = dict()
+    for s_i in segments_to_analyze:  # Loop through each segment
+        seg_name = segment_names[s_i]
+        null_corr_percentiles[seg_name] = dict()
+        for t_i in range(num_tastes):  # Loop through each taste
+            corr_vals = dev_stats[seg_name][t_i]['pop_vec_data_storage']
+            null_corr_percentiles[seg_name][dig_in_names[t_i]] = np.zeros(num_cp)
+            for e_i in range(num_cp):
+                epoch_corrs = corr_vals[:,:,e_i].flatten()
+                e_percentile = np.nanpercentile(epoch_corrs,90)
+                null_corr_percentiles[seg_name][dig_in_names[t_i]][e_i] = e_percentile
+                
+    #Save to file for future import
+    dict_save_dir = os.path.join(save_dir,'null_corr_percentiles.pkl')
+    f = open(dict_save_dir,"wb")
+    pickle.dump(null_corr_percentiles,f)
+
+    return null_corr_percentiles
 
 def stat_significance(segment_data, segment_names, dig_in_names, save_dir, dist_name, segments_to_analyze=[]):
 
