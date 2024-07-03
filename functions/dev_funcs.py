@@ -354,6 +354,47 @@ def calculate_vec_correlations(num_neur, segment_dev_vectors, tastant_spike_time
                         np.save(filename_pop_vec, neuron_pop_vec_corr_storage)
                 np.save(filename_pop_vec, neuron_pop_vec_corr_storage)
 
+def calculate_significant_dev(segment_dev_times, segment_times, dig_in_names,
+                              segment_names, save_dir, segments_to_analyze=[]):
+    """
+    This function uses the outputs of null_dev_corr_90_percentiles() and
+    calculate_vec_correlations() to calculate which true deviation events
+    are correlated more to the taste than the 90th percentile cutoffs of
+    null deviation correlation data.
+    
+    INPUTS:
+        - 
+        - save_dir: directory where the true correlation data is saved
+        
+    OUTPUTS:
+        - Plots of significant deviation events
+        - Dictionary of significant events
+    """
+    
+    # Grab parameters
+    num_tastes = len(dig_in_names)
+    num_segments = len(segment_times)
+    
+    if len(segments_to_analyze) == 0:
+        segments_to_analyze = np.arange(num_segments)
+    
+    #Import null deviation correlation percentiles
+    filename_null_percentiles = os.path.join(save_dir,'null','null_corr_percentiles.pkl')
+    null_corr_percentiles = np.load(filename_null_percentiles,allow_pickle=True)
+    
+    for s_ind, s_i in enumerate(segments_to_analyze):
+        seg_null_percentiles = null_corr_percentiles[segment_names[s_i]]
+        for t_i in range(num_tastes):
+            taste_null_percentiles = seg_null_percentiles[dig_in_names[t_i]]
+            num_null_cp = len(taste_null_percentiles)
+            #Import true deviation correlation data
+            filename_pop_vec = os.path.join(save_dir,segment_names[s_i] + '_' + \
+                dig_in_names[t_i] + '_pop_vec.npy')
+            neuron_pop_vec_corr_storage = np.load(filename_pop_vec)
+            num_dev, num_deliv, num_cp = np.shape(neuron_pop_vec_corr_storage)
+            
+    
+
 
 def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, tastant_spike_times,
                                       segment_times, segment_spike_times, start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,

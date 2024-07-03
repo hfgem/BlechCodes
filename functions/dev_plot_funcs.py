@@ -1017,8 +1017,8 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
     plt.close(f_frac)
 
     # Plot the cumulative distribution functions by segment and the density differences
-    density_x_vals = np.arange(0, 1.1, 0.1)
-    density_bins = np.arange(-0.05, 1.15, 0.1)
+    density_x_vals = np.arange(0, 1.1, 0.025)
+    density_bins = np.arange(-0.05, 1.15, 0.025)
     taste_pairs = list(combinations(np.arange(num_tastes), 2))
     epoch_pairs = list(combinations(np.arange(len(epochs_to_analyze)), 2))
 
@@ -1046,7 +1046,6 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
             taste_corr = np.array(taste_corr).squeeze()
             density_hist_data = np.histogram(
                 taste_corr, bins=density_bins, density=True)
-            #norm_dens = density_hist_data[0]/max(density_hist_data[0])
             taste_density.append(density_hist_data[0])
             ax_cum[s_ind, 0].hist(taste_corr, bins=density_bins, histtype='step', density=True,
                                   cumulative=True, color=taste_colors[t_i, :], label=dig_in_names[t_i])
@@ -1083,14 +1082,13 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
             epoch_corr = np.array(epoch_corr).squeeze()
             density_hist_data = np.histogram(
                 epoch_corr, bins=density_bins, density=True)
-            norm_dens = density_hist_data[0]/max(density_hist_data[0])
-            epoch_density.append(norm_dens)
+            epoch_density.append(density_hist_data[0])
             ax_cum[s_ind, 1].hist(epoch_corr, bins=density_bins, histtype='step', density=True,
                                   cumulative=True, color=epoch_colors[e_ind, :], label='Epoch ' + str(e_i))
             ax_cum[s_ind, 1].set_ylim([-0.05, 1.05])
             ax_cum[s_ind, 1].set_xlim([-0.05, 1.05])
             ax_dens[s_ind, 1].plot(
-                density_x_vals, norm_dens, color=epoch_colors[e_ind, :], label='Epoch ' + str(e_i))
+                density_x_vals, density_hist_data[0], color=epoch_colors[e_ind, :], label='Epoch ' + str(e_i))
             ax_dens[s_ind, 1].set_ylim([-0.05, 1.05])
             ax_dens[s_ind, 1].set_xlim([-0.05, 1.05])
         for ep_ind, e_pair in enumerate(epoch_pairs):
