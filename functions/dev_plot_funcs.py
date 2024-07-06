@@ -1165,3 +1165,65 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
     f_diff_epoch.savefig(os.path.join(save_dir, 'best_corr_epoch_diff.png'))
     f_diff_epoch.savefig(os.path.join(save_dir, 'best_corr_epoch_diff.svg'))
     plt.close(f_diff_epoch)
+    
+    
+def sig_count_plot(sig_dev_counts, segments_to_analyze, segment_names,
+                   dig_in_names, save_dir):
+    """
+    Basic function to plot the number of significant deviations by condition.
+    Called from / data passed from dev_funcs.py function 
+    "calculate_significant_dev()".
+
+    Returns
+    -------
+    None.
+
+    """
+    num_seg = len(segments_to_analyze)
+    num_tastes = len(dig_in_names)
+    
+    max_num = 0
+    max_num_cp = 0
+    #By segment
+    f,ax = plt.subplots(ncols = num_seg, figsize=(4*num_seg,4))
+    for s_i in range(num_seg):
+        for t_i in range(num_tastes):
+            ax[s_i].plot(sig_dev_counts[s_i][t_i],label=dig_in_names[t_i])
+            if max(sig_dev_counts[s_i][t_i]) > max_num:
+                max_num = max(sig_dev_counts[s_i][t_i])
+            if len(sig_dev_counts[s_i][t_i]) > max_num_cp:
+                max_num_cp = len(sig_dev_counts[s_i][t_i])
+        ax[s_i].set_title(segment_names[segments_to_analyze[s_i]])
+        ax[s_i].set_xlabel('Epoch Index')
+        ax[s_i].set_ylabel('# Significant Deviation Events')
+    for s_i in range(num_seg):
+        ax[s_i].set_ylim([-1,max_num])
+        ax[s_i].legend(loc='upper left')
+    plt.tight_layout()
+    f.savefig(os.path.join(save_dir,'sig_dev_event_counts_segment.png'))
+    f.savefig(os.path.join(save_dir,'sig_dev_event_counts_segment.svg'))
+    plt.close(f)
+    
+    max_num = 0
+    max_num_cp = 0
+    #By taste
+    f,ax = plt.subplots(ncols = num_tastes, figsize=(4*num_tastes,4))
+    for t_i in range(num_tastes):
+        for s_i in range(num_seg):
+            ax[t_i].plot(sig_dev_counts[s_i][t_i],label=segment_names[segments_to_analyze[s_i]])
+            if max(sig_dev_counts[s_i][t_i]) > max_num:
+                max_num = max(sig_dev_counts[s_i][t_i])
+            if len(sig_dev_counts[s_i][t_i]) > max_num_cp:
+                max_num_cp = len(sig_dev_counts[s_i][t_i])
+        ax[t_i].set_title(dig_in_names[t_i])
+        ax[t_i].set_xlabel('Epoch Index')
+        ax[t_i].set_ylabel('# Significant Deviation Events')
+    for t_i in range(num_tastes):
+        ax[t_i].set_ylim([-1,max_num])
+        ax[t_i].legend(loc='upper left')
+    plt.tight_layout()
+    f.savefig(os.path.join(save_dir,'sig_dev_event_counts_taste.png'))
+    f.savefig(os.path.join(save_dir,'sig_dev_event_counts_taste.svg'))
+    plt.close(f)
+    
+    

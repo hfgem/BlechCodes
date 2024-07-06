@@ -245,7 +245,7 @@ num_segments = len(segment_names)
 pre_taste = metadata['params_dict']['pre_taste']
 post_taste = metadata['params_dict']['post_taste']
 # Import changepoint data
-num_cp = metadata['params_dict']['num_cp']
+num_cp = metadata['params_dict']['num_cp'] + 2
 data_group_name = 'changepoint_data'
 pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
     hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
@@ -253,6 +253,14 @@ pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
 data_group_name = 'taste_discriminability'
 discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
     hdf5_dir, data_group_name, 'discrim_neur'))
+num_discrim_cp = np.shape(discrim_neur)[0]
+discrim_cp_raster_inds = []
+for t_i in range(len(dig_in_names)):
+    t_cp_vec = np.ones(
+        (np.shape(pop_taste_cp_raster_inds[t_i])[0], num_discrim_cp))
+    t_cp_vec = (peak_epochs[:num_cp] +
+                int(pre_taste*1000))*t_cp_vec
+    discrim_cp_raster_inds.append(t_cp_vec)
 num_null = metadata['params_dict']['num_null']
 segments_to_analyze = metadata['params_dict']['segments_to_analyze']
 segment_names = data_dict['segment_names']
@@ -298,7 +306,7 @@ del null_i, null_segment_deviations, s_i, filepath, json_bytes, json_str, data
 print('\tCalculating null distribution spike times')
 # _____Grab null dataset spike times_____
 all_null_segment_spike_times = []
-for null_i in range(num_null):
+for null_i in tqdm.tqdm(range(num_null)):
     null_segment_spike_times = []
     
     for s_i in segments_to_analyze:
@@ -324,7 +332,7 @@ for null_i in range(num_null):
     all_null_segment_spike_times.append(null_segment_spike_times)
 all_null_segment_spike_times = all_null_segment_spike_times
 
-print("\tNow pulling null deviation rasters")
+print("\tNow pulling null deviation firing rate vectors")
 num_seg = len(segments_to_analyze)
 seg_times_reshaped = np.array(segment_times_reshaped)[
     segments_to_analyze, :]
@@ -339,7 +347,7 @@ for null_i in tqdm.tqdm(range(num_null)):
                                                              null_segment_spike_times,
                                                              seg_times_reshaped,
                                                              null_segment_deviations,
-                                                             z_bin)
+                                                             z_bin, no_z = True)
     #Compiled all into a single group, rather than keeping separated by null dist
     for s_i in range(num_seg):
         null_dev_vecs[s_i].extend(null_segment_dev_vecs_i[s_i])

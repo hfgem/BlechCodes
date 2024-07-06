@@ -59,7 +59,7 @@ class run_null_deviation_correlations():
         self.pre_taste = self.metadata['params_dict']['pre_taste']
         self.post_taste = self.metadata['params_dict']['post_taste']
         # Import changepoint data
-        self.num_cp = self.metadata['params_dict']['num_cp']+ 1
+        self.num_cp = self.metadata['params_dict']['num_cp']+ 2
         data_group_name = 'changepoint_data'
         pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
             self.hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
@@ -159,7 +159,7 @@ class run_null_deviation_correlations():
                                                                      null_segment_spike_times,
                                                                      seg_times_reshaped,
                                                                      null_segment_deviations,
-                                                                     self.z_bin)
+                                                                     self.z_bin, no_z = True)
             #Compiled all into a single segment group, rather than keeping separated by null dist
             for s_i in range(num_seg):
                 null_dev_vecs[s_i].extend(null_segment_dev_vecs_i[s_i])

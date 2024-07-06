@@ -128,7 +128,10 @@ class run_deviation_correlations():
                                       self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
                                       self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)  # For all neurons in dataset
         # Calculate significant events
-        df.calculate_significant_dev()
+        sig_dev, sig_dev_counts = df.calculate_significant_dev(self.segment_dev_times, 
+                                                               self.segment_times, self.dig_in_names,
+                                                               self.segment_names, self.corr_dir,
+                                                               self.segments_to_analyze)
         # Now plot and calculate significance!
         self.calculate_plot_corr_stats()
         self.calculate_significance()
