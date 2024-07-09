@@ -10,11 +10,12 @@ etc... the deviations in true and null datasets.
 """
 
 import os
+import warnings
 import json
 import gzip
 import tqdm
 import itertools
-import warnings
+import pickle
 import numpy as np
 #import matplotlib.pyplot as plt
 #from scipy.signal import find_peaks
@@ -77,7 +78,7 @@ def run_dev_pull_parallelized(inputs):
 
 
 def create_dev_rasters(num_iterations, spike_times,
-                       start_end_times, deviations, z_bin):
+                       start_end_times, deviations, z_bin, no_z = False):
     """This function takes the spike times and creates binary matrices of 
     rasters of spiking"""
     z_bin_dt = np.ceil(z_bin*1000).astype('int')
@@ -95,13 +96,14 @@ def create_dev_rasters(num_iterations, spike_times,
             neur_spikes = np.array(seg_spikes[n_i]).astype(
                 'int') - int(start_end_times[ind][0])
             spikes_bin[n_i, neur_spikes] = 1
-        # Calculate z-score mean and std
-        seg_fr = np.zeros(np.shape(spikes_bin))
-        for tb_i in range(num_dt - z_bin_dt):
-            seg_fr[:, tb_i] = np.sum(
-                spikes_bin[:, tb_i:tb_i+z_bin_dt], 1)/z_bin
-        mean_fr = np.nanmean(seg_fr, 1)
-        std_fr = np.nanstd(seg_fr, 1)
+        if not no_z:
+            # Calculate z-score mean and std
+            seg_fr = np.zeros(np.shape(spikes_bin))
+            for tb_i in range(num_dt - z_bin_dt):
+                seg_fr[:, tb_i] = np.sum(
+                    spikes_bin[:, tb_i:tb_i+z_bin_dt], 1)/z_bin
+            mean_fr = np.nanmean(seg_fr, 1)
+            std_fr = np.nanstd(seg_fr, 1)
         # Now pull rasters and vectors
         seg_rast = []
         seg_vecs = []
@@ -124,11 +126,12 @@ def create_dev_rasters(num_iterations, spike_times,
             dev_e_i = end_dev_bouts[b_i]
             dev_rast_i = spikes_bin[:, dev_s_i:dev_e_i]
             dev_fr = np.sum(dev_rast_i, 1)/((dev_e_i-dev_s_i)/1000)
-            dev_fr_z = (dev_fr - mean_fr)/std_fr
 
             seg_rast.append(dev_rast_i)
             seg_vecs.append(dev_fr)
-            seg_vecs_zscore.append(dev_fr_z)
+            if not no_z:
+                dev_fr_z = (dev_fr - mean_fr)/std_fr
+                seg_vecs_zscore.append(dev_fr_z)
 
         dev_rasters.append(seg_rast)
         dev_times.append(bout_times)
@@ -353,6 +356,86 @@ def calculate_vec_correlations(num_neur, segment_dev_vectors, tastant_spike_time
                         np.save(filename_pop_vec, neuron_pop_vec_corr_storage)
                 np.save(filename_pop_vec, neuron_pop_vec_corr_storage)
 
+def calculate_significant_dev(segment_dev_times, segment_times, dig_in_names,
+                              segment_names, save_dir, segments_to_analyze=[]):
+    """
+    This function uses the outputs of null_dev_corr_90_percentiles() and
+    calculate_vec_correlations() to calculate which true deviation events
+    are correlated more to the taste than the 90th percentile cutoffs of
+    null deviation correlation data.
+    
+    INPUTS:
+        - 
+        - save_dir: directory where the true correlation data is saved
+        
+    OUTPUTS:
+        - Plots of significant deviation events
+        - Dictionary of significant events
+    """
+    
+    # Grab parameters
+    num_tastes = len(dig_in_names)
+    num_segments = len(segment_times)
+    
+    if len(segments_to_analyze) == 0:
+        segments_to_analyze = np.arange(num_segments)
+    
+    #Import null deviation correlation percentiles
+    filename_null_percentiles = os.path.join(save_dir,'null','null_corr_percentiles.pkl')
+    null_corr_percentiles = np.load(filename_null_percentiles,allow_pickle=True)
+    
+    
+    sig_dev = dict()
+    sig_dev_counts = []
+    for s_ind, s_i in enumerate(segments_to_analyze):
+        seg_sig_dev_counts = []
+        seg_null_percentiles = null_corr_percentiles[segment_names[s_i]]
+        sig_dev[s_ind] = dict()
+        sig_dev[s_ind]['segment_name'] = segment_names[s_i]
+        sig_dev[s_ind]['taste_sig'] = dict()
+        for t_i in range(num_tastes):
+            taste_sig_dev_counts = []
+            sig_dev[s_ind]['taste_sig'][t_i] = dict()
+            sig_dev[s_ind]['taste_sig'][t_i]['taste_name'] = dig_in_names[t_i]
+            sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'] = dict()
+            taste_null_percentiles = seg_null_percentiles[dig_in_names[t_i]]
+            num_null_cp = len(taste_null_percentiles)
+            #Import true deviation correlation data
+            filename_pop_vec = os.path.join(save_dir,segment_names[s_i] + '_' + \
+                dig_in_names[t_i] + '_pop_vec.npy')
+            neuron_pop_vec_corr_storage = np.load(filename_pop_vec)
+            num_dev, num_deliv, num_cp = np.shape(neuron_pop_vec_corr_storage)
+            #Calculate which deviations exceed the thresholds
+            min_null = min(num_null_cp, num_cp)
+            for cp_i in range(min_null):
+                sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i] = dict()
+                sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['Changepoint_ind'] = cp_i
+                sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_times'] = [] #nx2 size array with start in row 0 and end in row 1
+                sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_corrs'] = [] #n length array with start in row 0 and end in row 1
+                for dev_i in range(num_dev):
+                    #Significant correlation to at least one taste delivery
+                    for deliv_i in range(num_deliv):
+                        if neuron_pop_vec_corr_storage[dev_i,deliv_i,cp_i] >= taste_null_percentiles[cp_i]:
+                            sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_times'].extend([segment_dev_times[s_ind][:,dev_i]])
+                            sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_corrs'].extend([neuron_pop_vec_corr_storage[dev_i,deliv_i,cp_i]])
+                            break
+                taste_sig_dev_counts.extend([len(sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_times'])])
+            seg_sig_dev_counts.append(taste_sig_dev_counts)
+        sig_dev_counts.append(seg_sig_dev_counts)
+        
+    #Save the dictionary for future use
+    np.save(os.path.join(save_dir,'sig_dev'),sig_dev,True)
+
+    #Create a basic plot of the significance counts across conditions
+    dpf.sig_count_plot(sig_dev_counts, segments_to_analyze, segment_names,
+                   dig_in_names, save_dir)
+    
+    #Create a plot of the correlation values across conditions
+    dpf.sig_val_plot(sig_dev,segments_to_analyze,segment_names,
+                     dig_in_names,save_dir)
+    
+    return sig_dev, sig_dev_counts
+    
 
 def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, tastant_spike_times,
                                       segment_times, segment_spike_times, start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
@@ -535,6 +618,36 @@ def pull_corr_dev_stats(segment_names, dig_in_names, save_dir, segments_to_analy
 
     return dev_stats
 
+def null_dev_corr_90_percentiles(dev_stats, segment_names, dig_in_names, 
+                                 save_dir, segments_to_analyze = []):
+    """Given correlation data calculated for all null distribution deviation
+    events, calculate the 90th percentiles for each distribution to use in 
+    determining significant deviation events from true data"""
+    
+    num_tastes = len(dig_in_names)
+    if len(segments_to_analyze) == 0:
+        segments_to_analyze = np.arange(len(segment_names))
+    num_segments = len(segments_to_analyze)
+    
+    null_corr_percentiles = dict()
+    for s_i in segments_to_analyze:  # Loop through each segment
+        seg_name = segment_names[s_i]
+        null_corr_percentiles[seg_name] = dict()
+        for t_i in range(num_tastes):  # Loop through each taste
+            corr_vals = dev_stats[seg_name][t_i]['pop_vec_data_storage']
+            num_dev, num_deliv, num_cp = np.shape(corr_vals)
+            null_corr_percentiles[seg_name][dig_in_names[t_i]] = np.zeros(num_cp)
+            for e_i in range(num_cp):
+                epoch_corrs = corr_vals[:,:,e_i].flatten()
+                e_percentile = np.nanpercentile(epoch_corrs,90)
+                null_corr_percentiles[seg_name][dig_in_names[t_i]][e_i] = e_percentile
+                
+    #Save to file for future import
+    dict_save_dir = os.path.join(save_dir,'null_corr_percentiles.pkl')
+    f = open(dict_save_dir,"wb")
+    pickle.dump(null_corr_percentiles,f)
+
+    return null_corr_percentiles
 
 def stat_significance(segment_data, segment_names, dig_in_names, save_dir, dist_name, segments_to_analyze=[]):
 

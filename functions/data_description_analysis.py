@@ -105,10 +105,7 @@ class run_data_description_analysis():
             os.mkdir(sc_save_dir)
 
         # All data
-        all_sc_save_dir = sc_save_dir + 'All/'
-        if os.path.isdir(all_sc_save_dir) == False:
-            os.mkdir(all_sc_save_dir)
-            sc.bin_spike_counts(all_sc_save_dir, self.data_dict['segment_spike_times'],
+        sc.bin_spike_counts(sc_save_dir, self.data_dict['segment_spike_times'],
                                 self.data_dict['segment_names'], self.data_dict['segment_times'])
 
     def taste_anova(self,):

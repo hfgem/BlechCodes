@@ -37,83 +37,83 @@ def bin_spike_counts(save_dir, segment_spike_times, segment_names, segment_times
     figure_save_dir = save_dir + 'indiv_distributions/'
     if os.path.isdir(figure_save_dir) == False:
         os.mkdir(figure_save_dir)
-    # First calculate individual distributions, plot them, and save
-    segment_neur_counts = dict()
-    segment_counts = dict()
-    segment_frs = dict()
-    segment_isis = dict()
-    segment_fano_factors = dict()
-    # Get distributions for different bin sizes
-    bin_sizes = np.arange(0.05, 1.05, 0.05)
-    print("\nCalculating distributions for different bin sizes.")
-    for s_i in tqdm.tqdm(range(len(segment_names))):
-        segment_spikes = segment_spike_times[s_i]
-        num_neur = len(segment_spikes)
-        segment_start_time = segment_times[s_i]
-        segment_end_time = segment_times[s_i+1]
-        segment_len = int(segment_end_time-segment_start_time)
-        # Convert to a binary spike matrix
-        bin_spike = np.zeros((num_neur, segment_len+1))
-        for n_i in range(num_neur):
-            spike_indices = (
-                np.array(segment_spikes[n_i]) - segment_start_time).astype('int')
-            bin_spike[n_i, spike_indices] = 1
-        # Calculate count, fr, isi, and fano factor distributions
-        neur_count_results = dict(calculate_spike_neuron_distribution(
-            bin_spike, bin_sizes[i]) for i in range(len(bin_sizes)))
-        count_results = dict(calculate_spike_count_distribution(
-            bin_spike, bin_sizes[i]) for i in range(len(bin_sizes)))
-        fr_results = dict(calculate_fr_distribution(
-            bin_spike, bin_sizes[i]) for i in range(len(bin_sizes)))
-        isi_results = calculate_isi_distribution(bin_spike)
-        fano_results = calculate_fano_factors(count_results)
-        # Save results to master dictionary
-        segment_neur_counts.update({segment_names[s_i]: neur_count_results})
-        segment_counts.update({segment_names[s_i]: count_results})
-        segment_frs.update({segment_names[s_i]: fr_results})
-        segment_isis.update({segment_names[s_i]: isi_results})
-        segment_fano_factors.update({segment_names[s_i]: fano_results})
-        # Plot spike distributions
-        plot_distributions(
-            neur_count_results, segment_names[s_i], 'Neuron Spike Counts', figure_save_dir)
-        plot_distributions(
-            count_results, segment_names[s_i], 'Spike Counts', figure_save_dir)
-        plot_distributions(
-            fr_results, segment_names[s_i], 'Firing Rates', figure_save_dir)
-        plot_distributions(isi_results, 'ISI Distributions' + ' CV = ' + str(
-            round(np.std(isi_results)/np.mean(isi_results), 2)), 'ISIs (s)', figure_save_dir)
-
-    # Use the KS-Test to calculate if segment distributions are different
-    print("\nCalculating KS-Test for pairs of segments:")
-    # Create save dir for KS-Test pair results
-    figure_save_dir = save_dir + 'pair_KS_tests/'
+        # First calculate individual distributions, plot them, and save
+        segment_neur_counts = dict()
+        segment_counts = dict()
+        segment_frs = dict()
+        segment_isis = dict()
+        segment_fano_factors = dict()
+        # Get distributions for different bin sizes
+        bin_sizes = np.arange(0.05, 1.05, 0.05)
+        print("\nCalculating distributions for different bin sizes.")
+        for s_i in tqdm.tqdm(range(len(segment_names))):
+            segment_spikes = segment_spike_times[s_i]
+            num_neur = len(segment_spikes)
+            segment_start_time = segment_times[s_i]
+            segment_end_time = segment_times[s_i+1]
+            segment_len = int(segment_end_time-segment_start_time)
+            # Convert to a binary spike matrix
+            bin_spike = np.zeros((num_neur, segment_len+1))
+            for n_i in range(num_neur):
+                spike_indices = (
+                    np.array(segment_spikes[n_i]) - segment_start_time).astype('int')
+                bin_spike[n_i, spike_indices] = 1
+            # Calculate count, fr, isi, and fano factor distributions
+            neur_count_results = dict(calculate_spike_neuron_distribution(
+                bin_spike, bin_sizes[i]) for i in range(len(bin_sizes)))
+            count_results = dict(calculate_spike_count_distribution(
+                bin_spike, bin_sizes[i]) for i in range(len(bin_sizes)))
+            fr_results = dict(calculate_fr_distribution(
+                bin_spike, bin_sizes[i]) for i in range(len(bin_sizes)))
+            isi_results = calculate_isi_distribution(bin_spike)
+            fano_results = calculate_fano_factors(count_results)
+            # Save results to master dictionary
+            segment_neur_counts.update({segment_names[s_i]: neur_count_results})
+            segment_counts.update({segment_names[s_i]: count_results})
+            segment_frs.update({segment_names[s_i]: fr_results})
+            segment_isis.update({segment_names[s_i]: isi_results})
+            segment_fano_factors.update({segment_names[s_i]: fano_results})
+            # Plot spike distributions
+            plot_distributions(
+                neur_count_results, segment_names[s_i], 'Neuron Spike Counts', figure_save_dir)
+            plot_distributions(
+                count_results, segment_names[s_i], 'Spike Counts', figure_save_dir)
+            plot_distributions(
+                fr_results, segment_names[s_i], 'Firing Rates', figure_save_dir)
+            plot_distributions(isi_results, 'ISI Distributions' + ' CV = ' + str(
+                round(np.std(isi_results)/np.mean(isi_results), 2)), 'ISIs (s)', figure_save_dir)
+    
+    # Use the T-Test to calculate if segment distributions are different
+    # Create save dir for T-Test pair results
+    figure_save_dir = save_dir + 'pair_t_tests/'
     if os.path.isdir(figure_save_dir) == False:
         os.mkdir(figure_save_dir)
-    s_i_pairs = list(itertools.combinations(segment_names, 2))
-    print("\tNeurons Spiking Count distributions:")
-    # First calculating for spike counts
-    neur_count_save_dir = figure_save_dir + 'neur_spike_counts/'
-    dist_name = 'Neuron Spike Count'
-    segment_pair_count_calculations = KS_test_pipeline(
-        neur_count_save_dir, dist_name, s_i_pairs, segment_neur_counts)
-    print("\tCount distributions:")
-    # First calculating for spike counts
-    count_save_dir = figure_save_dir + 'spike_counts/'
-    dist_name = 'Spike Count'
-    segment_pair_count_calculations = KS_test_pipeline(
-        count_save_dir, dist_name, s_i_pairs, segment_counts)
-    # Second calculating for firing rates (Hz)
-    print("\tFiring rate distributions:")
-    fr_save_dir = figure_save_dir + 'frs/'
-    dist_name = 'Firing Rate'
-    segment_pair_fr_calculations = KS_test_pipeline(
-        fr_save_dir, dist_name, s_i_pairs, segment_frs)
-    # Third calculating for ISIs
-    print("\tISI and Fano Factor Plots:")
-    isi_fano_save_dir = figure_save_dir + 'isis_fano/'
-    if os.path.isdir(isi_fano_save_dir) == False:
-        os.mkdir(isi_fano_save_dir)
-    single_trend_plots(segment_fano_factors, 'Fano Factor', isi_fano_save_dir)
+        print("\nCalculating KS-Test for pairs of segments:")
+        s_i_pairs = list(itertools.combinations(segment_names, 2))
+        print("\tNeurons Spiking Count distributions:")
+        # First calculating for spike counts
+        neur_count_save_dir = figure_save_dir + 'neur_spike_counts/'
+        dist_name = 'Neuron Spike Count'
+        segment_pair_count_calculations = T_test_pipeline(
+            neur_count_save_dir, dist_name, s_i_pairs, segment_neur_counts)
+        print("\tCount distributions:")
+        # First calculating for spike counts
+        count_save_dir = figure_save_dir + 'spike_counts/'
+        dist_name = 'Spike Count'
+        segment_pair_count_calculations = T_test_pipeline(
+            count_save_dir, dist_name, s_i_pairs, segment_counts)
+        # Second calculating for firing rates (Hz)
+        print("\tFiring rate distributions:")
+        fr_save_dir = figure_save_dir + 'frs/'
+        dist_name = 'Firing Rate'
+        segment_pair_fr_calculations = T_test_pipeline(
+            fr_save_dir, dist_name, s_i_pairs, segment_frs)
+        # Third calculating for ISIs
+        print("\tISI and Fano Factor Plots:")
+        isi_fano_save_dir = figure_save_dir + 'isis_fano/'
+        if os.path.isdir(isi_fano_save_dir) == False:
+            os.mkdir(isi_fano_save_dir)
+        single_trend_plots(segment_fano_factors, 'Fano Factor', isi_fano_save_dir)
 
 
 @jit(forceobj=True)
@@ -232,7 +232,7 @@ def plot_distributions(results, title, dist_name, save_location):
 
 
 @jit(forceobj=True)
-def KS_test_pipeline(ks_save_dir, dist_name, s_i_pairs, data_dict):
+def T_test_pipeline(t_save_dir, dist_name, s_i_pairs, data_dict):
     """This function runs data through a 2-sample KS test pipline of calculations
     and plots
     INPUTS:
@@ -241,8 +241,8 @@ def KS_test_pipeline(ks_save_dir, dist_name, s_i_pairs, data_dict):
             - s_i_pairs: names of segments in pair
             - data_dict: dictionary of distribution values to be tested
     """
-    if os.path.isdir(ks_save_dir) == False:
-        os.mkdir(ks_save_dir)
+    if os.path.isdir(t_save_dir) == False:
+        os.mkdir(t_save_dir)
     segment_pair_calculations = dict()
     for pair_i in tqdm.tqdm(s_i_pairs):
         seg_1 = pair_i[0]
@@ -250,15 +250,15 @@ def KS_test_pipeline(ks_save_dir, dist_name, s_i_pairs, data_dict):
         print("\t\t" + seg_1 + " vs " + seg_2)
         seg_1_data = data_dict[seg_1]
         seg_2_data = data_dict[seg_2]
-        pair_results = KS_test_distributions(
-            dist_name, seg_1, seg_2, seg_1_data, seg_2_data, ks_save_dir)
+        pair_results = T_test_distributions(
+            dist_name, seg_1, seg_2, seg_1_data, seg_2_data, t_save_dir)
         segment_pair_calculations.update({seg_1+"_"+seg_2: pair_results})
 
     return segment_pair_calculations
 
 
 @jit(forceobj=True)
-def KS_test_distributions(dist_name, name_1, name_2, dict_1, dict_2, fig_save_dir):
+def T_test_distributions(dist_name, name_1, name_2, dict_1, dict_2, fig_save_dir):
     """This function performs a two-sample KS-test on a given pair of values:
     INPUTS:
             - dist_name: what distribution is being tested
@@ -289,33 +289,33 @@ def KS_test_distributions(dist_name, name_1, name_2, dict_1, dict_2, fig_save_di
         means_minus_0.append([np.mean(values_1_no_0), np.mean(values_2_no_0)])
         stds.append([np.std(values_1), np.std(values_2)])
         stds_minus_0.append([np.std(values_1_no_0), np.std(values_2_no_0)])
-        ksresult = stats.ks_2samp(values_1, values_2)
-        results.update({key: ksresult})
-        ksresult_minus_0 = stats.ks_2samp(values_1_no_0, values_2_no_0)
-        results_minus_0.update({key: ksresult_minus_0})
+        tresult = stats.ttest_ind(values_1, values_2)
+        results.update({key: tresult})
+        tresult_minus_0 = stats.ttest_ind(values_1_no_0, values_2_no_0)
+        results_minus_0.update({key: tresult_minus_0})
 
     # Plot the KS-Test results as bin size increases
-    KS_test_plots(dist_name, name_1, name_2, results,
+    T_test_plots(dist_name, name_1, name_2, results,
                   bin_size, means, stds, fig_save_dir)
 
     # Plot the KS-Test results as bin size increases without 0 bins included
-    KS_test_plots(dist_name, name_1, name_2, results_minus_0, bin_size,
+    T_test_plots(dist_name, name_1, name_2, results_minus_0, bin_size,
                   means_minus_0, stds_minus_0, fig_save_dir, name_modifier='_no_0')
 
     return results
 
 
 @jit(forceobj=True)
-def KS_test_plots(dist_name, name_1, name_2, results, bin_size, means, stds, fig_save_dir, name_modifier=''):
+def T_test_plots(dist_name, name_1, name_2, results, bin_size, means, stds, fig_save_dir, name_modifier=''):
     """This function plots the results from the KS-test calculator"""
-    # Plot the KS-Test results as bin size increases
+    # Plot the T-Test results as bin size increases
     fig = plt.figure(figsize=(6, 10))
     # Same/Diff subplot
     key_val_pairs = []
     for key in results:
-        ksresult = results[key]
+        tresult = results[key]
         same = 0
-        if ksresult[1] < 0.05:
+        if tresult[1] < 0.05:
             same = 1
         key_val_pairs.append([float(key), same])
     plt.subplot(3, 2, 1)
@@ -326,8 +326,8 @@ def KS_test_plots(dist_name, name_1, name_2, results, bin_size, means, stds, fig
     # P-values subplot
     p_val_pairs = []
     for key in results:
-        ksresult = results[key]
-        p_val_pairs.append([float(key), ksresult[1]])
+        tresult = results[key]
+        p_val_pairs.append([float(key), tresult[1]])
     plt.subplot(3, 2, 2)
     plt.plot(np.array(p_val_pairs).T[0, :], np.array(p_val_pairs).T[1, :])
     plt.axhline(0.05, linestyle='-', alpha=0.5, color='r')

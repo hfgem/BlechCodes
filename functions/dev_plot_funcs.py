@@ -313,11 +313,8 @@ def plot_null_v_true_stats(true_data, null_data, data_name, save_dir, x_label=[]
 
 def plot_stats(dev_stats, segment_names, dig_in_names, save_dir, dist_name,
                neuron_indices, segments_to_analyze):
-    """This function takes in deviation rasters, tastant delivery spikes, and
-    changepoint indices to calculate correlations of each deviation to each 
-    changepoint interval. Outputs are saved .npy files with name indicating
-    segment and taste containing matrices of shape [num_dev, num_deliv, num_neur, num_cp]
-    with the correlations stored.
+    """This function takes in deviation correlations and plots the distributions.
+    Outputs are saved as .png and .svg files.
 
     neuron_indices should be binary and shaped num_neur x num_cp
     """
@@ -1020,8 +1017,8 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
     plt.close(f_frac)
 
     # Plot the cumulative distribution functions by segment and the density differences
-    density_x_vals = np.arange(0, 1.1, 0.1)
-    density_bins = np.arange(-0.05, 1.15, 0.1)
+    density_x_vals = np.arange(0, 1.1, 0.025)
+    density_bins = np.arange(-0.05, 1.15, 0.025)
     taste_pairs = list(combinations(np.arange(num_tastes), 2))
     epoch_pairs = list(combinations(np.arange(len(epochs_to_analyze)), 2))
 
@@ -1049,14 +1046,13 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
             taste_corr = np.array(taste_corr).squeeze()
             density_hist_data = np.histogram(
                 taste_corr, bins=density_bins, density=True)
-            norm_dens = density_hist_data[0]/max(density_hist_data[0])
-            taste_density.append(norm_dens)
+            taste_density.append(density_hist_data[0])
             ax_cum[s_ind, 0].hist(taste_corr, bins=density_bins, histtype='step', density=True,
                                   cumulative=True, color=taste_colors[t_i, :], label=dig_in_names[t_i])
             ax_cum[s_ind, 0].set_ylim([-0.05, 1.05])
             ax_cum[s_ind, 0].set_xlim([-0.05, 1.05])
             ax_dens[s_ind, 0].plot(
-                density_x_vals, norm_dens, color=taste_colors[t_i, :], label=dig_in_names[t_i])
+                density_x_vals, density_hist_data[0], color=taste_colors[t_i, :], label=dig_in_names[t_i])
             ax_dens[s_ind, 0].set_ylim([-0.05, 1.05])
             ax_dens[s_ind, 0].set_xlim([-0.05, 1.05])
         for tp_ind, t_pair in enumerate(taste_pairs):
@@ -1086,14 +1082,13 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
             epoch_corr = np.array(epoch_corr).squeeze()
             density_hist_data = np.histogram(
                 epoch_corr, bins=density_bins, density=True)
-            norm_dens = density_hist_data[0]/max(density_hist_data[0])
-            epoch_density.append(norm_dens)
+            epoch_density.append(density_hist_data[0])
             ax_cum[s_ind, 1].hist(epoch_corr, bins=density_bins, histtype='step', density=True,
                                   cumulative=True, color=epoch_colors[e_ind, :], label='Epoch ' + str(e_i))
             ax_cum[s_ind, 1].set_ylim([-0.05, 1.05])
             ax_cum[s_ind, 1].set_xlim([-0.05, 1.05])
             ax_dens[s_ind, 1].plot(
-                density_x_vals, norm_dens, color=epoch_colors[e_ind, :], label='Epoch ' + str(e_i))
+                density_x_vals, density_hist_data[0], color=epoch_colors[e_ind, :], label='Epoch ' + str(e_i))
             ax_dens[s_ind, 1].set_ylim([-0.05, 1.05])
             ax_dens[s_ind, 1].set_xlim([-0.05, 1.05])
         for ep_ind, e_pair in enumerate(epoch_pairs):
@@ -1170,3 +1165,107 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
     f_diff_epoch.savefig(os.path.join(save_dir, 'best_corr_epoch_diff.png'))
     f_diff_epoch.savefig(os.path.join(save_dir, 'best_corr_epoch_diff.svg'))
     plt.close(f_diff_epoch)
+    
+    
+def sig_count_plot(sig_dev_counts, segments_to_analyze, segment_names,
+                   dig_in_names, save_dir):
+    """
+    Basic function to plot the number of significant deviations by condition.
+    Called from / data passed from dev_funcs.py function 
+    "calculate_significant_dev()".
+
+    Returns
+    -------
+    None.
+
+    """
+    num_seg = len(segments_to_analyze)
+    num_tastes = len(dig_in_names)
+    
+    max_num = 0
+    max_num_cp = 0
+    #By segment
+    f,ax = plt.subplots(ncols = num_seg, figsize=(4*num_seg,4))
+    for s_i in range(num_seg):
+        for t_i in range(num_tastes):
+            ax[s_i].plot(sig_dev_counts[s_i][t_i],label=dig_in_names[t_i])
+            if max(sig_dev_counts[s_i][t_i]) > max_num:
+                max_num = max(sig_dev_counts[s_i][t_i])
+            if len(sig_dev_counts[s_i][t_i]) > max_num_cp:
+                max_num_cp = len(sig_dev_counts[s_i][t_i])
+        ax[s_i].set_title(segment_names[segments_to_analyze[s_i]])
+        ax[s_i].set_xlabel('Epoch Index')
+        ax[s_i].set_ylabel('# Significant Deviation Events')
+    for s_i in range(num_seg):
+        ax[s_i].set_ylim([-1,max_num + np.ceil(0.05*max_num).astype('int')])
+        ax[s_i].legend(loc='upper left')
+    plt.tight_layout()
+    f.savefig(os.path.join(save_dir,'sig_dev_event_counts_segment.png'))
+    f.savefig(os.path.join(save_dir,'sig_dev_event_counts_segment.svg'))
+    plt.close(f)
+    
+    #By taste
+    f,ax = plt.subplots(ncols = num_tastes, figsize=(4*num_tastes,4))
+    for t_i in range(num_tastes):
+        for s_i in range(num_seg):
+            ax[t_i].plot(sig_dev_counts[s_i][t_i],label=segment_names[segments_to_analyze[s_i]])
+        ax[t_i].set_title(dig_in_names[t_i])
+        ax[t_i].set_xlabel('Epoch Index')
+        ax[t_i].set_ylabel('# Significant Deviation Events')
+        ax[t_i].set_ylim([-1,max_num + np.ceil(0.05*max_num).astype('int')])
+        ax[t_i].legend(loc='upper left')
+    plt.tight_layout()
+    f.savefig(os.path.join(save_dir,'sig_dev_event_counts_taste.png'))
+    f.savefig(os.path.join(save_dir,'sig_dev_event_counts_taste.svg'))
+    plt.close(f)
+    
+def sig_val_plot(sig_dev,segments_to_analyze,segment_names,dig_in_names,save_dir):
+    """
+    This function plots the distributions of correlation values of events that 
+    are significant across conditions.
+    
+    INPUTS:
+        - sig_dev: dictionary generated by functions/dev_funcs.py function 
+            'calculate_significant_dev()' that contains times and correlation
+            values of significant deviation events across conditions.
+        - segments_to_analyze: which segments are being analyzed
+        - segment_names: names of segments
+        - dig_in_names: names of tastes
+        - save_dir: where to save plots
+    OUTPUTS:
+        - plots of distributions of correlation values across segment, taste, 
+            and epoch for events that are deemed significant.
+    """
+    
+    num_seg = len(segments_to_analyze)
+    num_tastes = len(dig_in_names)
+    
+    max_num_cp = 0
+    max_count = 0
+    #By segment
+    f,ax = plt.subplots(nrows= num_tastes, ncols = num_seg, figsize=(4*num_seg,4*num_tastes))
+    for s_i in range(num_seg):
+        for t_i in range(num_tastes):
+            num_cp = len(sig_dev[s_i]['taste_sig'][t_i]['cp_sig'])
+            if num_cp > max_num_cp:
+                max_num_cp = num_cp
+            for cp_i in range(num_cp):
+                corr_vals = sig_dev[s_i]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_corrs']
+                hist_results = ax[t_i,s_i].hist(corr_vals,bins=np.arange(-0.05,1.05,0.05),
+                                 alpha=0.3,label='Epoch ' + str(cp_i))
+                if max(hist_results[0]) > max_count:
+                    max_count = max(hist_results[0])
+    for s_i in range(num_seg):
+        for t_i in range(num_tastes):
+            ax[t_i,s_i].set_title(segment_names[segments_to_analyze[s_i]] + ' x ' + dig_in_names[t_i])
+            ax[t_i,s_i].set_xlabel('Correlation')
+            ax[t_i,s_i].set_ylabel('# Deviation Events')
+            ax[t_i,s_i].set_xlim([0,1])
+            ax[t_i,s_i].set_ylim([0,max_count + np.ceil(0.05*max_count).astype('int')])
+            ax[t_i,s_i].legend(loc='upper left')
+    plt.tight_layout()
+    f.savefig(os.path.join(save_dir,'sig_dev_corr_hists.png'))
+    f.savefig(os.path.join(save_dir,'sig_dev_corr_hists.svg'))
+    plt.close(f)
+    
+    
