@@ -411,14 +411,14 @@ def calculate_significant_dev(segment_dev_times, segment_times, dig_in_names,
                 sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i] = dict()
                 sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['Changepoint_ind'] = cp_i
                 sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_times'] = [] #nx2 size array with start in row 0 and end in row 1
+                sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_corrs'] = [] #n length array with start in row 0 and end in row 1
                 for dev_i in range(num_dev):
-                    sig_val = 0
                     #Significant correlation to at least one taste delivery
                     for deliv_i in range(num_deliv):
                         if neuron_pop_vec_corr_storage[dev_i,deliv_i,cp_i] >= taste_null_percentiles[cp_i]:
-                            sig_val = 1
-                    if sig_val == 1:
-                        sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_times'].append(list(segment_dev_times[s_ind][:,dev_i]))
+                            sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_times'].extend([segment_dev_times[s_ind][:,dev_i]])
+                            sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_corrs'].extend([neuron_pop_vec_corr_storage[dev_i,deliv_i,cp_i]])
+                            break
                 taste_sig_dev_counts.extend([len(sig_dev[s_ind]['taste_sig'][t_i]['cp_sig'][cp_i]['dev_times'])])
             seg_sig_dev_counts.append(taste_sig_dev_counts)
         sig_dev_counts.append(seg_sig_dev_counts)
@@ -429,6 +429,10 @@ def calculate_significant_dev(segment_dev_times, segment_times, dig_in_names,
     #Create a basic plot of the significance counts across conditions
     dpf.sig_count_plot(sig_dev_counts, segments_to_analyze, segment_names,
                    dig_in_names, save_dir)
+    
+    #Create a plot of the correlation values across conditions
+    dpf.sig_val_plot(sig_dev,segments_to_analyze,segment_names,
+                     dig_in_names,save_dir)
     
     return sig_dev, sig_dev_counts
     
@@ -615,7 +619,7 @@ def pull_corr_dev_stats(segment_names, dig_in_names, save_dir, segments_to_analy
     return dev_stats
 
 def null_dev_corr_90_percentiles(dev_stats, segment_names, dig_in_names, 
-                                 num_cp, save_dir, segments_to_analyze = []):
+                                 save_dir, segments_to_analyze = []):
     """Given correlation data calculated for all null distribution deviation
     events, calculate the 90th percentiles for each distribution to use in 
     determining significant deviation events from true data"""
@@ -631,6 +635,7 @@ def null_dev_corr_90_percentiles(dev_stats, segment_names, dig_in_names,
         null_corr_percentiles[seg_name] = dict()
         for t_i in range(num_tastes):  # Loop through each taste
             corr_vals = dev_stats[seg_name][t_i]['pop_vec_data_storage']
+            num_dev, num_deliv, num_cp = np.shape(corr_vals)
             null_corr_percentiles[seg_name][dig_in_names[t_i]] = np.zeros(num_cp)
             for e_i in range(num_cp):
                 epoch_corrs = corr_vals[:,:,e_i].flatten()

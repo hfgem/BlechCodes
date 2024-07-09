@@ -75,12 +75,12 @@ class run_deviation_correlations():
                 segment_deviations.append(data)
         print("\tNow pulling true deviation rasters")
         num_segments = len(self.segments_to_analyze)
-        segment_spike_times = [self.segment_spike_times[i]
+        segment_spike_times_reshaped = [self.segment_spike_times[i]
                                for i in self.segments_to_analyze]
         segment_times_reshaped = np.array(
             [self.segment_times_reshaped[i] for i in self.segments_to_analyze])
         segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments,
-                                                                                                                segment_spike_times,
+                                                                                                                segment_spike_times_reshaped,
                                                                                                                 segment_times_reshaped,
                                                                                                                 segment_deviations, self.z_bin)
         self.segment_dev_rasters = segment_dev_rasters
@@ -130,7 +130,7 @@ class run_deviation_correlations():
         # Calculate significant events
         sig_dev, sig_dev_counts = df.calculate_significant_dev(self.segment_dev_times, 
                                                                self.segment_times, self.dig_in_names,
-                                                               self.segment_names, self.corr_dir,
+                                                               self.segment_names, self.current_corr_dir,
                                                                self.segments_to_analyze)
         # Now plot and calculate significance!
         self.calculate_plot_corr_stats()
@@ -170,6 +170,11 @@ class run_deviation_correlations():
                                              self.segment_times, self.segment_spike_times, self.start_dig_in_times, self.end_dig_in_times,
                                              self.segment_names, self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
                                              self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)
+        # Calculate significant events
+        sig_dev, sig_dev_counts = df.calculate_significant_dev(self.segment_dev_times, 
+                                                               self.segment_times, self.dig_in_names,
+                                                               self.segment_names, self.current_corr_dir,
+                                                               self.segments_to_analyze)
         # Now plot and calculate significance!
         self.calculate_plot_corr_stats()
         self.calculate_significance()

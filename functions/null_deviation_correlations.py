@@ -59,7 +59,7 @@ class run_null_deviation_correlations():
         self.pre_taste = self.metadata['params_dict']['pre_taste']
         self.post_taste = self.metadata['params_dict']['post_taste']
         # Import changepoint data
-        self.num_cp = self.metadata['params_dict']['num_cp']+ 2
+        self.num_cp = self.metadata['params_dict']['num_cp']+ 1
         data_group_name = 'changepoint_data'
         pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
             self.hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
@@ -71,11 +71,11 @@ class run_null_deviation_correlations():
         self.num_null = self.metadata['params_dict']['num_null']
         self.segments_to_analyze = self.metadata['params_dict']['segments_to_analyze']
         self.segment_names = self.data_dict['segment_names']
+        self.segment_spike_times = self.data_dict['segment_spike_times']
         self.segment_times = self.data_dict['segment_times']
         self.segment_times_reshaped = [
             [self.segment_times[i], self.segment_times[i+1]] for i in range(self.num_segments)]
         self.z_bin = self.metadata['params_dict']['z_bin']
-        
         
     def import_null_deviations(self,):
         try:  # test if the data exists by trying to import the last from each segment
@@ -150,22 +150,26 @@ class run_null_deviation_correlations():
             self.segments_to_analyze, :]
         
         null_dev_vecs = []
+        null_dev_vecs_zscore = []
         for s_i in range(num_seg):
             null_dev_vecs.append([])
+            null_dev_vecs_zscore.append([])
         for null_i in tqdm.tqdm(range(self.num_null)):
             null_segment_deviations = self.all_null_deviations[null_i]
             null_segment_spike_times = self.all_null_segment_spike_times[null_i]
-            _, _, null_segment_dev_vecs_i, _ = df.create_dev_rasters(num_seg,
+            _, _, null_segment_dev_vecs_i, null_segment_dev_vecs_zscore_i = df.create_dev_rasters(num_seg,
                                                                      null_segment_spike_times,
                                                                      seg_times_reshaped,
                                                                      null_segment_deviations,
-                                                                     self.z_bin, no_z = True)
+                                                                     self.z_bin, no_z = False)
             #Compiled all into a single segment group, rather than keeping separated by null dist
             for s_i in range(num_seg):
                 null_dev_vecs[s_i].extend(null_segment_dev_vecs_i[s_i])
+                null_dev_vecs_zscore[s_i].extend(null_segment_dev_vecs_zscore_i[s_i])
 
         self.__dict__.pop('all_null_deviations', None)
         self.null_dev_vecs = null_dev_vecs
+        self.null_dev_vecs_zscore = null_dev_vecs_zscore
     
     def calculate_correlations_all_null(self,):
         print('\tCalculating null correlation distributions')
@@ -177,6 +181,20 @@ class run_null_deviation_correlations():
         df.calculate_vec_correlations(self.num_neur, self.null_dev_vecs, self.tastant_spike_times,
                                       self.start_dig_in_times, self.end_dig_in_times, self.segment_names,
                                       self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
+                                      self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)  # For all neurons in dataset
+        # Now plot and calculate significance!
+        self.stats_plots()
+        
+    def calculate_correlations_zscore_null(self,):
+        print('\tCalculating null correlation distributions')
+        self.current_corr_dir = self.corr_dir + 'all_neur_zscore/' + 'null/'
+        if os.path.isdir(self.current_corr_dir) == False:
+            os.mkdir(self.current_corr_dir)
+        self.neuron_keep_indices = np.ones(np.shape(self.discrim_neur))
+        # Calculate correlations
+        df.calculate_vec_correlations_zscore(self.num_neur, self.z_bin, self.null_dev_vecs_zscore, self.tastant_spike_times,
+                                      self.segment_times, self.segment_spike_times, self.start_dig_in_times, self.end_dig_in_times,
+                                      self.segment_names, self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
                                       self.current_corr_dir, self.neuron_keep_indices, self.segments_to_analyze)  # For all neurons in dataset
         # Now plot and calculate significance!
         self.stats_plots()
@@ -195,7 +213,7 @@ class run_null_deviation_correlations():
         segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, self.segment_names, self.dig_in_names,
                                                        self.plot_dir, 'Correlation', self.neuron_keep_indices, self.segments_to_analyze)
         null_corr_percentiles = df.null_dev_corr_90_percentiles(corr_dev_stats, self.segment_names, self.dig_in_names, 
-                                         self.num_cp, self.current_corr_dir, self.segments_to_analyze)
+                                         self.current_corr_dir, self.segments_to_analyze)
     
     
     

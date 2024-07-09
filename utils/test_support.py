@@ -245,7 +245,7 @@ num_segments = len(segment_names)
 pre_taste = metadata['params_dict']['pre_taste']
 post_taste = metadata['params_dict']['post_taste']
 # Import changepoint data
-num_cp = metadata['params_dict']['num_cp'] + 2
+num_cp = metadata['params_dict']['num_cp'] + 1
 data_group_name = 'changepoint_data'
 pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
     hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
@@ -338,19 +338,22 @@ seg_times_reshaped = np.array(segment_times_reshaped)[
     segments_to_analyze, :]
 
 null_dev_vecs = []
+null_dev_vecs_zscore = []
 for s_i in range(num_seg):
     null_dev_vecs.append([])
+    null_dev_vecs_zscore.append([])
 for null_i in tqdm.tqdm(range(num_null)):
     null_segment_deviations = all_null_deviations[null_i]
     null_segment_spike_times = all_null_segment_spike_times[null_i]
-    _, _, null_segment_dev_vecs_i, _ = df.create_dev_rasters(num_seg,
+    _, _, null_segment_dev_vecs_i, null_segment_dev_vecs_zscore_i = df.create_dev_rasters(num_seg,
                                                              null_segment_spike_times,
                                                              seg_times_reshaped,
                                                              null_segment_deviations,
-                                                             z_bin, no_z = True)
-    #Compiled all into a single group, rather than keeping separated by null dist
+                                                             z_bin, no_z = False)
+    #Compiled all into a single segment group, rather than keeping separated by null dist
     for s_i in range(num_seg):
         null_dev_vecs[s_i].extend(null_segment_dev_vecs_i[s_i])
+        null_dev_vecs_zscore[s_i].extend(null_segment_dev_vecs_zscore_i[s_i])
 
 current_corr_dir = corr_dir + 'all_neur/' + 'null/'
 if os.path.isdir(current_corr_dir) == False:
@@ -361,4 +364,20 @@ df.calculate_vec_correlations(num_neur, null_dev_vecs, tastant_spike_times,
                               start_dig_in_times, end_dig_in_times, segment_names,
                               dig_in_names, pre_taste, post_taste, pop_taste_cp_raster_inds,
                               current_corr_dir, neuron_keep_indices, segments_to_analyze)  # For all neurons in dataset
+
+
+import functions.dev_plot_funcs as dpf
+print('\tPlotting null correlation distributions')
+plot_dir = current_corr_dir + 'plots/'
+if os.path.isdir(plot_dir) == False:
+    os.mkdir(plot_dir)
+plot_dir = plot_dir
+corr_dev_stats = df.pull_corr_dev_stats(
+    segment_names, dig_in_names, current_corr_dir, segments_to_analyze)
+dpf.plot_stats(corr_dev_stats, segment_names, dig_in_names, plot_dir,
+               'Correlation', neuron_keep_indices, segments_to_analyze)
+segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names,
+                                               plot_dir, 'Correlation', neuron_keep_indices, segments_to_analyze)
+null_corr_percentiles = df.null_dev_corr_90_percentiles(corr_dev_stats, segment_names, dig_in_names, 
+                                 current_corr_dir, segments_to_analyze)
 
