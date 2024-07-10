@@ -34,9 +34,11 @@ def bin_spike_counts(save_dir, segment_spike_times, segment_names, segment_times
             - segment_times: the ms time delineations of each segment
     """
     # Create save dir for individual distributions
-    figure_save_dir = save_dir + 'indiv_distributions/'
-    if os.path.isdir(figure_save_dir) == False:
-        os.mkdir(figure_save_dir)
+    dist_save_dir = save_dir + 'indiv_distributions/'
+    if os.path.isdir(dist_save_dir) == False:
+        os.mkdir(dist_save_dir)
+        
+    if not os.path.isfile(os.path.join(dist_save_dir,'segment_fano_factors.npy')):
         # First calculate individual distributions, plot them, and save
         segment_neur_counts = dict()
         segment_counts = dict()
@@ -74,15 +76,20 @@ def bin_spike_counts(save_dir, segment_spike_times, segment_names, segment_times
             segment_isis.update({segment_names[s_i]: isi_results})
             segment_fano_factors.update({segment_names[s_i]: fano_results})
             # Plot spike distributions
-            plot_distributions(
-                neur_count_results, segment_names[s_i], 'Neuron Spike Counts', figure_save_dir)
-            plot_distributions(
-                count_results, segment_names[s_i], 'Spike Counts', figure_save_dir)
-            plot_distributions(
-                fr_results, segment_names[s_i], 'Firing Rates', figure_save_dir)
-            plot_distributions(isi_results, 'ISI Distributions' + ' CV = ' + str(
-                round(np.std(isi_results)/np.mean(isi_results), 2)), 'ISIs (s)', figure_save_dir)
-    
+            # plot_distributions(
+            #     neur_count_results, segment_names[s_i], 'Neuron Spike Counts', figure_save_dir)
+            # plot_distributions(
+            #     count_results, segment_names[s_i], 'Spike Counts', figure_save_dir)
+            # plot_distributions(
+            #     fr_results, segment_names[s_i], 'Firing Rates', figure_save_dir)
+            # plot_distributions(isi_results, 'ISI Distributions' + ' CV = ' + str(
+            #     round(np.std(isi_results)/np.mean(isi_results), 2)), 'ISIs (s)', figure_save_dir)
+        np.save(os.path.join(dist_save_dir,'segment_neur_counts.npy'),segment_neur_counts,allow_pickle=True)
+        np.save(os.path.join(dist_save_dir,'segment_counts.npy'),segment_counts,allow_pickle=True)
+        np.save(os.path.join(dist_save_dir,'segment_frs.npy'),segment_frs,allow_pickle=True)
+        np.save(os.path.join(dist_save_dir,'segment_isis.npy'),segment_isis,allow_pickle=True)
+        np.save(os.path.join(dist_save_dir,'segment_fano_factors.npy'),segment_fano_factors,allow_pickle=True)
+        
     # Use the T-Test to calculate if segment distributions are different
     # Create save dir for T-Test pair results
     figure_save_dir = save_dir + 'pair_t_tests/'
