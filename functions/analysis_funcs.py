@@ -373,9 +373,9 @@ def get_bin_activity(segment_times_reshaped, segment_spike_times, bin_size,
         num_segments = len(segments_to_analyze)
     
     bin_times = []
-    bin_pop_fr = []
-    bin_fr_vecs = []
-    bin_fr_vecs_zscore = []
+    bin_pop_fr = dict()
+    bin_fr_vecs = dict()
+    bin_fr_vecs_zscore = dict()
     for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
         seg_times = segment_times_reshaped[s_ind]
         seg_len = seg_times[1] - seg_times[0] + 1
@@ -400,9 +400,9 @@ def get_bin_activity(segment_times_reshaped, segment_spike_times, bin_size,
         seg_fr_vecs_z = list((np.array(seg_fr_vecs)-np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1))
         #Store
         bin_times.append(seg_times)
-        bin_pop_fr.append(seg_pop_fr)
-        bin_fr_vecs.append(seg_fr_vecs)
-        bin_fr_vecs_zscore.append(seg_fr_vecs_z)
+        bin_pop_fr[s_i] = seg_pop_fr
+        bin_fr_vecs[s_i] = seg_fr_vecs
+        bin_fr_vecs_zscore[s_i] = seg_fr_vecs_z
     
     return bin_times, bin_pop_fr, bin_fr_vecs, bin_fr_vecs_zscore
     

@@ -84,11 +84,6 @@ def slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,sav
                         cp_nan_inds = np.where(np.isnan(cp_corr_data))[0]
                         remaining_inds = np.setdiff1d(np.arange(len(seg_pop_fr)),np.concatenate((popfr_inf_inds,popfr_nan_inds,cp_inf_inds,cp_nan_inds)))
                         #Pearson corr calc
-                        # cp_corr_mean = np.nanmean(cp_corr_data)
-                        # popfr_mean = np.nanmean(seg_pop_fr)
-                        # numerator = np.nansum((cp_corr_data - cp_corr_mean)*(seg_pop_fr - popfr_mean))
-                        # denominator = np.sqrt(np.nansum((cp_corr_data - cp_corr_mean)**2)*np.nansum((seg_pop_fr - popfr_mean)**2))
-                        # popfr_corr_vals[d_i,cp_i] = numerator/denominator
                         if len(remaining_inds) > 2:
                             corr_result = pearsonr(cp_corr_data[remaining_inds],seg_pop_fr[remaining_inds],alternative='two-sided')[0]
                         else:
@@ -196,7 +191,7 @@ def slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,sav
     return popfr_corr_storage
 
 def top_corr_rate_dist(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,
-                       segment_names,dig_in_names,segments_to_analyze=[]):
+                       save_dir,segment_names,dig_in_names,segments_to_analyze=[]):
     """This function pulls out the top 90th+ percentile of correlation value 
     bins across segments and looks at the population firing rate distribution.
     
@@ -212,14 +207,96 @@ def top_corr_rate_dist(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,
         segments_to_analyze = np.arange(len(segment_names))
     num_segments = len(segments_to_analyze)
     
+    f_dist_corr, ax_dist_corr = plt.subplots(nrows = num_segments, ncols = num_cp, figsize=(4*num_cp,4*num_segments))
+    f_dist_pop, ax_dist_pop = plt.subplots(nrows = num_segments, ncols = num_cp, figsize=(4*num_cp,4*num_segments))
+    f_corr_mean, ax_corr_mean = plt.subplots(ncols= num_segments, figsize = (4*num_segments,4))
+    f_pop_mean, ax_pop_mean = plt.subplots(ncols= num_segments, figsize = (4*num_segments,4))
+     
+    max_pop_rate = 0
+    max_mean_pop_rate = 0
+    min_mean_pop_rate = 100
+    max_mean_corr = 0
+    min_mean_corr = 1
     for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
         seg_name = segment_names[s_ind]
         seg_pop_fr = np.array(bin_pop_fr[s_i])
-        popfr_corr_storage[seg_name] = dict()
+        pop_means = np.zeros((num_tastes,num_cp))
+        corr_means = np.zeros((num_tastes,num_cp))
+        #Fill out distribution plots
+        for cp_i in range(num_cp):
+            for t_i in range(num_tastes):
+                taste_name = dig_in_names[t_i]
+                st_corr = corr_slide_stats[seg_name][t_i]['pop_vec_data_storage']
+                num_times, num_deliv, _ = np.shape(st_corr) #time x deliv x cp
+                cp_corr = np.nanmean(st_corr[:,:,cp_i],1).flatten()
+                #Find indices of high correlation
+                p_cutoff = np.percentile(cp_corr[~np.isnan(cp_corr)],90)
+                high_corr_inds = np.where(cp_corr >= p_cutoff)[0]
+                #Now find the correlation values and population rates during these times
+                high_corr_vals = cp_corr[high_corr_inds]
+                high_corr_pop_rate = seg_pop_fr[high_corr_inds]
+                if np.max(high_corr_pop_rate) > max_pop_rate:
+                    max_pop_rate = np.max(high_corr_pop_rate)
+                corr_means[t_i,cp_i] = np.nanmean(high_corr_vals)
+                pop_means[t_i,cp_i] = np.nanmean(high_corr_pop_rate)
+                #Plot the distributions
+                ax_dist_corr[s_i,cp_i].boxplot(high_corr_vals,positions = [t_i+1])
+                ax_dist_pop[s_i,cp_i].boxplot(high_corr_pop_rate,positions = [t_i+1])
+            if cp_i == 0:
+                ax_dist_corr[s_i,cp_i].set_ylabel(seg_name + '\nCorrelation to Taste')
+                ax_dist_pop[s_i,cp_i].set_ylabel(seg_name + '\nPopulation Firing Rate (Hz)')
+            ax_dist_corr[s_i,cp_i].set_xticklabels(dig_in_names)
+            ax_dist_corr[s_i,cp_i].set_title('Epoch ' + str(cp_i) + ' corr. distribution')
+            ax_dist_pop[s_i,cp_i].set_xticklabels(dig_in_names)
+            ax_dist_pop[s_i,cp_i].set_title('Epoch ' + str(cp_i) + ' pop. rate distribution')
+        #Now fill out mean plots
+        if np.max(pop_means) > max_mean_pop_rate:
+            max_mean_pop_rate = np.max(pop_means)
+        if np.min(pop_means) < min_mean_pop_rate:
+            min_mean_pop_rate = np.min(pop_means)
+        if np.max(corr_means) > max_mean_corr:
+            max_mean_corr = np.max(corr_means)
+        if np.min(corr_means) < min_mean_corr:
+            min_mean_corr = np.min(corr_means)
         for t_i in range(num_tastes):
-            taste_name = dig_in_names[t_i]
-            st_corr = corr_slide_stats[seg_name][t_i]['pop_vec_data_storage']
-            num_times, num_deliv, _ = np.shape(st_corr)
-            
-            
-
+            ax_corr_mean[s_i].plot(np.arange(num_cp),corr_means[t_i,:],label=dig_in_names[t_i])
+            ax_pop_mean[s_i].plot(np.arange(num_cp),pop_means[t_i,:],label=dig_in_names[t_i])
+        ax_corr_mean[s_i].set_xlabel('Epoch')
+        ax_pop_mean[s_i].set_xlabel('Epoch')
+        ax_corr_mean[s_i].set_ylabel('90th-Percentile Mean Corr')
+        ax_pop_mean[s_i].set_ylabel('90th-Percentile Pop Rate')
+        ax_corr_mean[s_i].legend()
+        ax_pop_mean[s_i].legend()
+        ax_corr_mean[s_i].set_title(seg_name)
+        ax_pop_mean[s_i].set_title(seg_name)
+        
+    for s_i in range(num_segments):
+        ax_corr_mean[s_i].set_ylim([min_mean_corr - np.abs(0.1*min_mean_corr),max_mean_corr + 0.1*max_mean_corr])
+        ax_pop_mean[s_i].set_ylim([min_mean_pop_rate - np.abs(0.1*min_mean_pop_rate),max_mean_pop_rate + 0.1*max_mean_pop_rate])
+        for cp_i in range(num_cp):
+            ax_dist_corr[s_i,cp_i].set_ylim([-0.05,1.05])
+            ax_dist_pop[s_i,cp_i].set_ylim([0,max_pop_rate + 0.1*max_pop_rate])
+    f_corr_mean.suptitle('Mean 90th-Percentile+ Correlations')
+    f_pop_mean.suptitle('Mean 90th-Percentile+ Population Rates')
+    f_dist_corr.suptitle('90th-Percentile+ Correlation Distributions')
+    f_dist_pop.suptitle('90th-Percentile+ Population Rate Distributions')
+    f_corr_mean.tight_layout()
+    f_pop_mean.tight_layout()
+    f_dist_corr.tight_layout()     
+    f_dist_pop.tight_layout()
+    #Save and close
+    f_corr_mean.savefig(os.path.join(plot_dir,'90th_percentile_corr_dist_means.png'))
+    f_corr_mean.savefig(os.path.join(plot_dir,'90th_percentile_corr_dist_means.svg'))
+    f_pop_mean.savefig(os.path.join(plot_dir,'90th_percentile_pop_fr_dist_means.png'))
+    f_pop_mean.savefig(os.path.join(plot_dir,'90th_percentile_pop_fr_dist_means.svg'))
+    f_dist_corr.savefig(os.path.join(plot_dir,'90th_percentile_corr_dist.png'))
+    f_dist_corr.savefig(os.path.join(plot_dir,'90th_percentile_corr_dist.svg'))
+    f_dist_pop.savefig(os.path.join(plot_dir,'90th_percentile_pop_fr_dist.png'))
+    f_dist_pop.savefig(os.path.join(plot_dir,'90th_percentile_pop_fr_dist.svg'))
+    
+    
+    plt.close(f_corr_mean)
+    plt.close(f_pop_mean)
+    plt.close(f_dist_corr)
+    plt.close(f_dist_pop)
+    

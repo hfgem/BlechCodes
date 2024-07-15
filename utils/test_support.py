@@ -105,6 +105,7 @@ discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
 
 
 print("\tNow calculating binned activity")
+
 bin_times, bin_pop_fr, bin_fr_vecs, bin_fr_vecs_zscore = af.get_bin_activity(segment_times_reshaped,
                                                              segment_spike_times, bin_size, 
                                                              segments_to_analyze, False)
@@ -130,3 +131,31 @@ corr_slide_stats = df.pull_corr_dev_stats(
 spf.slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,
                        corr_dir,segment_names,dig_in_names,segments_to_analyze)
 
+spf.top_corr_rate_dist(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,
+                       corr_dir,segment_names,dig_in_names,segments_to_analyze)
+
+
+corr_dir = os.path.join(slide_dir,'all_neur_zscore')
+if os.path.isdir(corr_dir) == False:
+    os.mkdir(corr_dir)
+    
+neuron_keep_indices = np.ones(np.shape(discrim_neur))
+
+df.calculate_vec_correlations_zscore(num_neur, z_bin, bin_fr_vecs_zscore, tastant_spike_times,
+                                     segment_times, segment_spike_times, start_dig_in_times, end_dig_in_times,
+                                     segment_names, dig_in_names, pre_taste, post_taste, pop_taste_cp_raster_inds,
+                                     corr_dir, neuron_keep_indices, segments_to_analyze)
+
+plot_dir = os.path.join(corr_dir,'plots/')
+if os.path.isdir(plot_dir) == False:
+    os.mkdir(plot_dir)
+
+corr_slide_stats = df.pull_corr_dev_stats(
+     segment_names, dig_in_names, corr_dir, 
+     segments_to_analyze, False)
+
+spf.slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,
+                       corr_dir,segment_names,dig_in_names,segments_to_analyze)
+
+spf.top_corr_rate_dist(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,
+                       corr_dir,segment_names,dig_in_names,segments_to_analyze)

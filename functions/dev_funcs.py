@@ -296,8 +296,9 @@ def calculate_vec_correlations(num_neur, segment_dev_vectors, tastant_spike_time
             try:
                 neuron_pop_vec_corr_storage = np.load(filename_pop_vec)
                 filename_pop_vec_loaded = 1
+                print("\t\t\tVector correlations previously calculated for taste " + str(t_i+1))
             except:
-                print("\t\t\tVector correlations not calculated for taste " + str(t_i))
+                print("\t\t\tVector correlations now being calculated for taste " + str(t_i+1))
             if filename_pop_vec_loaded == 0:
                 taste_cp_pop = cp[t_i]
                 # Note, num_cp = num_cp+1 with the first value the taste delivery index
@@ -520,16 +521,16 @@ def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, 
         dev_fr_vecs = np.array(seg_vecs)
         for t_i in range(num_tastes):  # Loop through each taste
             # Set storage directory and check if data previously stored
-            filename_pop_vec = save_dir + \
-                segment_names[s_i] + '_' + dig_in_names[t_i] + '_pop_vec.npy'
+            filename_pop_vec = os.path.join(save_dir, segment_names[s_i] + '_' 
+                                            + dig_in_names[t_i] + '_pop_vec.npy')
             filename_pop_vec_loaded = 0
             try:
                 neuron_pop_vec_corr_storage = np.load(filename_pop_vec)
                 filename_pop_vec_loaded = 1
+                print("\t\t\tVector correlations previously calculated for taste " + str(t_i + 1))
             except:
-                print("\t\t\tVector correlations not calculated for taste " + str(t_i))
+                print("\t\t\tVector correlations now being calculated for taste " + str(t_i + 1))
             if filename_pop_vec_loaded == 0:
-                print("\t\t\tCalculating Taste #" + str(t_i + 1))
                 taste_cp_pop = cp[t_i]
                 taste_spikes = tastant_spike_times[t_i]
                 # Note, num_cp = num_cp+1 with the first value the taste delivery index

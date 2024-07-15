@@ -21,9 +21,8 @@ from functions.deviation_null_analysis import run_deviation_null_analysis
 from functions.deviation_analysis import run_find_deviations
 from functions.changepoint_analysis import run_changepoint_detection
 from functions.data_description_analysis import run_data_description_analysis
+from functions.sliding_correlations import run_sliding_correlations
 from utils.replay_utils import state_tracker
-
-
 
 class run_analysis_steps():
 
@@ -93,9 +92,13 @@ class run_analysis_steps():
         state_exec_dict[4]['name'] = 'Deviation x Taste Correlations'
         state_exec_dict[4]['exec'] = 'run_deviation_correlations([self.metadata,self.data_dict])'
         state_exec_dict[5] = dict()
-        state_exec_dict[5]['name'] = 'Bayesian Replay Decoding'
-        state_exec_dict[5]['exec'] = 'run_dependent_bayes([self.metadata,self.data_dict])'
-        state_exec_dict[6] = dict()
-        state_exec_dict[6]['name'] = 'Bayesian Deviation Decoding'
-        state_exec_dict[6]['exec'] = ''
+        state_exec_dict[5]['name'] = 'Sliding Bin Correlations'
+        state_exec_dict[5]['exec'] = 'run_sliding_correlations([self.metadata,self.data_dict])'
+        
+        #state_exec_dict[6] = dict()
+        #state_exec_dict[6]['name'] = 'Bayesian Replay Decoding'
+        #state_exec_dict[6]['exec'] = 'run_dependent_bayes([self.metadata,self.data_dict])'
+        #state_exec_dict[7] = dict()
+        #state_exec_dict[7]['name'] = 'Bayesian Deviation Decoding'
+        #state_exec_dict[7]['exec'] = ''
         self.state_exec_dict = state_exec_dict
