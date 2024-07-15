@@ -358,3 +358,51 @@ def full_taste_interval_2way_anova(num_tastes, num_neur, tastant_spike_times,
         taste_fr_data.append(deliv_rasters)
 
     # Convert spike rasters to firing rate vectors
+
+def get_bin_activity(segment_times_reshaped, segment_spike_times, bin_size, 
+                     segments_to_analyze = [], no_z = False):
+    """Pull firing rate vectors (regular and z-scored) for sliding bins across 
+    rest intervals and return along with bin start times"""
+    
+    num_segments = len(segment_spike_times)
+    half_bin = np.ceil(bin_size/2).astype(int)
+
+    if len(segments_to_analyze) == 0:
+        segments_to_analyze = np.arange(num_segments)
+    else:
+        num_segments = len(segments_to_analyze)
+    
+    bin_times = []
+    bin_pop_fr = dict()
+    bin_fr_vecs = dict()
+    bin_fr_vecs_zscore = dict()
+    for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
+        seg_times = segment_times_reshaped[s_ind]
+        seg_len = seg_times[1] - seg_times[0] + 1
+        seg_st = segment_spike_times[s_ind] 
+        num_neur = len(seg_st)
+        #Pull binary raster of segment
+        bin_spike_storage = np.zeros((num_neur,seg_len))
+        for n_i in range(num_neur):
+            neur_st = (np.array(seg_st[n_i]) - seg_times[0]).astype('int')
+            bin_spike_storage[n_i,neur_st] = 1
+        del neur_st, seg_st
+        #Grab neuron firing rates across bins in segment
+        seg_fr_vecs = []
+        seg_pop_fr = []
+        seg_bin_times = np.arange(half_bin,seg_len-half_bin)
+        for st_i, st_ind in enumerate(seg_bin_times):
+            seg_fr_vecs.append(list(np.sum(bin_spike_storage[:,st_ind-half_bin:st_ind+half_bin],axis=1)/(2*half_bin/1000))) #In Hz
+            seg_pop_fr.extend([np.sum(bin_spike_storage[:,st_ind-half_bin:st_ind+half_bin])/(2*half_bin/1000)/num_neur]) #In Hz
+        #Calculate z-scored fr vecs
+        mean_fr = np.mean(np.array(seg_fr_vecs),1)
+        std_fr = np.std(np.array(seg_fr_vecs),1)
+        seg_fr_vecs_z = list((np.array(seg_fr_vecs)-np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1))
+        #Store
+        bin_times.append(seg_times)
+        bin_pop_fr[s_i] = seg_pop_fr
+        bin_fr_vecs[s_i] = seg_fr_vecs
+        bin_fr_vecs_zscore[s_i] = seg_fr_vecs_z
+    
+    return bin_times, bin_pop_fr, bin_fr_vecs, bin_fr_vecs_zscore
+    
