@@ -95,7 +95,7 @@ def bin_spike_counts(save_dir, segment_spike_times, segment_names, segment_times
     figure_save_dir = save_dir + 'pair_t_tests/'
     if os.path.isdir(figure_save_dir) == False:
         os.mkdir(figure_save_dir)
-        print("\nCalculating KS-Test for pairs of segments:")
+        print("\nCalculating T-Test for pairs of segments:")
         s_i_pairs = list(itertools.combinations(segment_names, 2))
         print("\tNeurons Spiking Count distributions:")
         # First calculating for spike counts
@@ -116,11 +116,12 @@ def bin_spike_counts(save_dir, segment_spike_times, segment_names, segment_times
         segment_pair_fr_calculations = T_test_pipeline(
             fr_save_dir, dist_name, s_i_pairs, segment_frs)
         # Third calculating for ISIs
-        print("\tISI and Fano Factor Plots:")
-        isi_fano_save_dir = figure_save_dir + 'isis_fano/'
-        if os.path.isdir(isi_fano_save_dir) == False:
-            os.mkdir(isi_fano_save_dir)
-        single_trend_plots(segment_fano_factors, 'Fano Factor', isi_fano_save_dir)
+        #print("\tISI and Fano Factor Plots:")
+        #isi_fano_save_dir = figure_save_dir + 'isis_fano/'
+        #if os.path.isdir(isi_fano_save_dir) == False:
+        #    os.mkdir(isi_fano_save_dir)
+        #single_trend_plots(segment_fano_factors, 'Fano Factor', isi_fano_save_dir)
+        #single_trend_plots(segment_isis, 'ISIs', isi_fano_save_dir)
 
 
 @jit(forceobj=True)
@@ -185,11 +186,14 @@ def calculate_isi_distribution(spike_times):
             - spike_times: binary matrix of num_neur x num_time (in ms bins) with 1s where a neuron fires
             - bin_size: width (in seconds) of bins to calculate the number of spikes in
     """
-    spikes_collapsed = np.sum(spike_times, 0)
-    spike_indices = np.where(spikes_collapsed > 0)[0]
-    bin_isis = np.diff(spike_indices)/1000  # Converted to seconds
+    all_isis = []
+    num_neur, _ = np.shape(spike_times)
+    for n_i in range(num_neur):
+        spike_indices = np.where(spike_times[n_i,:] > 0)[0]
+        bin_isis = np.diff(spike_indices)/1000  # Converted to seconds
+        all_isis.extend(list(bin_isis))
 
-    return bin_isis
+    return np.array(all_isis)
 
 
 @jit(forceobj=True)
@@ -389,16 +393,25 @@ def single_trend_plots(segment_trends, trend_name, fig_save_dir):
     for seg_key in segment_trends:
         plot_ind += 1
         seg_value_dict = segment_trends[seg_key]
-        bins = []
-        values = []
-        for key in seg_value_dict:
-            bins.append(float(key))
-            values.append(seg_value_dict[key]/1000)  # Converted to s
-        plt.subplot(num_seg, 1, plot_ind)
-        plt.plot(bins, values)
-        plt.xlabel("Bin Size (s)")
-        plt.ylabel(trend_name)
-        plt.title(seg_key)
+        try:
+            bins = []
+            values = []
+            for key in seg_value_dict:
+                bins.append(float(key))
+                values.append(seg_value_dict[key]/1000)  # Converted to s
+            plt.subplot(num_seg, 1, plot_ind)
+            plt.plot(bins, values)
+            plt.xlabel("Bin Size (s)")
+            plt.ylabel(trend_name)
+            plt.title(seg_key)
+        except:
+            plt.subplot(num_seg, 1, plot_ind)
+            plt.hist(seg_value_dict,bins=100,density=True)
+            plt.axvline(np.mean(seg_value_dict),color='k',label='Mean = ' + str(np.round(np.mean(seg_value_dict),2)))
+            plt.legend()
+            plt.xlabel(trend_name)
+            plt.ylabel('Density')
+            plt.title(seg_key)
     plt.suptitle(trend_name + " Plots")
     plt.tight_layout()
     plt.savefig(fig_save_dir + ('_').join(trend_name.split(' ')) + '.png')

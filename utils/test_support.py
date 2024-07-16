@@ -63,99 +63,176 @@ tastant_spike_times = af.calc_tastant_spike_times(data_dict['segment_times'],dat
 data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
-#%% Sweeping Corr Support
+#%% Compare Conditions Support
 
-import functions.analysis_funcs as af
-import functions.dev_funcs as df
-import functions.hdf5_handling as hf5
-import functions.dev_plot_funcs as dpf
-import functions.slide_plot_funcs as spf
+import os
+import easygui
+from utils.replay_utils import import_metadata
+from utils.data_utils import import_data
+from functions.compare_conditions_analysis import run_compare_conditions_analysis
+from functions.compare_conditions_funcs import int_input, bool_input
 
-# Directories
-slide_dir = metadata['dir_name'] + 'Sliding_Correlations/'
-if os.path.isdir(slide_dir) == False:
-    os.mkdir(slide_dir)
-hdf5_dir = metadata['hdf5_dir']
-# Params/Variables
-num_neur = data_dict['num_neur']
-pre_taste = metadata['params_dict']['pre_taste']
-post_taste = metadata['params_dict']['post_taste']
-segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-epochs_to_analyze = metadata['params_dict']['epochs_to_analyze']
-segment_names = data_dict['segment_names']
-num_segments = len(segment_names)
-segment_spike_times = data_dict['segment_spike_times']
-segment_times = data_dict['segment_times']
-segment_times_reshaped = [
-    [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
-# Remember this is 1 less than the number of epochs
-num_cp = metadata['params_dict']['num_cp'] + 1
-tastant_spike_times = data_dict['tastant_spike_times']
-start_dig_in_times = data_dict['start_dig_in_times']
-end_dig_in_times = data_dict['end_dig_in_times']
-dig_in_names = data_dict['dig_in_names']
-bin_size = metadata['params_dict']['min_dev_size'] #Use the same minimal size as deviation events
-z_bin = metadata['params_dict']['z_bin']
-data_group_name = 'changepoint_data'
-pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
-    hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
-data_group_name = 'taste_discriminability'
-discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
-    hdf5_dir, data_group_name, 'discrim_neur'))
+# Grab current directory and data directory / metadata
+script_path = os.path.realpath(__file__)
+blechcodes_dir = os.path.dirname(script_path)
 
+all_data_dict = dict()
+save_dir = ''
 
-print("\tNow calculating binned activity")
+# _____Prompt user if they'd like to use previously stored correlation data_____
+print("If you previously started an analysis, you may have a corr_data.pkl file in the analysis folder.")
+bool_val = bool_input(
+    "Do you have a correlation pickle file stored you'd like to continue analyzing [y/n]? ")
+if bool_val == 'y':
+    save_dir = easygui.diropenbox(
+        title='Please select the storage folder.')
+else:
+    # _____Prompt user for the number of datasets needed in the analysis_____
+    print("Conditions include across days and across animals (the number of separate spike sorted datasets).")
+    num_cond = int_input(
+        "How many conditions-worth of correlation data do you wish to import for this comparative analysis (integer value)? ")
+    if num_cond >= 1:
+        print("Multiple file import selected.")
+    else:
+        print("Single file import selected.")
 
-bin_times, bin_pop_fr, bin_fr_vecs, bin_fr_vecs_zscore = af.get_bin_activity(segment_times_reshaped,
-                                                             segment_spike_times, bin_size, 
-                                                             segments_to_analyze, False)
+    # _____Pull all data into a dictionary_____
+    all_data_dict = dict()
+    for nc in range(num_cond):
+        # _____Get the directory of the hdf5 file_____
+        print("Please select the folder where the data # " +
+              str(nc+1) + " is stored.")
 
-corr_dir = os.path.join(slide_dir,'all_neur')
-if os.path.isdir(corr_dir) == False:
-    os.mkdir(corr_dir)
-neuron_keep_indices = np.ones(np.shape(discrim_neur))
+        # _____Import relevant data_____
+        metadata_handler = import_metadata([blechcodes_dir])
+        try:
+            dig_in_names = metadata_handler.info_dict['taste_params']['tastes']
+        except:
+            dig_in_names = []
 
-df.calculate_vec_correlations(num_neur, bin_fr_vecs, tastant_spike_times,
-                              start_dig_in_times, end_dig_in_times, segment_names,
-                              dig_in_names, pre_taste, post_taste, pop_taste_cp_raster_inds,
-                              corr_dir, neuron_keep_indices, segments_to_analyze)  # For all neurons in dataset
+        # import data from hdf5
+        data_handler = import_data(
+            [metadata_handler.dir_name, metadata_handler.hdf5_dir, dig_in_names])
 
-plot_dir = os.path.join(corr_dir,'plots/')
-if os.path.isdir(plot_dir) == False:
-    os.mkdir(plot_dir)
+        # repackage data from all handlers
+        metadata = dict()
+        for var in vars(metadata_handler):
+            metadata[var] = getattr(metadata_handler, var)
+        del metadata_handler
 
-corr_slide_stats = df.pull_corr_dev_stats(
-     segment_names, dig_in_names, corr_dir, 
-     segments_to_analyze, False)
+        data_dict = dict()
+        for var in vars(data_handler):
+            data_dict[var] = getattr(data_handler, var)
+        del data_handler
 
-spf.slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,
-                       corr_dir,segment_names,dig_in_names,segments_to_analyze)
+        # Grab colloquial name
+        print("Give a more colloquial name to the dataset.")
+        data_name = data_dict['data_path'].split('/')[-2]
+        given_name = input("How would you rename " + data_name + "? ")
 
-spf.top_corr_rate_dist(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,
-                       corr_dir,segment_names,dig_in_names,segments_to_analyze)
+        all_data_dict[given_name] = dict()
+        all_data_dict[given_name]['data'] = data_dict
+        all_data_dict[given_name]['metadata'] = metadata
 
+        del data_dict, data_name, given_name, metadata, dig_in_names
+        
+    del nc
 
-corr_dir = os.path.join(slide_dir,'all_neur_zscore')
-if os.path.isdir(corr_dir) == False:
-    os.mkdir(corr_dir)
-    
-neuron_keep_indices = np.ones(np.shape(discrim_neur))
+import os
+import warnings
+import easygui
+import pickle
+import numpy as np
 
-df.calculate_vec_correlations_zscore(num_neur, z_bin, bin_fr_vecs_zscore, tastant_spike_times,
-                                     segment_times, segment_spike_times, start_dig_in_times, end_dig_in_times,
-                                     segment_names, dig_in_names, pre_taste, post_taste, pop_taste_cp_raster_inds,
-                                     corr_dir, neuron_keep_indices, segments_to_analyze)
+current_path = os.path.realpath(__file__)
+blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
+os.chdir(blech_codes_path)
 
-plot_dir = os.path.join(corr_dir,'plots/')
-if os.path.isdir(plot_dir) == False:
-    os.mkdir(plot_dir)
+import functions.compare_datasets_funcs as cdf
+import functions.compare_conditions_funcs as ccf
 
-corr_slide_stats = df.pull_corr_dev_stats(
-     segment_names, dig_in_names, corr_dir, 
-     segments_to_analyze, False)
+warnings.filterwarnings("ignore")
 
-spf.slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,
-                       corr_dir,segment_names,dig_in_names,segments_to_analyze)
+save_dir = easygui.diropenbox(
+    title='Please select the storage folder.')
+num_datasets = len(all_data_dict)
+dataset_names = list(all_data_dict.keys())
+seg_data = dict()
+for n_i in range(num_datasets):
+    data_name = dataset_names[n_i]
+    data_dict = all_data_dict[data_name]['data']
+    metadata = all_data_dict[data_name]['metadata']
+    data_save_dir = data_dict['data_path']
+    seg_save_dir = os.path.join(data_save_dir,'Segment_Comparison','indiv_distributions')
+    num_dicts = os.listdir(seg_save_dir)
+    seg_data[data_name] = dict()
+    seg_data[data_name]['num_neur'] = data_dict['num_neur']
+    segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+    seg_data[data_name]['segments_to_analyze'] = segments_to_analyze
+    seg_data[data_name]['segment_names'] = data_dict['segment_names']
+    segment_times = data_dict['segment_times']
+    num_segments = len(seg_data[data_name]['segment_names'])
+    seg_data[data_name]['segment_times_reshaped'] = [
+        [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+    dig_in_names = data_dict['dig_in_names']
+    seg_data[data_name]['dig_in_names'] = dig_in_names
+    seg_data[data_name]['seg_data'] = dict()
+    for nd_i in range(len(num_dicts)):
+        dict_name = num_dicts[nd_i]
+        dict_dir = os.path.join(seg_save_dir,dict_name)
+        seg_data[data_name]['seg_data'][dict_name.split('.npy')[0]] = \
+            np.load(dict_dir,allow_pickle=True).item()
+        #This data is organized by [seg_name][bin_size] gives the result array
+# Save the combined dataset somewhere...
+# _____Analysis Storage Directory_____
+if not os.path.isdir(os.path.join(save_dir,'Segment_Comparison')):
+    os.mkdir(os.path.join(save_dir,'Segment_Comparison'))
+seg_results_dir = os.path.join(save_dir,'Segment_Comparison')
+# Save the dictionary of data
+dict_save_dir = os.path.join(save_dir, 'seg_data.pkl')
+f = open(dict_save_dir, "wb")
+pickle.dump(seg_data, f)
 
-spf.top_corr_rate_dist(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,
-                       corr_dir,segment_names,dig_in_names,segments_to_analyze)
+unique_given_names = list(seg_data.keys())
+unique_given_indices = np.sort(
+    np.unique(unique_given_names, return_index=True)[1])
+unique_given_names = [unique_given_names[i]
+                      for i in unique_given_indices]
+unique_analysis_names = np.array([list(seg_data[name]['seg_data'].keys(
+)) for name in unique_given_names]).flatten()  # How many types of segment analyses
+unique_analysis_indices = np.sort(
+    np.unique(unique_analysis_names, return_index=True)[1])
+unique_analysis_names = [unique_analysis_names[i] for i in unique_analysis_indices]
+unique_segment_names = []
+unique_bin_sizes = []
+for name in unique_given_names:
+    for analysis_name in unique_analysis_names:
+        try:
+            
+            #seg_names = list(
+            #    seg_data[name]['seg_data'][analysis_name].keys())
+            segments_to_analyze = seg_data[name]['segments_to_analyze']
+            segment_names = seg_data[name]['segment_names']
+            seg_names = np.array(segment_names)[segments_to_analyze]
+            unique_segment_names.extend(seg_names)
+            for seg_name in seg_names:
+                try:
+                    bin_sizes = list(
+                    seg_data[name]['seg_data'][analysis_name][seg_name].keys())
+                    bin_sizes_float = [float(bs) for bs in bin_sizes]
+                except: #This dataset doesn't use bin sizes (ex. isi calculation)
+                    bin_sizes = []
+                    bin_sizes_float = []
+                unique_bin_sizes.extend(bin_sizes_float)
+        except:
+            print(name + " does not have data for " + analysis_name)
+unique_segment_indices = np.sort(
+    np.unique(unique_segment_names, return_index=True)[1])
+unique_segment_names = [unique_segment_names[i]
+                        for i in unique_segment_indices]
+unique_bin_indices = np.sort(
+    np.unique(unique_bin_sizes, return_index=True)[1])
+unique_bin_sizes = [unique_bin_sizes[i]
+                      for i in unique_bin_indices]
+
+results_dir = seg_results_dir

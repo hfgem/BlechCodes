@@ -1954,3 +1954,188 @@ def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_seg
                         -1, data.shape[-1])
 
     return unique_data_dict, max_epochs
+
+def cross_dataset_seg_compare_means(seg_data,unique_given_names,unique_analysis_names,
+                              unique_segment_names,unique_bin_sizes,save_dir):
+    """This function takes data across animals and compares across segments the
+    distribution means by bin size
+    INPUTS:
+            - seg_data: dictionary containing correlation data across conditions.
+                    length = number of datasets
+                    seg_data[name] = dictionary of dataset data
+                    seg_data[name]['seg_data'] = dict of length # analysis types
+                    seg_data[name]['seg_data'][analysis_names] = dict of length #segments
+                    seg_data[name]['seg_data'][analysis_names][seg_name] = dict of length #bins
+                    seg_data[name]['seg_data'][analysis_names][seg_name][bin_size] = numpy array of analysis data for that bin size
+            - unique_given_names: unique names of datasets
+            - unique_analysis_names: unique names of analysis types
+            - unique_segment_names: unique names of experimental segments
+            - unique_bin_sizes: unique bin sizes from individual animal segment analyses
+            - save_dir: where to save resulting plots
+    OUTPUTS: plots and statistical significance tests comparing segments to each other
+    """
+    
+    num_bins = len(unique_bin_sizes)
+    subplot_square = np.ceil(np.sqrt(num_bins)).astype('int')
+    subplot_inds_square = np.reshape(np.arange(subplot_square**2),(subplot_square,subplot_square))
+    
+    for analysis in unique_analysis_names:
+        try:
+            f_mean, ax_mean = plt.subplots(nrows = subplot_square, ncols = subplot_square, figsize = (3*subplot_square,3*subplot_square))
+            for bs_i, bs in enumerate(unique_bin_sizes):
+                bs_string = str(bs)
+                bs_data_collection = np.nan*np.ones((len(unique_given_names),len(unique_segment_names)))
+                for name_ind, name in enumerate(unique_given_names):
+                    for seg_ind, seg_name in enumerate(unique_segment_names):
+                        try:
+                            animal_seg_data = seg_data[name]['seg_data'][analysis][seg_name][bs_string]
+                            bs_data_collection[name_ind,seg_ind] = np.nanmean(animal_seg_data)
+                        except:
+                            print(seg_name + " data not found for " + analysis + ' ' + name)
+                max_val = np.nanmax(bs_data_collection)*1.05
+                min_val = np.nanmin(bs_data_collection)*0.95
+                bs_i_square = np.where(subplot_inds_square == bs_i)
+                ax_mean[bs_i_square[0][0],bs_i_square[1][0]].boxplot(bs_data_collection)
+                ax_mean[bs_i_square[0][0],bs_i_square[1][0]].set_xticklabels(unique_segment_names,rotation=45)
+                ax_mean[bs_i_square[0][0],bs_i_square[1][0]].set_title('Bin Size = ' + str(np.round(bs,2)))
+                for seg_ind, seg_name in enumerate(unique_segment_names):
+                    animal_points = bs_data_collection[:,seg_ind]
+                    nonnan_points = animal_points[~np.isnan(animal_points)]
+                    animal_x_jitter = 0.1*np.random.randn(len(nonnan_points))
+                    ax_mean[bs_i_square[0][0],bs_i_square[1][0]].scatter((seg_ind+1)*np.ones(len(nonnan_points)) + animal_x_jitter, nonnan_points, alpha=0.3, color='g')
+                #Now calculate pairwise significance
+                seg_pairs = list(combinations(np.arange(len(unique_segment_names)),2))
+                for sp in seg_pairs:
+                    seg_1 = sp[0]
+                    seg_1_data = bs_data_collection[:,seg_1]
+                    seg_2 = sp[1]
+                    seg_2_data = bs_data_collection[:,seg_2]
+                    ttest_result = ttest_ind(seg_1_data[~np.isnan(seg_1_data)],seg_2_data[~np.isnan(seg_2_data)])
+                    if ttest_result[1] <= 0.05:
+                        ax_mean[bs_i_square[0][0],bs_i_square[1][0]].plot([seg_1+1, seg_2+1],[max_val,max_val],color='k')
+                        max_val = max_val*1.05
+                        ax_mean[bs_i_square[0][0],bs_i_square[1][0]].scatter([seg_1+1+(seg_2-seg_1)/2],[max_val],marker='*',s=3,c='k')
+                        max_val = max_val*1.05
+                ax_mean[bs_i_square[0][0],bs_i_square[1][0]].set_ylim([min_val,max_val])
+            plt.suptitle(analysis)
+            plt.tight_layout()
+            f_mean.savefig(os.path.join(save_dir,analysis + '_means.png'))
+            f_mean.savefig(os.path.join(save_dir,analysis + '_means.svg'))
+            plt.close(f_mean)
+        except:
+            #No bins in this data!
+            f = plt.figure(figsize=(5,5))
+            data_means = np.nan*np.ones((len(unique_given_names),len(unique_segment_names)))
+            for name_ind, name in enumerate(unique_given_names):
+                for seg_ind, seg_name in enumerate(unique_segment_names):
+                    animal_seg_data = seg_data[name]['seg_data'][analysis][seg_name]
+                    data_means[name_ind,seg_ind] = np.nanmean(animal_seg_data)
+            max_val = np.nanmax(data_means)*1.05
+            min_val = np.nanmin(data_means)*0.95
+            plt.boxplot(data_means)
+            plt.xticks(np.arange(len(unique_segment_names)) + 1,unique_segment_names,rotation=45)
+            plt.title(analysis)
+            for seg_ind, seg_name in enumerate(unique_segment_names):
+                animal_points = data_means[:,seg_ind]
+                nonnan_points = animal_points[~np.isnan(animal_points)]
+                animal_x_jitter = 0.1*np.random.randn(len(nonnan_points))
+                plt.scatter((seg_ind+1)*np.ones(len(nonnan_points)) + animal_x_jitter, nonnan_points, alpha=0.3, color='g')
+            #Now calculate pairwise significance
+            seg_pairs = list(combinations(np.arange(len(unique_segment_names)),2))
+            for sp in seg_pairs:
+                seg_1 = sp[0]
+                seg_1_data = bs_data_collection[:,seg_1]
+                seg_2 = sp[1]
+                seg_2_data = bs_data_collection[:,seg_2]
+                ttest_result = ttest_ind(seg_1_data[~np.isnan(seg_1_data)],seg_2_data[~np.isnan(seg_2_data)])
+                if ttest_result[1] <= 0.05:
+                    plt.plot([seg_1+1, seg_2+1],[max_val,max_val],color='k')
+                    max_val = max_val*1.05
+                    plt.scatter([seg_1+1+(seg_2-seg_1)/2],[max_val],marker='*',size=3,color='k')
+                    max_val = max_val*1.05
+            plt.ylim([min_val,max_val])
+            plt.tight_layout()
+            f.savefig(os.path.join(save_dir,analysis + '_means.png'))
+            f.savefig(os.path.join(save_dir,analysis + '_means.svg'))
+            plt.close(f_mean)
+            
+def cross_dataset_seg_compare_mean_diffs(seg_data,unique_given_names,unique_analysis_names,
+                              unique_segment_names,unique_bin_sizes,save_dir):
+    """This function takes data across animals and compares across segments the
+    differences in distribution means by bin size
+    INPUTS:
+            - seg_data: dictionary containing correlation data across conditions.
+                    length = number of datasets
+                    seg_data[name] = dictionary of dataset data
+                    seg_data[name]['seg_data'] = dict of length # analysis types
+                    seg_data[name]['seg_data'][analysis_names] = dict of length #segments
+                    seg_data[name]['seg_data'][analysis_names][seg_name] = dict of length #bins
+                    seg_data[name]['seg_data'][analysis_names][seg_name][bin_size] = numpy array of analysis data for that bin size
+            - unique_given_names: unique names of datasets
+            - unique_analysis_names: unique names of analysis types
+            - unique_segment_names: unique names of experimental segments
+            - unique_bin_sizes: unique bin sizes from individual animal segment analyses
+            - save_dir: where to save resulting plots
+    OUTPUTS: plots and statistical significance tests comparing segments to each other
+    """
+    
+    num_bins = len(unique_bin_sizes)
+    subplot_square = np.ceil(np.sqrt(num_bins)).astype('int')
+    subplot_inds_square = np.reshape(np.arange(subplot_square**2),(subplot_square,subplot_square))
+    
+    for analysis in unique_analysis_names:
+        if not os.path.isdir(os.path.join(save_dir,analysis)):
+            os.mkdir(os.path.join(save_dir,analysis))
+        try:
+            for bs_i, bs in enumerate(unique_bin_sizes):
+                bs_string = str(bs)
+                f_mean_diff = plt.figure(figsize = (10,7))
+                #Collect distribution means
+                bs_data_collection = np.nan*np.ones((len(unique_given_names),len(unique_segment_names)))
+                for name_ind, name in enumerate(unique_given_names):
+                    for seg_ind, seg_name in enumerate(unique_segment_names):
+                        try:
+                            animal_seg_data = seg_data[name]['seg_data'][analysis][seg_name][bs_string]
+                            bs_data_collection[name_ind,seg_ind] = np.nanmean(animal_seg_data)
+                        except:
+                            print(seg_name + " data not found for " + analysis + ' ' + name)
+                #Pairwise for an animal perform mean subtractions
+                seg_pairs = list(combinations(np.arange(len(unique_segment_names)),2))
+                bs_diff_data = np.nan*np.ones((len(unique_given_names),len(seg_pairs)))
+                bs_diff_labels = []
+                for sp_i, sp in enumerate(seg_pairs):
+                    seg_1 = sp[0]
+                    seg_1_data = bs_data_collection[:,seg_1]
+                    seg_1_name = unique_segment_names[seg_1]
+                    seg_2 = sp[1]
+                    seg_2_data = bs_data_collection[:,seg_2]
+                    seg_2_name = unique_segment_names[seg_2]
+                    bs_diff_data[:,sp_i] = seg_2_data - seg_1_data
+                    bs_diff_labels.extend([seg_2_name + ' - ' + seg_1_name])
+                #Plot the results
+                max_val = np.nanmax(bs_diff_data)*1.1
+                min_val = np.nanmin(bs_diff_data) - 0.05*np.abs(np.nanmin(bs_diff_data))
+                plt.axhline(0,alpha=0.3,color='k',linestyle='dashed')
+                plt.boxplot(bs_diff_data)
+                plt.xticks(np.arange(len(bs_diff_labels))+1,bs_diff_labels,rotation=45)
+                plt.title('Bin Size = ' + str(np.round(bs,2)))
+                for diff_ind, diff_name in enumerate(bs_diff_labels):
+                    animal_points = bs_diff_data[:,diff_ind]
+                    nonnan_points = animal_points[~np.isnan(animal_points)]
+                    animal_x_jitter = 0.1*np.random.randn(len(nonnan_points))
+                    plt.scatter((diff_ind+1)*np.ones(len(nonnan_points)) + animal_x_jitter, nonnan_points, alpha=0.3, color='g')
+                #Plot if the distribution is significantly above 0
+                for diff_i in range(len(bs_diff_labels)):
+                    fifth_percentile = np.percentile(bs_diff_data[:,diff_i],5)
+                    if fifth_percentile > 0:
+                        plt.scatter([diff_i + 1],[max_val],marker='*',color='k',s=12)
+                plt.ylim([min_val,max_val+1])
+                plt.tight_layout()
+                f_mean_diff.savefig(os.path.join(save_dir,analysis,'mean_diffs_bin_' + str(bs_i) + '.png'))
+                f_mean_diff.savefig(os.path.join(save_dir,analysis,'mean_diffs_bin_' + str(bs_i) + '.svg'))
+                plt.close(f_mean_diff)
+        except:
+            #No bins in this data!
+            print("Skipping " + analysis)
+            
+            
