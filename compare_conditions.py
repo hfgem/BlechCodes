@@ -11,6 +11,7 @@ if __name__ == '__main__':
 
     import os
     import easygui
+    import numpy as np
     from utils.replay_utils import import_metadata
     from utils.data_utils import import_data
     from functions.compare_conditions_analysis import run_compare_conditions_analysis
@@ -21,15 +22,20 @@ if __name__ == '__main__':
     blechcodes_dir = os.path.dirname(script_path)
 
     all_data_dict = dict()
-    corr_dir = ''
+    save_dir = ''
 
     # _____Prompt user if they'd like to use previously stored correlation data_____
-    print("If you previously started an analysis, you may have a corr_data.pkl file in the analysis folder.")
+    print("If you previously started an analysis, you may have a all_data_dict.npy file in the analysis folder.")
     bool_val = bool_input(
-        "Do you have a correlation pickle file stored you'd like to continue analyzing [y/n]? ")
+        "Do you have a file stored you'd like to continue analyzing [y/n]? ")
     if bool_val == 'y':
-        corr_dir = easygui.diropenbox(
+        save_dir = easygui.diropenbox(
             title='Please select the storage folder.')
+        try:
+            all_data_dict = np.load(os.path.join(save_dir,'all_data_dict.npy'),allow_pickle=True).item()
+        except:
+            print("All data dict not found in given save folder. Aborting.")
+            quit()
     else:
         # _____Prompt user for the number of datasets needed in the analysis_____
         print("Conditions include across days and across animals (the number of separate spike sorted datasets).")
@@ -82,4 +88,4 @@ if __name__ == '__main__':
         del nc
 
     # _____Pass Data to Analysis_____
-    run_compare_conditions_analysis([all_data_dict, corr_dir])
+    run_compare_conditions_analysis([all_data_dict, save_dir])
