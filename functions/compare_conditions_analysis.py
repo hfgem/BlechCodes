@@ -39,6 +39,10 @@ class run_compare_conditions_analysis():
                 self.import_seg_data()
             except:
                 self.gather_seg_data()
+            try:
+                self.import_rate_corr_data()
+            except:
+                self.gather_rate_corr_data()
         else:
             print("Please select a storage folder for results.")
             self.save_dir = easygui.diropenbox(
@@ -47,12 +51,16 @@ class run_compare_conditions_analysis():
                     self.all_data_dict,allow_pickle=True)
             self.gather_corr_data()
             self.gather_seg_data()
+            self.gather_rate_corr_data()
         #Correlation comparisons
         self.find_corr_groupings()
         self.plot_corr_results()
         #Segment comparisons
         self.find_seg_groupings()
         self.plot_seg_results()
+        #Pop Rate x Taste Corr comparisons
+        self.find_rate_corr_groupings()
+        self.plot_rate_corr_results()
 
     def import_corr(self,):
         """Import previously saved correlation data"""
@@ -264,8 +272,8 @@ class run_compare_conditions_analysis():
     def gather_seg_data(self,):
         """Import the relevant data from each dataset to be analyzed. This 
         includes the number of neurons, segments to analyze, segment names, 
-        segment start and end times, taste dig in names, and the correlation
-        data for all neurons and taste-selective neurons"""
+        segment start and end times, taste dig in names, and the segment
+        statistics data"""
 
         num_datasets = len(self.all_data_dict)
         dataset_names = list(self.all_data_dict.keys())
@@ -370,3 +378,111 @@ class run_compare_conditions_analysis():
         else:
            print("Not enough animals for segment comparison.")
         
+    def import_rate_corr_data(self,):
+        """Import previously saved pop rate x taste corr data"""
+        dict_save_dir = os.path.join(self.save_dir, 'rate_corr_data.npy')
+        rate_corr_data = np.load(dict_save_dir,allow_pickle=True).item()
+        self.rate_corr_data = rate_corr_data
+        if not os.path.isdir(os.path.join(self.save_dir,'Sliding_Correlation_Comparison')):
+            os.mkdir(os.path.join(self.save_dir,'Sliding_Correlation_Comparison'))
+        self.rate_corr_results_dir = os.path.join(self.save_dir,'Sliding_Correlation_Comparison')
+    
+    def gather_rate_corr_data(self,):
+        """Import the relevant data from each dataset to be analyzed. This 
+        includes the number of neurons, segments to analyze, segment names, 
+        segment start and end times, taste dig in names, and the population rate 
+        x taste correlation data for all sliding bins"""
+
+        num_datasets = len(self.all_data_dict)
+        dataset_names = list(self.all_data_dict.keys())
+        rate_corr_data = dict()
+        for n_i in range(num_datasets):
+            data_name = dataset_names[n_i]
+            data_dict = self.all_data_dict[data_name]['data']
+            metadata = self.all_data_dict[data_name]['metadata']
+            data_save_dir = data_dict['data_path']
+            rate_corr_save_dir = os.path.join(data_save_dir,'Sliding_Correlations')
+            num_corr_types = os.listdir(rate_corr_save_dir)
+            rate_corr_data[data_name] = dict()
+            rate_corr_data[data_name]['num_neur'] = data_dict['num_neur']
+            segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+            rate_corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
+            rate_corr_data[data_name]['segment_names'] = data_dict['segment_names']
+            segment_times = data_dict['segment_times']
+            num_segments = len(rate_corr_data[data_name]['segment_names'])
+            rate_corr_data[data_name]['segment_times_reshaped'] = [
+                [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+            dig_in_names = data_dict['dig_in_names']
+            rate_corr_data[data_name]['dig_in_names'] = dig_in_names
+            seg_names_to_analyze = np.array(rate_corr_data[data_name]['segment_names'])[segments_to_analyze]
+            rate_corr_data[data_name]['seg_data'] = dict()
+            for nct in range(len(num_corr_types)):
+                corr_type = num_corr_types[nct]
+                rate_corr_data[data_name]['seg_data'][corr_type] = dict()
+                corr_dir = os.path.join(rate_corr_save_dir,corr_type)
+                try:
+                    rate_corr_data[data_name]['seg_data'][corr_type] = np.load(os.path.join(corr_dir,'popfr_corr_storage.npy'), allow_pickle=True).item()
+                except:
+                    print("No population fr x taste correlation dictionary found for " + data_name + " corr " + corr_type)
+                #This data is organized by [seg_name][bin_size] gives the result array
+        self.rate_corr_data = rate_corr_data
+        np.save(os.path.join(self.save_dir, 'rate_corr_data.npy'),rate_corr_data,allow_pickle=True)
+        # Save the combined dataset somewhere...
+        # _____Analysis Storage Directory_____
+        if not os.path.isdir(os.path.join(self.save_dir,'Sliding_Correlation_Comparison')):
+            os.mkdir(os.path.join(self.save_dir,'Sliding_Correlation_Comparison'))
+        self.rate_corr_results_dir = os.path.join(self.save_dir,'Sliding_Correlation_Comparison')
+        
+    def find_rate_corr_groupings(self,):
+        """Across the different datasets, get the unique data names/indices,
+        correlation combinations and names/indices, unique segment names/indices,
+        and unique taste names/indices to align datasets to each other in these
+        different groups."""
+
+        rate_corr_data = self.rate_corr_data
+        unique_given_names = list(rate_corr_data.keys())
+        unique_given_indices = np.sort(
+            np.unique(unique_given_names, return_index=True)[1])
+        unique_given_names = [unique_given_names[i]
+                              for i in unique_given_indices]
+        unique_corr_types = np.array([list(rate_corr_data[name]['rate_corr_data'].keys()) for name in unique_given_names]).flatten()
+        unique_corr_indices = np.sort(
+            np.unique(unique_corr_types, return_index=True)[1])
+        unique_corr_types = [unique_corr_types[i] for i in unique_corr_indices]
+        unique_segment_names = []
+        unique_taste_names = []
+        for name in unique_given_names:
+            for corr_name in unique_corr_types:
+                try:
+                    segment_names = list(rate_corr_data[name]['rate_corr_data'][corr_name].keys())
+                    unique_segment_names.extend(segment_names)
+                    for seg_name in segment_names:
+                        taste_names = list(rate_corr_data[name]['rate_corr_data'][corr_name][seg_name].keys())
+                        unique_taste_names.extend(taste_names)
+                except:
+                    print(name + " does not have data for " + corr_name)
+        unique_segment_indices = np.sort(
+            np.unique(unique_segment_names, return_index=True)[1])
+        unique_segment_names = [unique_segment_names[i]
+                                for i in unique_segment_indices]
+        unique_taste_indices = np.sort(
+            np.unique(unique_taste_names, return_index=True)[1])
+        unique_taste_names = [unique_taste_names[i]
+                              for i in unique_taste_indices]
+
+        self.unique_given_names = unique_given_names
+        self.unique_corr_types = unique_corr_types
+        self.unique_segment_names = unique_segment_names
+        self.unique_taste_names = unique_taste_names
+    
+    def plot_rate_corr_results(self,):
+        num_cond = len(self.seg_data)
+        results_dir = self.rate_corr_results_dir
+
+        print("Beginning Plots.")
+        if num_cond > 1:
+            cdf.cross_dataset_pop_rate_taste_corr_plots(self.rate_corr_data, self.unique_given_names, 
+                                                        self.unique_corr_types, self.unique_segment_names, 
+                                                        self.unique_taste_names, self.results_dir)
+        else:
+           print("Not enough animals for segment comparison.")
