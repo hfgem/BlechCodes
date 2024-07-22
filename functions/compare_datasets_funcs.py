@@ -2270,4 +2270,119 @@ def cross_dataset_seg_compare_mean_diffs(seg_data,unique_given_names,unique_anal
             f_mean_diff.savefig(os.path.join(plot_save_dir,analysis,'mean_diffs_cross_bin.png'))
             f_mean_diff.savefig(os.path.join(plot_save_dir,analysis,'mean_diffs_cross_bin.svg'))
             plt.close(f_mean_diff)
+        
+def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names, 
+                                            unique_corr_types, unique_segment_names, 
+                                            unique_taste_names, results_dir):
+    """This function is dedicated to plotting statistics across datasets concerning
+    correlation between the population firing rate and binned taste correlation
+    calculations
+    INPUTS:
+        - rate_corr_data: dictionary containing rate correlation data with the
+            following structure:
+                - rate_corr_data[name] = data for specific dataset name
+                - rate_corr_data[name]['rate_corr_data'] = dictionary containing correlation data
+                - rate_corr_data[name]['rate_corr_data'][corr_type] = data for specific correlation type
+                - rate_corr_data[name]['rate_corr_data'][corr_type][seg_name] = data for specific segment
+                - rate_corr_data[name]['rate_corr_data'][corr_type][seg_name][taste_name] = # deliveries x # epochs correlation array
+        - unique_given_names: list of unique dataset names
+        - unique_corr_types: list of unique correlation type names
+        - unique_segment_names: list of unique segment names
+        - unique_taste_names: list of unique taste names
+        - results_dir: directory to save the results
+    OUTPUTS:
+        - plots with statistical tests of significance
+    """    
+    
+    #Calculate and store means of distributions across animals
+    mean_corr_dict = dict()
+    for corr_type in unique_corr_types:
+        mean_corr_dict[corr_type] = dict()
+        for taste in unique_taste_names:
+            mean_corr_dict[corr_type][taste] = dict()
+            for seg_name in unique_segment_names:
+                mean_corr_dict[corr_type][taste][seg_name] = dict()
             
+    for corr_type in unique_corr_types:
+        for taste_name in unique_taste_names:
+                for seg_name in unique_segment_names:
+                    seg_means = []
+                    for name in unique_given_names:
+                        try:
+                            corr_array = rate_corr_data[name]['rate_corr_data'][corr_type][seg_name][taste_name]
+                            seg_means.append(list(np.nanmean(corr_array,0)))
+                        except:
+                            print(name + ' does not contain ' + corr_type + ' segment ' + seg_name + ' taste ' + taste_name + ' data.')
+                    mean_corr_dict[corr_type][taste_name][seg_name] = np.array(seg_means)
+
+    #Create trend plots
+    taste_colors = ['g','b','purple','c','m','k']
+    for corr_type in unique_corr_types:
+        f, ax = plt.subplots(nrows = len(unique_segment_names), ncols = len(unique_taste_names), figsize = (4*len(unique_taste_names),4*len(unique_segment_names)))
+        f_mean, ax_mean = plt.subplots(nrows = len(unique_segment_names), ncols = 1, figsize = (4,4*len(unique_segment_names)))
+        max_mean = 0
+        min_mean = 0
+        for s_i, s_name in enumerate(unique_segment_names):
+            for t_i, t_name in enumerate(unique_taste_names):
+                corr_array = mean_corr_dict[corr_type][t_name][s_name]
+                if len(corr_array) > 0:
+                    corr_max = np.nanmax(corr_array)
+                    corr_min = np.nanmin(corr_array)
+                    ax[s_i,t_i].axhline(0,linestyle='solid',color='b',alpha=0.3)
+                    ax[s_i,t_i].boxplot(corr_array)
+                    x_vals = np.arange(np.shape(corr_array)[1])+1
+                    for d_i in range(np.shape(corr_array)[0]):
+                        animal_x_jitter = 0.1*np.random.randn(np.shape(corr_array)[1])
+                        ax[s_i,t_i].scatter(x_vals + animal_x_jitter, corr_array[d_i,:], alpha=0.3, color='g')
+                    ax[s_i,t_i].plot(x_vals,np.nanmean(corr_array,0),\
+                                     label='Mean',linestyle='dashed',alpha=0.5,color='k')
+                    ax_mean[s_i].plot(x_vals,np.nanmean(corr_array,0),label=t_name,color=taste_colors[t_i])
+                    ax[s_i,t_i].set_xticklabels(np.array(['Presence','Identity','Palatability']))
+                    ax_mean[s_i].set_xticks(x_vals,np.array(['Presence','Identity','Palatability'])) 
+                    if s_i == 0:
+                        ax[s_i,t_i].set_title(t_name)
+                        ax_mean[s_i].set_ylabel('Mean Correlation')
+                    if t_i == 0:
+                        ax[s_i,t_i].set_ylabel(s_name + '\nMean Correlation')
+                        ax_mean[s_i].set_title(s_name)
+                    ax_mean[s_i].legend(loc='lower right')
+                    #Now calculate pairwise significance
+                    epoch_pairs = list(combinations(np.arange(3),2))
+                    for ep in epoch_pairs:
+                        e_1 = ep[0]
+                        e_1_data = corr_array[:,e_1]
+                        e_2 = ep[1]
+                        e_2_data = corr_array[:,e_2]
+                        ttest_result = ttest_ind(e_1_data[~np.isnan(e_1_data)],e_2_data[~np.isnan(e_2_data)])
+                        if ttest_result[1] <= 0.05:
+                            ax[s_i,t_i].plot([e_1+1, e_2+1],[corr_max,corr_max],color='k')
+                            corr_max = corr_max*1.05
+                            ax[s_i,t_i].scatter([e_1+1+(e_2-e_1)/2],[corr_max],marker='*',s=3,c='k')
+                            corr_max = corr_max*1.05
+                    #Now calculate individual distribution significance > 0
+                    for e_i in range(3):
+                        fifth_percentile = np.percentile(corr_array[:,e_i],5)
+                        if 0 <= fifth_percentile:
+                            corr_max = corr_max*1.05
+                            ax[s_i,t_i].scatter([e_i+1],[corr_max],marker='*',s=3,c='b')
+                    if corr_min < min_mean:
+                        min_mean = corr_min
+                    if corr_max > max_mean:
+                        max_mean = corr_max
+        for s_i in range(len(unique_segment_names)):
+            ax_mean[s_i].set_ylim([min_mean - 0.1*np.abs(min_mean),max_mean + 0.1*max_mean])
+            for t_i in range(len(unique_taste_names)):
+                ax[s_i,t_i].set_ylim([min_mean - 0.1*np.abs(min_mean),max_mean + 0.1*max_mean])
+        f.suptitle(corr_type + ' Mean Correlation of Population Rate to Bin Taste Correlation')
+        plt.tight_layout()
+        f.savefig(os.path.join(results_dir,corr_type + '_mean_trends.png'))
+        f.savefig(os.path.join(results_dir,corr_type + '_mean_trends.svg'))
+        plt.close(f)
+        f_mean.suptitle(corr_type + ' Cross-Animal Mean Correlation of Population Rate to Bin Taste Correlation')
+        plt.tight_layout()
+        f_mean.savefig(os.path.join(results_dir,corr_type + '_cross_animal_mean_trends.png'))
+        f_mean.savefig(os.path.join(results_dir,corr_type + '_cross_animal_mean_trends.svg'))
+        plt.close(f_mean)
+            
+        
+        
