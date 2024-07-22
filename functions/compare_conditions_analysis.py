@@ -29,24 +29,35 @@ class run_compare_conditions_analysis():
     def __init__(self, args):
         self.all_data_dict = args[0]
         self.save_dir = args[1]
-        #Correlation comparisons
+        #Import/Load data
         if len(self.save_dir) > 0:
-            self.import_corr()
+            try:
+                self.import_corr()
+            except:
+                self.gather_corr_data()
+            try:
+                self.import_seg_data()
+            except:
+                self.gather_seg_data()
         else:
             print("Please select a storage folder for results.")
             self.save_dir = easygui.diropenbox(
                 title='Please select the storage folder.')
+            np.save(os.path.join(self.save_dir,'all_data_dict.npy'),\
+                    self.all_data_dict,allow_pickle=True)
             self.gather_corr_data()
+            self.gather_seg_data()
+        #Correlation comparisons
         self.find_corr_groupings()
         self.plot_corr_results()
         #Segment comparisons
+        self.find_seg_groupings()
+        self.plot_seg_results()
 
     def import_corr(self,):
         """Import previously saved correlation data"""
-        dict_save_dir = os.path.join(self.save_dir, 'corr_data.pkl')
-        file = open(dict_save_dir, 'rb')
-        corr_data = pickle.load(file)
-        file.close()
+        dict_save_dir = os.path.join(self.save_dir, 'corr_data.npy')
+        corr_data = np.load(dict_save_dir,allow_pickle=True).item()
         self.corr_data = corr_data
         if not os.path.isdir(os.path.join(self.save_dir,'Correlations')):
             os.mkdir(os.path.join(self.save_dir,'Correlations'))
@@ -83,36 +94,35 @@ class run_compare_conditions_analysis():
             corr_data[data_name]['corr_data'] = dict()
             for nct_i in range(len(num_corr_types)):
                 nct = num_corr_types[nct_i]
-                result_dir = os.path.join(dev_corr_save_dir, nct)
-                corr_data[data_name]['corr_data'][nct] = dict()
-                for s_i in segments_to_analyze:
-                    seg_name = corr_data[data_name]['segment_names'][s_i]
-                    corr_data[data_name]['corr_data'][nct][seg_name] = dict()
-                    for t_i in range(len(dig_in_names)):
-                        taste_name = dig_in_names[t_i]
-                        corr_data[data_name]['corr_data'][nct][seg_name][taste_name] = dict(
-                        )
-                        try:
-                            filename_pop_vec = os.path.join(
-                                result_dir, seg_name + '_' + taste_name + '_pop_vec.npy')
-                            data = np.load(filename_pop_vec)
-                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['data'] = data
-                            num_dev, num_deliv, num_cp = np.shape(data)
-                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_dev'] = num_dev
-                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_deliv'] = num_deliv
-                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_cp'] = num_cp
-                        except:
-                            print("No data in directory " + result_dir)
+                if nct[0] != '.':
+                    result_dir = os.path.join(dev_corr_save_dir, nct)
+                    corr_data[data_name]['corr_data'][nct] = dict()
+                    for s_i in segments_to_analyze:
+                        seg_name = corr_data[data_name]['segment_names'][s_i]
+                        corr_data[data_name]['corr_data'][nct][seg_name] = dict()
+                        for t_i in range(len(dig_in_names)):
+                            taste_name = dig_in_names[t_i]
+                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name] = dict(
+                            )
+                            try:
+                                filename_pop_vec = os.path.join(
+                                    result_dir, seg_name + '_' + taste_name + '_pop_vec.npy')
+                                data = np.load(filename_pop_vec)
+                                corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['data'] = data
+                                num_dev, num_deliv, num_cp = np.shape(data)
+                                corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_dev'] = num_dev
+                                corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_deliv'] = num_deliv
+                                corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_cp'] = num_cp
+                            except:
+                                print("No data in directory " + result_dir)
         self.corr_data = corr_data
+        dict_save_dir = os.path.join(self.save_dir, 'corr_data.npy')
+        np.save(dict_save_dir,corr_data,allow_pickle=True)
         # Save the combined dataset somewhere...
         # _____Analysis Storage Directory_____
         if not os.path.isdir(os.path.join(self.save_dir,'Correlations')):
             os.mkdir(os.path.join(self.save_dir,'Correlations'))
         self.corr_results_dir = os.path.join(self.save_dir,'Correlations')
-        # Save the dictionary of data
-        dict_save_dir = os.path.join(self.save_dir, 'corr_data.pkl')
-        f = open(dict_save_dir, "wb")
-        pickle.dump(corr_data, f)
 
     def find_corr_groupings(self,):
         """Across the different datasets, get the unique data names/indices,
@@ -126,8 +136,10 @@ class run_compare_conditions_analysis():
             np.unique(unique_given_names, return_index=True)[1])
         unique_given_names = [unique_given_names[i]
                               for i in unique_given_indices]
-        unique_corr_names = np.array([list(corr_data[name]['corr_data'].keys(
-        )) for name in unique_given_names]).flatten()  # How many types of correlation analyses
+        unique_corr_names = []
+        for name in unique_given_names:
+            unique_corr_names.extend(list(corr_data[name]['corr_data'].keys()))
+        unique_corr_names = np.array(unique_corr_names)
         unique_corr_indices = np.sort(
             np.unique(unique_corr_names, return_index=True)[1])
         unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
@@ -242,10 +254,8 @@ class run_compare_conditions_analysis():
 
     def import_seg_data(self,):
         """Import previously saved segment data"""
-        dict_save_dir = os.path.join(self.seg_dir, 'seg_data.pkl')
-        file = open(dict_save_dir, 'rb')
-        seg_data = pickle.load(file)
-        file.close()
+        dict_save_dir = os.path.join(self.save_dir, 'seg_data.npy')
+        seg_data = np.load(dict_save_dir,allow_pickle=True).item()
         self.seg_data = seg_data
         if not os.path.isdir(os.path.join(self.save_dir,'Segment_Comparison')):
             os.mkdir(os.path.join(self.save_dir,'Segment_Comparison'))
@@ -286,15 +296,12 @@ class run_compare_conditions_analysis():
                     np.load(dict_dir,allow_pickle=True).item()
                 #This data is organized by [seg_name][bin_size] gives the result array
         self.seg_data = seg_data
+        np.save(os.path.join(self.save_dir, 'seg_data.npy'),seg_data,allow_pickle=True)
         # Save the combined dataset somewhere...
         # _____Analysis Storage Directory_____
         if not os.path.isdir(os.path.join(self.save_dir,'Segment_Comparison')):
             os.mkdir(os.path.join(self.save_dir,'Segment_Comparison'))
         self.seg_results_dir = os.path.join(self.save_dir,'Segment_Comparison')
-        # Save the dictionary of data
-        dict_save_dir = os.path.join(self.save_dir, 'seg_data.pkl')
-        f = open(dict_save_dir, "wb")
-        pickle.dump(seg_data, f)
         
     def find_seg_groupings(self,):
         """Across the different datasets, get the unique data names/indices,
@@ -319,7 +326,7 @@ class run_compare_conditions_analysis():
             for analysis_name in unique_analysis_names:
                 try:
                     seg_to_analyze = seg_data[name]['segments_to_analyze']
-                    segment_names = seg_data[name]['segment_names']
+                    segment_names = np.array(seg_data[name]['segment_names'])
                     seg_names = list(
                         segment_names[seg_to_analyze])
                     unique_segment_names.extend(seg_names)
@@ -350,7 +357,12 @@ class run_compare_conditions_analysis():
 
         print("Beginning Plots.")
         if num_cond > 1:
-            cdf.cross_dataset_deg_compare(self.seg_data,self.unique_given_names,
+            cdf.cross_dataset_seg_compare_means(self.seg_data,self.unique_given_names,
+                                          self.unique_analysis_names,
+                                          self.unique_segment_names,
+                                          self.unique_bin_sizes,
+                                          results_dir)
+            cdf.cross_dataset_seg_compare_mean_diffs(self.seg_data,self.unique_given_names,
                                           self.unique_analysis_names,
                                           self.unique_segment_names,
                                           self.unique_bin_sizes,

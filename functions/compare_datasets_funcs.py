@@ -2060,7 +2060,7 @@ def cross_dataset_seg_compare_means(seg_data,unique_given_names,unique_analysis_
             plt.close(f_mean)
             
 def cross_dataset_seg_compare_mean_diffs(seg_data,unique_given_names,unique_analysis_names,
-                              unique_segment_names,unique_bin_sizes,save_dir):
+                              unique_segment_names,unique_bin_sizes,plot_save_dir):
     """This function takes data across animals and compares across segments the
     differences in distribution means by bin size
     INPUTS:
@@ -2075,7 +2075,7 @@ def cross_dataset_seg_compare_mean_diffs(seg_data,unique_given_names,unique_anal
             - unique_analysis_names: unique names of analysis types
             - unique_segment_names: unique names of experimental segments
             - unique_bin_sizes: unique bin sizes from individual animal segment analyses
-            - save_dir: where to save resulting plots
+            - plot_save_dir: where to save resulting plots
     OUTPUTS: plots and statistical significance tests comparing segments to each other
     """
     
@@ -2084,9 +2084,10 @@ def cross_dataset_seg_compare_mean_diffs(seg_data,unique_given_names,unique_anal
     subplot_inds_square = np.reshape(np.arange(subplot_square**2),(subplot_square,subplot_square))
     
     for analysis in unique_analysis_names:
-        if not os.path.isdir(os.path.join(save_dir,analysis)):
-            os.mkdir(os.path.join(save_dir,analysis))
+        if not os.path.isdir(os.path.join(plot_save_dir,analysis)):
+            os.mkdir(os.path.join(plot_save_dir,analysis))
         try:
+            #First do each bin individually
             for bs_i, bs in enumerate(unique_bin_sizes):
                 bs_string = str(bs)
                 f_mean_diff = plt.figure(figsize = (10,7))
@@ -2129,13 +2130,144 @@ def cross_dataset_seg_compare_mean_diffs(seg_data,unique_given_names,unique_anal
                     fifth_percentile = np.percentile(bs_diff_data[:,diff_i],5)
                     if fifth_percentile > 0:
                         plt.scatter([diff_i + 1],[max_val],marker='*',color='k',s=12)
+                #Now calculate pairwise significance
+                diff_pairs = list(combinations(np.arange(len(bs_diff_labels)),2))
+                for dp in diff_pairs:
+                    diff_1 = dp[0]
+                    diff_1_data = bs_diff_data[:,diff_1]
+                    diff_2 = dp[1]
+                    diff_2_data = bs_diff_data[:,diff_2]
+                    ttest_result = ttest_ind(diff_1_data[~np.isnan(diff_1_data)],diff_2_data[~np.isnan(diff_2_data)])
+                    if ttest_result[1] <= 0.05:
+                        plt.plot([diff_1+1, diff_2+1],[max_val,max_val],color='r')
+                        max_val = max_val*1.05
+                        plt.scatter([diff_1+1+(diff_2-diff_1)/2],[max_val],marker='*',s=3,c='r')
+                        max_val = max_val*1.05
                 plt.ylim([min_val,max_val+1])
                 plt.tight_layout()
-                f_mean_diff.savefig(os.path.join(save_dir,analysis,'mean_diffs_bin_' + str(bs_i) + '.png'))
-                f_mean_diff.savefig(os.path.join(save_dir,analysis,'mean_diffs_bin_' + str(bs_i) + '.svg'))
+                f_mean_diff.savefig(os.path.join(plot_save_dir,analysis,'mean_diffs_bin_' + str(bs_i) + '.png'))
+                f_mean_diff.savefig(os.path.join(plot_save_dir,analysis,'mean_diffs_bin_' + str(bs_i) + '.svg'))
                 plt.close(f_mean_diff)
+            #Next combine all bin data into one distribution and calculate mean
+            f_mean_diff = plt.figure(figsize = (7,4))
+            #Collect distribution means
+            bs_data_collection = np.nan*np.ones((len(unique_given_names),len(unique_segment_names)))
+            for name_ind, name in enumerate(unique_given_names):
+                for seg_ind, seg_name in enumerate(unique_segment_names):
+                    all_bin_data = []
+                    for bs_i, bs in enumerate(unique_bin_sizes):
+                        bs_string = str(bs)
+                        try:
+                            animal_seg_data = seg_data[name]['seg_data'][analysis][seg_name][bs_string]
+                            try:
+                                all_bin_data.extend(list(animal_seg_data))
+                            except:
+                                all_bin_data.extend([animal_seg_data])
+                        except:
+                            print(seg_name + " data not found for " + analysis + ' ' + name + ' bin ' + bs_string)
+                    bs_data_collection[name_ind,seg_ind] = np.nanmean(all_bin_data)
+            #Pairwise for an animal perform mean subtractions
+            seg_pairs = list(combinations(np.arange(len(unique_segment_names)),2))
+            bs_diff_data = np.nan*np.ones((len(unique_given_names),len(seg_pairs)))
+            bs_diff_labels = []
+            for sp_i, sp in enumerate(seg_pairs):
+                seg_1 = sp[0]
+                seg_1_data = bs_data_collection[:,seg_1]
+                seg_1_name = unique_segment_names[seg_1]
+                seg_2 = sp[1]
+                seg_2_data = bs_data_collection[:,seg_2]
+                seg_2_name = unique_segment_names[seg_2]
+                bs_diff_data[:,sp_i] = seg_2_data - seg_1_data
+                bs_diff_labels.extend([seg_2_name + ' - ' + seg_1_name])
+            #Plot the results
+            max_val = np.nanmax(bs_diff_data)*1.1
+            min_val = np.nanmin(bs_diff_data) - 0.05*np.abs(np.nanmin(bs_diff_data))
+            plt.axhline(0,alpha=0.3,color='k',linestyle='dashed')
+            plt.boxplot(bs_diff_data)
+            plt.xticks(np.arange(len(bs_diff_labels))+1,bs_diff_labels,rotation=45)
+            plt.title('Mean ' + analysis + ' Across Bins')
+            for diff_ind, diff_name in enumerate(bs_diff_labels):
+                animal_points = bs_diff_data[:,diff_ind]
+                nonnan_points = animal_points[~np.isnan(animal_points)]
+                animal_x_jitter = 0.1*np.random.randn(len(nonnan_points))
+                plt.scatter((diff_ind+1)*np.ones(len(nonnan_points)) + animal_x_jitter, nonnan_points, alpha=0.3, color='g')
+            #Plot if the distribution is significantly above 0
+            for diff_i in range(len(bs_diff_labels)):
+                fifth_percentile = np.percentile(bs_diff_data[:,diff_i],5)
+                if fifth_percentile > 0:
+                    plt.scatter([diff_i + 1],[max_val],marker='*',color='k',s=12)
+            #Now calculate pairwise significance
+            diff_pairs = list(combinations(np.arange(len(bs_diff_labels)),2))
+            for dp in diff_pairs:
+                diff_1 = dp[0]
+                diff_1_data = bs_diff_data[:,diff_1]
+                diff_2 = dp[1]
+                diff_2_data = bs_diff_data[:,diff_2]
+                ttest_result = ttest_ind(diff_1_data[~np.isnan(diff_1_data)],diff_2_data[~np.isnan(diff_2_data)])
+                if ttest_result[1] <= 0.05:
+                    plt.plot([diff_1+1, diff_2+1],[max_val,max_val],color='r')
+                    max_val = max_val*1.05
+                    plt.scatter([diff_1+1+(diff_2-diff_1)/2],[max_val],marker='*',s=3,c='r')
+                    max_val = max_val*1.05
+            plt.ylim([min_val,max_val + 0.25*max_val])
+            plt.tight_layout()
+            f_mean_diff.savefig(os.path.join(plot_save_dir,analysis,'mean_diffs_cross_bin.png'))
+            f_mean_diff.savefig(os.path.join(plot_save_dir,analysis,'mean_diffs_cross_bin.svg'))
+            plt.close(f_mean_diff)
         except:
             #No bins in this data!
-            print("Skipping " + analysis)
-            
+            f_mean_diff = plt.figure(figsize=(7,4))
+            seg_mean_data = np.nan*np.ones((len(unique_given_names),len(unique_segment_names)))
+            for name_ind, name in enumerate(unique_given_names):
+                for seg_ind, seg_name in enumerate(unique_segment_names):
+                    animal_seg_data = seg_data[name]['seg_data'][analysis][seg_name]
+                    seg_mean_data[name_ind,seg_ind] = np.nanmean(animal_seg_data)
+            #Now calculate pairwise differences
+            seg_pairs = list(combinations(np.arange(len(unique_segment_names)),2))
+            bs_diff_data = np.nan*np.ones((len(unique_given_names),len(seg_pairs)))
+            bs_diff_labels = []
+            for sp_i, sp in enumerate(seg_pairs):
+                seg_1 = sp[0]
+                seg_1_data = seg_mean_data[:,seg_1]
+                seg_1_name = unique_segment_names[seg_1]
+                seg_2 = sp[1]
+                seg_2_data = seg_mean_data[:,seg_2]
+                seg_2_name = unique_segment_names[seg_2]
+                bs_diff_data[:,sp_i] = seg_2_data - seg_1_data
+                bs_diff_labels.extend([seg_2_name + ' - ' + seg_1_name])
+            #Plot the results
+            max_val = np.nanmax(bs_diff_data)*1.1
+            min_val = np.nanmin(bs_diff_data) - 0.05*np.abs(np.nanmin(bs_diff_data))
+            plt.axhline(0,alpha=0.3,color='k',linestyle='dashed')
+            plt.boxplot(bs_diff_data)
+            plt.xticks(np.arange(len(bs_diff_labels))+1,bs_diff_labels,rotation=45)
+            plt.title('Mean ' + analysis + ' Across Bins')
+            for diff_ind, diff_name in enumerate(bs_diff_labels):
+                animal_points = bs_diff_data[:,diff_ind]
+                nonnan_points = animal_points[~np.isnan(animal_points)]
+                animal_x_jitter = 0.1*np.random.randn(len(nonnan_points))
+                plt.scatter((diff_ind+1)*np.ones(len(nonnan_points)) + animal_x_jitter, nonnan_points, alpha=0.3, color='g')
+            #Plot if the distribution is significantly above 0
+            for diff_i in range(len(bs_diff_labels)):
+                fifth_percentile = np.percentile(bs_diff_data[:,diff_i],5)
+                if fifth_percentile > 0:
+                    plt.scatter([diff_i + 1],[max_val],marker='*',color='k',s=12)
+            #Now calculate pairwise significance
+            diff_pairs = list(combinations(np.arange(len(bs_diff_labels)),2))
+            for dp in diff_pairs:
+                diff_1 = dp[0]
+                diff_1_data = bs_diff_data[:,diff_1]
+                diff_2 = dp[1]
+                diff_2_data = bs_diff_data[:,diff_2]
+                ttest_result = ttest_ind(diff_1_data[~np.isnan(diff_1_data)],diff_2_data[~np.isnan(diff_2_data)])
+                if ttest_result[1] <= 0.05:
+                    plt.plot([diff_1+1, diff_2+1],[max_val,max_val],color='r')
+                    max_val = max_val*1.05
+                    plt.scatter([diff_1+1+(diff_2-diff_1)/2],[max_val],marker='*',s=3,c='r')
+                    max_val = max_val*1.05
+            plt.ylim([min_val,max_val + 0.25*max_val])
+            plt.tight_layout()
+            f_mean_diff.savefig(os.path.join(plot_save_dir,analysis,'mean_diffs_cross_bin.png'))
+            f_mean_diff.savefig(os.path.join(plot_save_dir,analysis,'mean_diffs_cross_bin.svg'))
+            plt.close(f_mean_diff)
             
