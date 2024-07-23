@@ -7,8 +7,13 @@ Created on Fri Mar 29 14:57:17 2024
 
 This file contains utility functions to support replay analysis pipeline
 """
-
-import easygui, glob, os, json, csv, shutil
+import os
+import json
+import csv
+import easygui
+import glob 
+import shutil
+from tkinter.filedialog import askdirectory
 
 class import_metadata():
 	
@@ -21,7 +26,7 @@ class import_metadata():
 		self.load_info()
 		
 	def get_dir_name(self,):
-		dir_name = easygui.diropenbox(msg = 'Please select data directory')
+		dir_name = askdirectory()
 		if dir_name[-1] != '/':
 			dir_name += '/'
 		return dir_name

@@ -205,6 +205,12 @@ def calculate_dev_stats(rasters, times, iteration_names, save_dir, iterations_to
     dpf.plot_dev_stats_dict(num_neur_dict, iteration_names_to_analyze,
                             'Total Neuron Count', save_dir, 'Segment', '# Neurons')
 
+    #Save dictionaries to save dir
+    np.save(os.path.join(save_dir,'length_dict.npy'),length_dict,allow_pickle=True)
+    np.save(os.path.join(save_dir,'IDI_dict.npy'),IDI_dict,allow_pickle=True)
+    np.save(os.path.join(save_dir,'num_spike_dict.npy'),num_spike_dict,allow_pickle=True)
+    np.save(os.path.join(save_dir,'num_neur_dict.npy'),num_neur_dict,allow_pickle=True)
+
     return length_dict, IDI_dict, num_spike_dict, num_neur_dict
 
 
