@@ -191,75 +191,78 @@ warnings.filterwarnings("ignore")
 num_datasets = len(all_data_dict)
 dataset_names = list(all_data_dict.keys())
 
-#%% Deviation Analysis to save dicts
-
-import os
-import json
-import gzip
-import itertools
-import tqdm
-from multiprocessing import Pool
-
-current_path = os.path.realpath(__file__)
-blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
-os.chdir(blech_codes_path)
-
-import functions.dev_plot_funcs as dpf
-import functions.dev_funcs as df
-
-segment_names = data_dict['segment_names']
-num_segments = len(segment_names)
-segment_spike_times = data_dict['segment_spike_times']
-local_size = metadata['params_dict']['local_size']
-min_dev_size = metadata['params_dict']['min_dev_size']
-segment_times = data_dict['segment_times']
-segment_times_reshaped = [
-    [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
-segment_times_reshaped = segment_times_reshaped
-segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-# Create deviation storage directory
-dev_dir = metadata['dir_name'] + 'Deviations/'
-if os.path.isdir(dev_dir) == False:
-    os.mkdir(dev_dir)
+dev_stats_data = dict()
+for n_i in range(num_datasets):
+    data_name = dataset_names[n_i]
+    data_dict = all_data_dict[data_name]['data']
+    metadata = all_data_dict[data_name]['metadata']
+    data_save_dir = data_dict['data_path']
     
-segment_names = data_dict['segment_names']
+    dev_stats_save_dir = os.path.join(
+        data_save_dir, 'Deviations')
+    dev_dir_files = os.listdir(dev_stats_save_dir)
+    dev_dict_dirs = []
+    for dev_f in dev_dir_files:
+        if dev_f[-4:] == '.npy':
+            dev_dict_dirs.append(dev_f)
+    dev_stats_data[data_name] = dict()
+    dev_stats_data[data_name]['num_neur'] = data_dict['num_neur']
+    segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+    dev_stats_data[data_name]['segments_to_analyze'] = segments_to_analyze
+    dev_stats_data[data_name]['segment_names'] = data_dict['segment_names']
+    segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
+    segment_times = data_dict['segment_times']
+    num_segments = len(dev_stats_data[data_name]['segment_names'])
+    dev_stats_data[data_name]['segment_times_reshaped'] = [
+        [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+    dig_in_names = data_dict['dig_in_names']
+    dev_stats_data[data_name]['dig_in_names'] = dig_in_names
+    dev_stats_data[data_name]['dev_stats'] = dict()
+    for stat_i in range(len(dev_dict_dirs)):
+        stat_dir_name = dev_dict_dirs[stat_i]
+        stat_name = stat_dir_name.split('.')[0]
+        result_dir = os.path.join(dev_stats_save_dir, stat_dir_name)
+        result_dict = np.load(result_dir,allow_pickle=True).item()
+        dev_stats_data[data_name]['dev_stats'][stat_name] = dict()
+        for s_i, s_name in enumerate(segment_names_to_analyze):
+            dev_stats_data[data_name]['dev_stats'][stat_name][s_name] = result_dict[s_i]
+            
+dict_save_dir = os.path.join(save_dir, 'dev_stats_data.npy')
+np.save(dict_save_dir,dev_stats_data,allow_pickle=True)
+# _____Analysis Storage Directory_____
+if not os.path.isdir(os.path.join(save_dir,'Dev_Stats')):
+    os.mkdir(os.path.join(save_dir,'Dev_Stats'))
+dev_stats_results_dir = os.path.join(save_dir,'Dev_Stats')
 
-print("\tNow importing calculated deviations")
-segment_deviations = []
-for s_i in tqdm.tqdm(segments_to_analyze):
-    filepath = dev_dir + segment_names[s_i] + '/deviations.json'
-    with gzip.GzipFile(filepath, mode="r") as f:
-        json_bytes = f.read()
-        json_str = json_bytes.decode('utf-8')
-        data = json.loads(json_str)
-        segment_deviations.append(data)
+unique_given_names = list(dev_stats_data.keys())
+unique_given_indices = np.sort(
+    np.unique(unique_given_names, return_index=True)[1])
+unique_given_names = [unique_given_names[i]
+                      for i in unique_given_indices]
+unique_dev_stats_names = []
+for name in unique_given_names:
+    unique_dev_stats_names.extend(list(dev_stats_data[name]['dev_stats'].keys()))
+unique_dev_stats_names = np.array(unique_dev_stats_names)
+unique_dev_stats_indices = np.sort(
+    np.unique(unique_dev_stats_names, return_index=True)[1])
+unique_dev_stats_names = [unique_dev_stats_names[i] for i in unique_dev_stats_indices]
+unique_segment_names = []
+for name in unique_given_names:
+    for dev_stat_name in unique_dev_stats_names:
+        try:
+            seg_names = list(
+                dev_stats_data[name]['dev_stats'][dev_stat_name].keys())
+            unique_segment_names.extend(seg_names)
+        except:
+            print(name + " does not have correlation data for " + dev_stat_name)
+unique_segment_indices = np.sort(
+    np.unique(unique_segment_names, return_index=True)[1])
+unique_segment_names = [unique_segment_names[i]
+                        for i in unique_segment_indices]
 
-num_segments = len(segments_to_analyze)
-segment_spike_times = [data_dict['segment_spike_times'][i]
-                       for i in segments_to_analyze]
-segment_times_reshaped = [segment_times_reshaped[i]
-                          for i in segments_to_analyze]
-segment_deviations = segment_deviations
-z_bin = metadata['params_dict']['z_bin']
-# _____Pull rasters of deviations and plot_____
-# Calculate segment deviation spikes
-print("\tNow pulling true deviation rasters")
-segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments,
-                                                                                                        segment_spike_times,
-                                                                                                        segment_times_reshaped,
-                                                                                                        segment_deviations, z_bin)
+num_cond = len(dev_stats_data)
 
-pre_taste = metadata['params_dict']['pre_taste']
-post_taste = metadata['params_dict']['post_taste']
-min_dev_size = metadata['params_dict']['min_dev_size']
-segment_names = [data_dict['segment_names'][i]
-                 for i in segments_to_analyze]
-max_plot = metadata['params_dict']['max_plot']
+cdf.cross_dataset_dev_stats_plots(dev_stats_data, unique_given_names, 
+                                            unique_dev_stats_names, unique_segment_names, 
+                                            dev_stats_results_dir)
 
-segment_names = [data_dict['segment_names'][i]
-                 for i in segments_to_analyze]
-
-# _____Calculate segment deviation statistics - length,IDI_____
-print("\tNow calculating and plotting true deviation statistics")
-segment_length_dict, segment_IDI_dict, segment_num_spike_dict, segment_num_neur_dict = df.calculate_dev_stats(segment_dev_rasters,
-                                                                                                              segment_dev_times, segment_names, dev_dir)

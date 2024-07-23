@@ -43,6 +43,10 @@ class run_compare_conditions_analysis():
                 self.import_rate_corr_data()
             except:
                 self.gather_rate_corr_data()
+            try:
+                self.import_dev_stats()
+            except:
+                self.gather_dev_stats_data()
         else:
             print("Please select a storage folder for results.")
             self.save_dir = easygui.diropenbox(
@@ -52,6 +56,7 @@ class run_compare_conditions_analysis():
             self.gather_corr_data()
             self.gather_seg_data()
             self.gather_rate_corr_data()
+            self.gather_dev_stats_data()
         #Correlation comparisons
         self.find_corr_groupings()
         self.plot_corr_results()
@@ -61,6 +66,9 @@ class run_compare_conditions_analysis():
         #Pop Rate x Taste Corr comparisons
         self.find_rate_corr_groupings()
         self.plot_rate_corr_results()
+        #Deviation Statistic comparisons
+        self.find_dev_stats_groupings()
+        self.plot_dev_stat_results()
 
     def import_corr(self,):
         """Import previously saved correlation data"""
@@ -486,3 +494,117 @@ class run_compare_conditions_analysis():
                                                         self.unique_taste_names, self.results_dir)
         else:
            print("Not enough animals for segment comparison.")
+           
+    def import_dev_stats(self,):
+        """Import previously saved correlation data"""
+        dict_save_dir = os.path.join(self.save_dir, 'dev_stats_data.npy')
+        dev_stats_data = np.load(dict_save_dir,allow_pickle=True).item()
+        self.dev_stats_data = dev_stats_data
+        if not os.path.isdir(os.path.join(self.save_dir,'Dev_Stats')):
+            os.mkdir(os.path.join(self.save_dir,'Dev_Stats'))
+        self.dev_stats_results_dir = os.path.join(self.save_dir,'Dev_Stats')
+
+    def gather_dev_stats_data(self,):
+        """Import the relevant data from each dataset to be analyzed. This 
+        includes the number of neurons, segments to analyze, segment names, 
+        segment start and end times, taste dig in names, and the correlation
+        data for all neurons and taste-selective neurons"""
+
+        num_datasets = len(self.all_data_dict)
+        dataset_names = list(self.all_data_dict.keys())
+        dev_stats_data = dict()
+        for n_i in range(num_datasets):
+            data_name = dataset_names[n_i]
+            data_dict = self.all_data_dict[data_name]['data']
+            metadata = self.all_data_dict[data_name]['metadata']
+            data_save_dir = data_dict['data_path']
+            
+            dev_stats_save_dir = os.path.join(
+                data_save_dir, 'Deviations')
+            dev_dir_files = os.listdir(dev_stats_save_dir)
+            dev_dict_dirs = []
+            for dev_f in dev_dir_files:
+                if dev_f[-4:] == '.npy':
+                    dev_dict_dirs.append(dev_f)
+            dev_stats_data[data_name] = dict()
+            dev_stats_data[data_name]['num_neur'] = data_dict['num_neur']
+            segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+            dev_stats_data[data_name]['segments_to_analyze'] = segments_to_analyze
+            dev_stats_data[data_name]['segment_names'] = data_dict['segment_names']
+            segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
+            segment_times = data_dict['segment_times']
+            num_segments = len(dev_stats_data[data_name]['segment_names'])
+            dev_stats_data[data_name]['segment_times_reshaped'] = [
+                [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+            dig_in_names = data_dict['dig_in_names']
+            dev_stats_data[data_name]['dig_in_names'] = dig_in_names
+            dev_stats_data[data_name]['dev_stats'] = dict()
+            for stat_i in range(len(dev_dict_dirs)):
+                stat_dir_name = dev_dict_dirs[stat_i]
+                stat_name = stat_dir_name.split('.')[0]
+                result_dir = os.path.join(dev_stats_save_dir, stat_dir_name)
+                result_dict = np.load(result_dir,allow_pickle=True).item()
+                dev_stats_data[data_name]['dev_stats'][stat_name] = dict()
+                for s_i, s_name in enumerate(segment_names_to_analyze):
+                    dev_stats_data[data_name]['dev_stats'][stat_name][s_name] = result_dict[s_i]
+                    
+        self.dev_stats_data = dev_stats_data
+        dict_save_dir = os.path.join(self.save_dir, 'dev_stats_data.npy')
+        np.save(dict_save_dir,dev_stats_data,allow_pickle=True)
+        # _____Analysis Storage Directory_____
+        if not os.path.isdir(os.path.join(self.save_dir,'Dev_Stats')):
+            os.mkdir(os.path.join(self.save_dir,'Dev_Stats'))
+        self.dev_stats_results_dir = os.path.join(self.save_dir,'Dev_Stats')
+
+    def find_dev_stats_groupings(self,):
+        """Across the different datasets, get the unique data names/indices,
+        deviation statistic combinations and names/indices, and unique segment 
+        names/indices to align datasets to each other in these
+        different groups."""
+
+        dev_stats_data = self.dev_stats_data
+        unique_given_names = list(dev_stats_data.keys())
+        unique_given_indices = np.sort(
+            np.unique(unique_given_names, return_index=True)[1])
+        unique_given_names = [unique_given_names[i]
+                              for i in unique_given_indices]
+        unique_dev_stats_names = []
+        for name in unique_given_names:
+            unique_dev_stats_names.extend(list(dev_stats_data[name]['dev_stats'].keys()))
+        unique_dev_stats_names = np.array(unique_dev_stats_names)
+        unique_dev_stats_indices = np.sort(
+            np.unique(unique_dev_stats_names, return_index=True)[1])
+        unique_dev_stats_names = [unique_dev_stats_names[i] for i in unique_dev_stats_indices]
+        unique_segment_names = []
+        for name in unique_given_names:
+            for dev_stat_name in unique_dev_stats_names:
+                try:
+                    seg_names = list(
+                        dev_stats_data[name]['dev_stats'][dev_stat_name].keys())
+                    unique_segment_names.extend(seg_names)
+                except:
+                    print(name + " does not have correlation data for " + dev_stat_name)
+        unique_segment_indices = np.sort(
+            np.unique(unique_segment_names, return_index=True)[1])
+        unique_segment_names = [unique_segment_names[i]
+                                for i in unique_segment_indices]
+        
+        self.unique_given_names = unique_given_names
+        self.unique_dev_stats_names = unique_dev_stats_names
+        self.unique_segment_names = unique_segment_names
+
+    def plot_dev_stat_results(self,):
+        num_cond = len(self.dev_stats_data)
+        results_dir = self.dev_stats_results_dir
+
+        print("Beginning Plots.")
+        if num_cond > 1:
+            cdf.cross_dataset_dev_stats_plots(self.dev_stats_data, self.unique_given_names, 
+                                              self.unique_dev_stats_names, 
+                                              self.unique_segment_names, 
+                                              results_dir)
+        else:
+            print("Not enough animals for cross-animal dev stat plots.")
+
+           
+           
