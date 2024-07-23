@@ -191,77 +191,78 @@ warnings.filterwarnings("ignore")
 num_datasets = len(all_data_dict)
 dataset_names = list(all_data_dict.keys())
 
-
-rate_corr_data = dict()
+dev_stats_data = dict()
 for n_i in range(num_datasets):
     data_name = dataset_names[n_i]
     data_dict = all_data_dict[data_name]['data']
     metadata = all_data_dict[data_name]['metadata']
     data_save_dir = data_dict['data_path']
-    rate_corr_save_dir = os.path.join(data_save_dir,'Sliding_Correlations')
-    num_corr_types = os.listdir(rate_corr_save_dir)
-    rate_corr_data[data_name] = dict()
-    rate_corr_data[data_name]['num_neur'] = data_dict['num_neur']
+    
+    dev_stats_save_dir = os.path.join(
+        data_save_dir, 'Deviations')
+    dev_dir_files = os.listdir(dev_stats_save_dir)
+    dev_dict_dirs = []
+    for dev_f in dev_dir_files:
+        if dev_f[-4:] == '.npy':
+            dev_dict_dirs.append(dev_f)
+    dev_stats_data[data_name] = dict()
+    dev_stats_data[data_name]['num_neur'] = data_dict['num_neur']
     segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-    rate_corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
-    rate_corr_data[data_name]['segment_names'] = data_dict['segment_names']
+    dev_stats_data[data_name]['segments_to_analyze'] = segments_to_analyze
+    dev_stats_data[data_name]['segment_names'] = data_dict['segment_names']
+    segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
     segment_times = data_dict['segment_times']
-    num_segments = len(rate_corr_data[data_name]['segment_names'])
-    rate_corr_data[data_name]['segment_times_reshaped'] = [
+    num_segments = len(dev_stats_data[data_name]['segment_names'])
+    dev_stats_data[data_name]['segment_times_reshaped'] = [
         [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
     dig_in_names = data_dict['dig_in_names']
-    rate_corr_data[data_name]['dig_in_names'] = dig_in_names
-    seg_names_to_analyze = np.array(rate_corr_data[data_name]['segment_names'])[segments_to_analyze]
-    rate_corr_data[data_name]['rate_corr_data'] = dict()
-    for nct in range(len(num_corr_types)):
-        corr_type = num_corr_types[nct]
-        rate_corr_data[data_name]['rate_corr_data'][corr_type] = dict()
-        corr_dir = os.path.join(rate_corr_save_dir,corr_type)
-        try:
-            rate_corr_data[data_name]['rate_corr_data'][corr_type] = np.load(os.path.join(corr_dir,'popfr_corr_storage.npy'), allow_pickle=True).item()
-        except:
-            print("No population fr x taste correlation dictionary found for " + data_name + " corr " + corr_type)
-        #This data is organized by [seg_name][bin_size] gives the result array
-np.save(os.path.join(save_dir, 'rate_corr_data.npy'),rate_corr_data,allow_pickle=True)
-# Save the combined dataset somewhere...
+    dev_stats_data[data_name]['dig_in_names'] = dig_in_names
+    dev_stats_data[data_name]['dev_stats'] = dict()
+    for stat_i in range(len(dev_dict_dirs)):
+        stat_dir_name = dev_dict_dirs[stat_i]
+        stat_name = stat_dir_name.split('.')[0]
+        result_dir = os.path.join(dev_stats_save_dir, stat_dir_name)
+        result_dict = np.load(result_dir,allow_pickle=True).item()
+        dev_stats_data[data_name]['dev_stats'][stat_name] = dict()
+        for s_i, s_name in enumerate(segment_names_to_analyze):
+            dev_stats_data[data_name]['dev_stats'][stat_name][s_name] = result_dict[s_i]
+            
+dict_save_dir = os.path.join(save_dir, 'dev_stats_data.npy')
+np.save(dict_save_dir,dev_stats_data,allow_pickle=True)
 # _____Analysis Storage Directory_____
-if not os.path.isdir(os.path.join(save_dir,'Sliding_Correlation_Comparison')):
-    os.mkdir(os.path.join(save_dir,'Sliding_Correlation_Comparison'))
-rate_corr_results_dir = os.path.join(save_dir,'Sliding_Correlation_Comparison')
+if not os.path.isdir(os.path.join(save_dir,'Dev_Stats')):
+    os.mkdir(os.path.join(save_dir,'Dev_Stats'))
+dev_stats_results_dir = os.path.join(save_dir,'Dev_Stats')
 
-unique_given_names = list(rate_corr_data.keys())
+unique_given_names = list(dev_stats_data.keys())
 unique_given_indices = np.sort(
     np.unique(unique_given_names, return_index=True)[1])
 unique_given_names = [unique_given_names[i]
                       for i in unique_given_indices]
-unique_corr_types = []
+unique_dev_stats_names = []
+for name in unique_given_names:
+    unique_dev_stats_names.extend(list(dev_stats_data[name]['dev_stats'].keys()))
+unique_dev_stats_names = np.array(unique_dev_stats_names)
+unique_dev_stats_indices = np.sort(
+    np.unique(unique_dev_stats_names, return_index=True)[1])
+unique_dev_stats_names = [unique_dev_stats_names[i] for i in unique_dev_stats_indices]
 unique_segment_names = []
-unique_taste_names = []
 for name in unique_given_names:
-    unique_corr_types.extend(list(rate_corr_data[name]['rate_corr_data'].keys()))
-unique_corr_indices = np.sort(np.unique(unique_corr_types, return_index=True)[1])
-unique_corr_types = [unique_corr_types[i] for i in unique_corr_indices]
-for name in unique_given_names:
-    for corr_name in unique_corr_types:
+    for dev_stat_name in unique_dev_stats_names:
         try:
-            segment_names = list(rate_corr_data[name]['rate_corr_data'][corr_name].keys())
-            unique_segment_names.extend(segment_names)
-            for seg_name in segment_names:
-                taste_names = list(rate_corr_data[name]['rate_corr_data'][corr_name][seg_name].keys())
-                unique_taste_names.extend(taste_names)
+            seg_names = list(
+                dev_stats_data[name]['dev_stats'][dev_stat_name].keys())
+            unique_segment_names.extend(seg_names)
         except:
-            print(name + " does not have data for " + corr_name)
+            print(name + " does not have correlation data for " + dev_stat_name)
 unique_segment_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i]
                         for i in unique_segment_indices]
-unique_taste_indices = np.sort(
-    np.unique(unique_taste_names, return_index=True)[1])
-unique_taste_names = [unique_taste_names[i]
-                      for i in unique_taste_indices]
 
-results_dir = rate_corr_results_dir
+num_cond = len(dev_stats_data)
 
-cdf.cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names, 
-                                            unique_corr_types, unique_segment_names, 
-                                            unique_taste_names, results_dir)
+cdf.cross_dataset_dev_stats_plots(dev_stats_data, unique_given_names, 
+                                            unique_dev_stats_names, unique_segment_names, 
+                                            dev_stats_results_dir)
+
