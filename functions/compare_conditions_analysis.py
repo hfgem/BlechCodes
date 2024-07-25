@@ -47,6 +47,10 @@ class run_compare_conditions_analysis():
                 self.import_dev_stats()
             except:
                 self.gather_dev_stats_data()
+            try:
+                self.import_dev_null_stats()
+            except:
+                self.gather_dev_null_data()
         else:
             print("Please select a storage folder for results.")
             self.save_dir = easygui.diropenbox(
@@ -57,6 +61,7 @@ class run_compare_conditions_analysis():
             self.gather_seg_data()
             self.gather_rate_corr_data()
             self.gather_dev_stats_data()
+            self.gather_dev_null_data()
         #Correlation comparisons
         self.find_corr_groupings()
         self.plot_corr_results()
@@ -70,7 +75,8 @@ class run_compare_conditions_analysis():
         self.find_dev_stats_groupings()
         self.plot_dev_stat_results()
         #Deviation True x Null comparisons
-        
+        self.find_dev_null_groupings()
+        self.plot_dev_null_results()
 
     def import_corr(self,):
         """Import previously saved correlation data"""
@@ -696,30 +702,22 @@ class run_compare_conditions_analysis():
             np.unique(unique_dev_null_names, return_index=True)[1])
         unique_dev_null_names = [unique_dev_null_names[i] for i in unique_dev_null_indices]
         unique_segment_names = []
-        unique_type_names = []
         for name in unique_given_names:
             for dev_null_name in unique_dev_null_names:
                 try:
                     seg_names = list(
                         dev_null_data[name]['dev_null'][dev_null_name].keys())
                     unique_segment_names.extend(seg_names)
-                    for s_i, s_name in enumerate(seg_names):
-                        unique_type_names.extend(list(dev_null_data[name]['dev_null'][dev_null_name][s_name].keys()))
                 except:
                     print(name + " does not have correlation data for " + dev_null_name)
         unique_segment_indices = np.sort(
             np.unique(unique_segment_names, return_index=True)[1])
         unique_segment_names = [unique_segment_names[i]
                                 for i in unique_segment_indices]
-        unique_type_indices = np.sort(
-            np.unique(unique_type_names, return_index=True)[1])
-        unique_type_names = [unique_type_names[i]
-                                for i in unique_type_indices]
         
         self.unique_given_names = unique_given_names
         self.unique_dev_null_names = unique_dev_null_names
         self.unique_segment_names = unique_segment_names
-        self.unique_type_names = unique_type_names
 
     def plot_dev_null_results(self,):
         num_cond = len(self.dev_null_data)
@@ -727,7 +725,9 @@ class run_compare_conditions_analysis():
 
         print("Beginning Plots.")
         if num_cond > 1:
-            print("Insert plot call here.")
+            cdf.cross_dataset_dev_null_plots(self.dev_null_data, self.unique_given_names, 
+                                             self.unique_dev_null_names, self.unique_segment_names, 
+                                             results_dir)
         else:
             print("Not enough animals for cross-animal dev stat plots.")
 

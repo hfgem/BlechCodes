@@ -191,78 +191,86 @@ warnings.filterwarnings("ignore")
 num_datasets = len(all_data_dict)
 dataset_names = list(all_data_dict.keys())
 
-dev_stats_data = dict()
+num_datasets = len(all_data_dict)
+dataset_names = list(all_data_dict.keys())
+dev_null_data = dict()
 for n_i in range(num_datasets):
     data_name = dataset_names[n_i]
     data_dict = all_data_dict[data_name]['data']
     metadata = all_data_dict[data_name]['metadata']
     data_save_dir = data_dict['data_path']
     
-    dev_stats_save_dir = os.path.join(
-        data_save_dir, 'Deviations')
-    dev_dir_files = os.listdir(dev_stats_save_dir)
+    dev_null_save_dir = os.path.join(
+        data_save_dir, 'Deviations','null_x_true_deviations')
+    dev_dir_files = os.listdir(dev_null_save_dir)
     dev_dict_dirs = []
     for dev_f in dev_dir_files:
         if dev_f[-4:] == '.npy':
             dev_dict_dirs.append(dev_f)
-    dev_stats_data[data_name] = dict()
-    dev_stats_data[data_name]['num_neur'] = data_dict['num_neur']
+    dev_null_data[data_name] = dict()
+    dev_null_data[data_name]['num_neur'] = data_dict['num_neur']
     segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-    dev_stats_data[data_name]['segments_to_analyze'] = segments_to_analyze
-    dev_stats_data[data_name]['segment_names'] = data_dict['segment_names']
+    dev_null_data[data_name]['segments_to_analyze'] = segments_to_analyze
+    dev_null_data[data_name]['segment_names'] = data_dict['segment_names']
     segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
     segment_times = data_dict['segment_times']
-    num_segments = len(dev_stats_data[data_name]['segment_names'])
-    dev_stats_data[data_name]['segment_times_reshaped'] = [
+    num_segments = len(dev_null_data[data_name]['segment_names'])
+    dev_null_data[data_name]['segment_times_reshaped'] = [
         [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
     dig_in_names = data_dict['dig_in_names']
-    dev_stats_data[data_name]['dig_in_names'] = dig_in_names
-    dev_stats_data[data_name]['dev_stats'] = dict()
+    dev_null_data[data_name]['dig_in_names'] = dig_in_names
+    dev_null_data[data_name]['dev_null'] = dict()
     for stat_i in range(len(dev_dict_dirs)):
         stat_dir_name = dev_dict_dirs[stat_i]
-        stat_name = stat_dir_name.split('.')[0]
-        result_dir = os.path.join(dev_stats_save_dir, stat_dir_name)
+        null_name = stat_dir_name.split('.')[0]
+        result_dir = os.path.join(dev_null_save_dir, stat_dir_name)
         result_dict = np.load(result_dir,allow_pickle=True).item()
-        dev_stats_data[data_name]['dev_stats'][stat_name] = dict()
+        result_keys = list(result_dict.keys())
+        dev_null_data[data_name]['dev_null'][null_name] = dict()
         for s_i, s_name in enumerate(segment_names_to_analyze):
-            dev_stats_data[data_name]['dev_stats'][stat_name][s_name] = result_dict[s_i]
+            dev_null_data[data_name]['dev_null'][null_name][s_name] = dict()
+            for rk_i, rk in enumerate(result_keys):
+                if rk[:len(s_name)] == s_name:
+                    rk_type = rk.split('_')[1]
+                    dev_null_data[data_name]['dev_null'][null_name][s_name][rk_type] = \
+                        result_dict[rk]
             
-dict_save_dir = os.path.join(save_dir, 'dev_stats_data.npy')
-np.save(dict_save_dir,dev_stats_data,allow_pickle=True)
+dict_save_dir = os.path.join(save_dir, 'dev_null_data.npy')
+np.save(dict_save_dir,dev_null_data,allow_pickle=True)
 # _____Analysis Storage Directory_____
-if not os.path.isdir(os.path.join(save_dir,'Dev_Stats')):
-    os.mkdir(os.path.join(save_dir,'Dev_Stats'))
-dev_stats_results_dir = os.path.join(save_dir,'Dev_Stats')
+if not os.path.isdir(os.path.join(save_dir,'Dev_Null')):
+    os.mkdir(os.path.join(save_dir,'Dev_Null'))
+dev_null_results_dir = os.path.join(save_dir,'Dev_Null')
 
-unique_given_names = list(dev_stats_data.keys())
+unique_given_names = list(dev_null_data.keys())
 unique_given_indices = np.sort(
     np.unique(unique_given_names, return_index=True)[1])
 unique_given_names = [unique_given_names[i]
                       for i in unique_given_indices]
-unique_dev_stats_names = []
+unique_dev_null_names = []
 for name in unique_given_names:
-    unique_dev_stats_names.extend(list(dev_stats_data[name]['dev_stats'].keys()))
-unique_dev_stats_names = np.array(unique_dev_stats_names)
-unique_dev_stats_indices = np.sort(
-    np.unique(unique_dev_stats_names, return_index=True)[1])
-unique_dev_stats_names = [unique_dev_stats_names[i] for i in unique_dev_stats_indices]
+    unique_dev_null_names.extend(list(dev_null_data[name]['dev_null'].keys()))
+unique_dev_null_names = np.array(unique_dev_null_names)
+unique_dev_null_indices = np.sort(
+    np.unique(unique_dev_null_names, return_index=True)[1])
+unique_dev_null_names = [unique_dev_null_names[i] for i in unique_dev_null_indices]
 unique_segment_names = []
 for name in unique_given_names:
-    for dev_stat_name in unique_dev_stats_names:
+    for dev_null_name in unique_dev_null_names:
         try:
             seg_names = list(
-                dev_stats_data[name]['dev_stats'][dev_stat_name].keys())
+                dev_null_data[name]['dev_null'][dev_null_name].keys())
             unique_segment_names.extend(seg_names)
         except:
-            print(name + " does not have correlation data for " + dev_stat_name)
+            print(name + " does not have correlation data for " + dev_null_name)
 unique_segment_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i]
                         for i in unique_segment_indices]
 
-num_cond = len(dev_stats_data)
+results_dir = dev_null_results_dir
 
-cdf.cross_dataset_dev_stats_plots(dev_stats_data, unique_given_names, 
-                                            unique_dev_stats_names, unique_segment_names, 
-                                            dev_stats_results_dir)
+cdf.cross_dataset_dev_null_plots(dev_null_data, unique_given_names, 
+                                 unique_dev_null_names, unique_segment_names, 
+                                 results_dir)
 
