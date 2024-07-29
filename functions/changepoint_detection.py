@@ -121,12 +121,12 @@ def calc_cp_iter(tastant_spike_times, cp_bin, num_cp, start_dig_in_times,
         os.mkdir(deliv_save_dir)
     # Grab parameters
     num_tastes = len(tastant_spike_times)
-    num_deliv = len(tastant_spike_times[0])
-    num_neur = len(tastant_spike_times[0][0])
     # Calculate changepoints by taste
     taste_cp = []
     for t_i in range(num_tastes):
         print('Calculating changepoints for taste ' + dig_in_names[t_i])
+        num_deliv = len(tastant_spike_times[t_i])
+        num_neur = len(tastant_spike_times[t_i][0])
         neur_deliv_cp = np.zeros(
             (num_deliv, num_neur, num_cp+1))  # Store changepoints
         deliv_st = dict()  # Delivery spike times storage
@@ -247,12 +247,12 @@ def calc_cp_iter_pop(tastant_spike_times, cp_bin, num_cp, start_dig_in_times,
                      end_dig_in_times, before_taste, after_taste,
                      dig_in_names, taste_cp_save_dir):
     num_tastes = len(tastant_spike_times)
-    num_deliv = len(tastant_spike_times[0])
-    num_neur = len(tastant_spike_times[0][0])
     taste_cp = []
     for t_i in range(num_tastes):
         print('Calculating changepoints for taste ' + dig_in_names[t_i])
         dig_in_name = dig_in_names[t_i]
+        num_deliv = len(tastant_spike_times[t_i])
+        num_neur = len(tastant_spike_times[t_i][0])
         deliv_cp = np.zeros((num_deliv, num_cp+2))
         deliv_st = dict()
         # Calculate changepoints for the population for each tastant delivery
