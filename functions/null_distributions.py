@@ -29,10 +29,10 @@ def run_null_create_parallelized(inputs):
     spikes = inputs[1]
     start_t = inputs[2]
     end_t = inputs[3]
-    rand_neur_ind = list(np.arange(len(spikes)))
+    rand_neur_ind = list(np.arange(len(spikes)).astype('int'))
     random.shuffle(rand_neur_ind)
     null_dir = inputs[4]
-    fake_spike_times = [random.sample(range(start_t, end_t), len(
+    fake_spike_times = [random.sample(range(int(start_t), int(end_t)), len(
         spikes[n_i])) for n_i in rand_neur_ind]
     json_str = json.dumps(fake_spike_times)
     json_bytes = json_str.encode()

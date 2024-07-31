@@ -138,37 +138,41 @@ def fr_dist_calculator(num_cp, num_tastes, num_neur, max_num_deliv, taste_num_de
             t_i_dig_in_times = start_dig_in_times[t_i]
             for n_i in tqdm.tqdm(range(num_neur)):
                 for d_i in range(max_num_deliv):
-                    raster_times = t_i_spike_times[d_i][n_i]
-                    start_taste_i = t_i_dig_in_times[d_i]
-                    deliv_cp_pop = taste_cp_pop[d_i, :] - pre_taste_dt
-                    # Binerize the firing following taste delivery start
-                    times_post_taste = (np.array(raster_times)[np.where((raster_times >= start_taste_i)*(
-                        raster_times < start_taste_i + post_taste_dt))[0]] - start_taste_i).astype('int')
-                    bin_post_taste = np.zeros(post_taste_dt)
-                    bin_post_taste[times_post_taste] += 1
-                    # Grab changepoints
-                    start_epoch = int(deliv_cp_pop[cp_i])
-                    end_epoch = int(deliv_cp_pop[cp_i+1])
-                    epoch_len = end_epoch - start_epoch
-                    # Set bin sizes to use in breaking up the epoch for firing rates
-                    # 50 ms increments up to full epoch size
-                    bin_sizes = np.arange(50, epoch_len, 50)
-                    if bin_sizes[-1] != epoch_len:
-                        bin_sizes = np.concatenate(
-                            (bin_sizes, epoch_len*np.ones(1)))
-                    bin_sizes = bin_sizes.astype('int')
-                    all_my_fr = []
-                    # Get firing rates for each bin size and concatenate
-                    for b_i in bin_sizes:
-                        all_my_fr.extend(
-                            [np.sum(bin_post_taste[i:i+b_i])/(b_i/1000) for i in range(end_epoch-b_i+1)])
-                    tastant_epoch_delivery[cp_i][t_i][n_i][d_i]['full'] = all_my_fr
-                    # Get singular firing rate for the entire epoch for decoding
-                    tastant_epoch_delivery[cp_i][t_i][n_i][d_i]['true'] = np.sum(
-                        bin_post_taste[start_epoch:end_epoch])/(epoch_len/1000)
-                    # Calculate and update maximum firing rate
-                    if np.nanmax(all_my_fr) > max_hz_cp:
-                        max_hz_cp = np.nanmax(all_my_fr)
+                    try: #If number of deliveries reaches that amount for the taste
+                        raster_times = t_i_spike_times[d_i][n_i]
+                        start_taste_i = t_i_dig_in_times[d_i]
+                        deliv_cp_pop = taste_cp_pop[d_i, :] - pre_taste_dt
+                        # Binerize the firing following taste delivery start
+                        times_post_taste = (np.array(raster_times)[np.where((raster_times >= start_taste_i)*(
+                            raster_times < start_taste_i + post_taste_dt))[0]] - start_taste_i).astype('int')
+                        bin_post_taste = np.zeros(post_taste_dt)
+                        bin_post_taste[times_post_taste] += 1
+                        # Grab changepoints
+                        start_epoch = int(deliv_cp_pop[cp_i])
+                        end_epoch = int(deliv_cp_pop[cp_i+1])
+                        epoch_len = end_epoch - start_epoch
+                        # Set bin sizes to use in breaking up the epoch for firing rates
+                        # 50 ms increments up to full epoch size
+                        bin_sizes = np.arange(50, epoch_len, 50)
+                        if bin_sizes[-1] != epoch_len:
+                            bin_sizes = np.concatenate(
+                                (bin_sizes, epoch_len*np.ones(1)))
+                        bin_sizes = bin_sizes.astype('int')
+                        all_my_fr = []
+                        # Get firing rates for each bin size and concatenate
+                        for b_i in bin_sizes:
+                            all_my_fr.extend(
+                                [np.sum(bin_post_taste[i:i+b_i])/(b_i/1000) for i in range(end_epoch-b_i+1)])
+                        tastant_epoch_delivery[cp_i][t_i][n_i][d_i]['full'] = all_my_fr
+                        # Get singular firing rate for the entire epoch for decoding
+                        tastant_epoch_delivery[cp_i][t_i][n_i][d_i]['true'] = np.sum(
+                            bin_post_taste[start_epoch:end_epoch])/(epoch_len/1000)
+                        # Calculate and update maximum firing rate
+                        if np.nanmax(all_my_fr) > max_hz_cp:
+                            max_hz_cp = np.nanmax(all_my_fr)
+                    except:
+                        tastant_epoch_delivery[cp_i][t_i][n_i][d_i]['full'] = []
+                        tastant_epoch_delivery[cp_i][t_i][n_i][d_i]['true'] = np.nan
 
     return tastant_epoch_delivery, max_hz_cp
 

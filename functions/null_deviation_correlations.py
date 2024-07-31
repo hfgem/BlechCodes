@@ -35,7 +35,10 @@ class run_null_deviation_correlations():
         self.metadata = args[0]
         self.data_dict = args[1]
         self.gather_variables()
-        
+        self.import_null_deviations()
+        self.convert_null_dev_to_rasters()
+        self.calculate_correlations_all_null()
+        self.calculate_correlations_zscore_null()
         
     def gather_variables(self,):
         #These directories should already exist

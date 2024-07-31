@@ -22,6 +22,7 @@ from functions.deviation_analysis import run_find_deviations
 from functions.changepoint_analysis import run_changepoint_detection
 from functions.data_description_analysis import run_data_description_analysis
 from functions.sliding_correlations import run_sliding_correlations
+from functions.null_deviation_correlations import run_null_deviation_correlations
 from utils.replay_utils import state_tracker
 
 class run_analysis_steps():
@@ -87,7 +88,7 @@ class run_analysis_steps():
         state_exec_dict[2]['exec'] = 'run_deviation_null_analysis([self.metadata,self.data_dict])'
         state_exec_dict[3] = dict()
         state_exec_dict[3]['name'] = 'Null Deviation x Taste Correlations'
-        state_exec_dict[3]['exec'] = 'run_dependent_bayes([self.metadata,self.data_dict])'
+        state_exec_dict[3]['exec'] = 'run_null_deviation_correlations([self.metadata,self.data_dict])'
         state_exec_dict[4] = dict()
         state_exec_dict[4]['name'] = 'Deviation x Taste Correlations'
         state_exec_dict[4]['exec'] = 'run_deviation_correlations([self.metadata,self.data_dict])'
