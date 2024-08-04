@@ -13,6 +13,7 @@ import warnings
 import easygui
 import pickle
 import numpy as np
+import functions.hdf5_handling as hf5
 
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
@@ -40,6 +41,10 @@ class run_compare_conditions_analysis():
             except:
                 self.gather_seg_data()
             try:
+                self.import_cp_data()
+            except:
+                self.gather_cp_data()
+            try:
                 self.import_rate_corr_data()
             except:
                 self.gather_rate_corr_data()
@@ -59,6 +64,7 @@ class run_compare_conditions_analysis():
                     self.all_data_dict,allow_pickle=True)
             self.gather_corr_data()
             self.gather_seg_data()
+            self.gather_cp_data()
             self.gather_rate_corr_data()
             self.gather_dev_stats_data()
             self.gather_dev_null_data()
@@ -68,6 +74,9 @@ class run_compare_conditions_analysis():
         #Segment comparisons
         self.find_seg_groupings()
         self.plot_seg_results()
+        #Changepoint comparisons
+        self.find_cp_groupings()
+        self.plot_cp_results()
         #Pop Rate x Taste Corr comparisons
         self.find_rate_corr_groupings()
         self.plot_rate_corr_results()
@@ -393,6 +402,99 @@ class run_compare_conditions_analysis():
                                           results_dir)
         else:
            print("Not enough animals for segment comparison.")
+           
+    def import_cp_data(self,):
+        """Import previously saved segment data"""
+        dict_save_dir = os.path.join(self.save_dir, 'cp_data.npy')
+        cp_data = np.load(dict_save_dir,allow_pickle=True).item()
+        self.cp_data = cp_data
+        if not os.path.isdir(os.path.join(self.save_dir,'Changepoint_Statistics')):
+            os.mkdir(os.path.join(self.save_dir,'Changepoint_Statistics'))
+        self.cp_results_dir = os.path.join(self.save_dir,'Changepoint_Statistics')
+        
+    def gather_cp_data(self,):
+        """Import the relevant data from each dataset to be analyzed. This 
+        includes the number of neurons, segments to analyze, segment names, 
+        segment start and end times, taste dig in names, and the segment
+        statistics data"""
+
+        num_datasets = len(self.all_data_dict)
+        dataset_names = list(self.all_data_dict.keys())
+        cp_data = dict()
+        for n_i in range(num_datasets):
+            data_name = dataset_names[n_i]
+            data_dict = self.all_data_dict[data_name]['data']
+            metadata = self.all_data_dict[data_name]['metadata']
+            hdf5_dir = metadata['hdf5_dir']
+            cp_data[data_name] = dict()
+            cp_data[data_name]['num_neur'] = data_dict['num_neur']
+            segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+            cp_data[data_name]['segments_to_analyze'] = segments_to_analyze
+            cp_data[data_name]['segment_names'] = data_dict['segment_names']
+            segment_times = data_dict['segment_times']
+            num_segments = len(cp_data[data_name]['segment_names'])
+            cp_data[data_name]['segment_times_reshaped'] = [
+                [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+            dig_in_names = data_dict['dig_in_names']
+            cp_data[data_name]['dig_in_names'] = dig_in_names
+            cp_data[data_name]['cp_data'] = dict()
+            data_group_name = 'changepoint_data'
+            pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
+                hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
+            for t_i in range(len(dig_in_names)):
+                taste_cp_data = pop_taste_cp_raster_inds[t_i] #num deliv x num_cp + 2
+                cp_data[data_name]['cp_data'][dig_in_names[t_i]] = taste_cp_data
+        self.cp_data = cp_data
+        np.save(os.path.join(self.save_dir, 'cp_data.npy'),cp_data,allow_pickle=True)
+        # Save the combined dataset somewhere...
+        # _____Analysis Storage Directory_____
+        if not os.path.isdir(os.path.join(self.save_dir,'Changepoint_Statistics')):
+            os.mkdir(os.path.join(self.save_dir,'Changepoint_Statistics'))
+        self.cp_results_dir = os.path.join(self.save_dir,'Changepoint_Statistics')
+    
+    def find_cp_groupings(self,):
+        """Across the different datasets, get the unique data names/indices,
+        correlation combinations and names/indices, unique segment names/indices,
+        and unique taste names/indices to align datasets to each other in these
+        different groups."""
+
+        cp_data = self.cp_data
+        unique_given_names = list(cp_data.keys())
+        unique_given_indices = np.sort(
+            np.unique(unique_given_names, return_index=True)[1])
+        unique_given_names = [unique_given_names[i]
+                              for i in unique_given_indices]
+        unique_taste_names = np.array([list(cp_data[name]['cp_data'].keys(
+        )) for name in unique_given_names]).flatten()  # How many types of segment analyses
+        unique_taste_indices = np.sort(
+            np.unique(unique_taste_names, return_index=True)[1])
+        unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
+        max_cp_counts = 0
+        for name in unique_given_names:
+            for taste_name in unique_taste_names:
+                try:
+                    taste_cp_data = cp_data[name]['cp_data'][taste_name]
+                    num_cp = np.shape(taste_cp_data)[1] - 2
+                    if num_cp > max_cp_counts:
+                        max_cp_counts = num_cp
+                except:
+                    print(name + " does not have data for " + taste_name)
+        
+        self.unique_given_names = unique_given_names
+        self.unique_taste_names = unique_taste_names
+        self.max_cp_counts = max_cp_counts
+        
+    def plot_cp_results(self,):
+        num_cond = len(self.cp_data)
+        results_dir = self.cp_results_dir
+
+        print("Beginning Plots.")
+        if num_cond > 1:
+            cdf.cross_dataset_cp_plots(self.cp_data, self.unique_given_names, 
+                                       self.unique_taste_names, self.max_cp_counts,
+                                       results_dir)
+        else:
+            print("Not enough animals for segment comparison.")
         
     def import_rate_corr_data(self,):
         """Import previously saved pop rate x taste corr data"""

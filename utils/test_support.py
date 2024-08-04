@@ -207,6 +207,7 @@ from utils.replay_utils import import_metadata
 from utils.data_utils import import_data
 from functions.compare_conditions_analysis import run_compare_conditions_analysis
 from functions.compare_conditions_funcs import int_input, bool_input
+import functions.hdf5_handling as hf5
 
 # Grab current directory and data directory / metadata
 script_path = os.path.realpath(__file__)
@@ -296,86 +297,62 @@ warnings.filterwarnings("ignore")
 num_datasets = len(all_data_dict)
 dataset_names = list(all_data_dict.keys())
 
-num_datasets = len(all_data_dict)
-dataset_names = list(all_data_dict.keys())
-dev_null_data = dict()
+cp_data = dict()
 for n_i in range(num_datasets):
     data_name = dataset_names[n_i]
     data_dict = all_data_dict[data_name]['data']
     metadata = all_data_dict[data_name]['metadata']
-    data_save_dir = data_dict['data_path']
-    
-    dev_null_save_dir = os.path.join(
-        data_save_dir, 'Deviations','null_x_true_deviations')
-    dev_dir_files = os.listdir(dev_null_save_dir)
-    dev_dict_dirs = []
-    for dev_f in dev_dir_files:
-        if dev_f[-4:] == '.npy':
-            dev_dict_dirs.append(dev_f)
-    dev_null_data[data_name] = dict()
-    dev_null_data[data_name]['num_neur'] = data_dict['num_neur']
+    hdf5_dir = metadata['hdf5_dir']
+    cp_data[data_name] = dict()
+    cp_data[data_name]['num_neur'] = data_dict['num_neur']
     segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-    dev_null_data[data_name]['segments_to_analyze'] = segments_to_analyze
-    dev_null_data[data_name]['segment_names'] = data_dict['segment_names']
-    segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
+    cp_data[data_name]['segments_to_analyze'] = segments_to_analyze
+    cp_data[data_name]['segment_names'] = data_dict['segment_names']
     segment_times = data_dict['segment_times']
-    num_segments = len(dev_null_data[data_name]['segment_names'])
-    dev_null_data[data_name]['segment_times_reshaped'] = [
+    num_segments = len(cp_data[data_name]['segment_names'])
+    cp_data[data_name]['segment_times_reshaped'] = [
         [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
     dig_in_names = data_dict['dig_in_names']
-    dev_null_data[data_name]['dig_in_names'] = dig_in_names
-    dev_null_data[data_name]['dev_null'] = dict()
-    for stat_i in range(len(dev_dict_dirs)):
-        stat_dir_name = dev_dict_dirs[stat_i]
-        null_name = stat_dir_name.split('.')[0]
-        result_dir = os.path.join(dev_null_save_dir, stat_dir_name)
-        result_dict = np.load(result_dir,allow_pickle=True).item()
-        result_keys = list(result_dict.keys())
-        dev_null_data[data_name]['dev_null'][null_name] = dict()
-        for s_i, s_name in enumerate(segment_names_to_analyze):
-            dev_null_data[data_name]['dev_null'][null_name][s_name] = dict()
-            for rk_i, rk in enumerate(result_keys):
-                if rk[:len(s_name)] == s_name:
-                    rk_type = rk.split('_')[1]
-                    dev_null_data[data_name]['dev_null'][null_name][s_name][rk_type] = \
-                        result_dict[rk]
-            
-dict_save_dir = os.path.join(save_dir, 'dev_null_data.npy')
-np.save(dict_save_dir,dev_null_data,allow_pickle=True)
+    cp_data[data_name]['dig_in_names'] = dig_in_names
+    cp_data[data_name]['cp_data'] = dict()
+    data_group_name = 'changepoint_data'
+    pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
+        hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
+    for t_i in range(len(dig_in_names)):
+        taste_cp_data = pop_taste_cp_raster_inds[t_i] #num deliv x num_cp + 2
+        cp_data[data_name]['cp_data'][dig_in_names[t_i]] = taste_cp_data
+           
+np.save(os.path.join(save_dir, 'cp_data.npy'),cp_data,allow_pickle=True)
+# Save the combined dataset somewhere...
 # _____Analysis Storage Directory_____
-if not os.path.isdir(os.path.join(save_dir,'Dev_Null')):
-    os.mkdir(os.path.join(save_dir,'Dev_Null'))
-dev_null_results_dir = os.path.join(save_dir,'Dev_Null')
+if not os.path.isdir(os.path.join(save_dir,'Changepoint_Statistics')):
+    os.mkdir(os.path.join(save_dir,'Changepoint_Statistics'))
+cp_results_dir = os.path.join(save_dir,'Changepoint_Statistics')
 
-unique_given_names = list(dev_null_data.keys())
+unique_given_names = list(cp_data.keys())
 unique_given_indices = np.sort(
     np.unique(unique_given_names, return_index=True)[1])
 unique_given_names = [unique_given_names[i]
                       for i in unique_given_indices]
-unique_dev_null_names = []
+unique_taste_names = np.array([list(cp_data[name]['cp_data'].keys(
+)) for name in unique_given_names]).flatten()  # How many types of segment analyses
+unique_taste_indices = np.sort(
+    np.unique(unique_taste_names, return_index=True)[1])
+unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
+max_cp_counts = 0
 for name in unique_given_names:
-    unique_dev_null_names.extend(list(dev_null_data[name]['dev_null'].keys()))
-unique_dev_null_names = np.array(unique_dev_null_names)
-unique_dev_null_indices = np.sort(
-    np.unique(unique_dev_null_names, return_index=True)[1])
-unique_dev_null_names = [unique_dev_null_names[i] for i in unique_dev_null_indices]
-unique_segment_names = []
-for name in unique_given_names:
-    for dev_null_name in unique_dev_null_names:
+    for taste_name in unique_taste_names:
         try:
-            seg_names = list(
-                dev_null_data[name]['dev_null'][dev_null_name].keys())
-            unique_segment_names.extend(seg_names)
+            taste_cp_data = cp_data[name]['cp_data'][taste_name]
+            num_cp = np.shape(taste_cp_data)[1] - 2
+            if num_cp > max_cp_counts:
+                max_cp_counts = num_cp
         except:
-            print(name + " does not have correlation data for " + dev_null_name)
-unique_segment_indices = np.sort(
-    np.unique(unique_segment_names, return_index=True)[1])
-unique_segment_names = [unique_segment_names[i]
-                        for i in unique_segment_indices]
+            print(name + " does not have data for " + taste_name)
 
-results_dir = dev_null_results_dir
+results_dir = cp_results_dir
 
-cdf.cross_dataset_dev_null_plots(dev_null_data, unique_given_names, 
-                                 unique_dev_null_names, unique_segment_names, 
-                                 results_dir)
+cdf.cross_dataset_cp_plots(cp_data, unique_given_names, 
+                           unique_taste_names, max_cp_counts,
+                           results_dir)
 
