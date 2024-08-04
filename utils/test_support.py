@@ -63,62 +63,116 @@ tastant_spike_times = af.calc_tastant_spike_times(data_dict['segment_times'],dat
 data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
-#%% Changepoint Support
+#%% Dev Corr Support
 
-import functions.analysis_funcs as af
+import os
+import json
+import gzip
+import tqdm
+import numpy as np
+import functions.dev_plot_funcs as dpf
+import functions.dev_funcs as df
 import functions.hdf5_handling as hf5
-import functions.changepoint_detection as cd
-import functions.plot_funcs as pf
-import functions.decoding_funcs as df
 
-cp_bin = metadata['params_dict']['cp_bin']
-num_cp = metadata['params_dict']['num_cp']
-before_taste = np.ceil(metadata['params_dict']['pre_taste']*1000).astype('int') #Milliseconds before taste delivery to plot
-after_taste = np.ceil(metadata['params_dict']['post_taste']*1000).astype('int') #Milliseconds after taste delivery to plot
+dev_dir = metadata['dir_name'] + 'Deviations/'
 hdf5_dir = metadata['hdf5_dir']
+comp_dir = metadata['dir_name'] + 'dev_x_taste/'
+if os.path.isdir(comp_dir) == False:
+    os.mkdir(comp_dir)
+corr_dir = comp_dir + 'corr/'
+if os.path.isdir(corr_dir) == False:
+    os.mkdir(corr_dir)
+# Params/Variables
+num_neur = data_dict['num_neur']
+pre_taste = metadata['params_dict']['pre_taste']
+post_taste = metadata['params_dict']['post_taste']
+segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+epochs_to_analyze = metadata['params_dict']['epochs_to_analyze']
+segment_names = data_dict['segment_names']
+num_segments = len(segment_names)
+segment_spike_times = data_dict['segment_spike_times']
+segment_times = data_dict['segment_times']
+segment_times_reshaped = [
+    [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+# Remember this is 1 less than the number of epochs
+num_cp = metadata['params_dict']['num_cp']
+tastant_spike_times = data_dict['tastant_spike_times']
 start_dig_in_times = data_dict['start_dig_in_times']
 end_dig_in_times = data_dict['end_dig_in_times']
 dig_in_names = data_dict['dig_in_names']
+z_bin = metadata['params_dict']['z_bin']
 
+print("\tNow importing calculated deviations")
+segment_deviations = []
+for s_i in tqdm.tqdm(segments_to_analyze):
+    filepath = dev_dir + \
+        segment_names[s_i] + '/deviations.json'
+    with gzip.GzipFile(filepath, mode="r") as f:
+        json_bytes = f.read()
+        json_str = json_bytes.decode('utf-8')
+        data = json.loads(json_str)
+        segment_deviations.append(data)
+print("\tNow pulling true deviation rasters")
+num_segments = len(segments_to_analyze)
+segment_spike_times_reshaped = [segment_spike_times[i]
+                       for i in segments_to_analyze]
+segment_times_reshaped = np.array(
+    [segment_times_reshaped[i] for i in segments_to_analyze])
+segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments,
+                                                                                                        segment_spike_times_reshaped,
+                                                                                                        segment_times_reshaped,
+                                                                                                        segment_deviations, z_bin)
 
-#Set storage directory
-cp_save_dir =metadata['dir_name'] + 'Changepoint_Calculations/'
-if os.path.isdir(cp_save_dir) == False:
-	os.mkdir(cp_save_dir)
-
-#_____All data_____
-taste_cp_save_dir = cp_save_dir + 'All_Taste_CPs/'
-if os.path.isdir(taste_cp_save_dir) == False:
-	os.mkdir(taste_cp_save_dir)
 data_group_name = 'changepoint_data'
-#Raster Poisson Bayes Changepoint Calcs Indiv Neurons
-try:
-	taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_cp_raster_inds')
-	pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'pop_taste_cp_raster_inds')
-except:	
-	taste_cp_raster_save_dir = taste_cp_save_dir + 'neur/'
-	if os.path.isdir(taste_cp_raster_save_dir) == False:
-		os.mkdir(taste_cp_raster_save_dir)
-	taste_cp_raster_inds = cd.calc_cp_iter(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
-				  end_dig_in_times,before_taste,after_taste,
-				  dig_in_names,taste_cp_raster_save_dir)
-	hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_cp_raster_inds',taste_cp_raster_inds)
-	
-	taste_cp_raster_pop_save_dir = taste_cp_save_dir + 'pop/'
-	if os.path.isdir(taste_cp_raster_pop_save_dir) == False:
-		os.mkdir(taste_cp_raster_pop_save_dir)
-	pop_taste_cp_raster_inds = cd.calc_cp_iter_pop(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
-				  end_dig_in_times,before_taste,after_taste,
-				  dig_in_names,taste_cp_raster_pop_save_dir)
-	hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'pop_taste_cp_raster_inds',pop_taste_cp_raster_inds)
+pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
+pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
+num_pt_cp = num_cp + 2
+# Import discriminability data
+data_group_name = 'taste_discriminability'
+peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'peak_epochs'))
+discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'discrim_neur'))
+# Convert discriminatory neuron data into pop_taste_cp_raster_inds shape
+# TODO: Test this first, then if going with this rework functions to fit instead!
+num_discrim_cp = np.shape(discrim_neur)[0]
+discrim_cp_raster_inds = []
+for t_i in range(len(dig_in_names)):
+    t_cp_vec = np.ones(
+        (np.shape(pop_taste_cp_raster_inds[t_i])[0], num_discrim_cp))
+    t_cp_vec = (peak_epochs[:num_pt_cp] +
+                int(pre_taste*1000))*t_cp_vec
+    discrim_cp_raster_inds.append(t_cp_vec)
+num_discrim_cp = len(peak_epochs)
 
+current_corr_dir = corr_dir + 'all_neur/'
+if os.path.isdir(current_corr_dir) == False:
+    os.mkdir(current_corr_dir)
+#neuron_keep_indices = np.ones((num_neur,num_cp+1))
+neuron_keep_indices = np.ones(np.shape(discrim_neur))
+# Calculate correlations
+df.calculate_vec_correlations(num_neur, segment_dev_vec, tastant_spike_times,
+                              start_dig_in_times, end_dig_in_times, segment_names,
+                              dig_in_names, pre_taste, post_taste, pop_taste_cp_raster_inds,
+                              current_corr_dir, neuron_keep_indices, segments_to_analyze)  # For all neurons in dataset
+# Calculate significant events
+sig_dev, sig_dev_counts = df.calculate_significant_dev(segment_dev_times, 
+                                                       segment_times, dig_in_names,
+                                                       segment_names, current_corr_dir,
+                                                       segments_to_analyze)
 
+best_dir = current_corr_dir + 'best/'
+if os.path.isdir(best_dir) == False:
+    os.mkdir(best_dir)
+
+corr_data_dir = current_corr_dir
+save_dir = best_dir
 
 #%% CP Dist Plots
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.stats as stats
 
 colors = ['g','b','o','p','r']
 
@@ -136,9 +190,9 @@ for t_i in range(len(dig_in_names)):
     for cp_i in range(2):
         plt.hist(taste_cp_realigned[:,cp_i],density=True,alpha=0.3,label='Changepoint ' + str(cp_i+1),color=colors[cp_i])
         dist_mean = np.nanmean(taste_cp_realigned[:,cp_i])
-        dist_mode = stats.mode(taste_cp_realigned[:,cp_i])[0]
+        dist_median = np.median(taste_cp_realigned[:,cp_i])
         plt.axvline(dist_mean,label='Mean CP ' + str(cp_i+1) + ' = ' + str(np.round(dist_mean,2)), color=colors[cp_i])
-        plt.axvline(dist_mean,label='Mode CP ' + str(cp_i+1) + ' = ' + str(np.round(dist_mode,2)), linestyle='dashed', color=colors[cp_i])
+        plt.axvline(dist_median,label='Median CP ' + str(cp_i+1) + ' = ' + str(np.round(dist_median,2)), linestyle='dashed', color=colors[cp_i])
     plt.legend()
     plt.title(dig_in_names[t_i])
     plt.xlabel('Time Post Taste Delivery (ms)')

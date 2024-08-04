@@ -253,5 +253,5 @@ class run_deviation_correlations():
 
         dpf.best_corr_calc_plot(self.dig_in_names, self.epochs_to_analyze,
                                 self.segments_to_analyze, self.segment_names,
-                                self.segment_deviations, self.segment_dev_times,
-                                self.dev_dir, self.current_corr_dir, self.best_dir)
+                                self.segment_dev_times, self.dev_dir,
+                                self.current_corr_dir, self.best_dir)

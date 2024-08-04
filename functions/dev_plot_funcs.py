@@ -908,7 +908,7 @@ def plot_dev_x_null_single_dist(null_data, true_val, plot_name, save_dir):
 
 
 def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
-                        segment_names, segment_deviations, segment_dev_times, dev_dir,
+                        segment_names, segment_dev_times, dev_dir,
                         corr_data_dir, save_dir):
     """This function calculates which deviation is correlated most to which
     condition and plots"""
@@ -1018,7 +1018,7 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
 
     # Plot the cumulative distribution functions by segment and the density differences
     density_x_vals = np.arange(0, 1.1, 0.025)
-    density_bins = np.arange(-0.05, 1.15, 0.025)
+    density_bins = np.concatenate((density_x_vals - 0.05,1.125*np.ones(1)))
     taste_pairs = list(combinations(np.arange(num_tastes), 2))
     epoch_pairs = list(combinations(np.arange(len(epochs_to_analyze)), 2))
 
@@ -1026,14 +1026,6 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
         nrows=len(segments_to_analyze), ncols=2, figsize=(8, 8))
     f_dens, ax_dens = plt.subplots(
         nrows=len(segments_to_analyze), ncols=2, figsize=(8, 8))
-    f_diff_taste, ax_diff_taste = plt.subplots(
-        nrows=1, ncols=len(taste_pairs), figsize=(15, 5))
-    max_taste_diff = 0
-    min_taste_diff = 0
-    f_diff_epoch, ax_diff_epoch = plt.subplots(
-        nrows=1, ncols=len(epoch_pairs), figsize=(15, 5))
-    max_epoch_diff = 0
-    min_epoch_diff = 0
     for s_ind, s_i in enumerate(segments_to_analyze):  # By rest interval
         dev_sorting = seg_data[s_i]
         # Taste data
@@ -1055,23 +1047,6 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
                 density_x_vals, density_hist_data[0], color=taste_colors[t_i, :], label=dig_in_names[t_i])
             ax_dens[s_ind, 0].set_ylim([-0.05, 1.05])
             ax_dens[s_ind, 0].set_xlim([-0.05, 1.05])
-        for tp_ind, t_pair in enumerate(taste_pairs):
-            t_1 = t_pair[1]
-            t_2 = t_pair[0]
-            t_1_name = dig_in_names[t_1]
-            t_2_name = dig_in_names[t_2]
-            hist_diff = taste_density[t_2] - taste_density[t_1]
-            if s_ind == 0:
-                ax_diff_taste[tp_ind].set_title(t_2_name + ' - ' + t_1_name)
-                ax_diff_taste[tp_ind].set_xlabel('Correlation')
-                if tp_ind == 0:
-                    ax_diff_taste[tp_ind].set_ylabel('Density Difference')
-            if max(hist_diff) > max_taste_diff:
-                max_taste_diff = max(hist_diff)
-            if min(hist_diff) < min_taste_diff:
-                min_taste_diff = min(hist_diff)
-            ax_diff_taste[tp_ind].plot(
-                density_x_vals, hist_diff, label=segment_names[s_i], color=segment_colors[s_ind, :])
         # Epoch data
         epoch_density = []
         for e_ind, e_i in enumerate(epochs_to_analyze):
@@ -1091,23 +1066,6 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
                 density_x_vals, density_hist_data[0], color=epoch_colors[e_ind, :], label='Epoch ' + str(e_i))
             ax_dens[s_ind, 1].set_ylim([-0.05, 1.05])
             ax_dens[s_ind, 1].set_xlim([-0.05, 1.05])
-        for ep_ind, e_pair in enumerate(epoch_pairs):
-            e_1 = e_pair[0]
-            e_2 = e_pair[1]
-            e_1_name = 'Epoch ' + str(e_1)
-            e_2_name = 'Epoch ' + str(e_2)
-            hist_diff = epoch_density[e_2] - epoch_density[e_1]
-            if s_ind == 0:
-                ax_diff_epoch[ep_ind].set_title(e_2_name + ' - ' + e_1_name)
-                ax_diff_epoch[ep_ind].set_xlabel('Correlation')
-                if ep_ind == 0:
-                    ax_diff_epoch[ep_ind].set_ylabel('Density Difference')
-            if max(hist_diff) > max_epoch_diff:
-                max_epoch_diff = max(hist_diff)
-            if min(hist_diff) < min_epoch_diff:
-                min_epoch_diff = min(hist_diff)
-            ax_diff_epoch[ep_ind].plot(
-                density_x_vals, hist_diff, label=segment_names[s_i], color=segment_colors[s_ind, :])
         # Plot cleanups
         ax_cum[s_ind, 0].set_ylabel(segment_names[s_i])
         ax_dens[s_ind, 0].set_ylabel(segment_names[s_i])
@@ -1135,37 +1093,6 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
     f_dens.savefig(os.path.join(save_dir, 'best_corr_norm_dens_hist.png'))
     f_dens.savefig(os.path.join(save_dir, 'best_corr_norm_dens_hist.svg'))
     plt.close(f_dens)
-    # Taste diff plot cleanups
-    ax_diff_taste[0].legend(loc='upper left')
-    for tp_ind in range(len(taste_pairs)):
-        ax_diff_taste[tp_ind].axhline(
-            0, alpha=0.5, color='k', linestyle='dashed', label='_')
-        ax_diff_taste[tp_ind].axvline(
-            0.5, alpha=0.5, color='k', linestyle='dashed', label='_')
-        ax_diff_taste[tp_ind].set_xlim([-0.05, 1.05])
-        ax_diff_taste[tp_ind].set_ylim(
-            [min_taste_diff + 0.1*min_taste_diff, max_taste_diff + 0.1*max_taste_diff])
-    f_diff_taste.suptitle('Taste Density Differences of Best Events')
-    plt.tight_layout()
-    f_diff_taste.savefig(os.path.join(save_dir, 'best_corr_taste_diff.png'))
-    f_diff_taste.savefig(os.path.join(save_dir, 'best_corr_taste_diff.svg'))
-    plt.close(f_diff_taste)
-    # Epoch diff plot cleanups
-    ax_diff_epoch[0].legend(loc='upper left')
-    for ep_ind in range(len(epoch_pairs)):
-        ax_diff_epoch[ep_ind].axhline(
-            0, alpha=0.5, color='k', linestyle='dashed', label='_')
-        ax_diff_epoch[ep_ind].axvline(
-            0.5, alpha=0.5, color='k', linestyle='dashed', label='_')
-        ax_diff_epoch[ep_ind].set_xlim([-0.05, 1.05])
-        ax_diff_epoch[ep_ind].set_ylim(
-            [min_epoch_diff + 0.1*min_epoch_diff, max_epoch_diff + 0.1*max_epoch_diff])
-    f_diff_epoch.suptitle('Epoch Density Differences of Best Events')
-    plt.tight_layout()
-    f_diff_epoch.savefig(os.path.join(save_dir, 'best_corr_epoch_diff.png'))
-    f_diff_epoch.savefig(os.path.join(save_dir, 'best_corr_epoch_diff.svg'))
-    plt.close(f_diff_epoch)
-    
     
 def sig_count_plot(sig_dev_counts, segments_to_analyze, segment_names,
                    dig_in_names, save_dir):

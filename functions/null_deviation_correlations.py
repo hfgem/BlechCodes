@@ -176,6 +176,8 @@ class run_null_deviation_correlations():
     
     def calculate_correlations_all_null(self,):
         print('\tCalculating null correlation distributions')
+        if os.path.isdir(self.corr_dir + 'all_neur/') == False:
+            os.mkdir(self.corr_dir + 'all_neur/')
         self.current_corr_dir = self.corr_dir + 'all_neur/' + 'null/'
         if os.path.isdir(self.current_corr_dir) == False:
             os.mkdir(self.current_corr_dir)
@@ -190,6 +192,8 @@ class run_null_deviation_correlations():
         
     def calculate_correlations_zscore_null(self,):
         print('\tCalculating null correlation distributions')
+        if os.path.isdir(self.corr_dir + 'all_neur_zscore/') == False:
+            os.mkdir(self.corr_dir + 'all_neur_zscore/')
         self.current_corr_dir = self.corr_dir + 'all_neur_zscore/' + 'null/'
         if os.path.isdir(self.current_corr_dir) == False:
             os.mkdir(self.current_corr_dir)
