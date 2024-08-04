@@ -63,11 +63,116 @@ tastant_spike_times = af.calc_tastant_spike_times(data_dict['segment_times'],dat
 data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
+#%% Dev Corr Support
+
+import os
+import json
+import gzip
+import tqdm
+import numpy as np
+import functions.dev_plot_funcs as dpf
+import functions.dev_funcs as df
+import functions.hdf5_handling as hf5
+
+dev_dir = metadata['dir_name'] + 'Deviations/'
+hdf5_dir = metadata['hdf5_dir']
+comp_dir = metadata['dir_name'] + 'dev_x_taste/'
+if os.path.isdir(comp_dir) == False:
+    os.mkdir(comp_dir)
+corr_dir = comp_dir + 'corr/'
+if os.path.isdir(corr_dir) == False:
+    os.mkdir(corr_dir)
+# Params/Variables
+num_neur = data_dict['num_neur']
+pre_taste = metadata['params_dict']['pre_taste']
+post_taste = metadata['params_dict']['post_taste']
+segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+epochs_to_analyze = metadata['params_dict']['epochs_to_analyze']
+segment_names = data_dict['segment_names']
+num_segments = len(segment_names)
+segment_spike_times = data_dict['segment_spike_times']
+segment_times = data_dict['segment_times']
+segment_times_reshaped = [
+    [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+# Remember this is 1 less than the number of epochs
+num_cp = metadata['params_dict']['num_cp']
+tastant_spike_times = data_dict['tastant_spike_times']
+start_dig_in_times = data_dict['start_dig_in_times']
+end_dig_in_times = data_dict['end_dig_in_times']
+dig_in_names = data_dict['dig_in_names']
+z_bin = metadata['params_dict']['z_bin']
+
+print("\tNow importing calculated deviations")
+segment_deviations = []
+for s_i in tqdm.tqdm(segments_to_analyze):
+    filepath = dev_dir + \
+        segment_names[s_i] + '/deviations.json'
+    with gzip.GzipFile(filepath, mode="r") as f:
+        json_bytes = f.read()
+        json_str = json_bytes.decode('utf-8')
+        data = json.loads(json_str)
+        segment_deviations.append(data)
+print("\tNow pulling true deviation rasters")
+num_segments = len(segments_to_analyze)
+segment_spike_times_reshaped = [segment_spike_times[i]
+                       for i in segments_to_analyze]
+segment_times_reshaped = np.array(
+    [segment_times_reshaped[i] for i in segments_to_analyze])
+segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments,
+                                                                                                        segment_spike_times_reshaped,
+                                                                                                        segment_times_reshaped,
+                                                                                                        segment_deviations, z_bin)
+
+data_group_name = 'changepoint_data'
+pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
+pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
+num_pt_cp = num_cp + 2
+# Import discriminability data
+data_group_name = 'taste_discriminability'
+peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'peak_epochs'))
+discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'discrim_neur'))
+# Convert discriminatory neuron data into pop_taste_cp_raster_inds shape
+# TODO: Test this first, then if going with this rework functions to fit instead!
+num_discrim_cp = np.shape(discrim_neur)[0]
+discrim_cp_raster_inds = []
+for t_i in range(len(dig_in_names)):
+    t_cp_vec = np.ones(
+        (np.shape(pop_taste_cp_raster_inds[t_i])[0], num_discrim_cp))
+    t_cp_vec = (peak_epochs[:num_pt_cp] +
+                int(pre_taste*1000))*t_cp_vec
+    discrim_cp_raster_inds.append(t_cp_vec)
+num_discrim_cp = len(peak_epochs)
+
+current_corr_dir = corr_dir + 'all_neur/'
+if os.path.isdir(current_corr_dir) == False:
+    os.mkdir(current_corr_dir)
+#neuron_keep_indices = np.ones((num_neur,num_cp+1))
+neuron_keep_indices = np.ones(np.shape(discrim_neur))
+# Calculate correlations
+df.calculate_vec_correlations(num_neur, segment_dev_vec, tastant_spike_times,
+                              start_dig_in_times, end_dig_in_times, segment_names,
+                              dig_in_names, pre_taste, post_taste, pop_taste_cp_raster_inds,
+                              current_corr_dir, neuron_keep_indices, segments_to_analyze)  # For all neurons in dataset
+# Calculate significant events
+sig_dev, sig_dev_counts = df.calculate_significant_dev(segment_dev_times, 
+                                                       segment_times, dig_in_names,
+                                                       segment_names, current_corr_dir,
+                                                       segments_to_analyze)
+
+best_dir = current_corr_dir + 'best/'
+if os.path.isdir(best_dir) == False:
+    os.mkdir(best_dir)
+
+corr_data_dir = current_corr_dir
+save_dir = best_dir
+
 #%% CP Dist Plots
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.stats as stats
 
 colors = ['g','b','o','p','r']
 
@@ -85,9 +190,9 @@ for t_i in range(len(dig_in_names)):
     for cp_i in range(2):
         plt.hist(taste_cp_realigned[:,cp_i],density=True,alpha=0.3,label='Changepoint ' + str(cp_i+1),color=colors[cp_i])
         dist_mean = np.nanmean(taste_cp_realigned[:,cp_i])
-        dist_mode = stats.mode(taste_cp_realigned[:,cp_i])[0]
+        dist_median = np.median(taste_cp_realigned[:,cp_i])
         plt.axvline(dist_mean,label='Mean CP ' + str(cp_i+1) + ' = ' + str(np.round(dist_mean,2)), color=colors[cp_i])
-        plt.axvline(dist_mean,label='Mode CP ' + str(cp_i+1) + ' = ' + str(np.round(dist_mode,2)), linestyle='dashed', color=colors[cp_i])
+        plt.axvline(dist_median,label='Median CP ' + str(cp_i+1) + ' = ' + str(np.round(dist_median,2)), linestyle='dashed', color=colors[cp_i])
     plt.legend()
     plt.title(dig_in_names[t_i])
     plt.xlabel('Time Post Taste Delivery (ms)')
@@ -191,78 +296,86 @@ warnings.filterwarnings("ignore")
 num_datasets = len(all_data_dict)
 dataset_names = list(all_data_dict.keys())
 
-dev_stats_data = dict()
+num_datasets = len(all_data_dict)
+dataset_names = list(all_data_dict.keys())
+dev_null_data = dict()
 for n_i in range(num_datasets):
     data_name = dataset_names[n_i]
     data_dict = all_data_dict[data_name]['data']
     metadata = all_data_dict[data_name]['metadata']
     data_save_dir = data_dict['data_path']
     
-    dev_stats_save_dir = os.path.join(
-        data_save_dir, 'Deviations')
-    dev_dir_files = os.listdir(dev_stats_save_dir)
+    dev_null_save_dir = os.path.join(
+        data_save_dir, 'Deviations','null_x_true_deviations')
+    dev_dir_files = os.listdir(dev_null_save_dir)
     dev_dict_dirs = []
     for dev_f in dev_dir_files:
         if dev_f[-4:] == '.npy':
             dev_dict_dirs.append(dev_f)
-    dev_stats_data[data_name] = dict()
-    dev_stats_data[data_name]['num_neur'] = data_dict['num_neur']
+    dev_null_data[data_name] = dict()
+    dev_null_data[data_name]['num_neur'] = data_dict['num_neur']
     segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-    dev_stats_data[data_name]['segments_to_analyze'] = segments_to_analyze
-    dev_stats_data[data_name]['segment_names'] = data_dict['segment_names']
+    dev_null_data[data_name]['segments_to_analyze'] = segments_to_analyze
+    dev_null_data[data_name]['segment_names'] = data_dict['segment_names']
     segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
     segment_times = data_dict['segment_times']
-    num_segments = len(dev_stats_data[data_name]['segment_names'])
-    dev_stats_data[data_name]['segment_times_reshaped'] = [
+    num_segments = len(dev_null_data[data_name]['segment_names'])
+    dev_null_data[data_name]['segment_times_reshaped'] = [
         [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
     dig_in_names = data_dict['dig_in_names']
-    dev_stats_data[data_name]['dig_in_names'] = dig_in_names
-    dev_stats_data[data_name]['dev_stats'] = dict()
+    dev_null_data[data_name]['dig_in_names'] = dig_in_names
+    dev_null_data[data_name]['dev_null'] = dict()
     for stat_i in range(len(dev_dict_dirs)):
         stat_dir_name = dev_dict_dirs[stat_i]
-        stat_name = stat_dir_name.split('.')[0]
-        result_dir = os.path.join(dev_stats_save_dir, stat_dir_name)
+        null_name = stat_dir_name.split('.')[0]
+        result_dir = os.path.join(dev_null_save_dir, stat_dir_name)
         result_dict = np.load(result_dir,allow_pickle=True).item()
-        dev_stats_data[data_name]['dev_stats'][stat_name] = dict()
+        result_keys = list(result_dict.keys())
+        dev_null_data[data_name]['dev_null'][null_name] = dict()
         for s_i, s_name in enumerate(segment_names_to_analyze):
-            dev_stats_data[data_name]['dev_stats'][stat_name][s_name] = result_dict[s_i]
+            dev_null_data[data_name]['dev_null'][null_name][s_name] = dict()
+            for rk_i, rk in enumerate(result_keys):
+                if rk[:len(s_name)] == s_name:
+                    rk_type = rk.split('_')[1]
+                    dev_null_data[data_name]['dev_null'][null_name][s_name][rk_type] = \
+                        result_dict[rk]
             
-dict_save_dir = os.path.join(save_dir, 'dev_stats_data.npy')
-np.save(dict_save_dir,dev_stats_data,allow_pickle=True)
+dict_save_dir = os.path.join(save_dir, 'dev_null_data.npy')
+np.save(dict_save_dir,dev_null_data,allow_pickle=True)
 # _____Analysis Storage Directory_____
-if not os.path.isdir(os.path.join(save_dir,'Dev_Stats')):
-    os.mkdir(os.path.join(save_dir,'Dev_Stats'))
-dev_stats_results_dir = os.path.join(save_dir,'Dev_Stats')
+if not os.path.isdir(os.path.join(save_dir,'Dev_Null')):
+    os.mkdir(os.path.join(save_dir,'Dev_Null'))
+dev_null_results_dir = os.path.join(save_dir,'Dev_Null')
 
-unique_given_names = list(dev_stats_data.keys())
+unique_given_names = list(dev_null_data.keys())
 unique_given_indices = np.sort(
     np.unique(unique_given_names, return_index=True)[1])
 unique_given_names = [unique_given_names[i]
                       for i in unique_given_indices]
-unique_dev_stats_names = []
+unique_dev_null_names = []
 for name in unique_given_names:
-    unique_dev_stats_names.extend(list(dev_stats_data[name]['dev_stats'].keys()))
-unique_dev_stats_names = np.array(unique_dev_stats_names)
-unique_dev_stats_indices = np.sort(
-    np.unique(unique_dev_stats_names, return_index=True)[1])
-unique_dev_stats_names = [unique_dev_stats_names[i] for i in unique_dev_stats_indices]
+    unique_dev_null_names.extend(list(dev_null_data[name]['dev_null'].keys()))
+unique_dev_null_names = np.array(unique_dev_null_names)
+unique_dev_null_indices = np.sort(
+    np.unique(unique_dev_null_names, return_index=True)[1])
+unique_dev_null_names = [unique_dev_null_names[i] for i in unique_dev_null_indices]
 unique_segment_names = []
 for name in unique_given_names:
-    for dev_stat_name in unique_dev_stats_names:
+    for dev_null_name in unique_dev_null_names:
         try:
             seg_names = list(
-                dev_stats_data[name]['dev_stats'][dev_stat_name].keys())
+                dev_null_data[name]['dev_null'][dev_null_name].keys())
             unique_segment_names.extend(seg_names)
         except:
-            print(name + " does not have correlation data for " + dev_stat_name)
+            print(name + " does not have correlation data for " + dev_null_name)
 unique_segment_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i]
                         for i in unique_segment_indices]
 
-num_cond = len(dev_stats_data)
+results_dir = dev_null_results_dir
 
-cdf.cross_dataset_dev_stats_plots(dev_stats_data, unique_given_names, 
-                                            unique_dev_stats_names, unique_segment_names, 
-                                            dev_stats_results_dir)
+cdf.cross_dataset_dev_null_plots(dev_null_data, unique_given_names, 
+                                 unique_dev_null_names, unique_segment_names, 
+                                 results_dir)
 

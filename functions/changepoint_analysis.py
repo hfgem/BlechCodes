@@ -53,17 +53,17 @@ class run_changepoint_detection():
 		data_group_name = 'changepoint_data'
 		#Raster Poisson Bayes Changepoint Calcs Indiv Neurons
 		try:
-			taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_cp_raster_inds')
+# 			taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'taste_cp_raster_inds')
 			pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir,data_group_name,'pop_taste_cp_raster_inds')
 		except:	
-			taste_cp_raster_save_dir = taste_cp_save_dir + 'neur/'
-			if os.path.isdir(taste_cp_raster_save_dir) == False:
-				os.mkdir(taste_cp_raster_save_dir)
-			taste_cp_raster_inds = cd.calc_cp_iter(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
-						  end_dig_in_times,before_taste,after_taste,
-						  dig_in_names,taste_cp_raster_save_dir)
-			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_cp_raster_inds',taste_cp_raster_inds)
-			
+# 			taste_cp_raster_save_dir = taste_cp_save_dir + 'neur/'
+# 			if os.path.isdir(taste_cp_raster_save_dir) == False:
+# 				os.mkdir(taste_cp_raster_save_dir)
+# 			taste_cp_raster_inds = cd.calc_cp_iter(tastant_spike_times,cp_bin,num_cp,start_dig_in_times,
+# 						  end_dig_in_times,before_taste,after_taste,
+# 						  dig_in_names,taste_cp_raster_save_dir)
+# 			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'taste_cp_raster_inds',taste_cp_raster_inds)
+# 			
 			taste_cp_raster_pop_save_dir = taste_cp_save_dir + 'pop/'
 			if os.path.isdir(taste_cp_raster_pop_save_dir) == False:
 				os.mkdir(taste_cp_raster_pop_save_dir)

@@ -9,11 +9,13 @@
         4
     ],
     "epochs_to_analyze": [
-        1
+        0,
+        1,
+        2
     ],
     "max_plot": 50,
     "local_size": 60000,
-    "min_dev_size": 20,
+    "min_dev_size": 40,
     "num_null": 50,
     "compare_null_params":{
         "bin_size": 0.05,
@@ -21,21 +23,24 @@
         "lag_max": 100
     },
     "fr_bins": [
-        0.02,
         0.05,
-        0.1
+        0.1,
+        0.15,
+        0.2
     ],
     "z_bin": 0.05,
     "bayes_params":{
         "pre_taste": 2,
         "post_taste": 2,
+        "use_full": 0,
+        "skip_time": 0.05,
         "e_skip_time": 0.01,
         "e_len_time": 0.05,
         "neuron_count_thresh": 0.333,
         "max_decode": 50,
         "seg_stat_bin": 60000,
         "trial_start_frac": 0,
-        "decode_prob_cutoff": 0.95,
+        "decode_prob_cutoff": 0.8,
         "bin_time": 0.1
     }
 }

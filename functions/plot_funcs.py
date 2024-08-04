@@ -927,8 +927,14 @@ def taste_response_similarity_plots(num_tastes, num_cp, num_neur, num_segments,
                 max_vec_fr = np.max([np.max(x_taste_mat), np.max(y_taste_mat)])
                 ax[0, pair_i].plot([0, max_vec_fr], [
                                    0, max_vec_fr], alpha=0.5, linestyle='dashed', color='b')
-                ax[0, pair_i].scatter(
-                    x_taste_mat, y_taste_mat, alpha=0.1, color='k')
+                if len(x_taste_mat) == len(y_taste_mat):
+                    ax[0, pair_i].scatter(
+                        x_taste_mat, y_taste_mat, alpha=0.1, color='k')
+                else:
+                    for xt_i in range(num_taste_1):
+                        for yt_i in range(num_taste_2):
+                            ax[0, pair_i].scatter(
+                                x_taste_mat[xt_i,:], y_taste_mat[yt_i,:], alpha=0.1, color='k')
                 ax[0, pair_i].set_title('Avg Corr = ' + str(np.round(np.nanmean(
                     pair_corrs), 2)) + '\nAvg Dist = ' + str(np.round(np.nanmean(pair_dists), 2)))
                 ax[0, pair_i].set_xlabel(dig_in_names[t_1] + ' FR')

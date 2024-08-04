@@ -35,7 +35,10 @@ class run_null_deviation_correlations():
         self.metadata = args[0]
         self.data_dict = args[1]
         self.gather_variables()
-        
+        self.import_null_deviations()
+        self.convert_null_dev_to_rasters()
+        self.calculate_correlations_all_null()
+        self.calculate_correlations_zscore_null()
         
     def gather_variables(self,):
         #These directories should already exist
@@ -173,6 +176,8 @@ class run_null_deviation_correlations():
     
     def calculate_correlations_all_null(self,):
         print('\tCalculating null correlation distributions')
+        if os.path.isdir(self.corr_dir + 'all_neur/') == False:
+            os.mkdir(self.corr_dir + 'all_neur/')
         self.current_corr_dir = self.corr_dir + 'all_neur/' + 'null/'
         if os.path.isdir(self.current_corr_dir) == False:
             os.mkdir(self.current_corr_dir)
@@ -187,6 +192,8 @@ class run_null_deviation_correlations():
         
     def calculate_correlations_zscore_null(self,):
         print('\tCalculating null correlation distributions')
+        if os.path.isdir(self.corr_dir + 'all_neur_zscore/') == False:
+            os.mkdir(self.corr_dir + 'all_neur_zscore/')
         self.current_corr_dir = self.corr_dir + 'all_neur_zscore/' + 'null/'
         if os.path.isdir(self.current_corr_dir) == False:
             os.mkdir(self.current_corr_dir)
