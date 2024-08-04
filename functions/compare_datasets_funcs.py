@@ -2626,5 +2626,74 @@ def cross_dataset_dev_null_plots(dev_null_data, unique_given_names,
         f_log.savefig(os.path.join(results_dir,dev_null_stat+'_combined_log.png'))
         f_log.savefig(os.path.join(results_dir,dev_null_stat+'_combined_log.svg'))
         plt.close(f_log)
+    
+def cross_dataset_cp_plots(cp_data, unique_given_names, unique_taste_names, 
+                           max_cp_counts, results_dir):   
+    """This function is dedicated to plotting deviation statistics compared
+    to null distributions across animals.
+    INPUTS:
+        - dev_null_data: dictionary containing data regarding deviation statistics
+            organized as follows:
+                - cp_data.keys() are the unique_given_names
+                - cp_data[name]['cp_data'] = dict containing deviation stats
+                - cp_data[name]['cp_data'].keys() are the unique_dev_stats_names
+                - cp_data[name]['cp_data'][taste_name] = array of size # deliveries x # cp + 2 with specific changepoint times
+        - unique_taste_names: names of tastes in dataset
+        - max_cp_counts: maximum number of changepoints across datasets
+        - results_dir: storage directory
+    OUTPUTS:
+        - Plots with statistical results
+    """
+    colors = ['green','royalblue','blueviolet','teal','deeppink', \
+              'springgreen','turquoise', 'midnightblue']
+    
+    f_cp_dist, ax_cp_dist = plt.subplots(nrows = max_cp_counts, \
+                                         ncols = len(unique_taste_names), \
+                                         figsize = (8,8))
+    all_cp_list = [[] for cp_i in range(max_cp_counts)]
+    for t_i, taste_name in enumerate(unique_taste_names):
+        #Collect cp data across animals
+        cp_list = [[] for cp_i in range(max_cp_counts)]
+        for name in unique_given_names:
+            cp_array = cp_data[name]['cp_data'][taste_name]
+            taste_cp_diff = np.diff(cp_array)
+            taste_cp_realigned = np.cumsum(taste_cp_diff,1)
+            for cp_i in range(np.shape(cp_array)[1]-2):
+                cp_list[cp_i].extend(list(taste_cp_realigned[:,cp_i]))
+                all_cp_list[cp_i].extend(list(taste_cp_realigned[:,cp_i]))
+        #Plot histograms on appropriate axes
+        for cp_i in range(max_cp_counts):
+            cp_dist = cp_list[cp_i]
+            dist_mean = np.nanmean(cp_dist)
+            dist_median = np.median(cp_dist)
+            ax_cp_dist[cp_i,t_i].hist(cp_dist,density=True,alpha=0.3,\
+                                      color=colors[cp_i],label='_')
+            ax_cp_dist[cp_i,t_i].axvline(dist_mean,label='Mean CP ' + str(cp_i+1) + ' = ' + str(np.round(dist_mean,2)), color=colors[cp_i])
+            ax_cp_dist[cp_i,t_i].axvline(dist_median,label='Median CP ' + str(cp_i+1) + ' = ' + str(np.round(dist_median,2)), linestyle='dashed', color=colors[cp_i])
+            ax_cp_dist[cp_i,t_i].set_title(taste_name + ' cp ' + str(cp_i))
+            ax_cp_dist[cp_i,t_i].set_xlabel('Time After Taste (ms)')
+            ax_cp_dist[cp_i,t_i].set_ylabel('Density')
+            ax_cp_dist[cp_i,t_i].legend(loc='upper left',fontsize=8)
+    plt.tight_layout()
+    f_cp_dist.savefig(os.path.join(results_dir,'cp_dists.png'))
+    f_cp_dist.savefig(os.path.join(results_dir,'cp_dists.svg'))
+    plt.close(f_cp_dist)
         
+    f_all_cp, ax_all_cp = plt.subplots(ncols = max_cp_counts, figsize=(4*max_cp_counts,4))
+    for cp_i in range(max_cp_counts):
+        cp_dist = all_cp_list[cp_i]
+        dist_mean = np.nanmean(cp_dist)
+        dist_median = np.median(cp_dist)
+        ax_all_cp[cp_i].hist(cp_dist,density=True,alpha=0.3,\
+                                  color=colors[cp_i],label='_')
+        ax_all_cp[cp_i].axvline(dist_mean,label='Mean CP ' + str(cp_i+1) + ' = ' + str(np.round(dist_mean,2)), color=colors[cp_i])
+        ax_all_cp[cp_i].axvline(dist_median,label='Median CP ' + str(cp_i+1) + ' = ' + str(np.round(dist_median,2)), linestyle='dashed', color=colors[cp_i])
+        ax_all_cp[cp_i].set_title('All cp ' + str(cp_i))
+        ax_all_cp[cp_i].set_xlabel('Time After Taste (ms)')
+        ax_all_cp[cp_i].set_ylabel('Density')
+        ax_all_cp[cp_i].legend(loc='upper left',fontsize=8)
+    plt.tight_layout()
+    f_all_cp.savefig(os.path.join(results_dir,'all_cp_combined.png'))
+    f_all_cp.savefig(os.path.join(results_dir,'all_cp_combined.svg'))
+    plt.close(f_all_cp)
         
