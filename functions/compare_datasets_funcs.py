@@ -42,7 +42,7 @@ def cross_dataset_dev_freq_taste(corr_data, unique_given_names, unique_corr_name
     # Set parameters
     warnings.filterwarnings('ignore')
     
-    _, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
+    _, _, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
                                     unique_taste_names)
 
     class cross_taste_attributes:
@@ -292,7 +292,7 @@ def cross_dataset_dev_freq_seg(corr_data, unique_given_names, unique_corr_names,
     # Set parameters
     warnings.filterwarnings('ignore')
     
-    _, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
+    _, _, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
                                     unique_taste_names)
 
     class cross_seg_attributes:
@@ -561,18 +561,6 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
     bin_x_vals = np.arange(0, 1, 1/1000)
     
     # Create further save dirs
-    true_save = os.path.join(save_dir, 'True')
-    if not os.path.isdir(true_save):
-        os.mkdir(true_save)
-    norm_save = os.path.join(save_dir, 'Normalized')
-    if not os.path.isdir(norm_save):
-        os.mkdir(norm_save)
-    mean_save = os.path.join(save_dir, 'Mean')
-    if not os.path.isdir(mean_save):
-        os.mkdir(mean_save)
-    mean_norm_save = os.path.join(save_dir, 'Mean_Normalized')
-    if not os.path.isdir(mean_norm_save):
-        os.mkdir(mean_norm_save)
     mean_diff_save = os.path.join(save_dir, 'Corr_Mean_Diffs')
     if not os.path.isdir(mean_diff_save):
         os.mkdir(mean_diff_save)
@@ -585,7 +573,7 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
             setattr(self, names[2], eval(combo[2])[i_3])
 
     # _____Reorganize data by unique correlation type_____
-    unique_data_dict, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
+    unique_data_dict, unique_best_data_dict, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
                                                    unique_taste_names)
 
     # Plot all combinations
@@ -625,25 +613,24 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                 combo_2 = eval(combo[1])[i_2]
                 if type(combo_2) == np.int64:
                     combo_2 = "epoch_" + str(combo_2)
-                f, ax = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    segment_combinations), figsize=(len(segment_combinations)*5, combo_lengths[2]*5))
-                f_norm, ax_norm = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    segment_combinations), figsize=(len(segment_combinations)*5, combo_lengths[2]*5))
-                f_mean, ax_mean = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    segment_combinations), figsize=(len(segment_combinations)*5, combo_lengths[2]*5))
-                f_mean_norm, ax_mean_norm = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    segment_combinations), figsize=(len(segment_combinations)*5, combo_lengths[2]*5))
                 f_mean_diff, ax_mean_diff = plt.subplots(
                     ncols=combo_lengths[2], nrows=2, figsize=(combo_lengths[2]*5, 2*5))
-                max_diff = 0
-                min_diff = 0
+                f_best_mean_diff, ax_best_mean_diff = plt.subplots(
+                    ncols=combo_lengths[2], nrows=2, figsize=(combo_lengths[2]*5, 2*5))
                 max_mean_diff = 0
                 min_mean_diff = 0
+                max_best_mean_diff = 0
+                min_best_mean_diff = 0
                 significance_storage = dict()
+                best_significance_storage = dict()
+                
                 for i_3 in range(combo_lengths[2]):
                     significance_storage[i_3] = dict()
+                    best_significance_storage[i_3] = dict()
                     max_mean_diff_i = 0
                     min_mean_diff_i = 0
+                    max_best_mean_diff_i = 0
+                    min_best_mean_diff_i = 0
                     xlabel = eval(combo[2])[i_3]
                     if type(xlabel) == np.int64:
                         xlabel = "epoch_" + str(xlabel)
@@ -655,196 +642,55 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                     e_i = att.e_i
                     # Pit segment pairs against each other
                     mean_diff_collection = dict()
+                    best_mean_diff_collection = dict()
                     mean_diff_labels = []
                     for sp_i, sp in enumerate(segment_combinations):
                         seg_1 = sp[0]
                         seg_2 = sp[1]
-                        title = seg_2 + ' - ' + seg_1
                         mean_diffs = []
-                        cum_dist_collection = []
+                        best_mean_diffs = []
                         cum_dist_labels = []
+                        best_cum_dist_labels = []
                         counter = 0
+                        best_counter = 0
                         for g_n in unique_given_names:
                             try:
+                                #Reg Means
                                 data_1 = unique_data_dict[corr_name][g_n][seg_1][taste_name]['data'][:, e_i]
-                                counts_1, _ = np.histogram(data_1, bin_edges)
-                                counts_1_smooth = savgol_filter(counts_1, np.ceil(
-                                    len(data_1)/100).astype('int'), polyorder=1)
-                                counts_1_smooth_density = counts_1_smooth / \
-                                    np.sum(counts_1_smooth)
                                 data_2 = unique_data_dict[corr_name][g_n][seg_2][taste_name]['data'][:, e_i]
-                                counts_2, _ = np.histogram(data_2, bin_edges)
-                                counts_2_smooth = savgol_filter(counts_2, np.ceil(
-                                    len(data_2)/100).astype('int'), polyorder=1)
-                                counts_2_smooth_density = counts_2_smooth / \
-                                    np.sum(counts_2_smooth)
-                                cum_dist_collection.append(
-                                    counts_2_smooth_density-counts_1_smooth_density)
-                                cum_dist_labels.append(
-                                    [g_n + '(' + str(counter) + ')'])
                                 mean_diffs.extend(
                                     [np.nanmean(data_2) - np.nanmean(data_1)])
+                                cum_dist_labels.append(
+                                    [g_n + '(' + str(counter) + ')'])
                                 counter += 1
                             except:
                                 print("\tSkipping invalid dataset.")
-                        cum_dist_collection_array = np.array(
-                            cum_dist_collection)
-                        num_cum_dist = len(cum_dist_labels)
-                        # Plot distribution differences as is
-                        ax[i_3, sp_i].axhline(
-                            0, label='_', alpha=0.2, color='k')
-                        ax[i_3, sp_i].axvline(
-                            0.5, label='_', alpha=0.2, color='k')
-                        ax_mean[i_3, sp_i].axhline(
-                            0, label='_', alpha=0.2, color='k')
-                        ax_mean[i_3, sp_i].axvline(
-                            0.5, label='_', alpha=0.2, color='k')
-                        for c_i in range(num_cum_dist):
-                            ax[i_3, sp_i].plot(
-                                bin_x_vals, cum_dist_collection[c_i], label=cum_dist_labels[c_i], alpha=0.75)
+                            try:    
+                                #Best Means
+                                data_1 = unique_best_data_dict[corr_name][g_n][seg_1][taste_name][e_i]
+                                data_2 = unique_best_data_dict[corr_name][g_n][seg_2][taste_name][e_i]
+                                best_mean_diffs.extend(
+                                    [np.nanmean(data_2) - np.nanmean(data_1)])
+                                best_cum_dist_labels.append(
+                                    [g_n + '(' + str(best_counter) + ')'])
+                                best_counter += 1
+                            except:
+                                print("\tSkipping invalid dataset.")
                         # Collect mean distribution differences
                         mean_diff_collection[sp_i] = dict()
                         mean_diff_collection[sp_i]['data'] = mean_diffs
                         mean_diff_collection[sp_i]['labels'] = cum_dist_labels
+                        best_mean_diff_collection[sp_i] = dict()
+                        best_mean_diff_collection[sp_i]['data'] = best_mean_diffs
+                        best_mean_diff_collection[sp_i]['labels'] = best_cum_dist_labels
                         mean_diff_labels.append(seg_2 + ' - ' + seg_1)
-                        if num_cum_dist >= 1:
-                            mean_cum_dist = np.nanmean(
-                                cum_dist_collection_array, 0)
-                            std_cum_dist = np.nanstd(
-                                cum_dist_collection_array, 0)
-                            half_means = np.concatenate((np.mean(
-                                mean_cum_dist[:500])*np.ones(500), np.mean(mean_cum_dist[500:])*np.ones(500)))
-                            max_cum_dist = np.nanmax(cum_dist_collection_array)
-                            if max_cum_dist > max_diff:
-                                max_diff = max_cum_dist
-                            min_cum_dist = np.nanmin(cum_dist_collection_array)
-                            if min_cum_dist < min_diff:
-                                min_diff = min_cum_dist
-                            std_y_low = mean_cum_dist-std_cum_dist
-                            std_y_high = mean_cum_dist+std_cum_dist
-                            # Create std shading
-                            ax[i_3, sp_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            # Plot mean of all curves
-                            ax[i_3, sp_i].plot(
-                                bin_x_vals, mean_cum_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax[i_3, sp_i].plot(
-                                bin_x_vals, half_means, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-                            # Plot mean on separate axes
-                            ax_mean[i_3, sp_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            ax_mean[i_3, sp_i].plot(
-                                bin_x_vals, mean_cum_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax_mean[i_3, sp_i].plot(
-                                bin_x_vals, half_means, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-                        # Plot normalized distribution differences: |max diff| = 1
-                        ax_norm[i_3, sp_i].axhline(
-                            0, label='_', alpha=0.2, color='k')
-                        ax_norm[i_3, sp_i].axvline(
-                            0.5, label='_', alpha=0.2, color='k')
-                        if num_cum_dist > 0:
-                            try:
-                                norm_dist = cum_dist_collection_array/(np.expand_dims(np.nanmax(np.abs(
-                                    cum_dist_collection), 1), 1)*np.ones(np.shape(cum_dist_collection_array)))
-                            except:
-                                norm_dist = cum_dist_collection_array / \
-                                    (np.nanmax(np.abs(cum_dist_collection)) *
-                                     np.ones(np.shape(cum_dist_collection_array)))
-                        for c_i in range(num_cum_dist):
-                            ax_norm[i_3, sp_i].plot(
-                                bin_x_vals, norm_dist[c_i, :], label=cum_dist_labels[c_i], alpha=0.75)
-                        try:
-                            mean_norm_dist = np.nanmean(norm_dist, 0)
-                            std_norm_dist = np.nanstd(norm_dist, 0)
-                            half_means_norm = np.concatenate((np.nanmean(
-                                mean_norm_dist[:500])*np.ones(500), np.nanmean(mean_norm_dist[500:])*np.ones(500)))
-                            # Create std shading
-                            std_y_low = mean_norm_dist-std_norm_dist
-                            std_y_high = mean_norm_dist+std_norm_dist
-                            ax_norm[i_3, sp_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            # Plot mean of all curves
-                            ax_norm[i_3, sp_i].plot(
-                                bin_x_vals, mean_norm_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax_norm[i_3, sp_i].plot(
-                                bin_x_vals, half_means_norm, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-                            # Plot mean to separate axes
-                            ax_mean_norm[i_3, sp_i].axhline(
-                                0, label='_', alpha=0.2, color='k')
-                            ax_mean_norm[i_3, sp_i].axvline(
-                                0.5, label='_', alpha=0.2, color='k')
-                            ax_mean_norm[i_3, sp_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            ax_mean_norm[i_3, sp_i].plot(
-                                bin_x_vals, mean_norm_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax_mean_norm[i_3, sp_i].plot(
-                                bin_x_vals, half_means_norm, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-                        except:
-                            print("\tNo Mean Plotted.")
-                        # Calculate distribution differences significance above 0 using percentile
-                        true_sig_bins = np.zeros(len(bin_x_vals)+2)
-                        norm_sig_bins = np.zeros(len(bin_x_vals)+2)
-                        if num_cum_dist > 1:  # Hopefully that means that there are far more than 1, or else this is silly
-                            for b_i, b_val in enumerate(bin_x_vals):
-                                # True data
-                                bin_dist = cum_dist_collection_array[:, b_i]
-                                cutoff_percentile = np.percentile(bin_dist, 5)
-                                if 0 < cutoff_percentile:
-                                    true_sig_bins[b_i+1] = 1
-                                # Normalized data
-                                bin_dist = norm_dist[:, b_i]
-                                cutoff_percentile = np.percentile(bin_dist, 5)
-                                if 0 < cutoff_percentile:
-                                    norm_sig_bins[b_i+1] = 1
-                        # Plot significance intervals as yellow shaded vertical bars
-                        true_bin_starts = np.where(
-                            np.diff(true_sig_bins) == 1)[0]
-                        true_bin_ends = np.where(
-                            np.diff(true_sig_bins) == -1)[0] - 1
-                        norm_bin_starts = np.where(
-                            np.diff(norm_sig_bins) == 1)[0]
-                        norm_bin_ends = np.where(
-                            np.diff(norm_sig_bins) == -1)[0] - 1
-                        if len(true_bin_starts) > 0:
-                            for tb_i in range(len(true_bin_starts)):
-                                start_i = bin_x_vals[true_bin_starts[tb_i]]
-                                end_i = bin_x_vals[true_bin_ends[tb_i]]
-                                ax[i_3, sp_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow', label='Sig')
-                                ax_mean[i_3, sp_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow', label='Sig')
-                        if len(norm_bin_starts) > 0:
-                            for nb_i in range(len(norm_bin_starts)):
-                                start_i = bin_x_vals[norm_bin_starts[nb_i]]
-                                end_i = bin_x_vals[norm_bin_ends[nb_i]]
-                                ax_norm[i_3, sp_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow', label='Sig')
-                                ax_mean_norm[i_3, sp_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow', label='Sig')
-                        # Plot cleanups
-                        ax[i_3, sp_i].legend(fontsize='8', loc='lower left')
-                        ax[i_3, sp_i].set_xlim([0, 1.1])
-                        ax[i_3, sp_i].set_xlabel(xlabel)
-                        ax[i_3, sp_i].set_title(title)
-                        ax_norm[i_3, sp_i].legend(
-                            fontsize='8', loc='lower left')
-                        ax_norm[i_3, sp_i].set_xlim([0, 1.1])
-                        ax_norm[i_3, sp_i].set_xlabel(xlabel)
-                        ax_norm[i_3, sp_i].set_title(title)
-                        ax_mean[i_3, sp_i].legend(
-                            fontsize='8', loc='lower left')
-                        ax_mean[i_3, sp_i].set_xlim([0, 1.1])
-                        ax_mean[i_3, sp_i].set_xlabel(xlabel)
-                        ax_mean[i_3, sp_i].set_title(title)
-                        ax_mean_norm[i_3, sp_i].legend(
-                            fontsize='8', loc='lower left')
-                        ax_mean_norm[i_3, sp_i].set_xlim([0, 1.1])
-                        ax_mean_norm[i_3, sp_i].set_xlabel(xlabel)
-                        ax_mean_norm[i_3, sp_i].set_title(title)
                     # Plot box plots and trends of mean correlation differences with significance
                     ax_mean_diff[0, i_3].axhline(
                         0, label='_', alpha=0.2, color='k', linestyle='dashed')
+                    ax_best_mean_diff[0, i_3].axhline(
+                        0, label='_', alpha=0.2, color='k', linestyle='dashed')
                     points_boxplot = []
+                    points_boxplot_best = []
                     for m_i in range(len(mean_diff_collection)):
                         points = mean_diff_collection[m_i]['data']
                         if len(points) > 0:
@@ -857,20 +703,45 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                             ax_mean_diff[0, i_3].boxplot([points], positions=[
                                                          m_i+1], sym='', medianprops=dict(linestyle='-', color='blue'), showcaps=True, showbox=True)
                         points_boxplot.append(list(points))
+                    for m_i in range(len(best_mean_diff_collection)):
+                        points_best = best_mean_diff_collection[m_i]['data']
+                        if len(points_best) > 0:
+                            if np.max(points_best) > max_best_mean_diff_i:
+                                max_best_mean_diff_i = np.max(points_best)
+                            if np.min(points_best) < min_best_mean_diff_i:
+                                min_best_mean_diff_i = np.min(points_best)
+                            ax_best_mean_diff[0, i_3].scatter(np.random.normal(
+                                m_i+1, 0.04, size=len(points_best)), points_best, color='g', alpha=0.2)
+                            ax_best_mean_diff[0, i_3].boxplot([points_best], positions=[
+                                                         m_i+1], sym='', medianprops=dict(linestyle='-', color='blue'), showcaps=True, showbox=True)
+                        points_boxplot_best.append(list(points_best))
                     if len(points_boxplot) > 0:
                         if max_mean_diff < max_mean_diff_i:
                             max_mean_diff = max_mean_diff_i
                         if min_mean_diff > min_mean_diff_i:
                             min_mean_diff = min_mean_diff_i
+                    if len(points_boxplot_best) > 0:
+                        if max_best_mean_diff < max_best_mean_diff_i:
+                            max_best_mean_diff = max_best_mean_diff_i
+                        if min_best_mean_diff > min_best_mean_diff_i:
+                            min_best_mean_diff = min_best_mean_diff_i
                     # Now plot the points by animal as lines
                     ax_mean_diff[1, i_3].axhline(
+                        0, label='_', alpha=0.2, color='k', linestyle='dashed')
+                    ax_best_mean_diff[1, i_3].axhline(
                         0, label='_', alpha=0.2, color='k', linestyle='dashed')
                     all_data_labels = []
                     for m_i in range(len(mean_diff_collection)):
                         all_data_labels.extend(
                             mean_diff_collection[m_i]['labels'])
+                    all_best_data_labels = []
+                    for m_i in range(len(best_mean_diff_collection)):
+                        all_best_data_labels.extend(
+                            best_mean_diff_collection[m_i]['labels'])
                     unique_data_labels = np.array(
                         list(np.unique(all_data_labels)))
+                    unique_best_data_labels = np.array(
+                        list(np.unique(all_best_data_labels)))
                     reshape_collection = np.nan * \
                         np.ones((len(unique_data_labels), len(mean_diff_labels)))
                     for label_i, label_name in enumerate(mean_diff_labels):
@@ -881,6 +752,15 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                                 if l_val[0] == ulabel:
                                     reshape_collection[u_index,
                                                        label_i] = data[l_i]
+                    reshape_best_collection = np.nan * \
+                        np.ones((len(unique_best_data_labels), len(mean_diff_labels)))
+                    for label_i, label_name in enumerate(mean_diff_labels):
+                        data = best_mean_diff_collection[label_i]['data']
+                        data_labels = best_mean_diff_collection[label_i]['labels']
+                        for l_i, l_val in enumerate(data_labels):
+                            for u_index, ulabel in enumerate(unique_best_data_labels):
+                                if l_val[0] == ulabel:
+                                    reshape_best_collection[u_index,label_i] = data[l_i]
                     for u_i in range(len(unique_data_labels)):
                         ax_mean_diff[1, i_3].plot(
                             reshape_collection[u_i, :], alpha=0.5, label=unique_data_labels[u_i])
@@ -889,6 +769,15 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                     ax_mean_diff[1, i_3].set_xticks(
                         np.arange(len(mean_diff_labels)), mean_diff_labels, rotation=45)
                     ax_mean_diff[1, i_3].set_ylabel(
+                        'Mean Correlation Difference')
+                    for u_i in range(len(unique_best_data_labels)):
+                        ax_best_mean_diff[1, i_3].plot(
+                            reshape_best_collection[u_i, :], alpha=0.5, label=unique_best_data_labels[u_i])
+                    ax_best_mean_diff[1, i_3].plot(np.arange(len(mean_diff_labels)), np.nanmean(
+                        reshape_best_collection, 0), color='k', alpha=1, linewidth=3)
+                    ax_best_mean_diff[1, i_3].set_xticks(
+                        np.arange(len(mean_diff_labels)), mean_diff_labels, rotation=45)
+                    ax_best_mean_diff[1, i_3].set_ylabel(
                         'Mean Correlation Difference')
                     # Calculate significances
                     # __Significance from 0
@@ -905,6 +794,20 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                             if zero_percentile >= 95:
                                 sig_inds.extend([points_ind+1])
                     significance_storage[i_3]['sig_dists'] = sig_inds
+                    
+                    sig_inds_best = []
+                    for points_ind, points_dist in enumerate(points_boxplot_best):
+                        # First check if positive or negative distribution on average
+                        # Then test significance accordingly
+                        if np.mean(points_dist) > 0:
+                            zero_percentile = percentileofscore(points_dist, 0)
+                            if zero_percentile <= 5:
+                                sig_inds_best.extend([points_ind+1])
+                        if np.mean(points_dist) < 0:
+                            zero_percentile = percentileofscore(points_dist, 0)
+                            if zero_percentile >= 95:
+                                sig_inds_best.extend([points_ind+1])
+                    best_significance_storage[i_3]['sig_dists'] = sig_inds_best
                     # __Pairwise significance
 # 					pair_diffs = list(combinations(np.arange(len(mean_diff_collection)),2))
 # 					step = max_mean_diff_i/10
@@ -926,12 +829,11 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                     ax_mean_diff[0, i_3].set_title(xlabel)
                     ax_mean_diff[0, i_3].set_ylabel(
                         'Mean Correlation Difference')
-                    # Update axis labels of different plots
-                    ax[i_3, 0].set_ylabel('Density Difference')
-                    ax_norm[i_3, 0].set_ylabel('Normalized Density Difference')
-                    ax_mean[i_3, 0].set_ylabel('Density Difference')
-                    ax_mean_norm[i_3, 0].set_ylabel(
-                        'Normalized Density Difference')
+                    ax_best_mean_diff[0, i_3].set_xticks(
+                        np.arange(1, len(best_mean_diff_collection)+1), mean_diff_labels, rotation=45)
+                    ax_best_mean_diff[0, i_3].set_title(xlabel)
+                    ax_best_mean_diff[0, i_3].set_ylabel(
+                        'Mean Correlation Difference')
                 # Update all plots with remaining values
                 for i_3 in range(combo_lengths[2]):
                     # Add significance data
@@ -964,50 +866,39 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                     ax_mean_diff[1, i_3].set_ylim(
                         [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
                     ax_mean_diff[1, i_3].legend()
-                    for sp_i in range(len(segment_combinations)):
-                        ax[i_3, sp_i].set_ylim([min_diff, max_diff])
-                        ax_norm[i_3, sp_i].set_ylim([-1.01, 1.01])
-                        ax_mean[i_3, sp_i].set_ylim([min_diff, max_diff])
-                        ax_mean_norm[i_3, sp_i].set_ylim([-1.01, 1.01])
-                # Finish plots with titles and save
-                f.suptitle('Probability Density Difference: ' +
-                           combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f.tight_layout()
+                for i_3 in range(combo_lengths[2]):
+                    # Add best significance data
+                    step = max_best_mean_diff/10
+                    sig_height = max_best_mean_diff + step
+                    best_sig_taste_data = best_significance_storage[i_3]
+                    for sp_i in list(sig_taste_data.keys()):
+                        try:  # Pair data
+                            ind_1 = best_sig_taste_data[sp_i]['ind_1']
+                            ind_2 = best_sig_taste_data[sp_i]['ind_2']
+                            marker = best_sig_taste_data[sp_i]['marker']
+                            ax_mean_diff[0, i_3].plot(
+                                [ind_1, ind_2], [sig_height, sig_height], color='k', linestyle='solid')
+                            ax_mean_diff[0, i_3].plot([ind_1, ind_1], [
+                                                      sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                            ax_mean_diff[0, i_3].plot([ind_2, ind_2], [
+                                                      sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                            ax_mean_diff[0, i_3].text(
+                                ind_1 + (ind_2-ind_1)/2, sig_height + step/2, marker, horizontalalignment='center', verticalalignment='center')
+                            sig_height += step
+                        except:  # Individual dist significance
+                            dist_sig_data = best_sig_taste_data[sp_i]
+                            for sig_plot_ind in dist_sig_data:
+                                ax_mean_diff[0, i_3].text(
+                                    sig_plot_ind, sig_height, '*', horizontalalignment='center', verticalalignment='center')
+                            sig_height += step
+                    # Adjust y-limits
+                    ax_best_mean_diff[0, i_3].set_ylim(
+                        [min_best_mean_diff - np.abs(min_best_mean_diff)/5, sig_height + sig_height/5])
+                    ax_best_mean_diff[1, i_3].set_ylim(
+                        [min_best_mean_diff - np.abs(min_best_mean_diff)/5, sig_height + sig_height/5])
+                    ax_best_mean_diff[1, i_3].legend()
                 f_pop_vec_plot_name = combo_1.replace(
                     ' ', '_') + '_' + combo_2.replace(' ', '_')
-                f.savefig(os.path.join(
-                    true_save, f_pop_vec_plot_name) + '.png')
-                f.savefig(os.path.join(
-                    true_save, f_pop_vec_plot_name) + '.svg')
-                plt.close(f)
-
-                f_norm.suptitle('Normalized Probability Density Difference: ' +
-                                combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f_norm.tight_layout()
-                f_norm.savefig(os.path.join(
-                    norm_save, f_pop_vec_plot_name) + '_norm.png')
-                f_norm.savefig(os.path.join(
-                    norm_save, f_pop_vec_plot_name) + '_norm.svg')
-                plt.close(f_norm)
-
-                f_mean.suptitle('Mean Probability Density Difference: ' +
-                                combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f_mean.tight_layout()
-                f_mean.savefig(os.path.join(
-                    mean_save, f_pop_vec_plot_name) + '_mean.png')
-                f_mean.savefig(os.path.join(
-                    mean_save, f_pop_vec_plot_name) + '_mean.svg')
-                plt.close(f_mean)
-
-                f_mean_norm.suptitle('Normalized Mean Probability Density Difference: ' +
-                                     combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f_mean_norm.tight_layout()
-                f_mean_norm.savefig(os.path.join(
-                    mean_norm_save, f_pop_vec_plot_name) + '_mean_norm.png')
-                f_mean_norm.savefig(os.path.join(
-                    mean_norm_save, f_pop_vec_plot_name) + '_mean_norm.svg')
-                plt.close(f_mean_norm)
-
                 f_mean_diff.suptitle('Mean Correlation Difference: ' +
                                      combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
                 f_mean_diff.tight_layout()
@@ -1016,7 +907,14 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                 f_mean_diff.savefig(os.path.join(
                     mean_diff_save, f_pop_vec_plot_name) + '_mean_diff.svg')
                 plt.close(f_mean_diff)
-
+                f_best_mean_diff.suptitle('Mean Correlation Difference: ' +
+                                     combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
+                f_best_mean_diff.tight_layout()
+                f_best_mean_diff.savefig(os.path.join(
+                    mean_diff_save, f_pop_vec_plot_name) + '_mean_diff_best.png')
+                f_best_mean_diff.savefig(os.path.join(
+                    mean_diff_save, f_pop_vec_plot_name) + '_mean_diff_best.svg')
+                plt.close(f_best_mean_diff)
 
 def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names,
                       unique_segment_names, unique_taste_names):
@@ -1041,18 +939,6 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
     bin_x_vals = np.arange(0, 1, 1/1000)
     
     # Create further save dirs
-    true_save = os.path.join(save_dir, 'True')
-    if not os.path.isdir(true_save):
-        os.mkdir(true_save)
-    norm_save = os.path.join(save_dir, 'Normalized')
-    if not os.path.isdir(norm_save):
-        os.mkdir(norm_save)
-    mean_save = os.path.join(save_dir, 'Mean')
-    if not os.path.isdir(mean_save):
-        os.mkdir(mean_save)
-    mean_norm_save = os.path.join(save_dir, 'Mean_Normalized')
-    if not os.path.isdir(mean_norm_save):
-        os.mkdir(mean_norm_save)
     mean_diff_save = os.path.join(save_dir, 'Corr_Mean_Diffs')
     if not os.path.isdir(mean_diff_save):
         os.mkdir(mean_diff_save)
@@ -1065,7 +951,7 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
             setattr(self, names[2], eval(combo[2])[i_3])
 
     # _____Reorganize data by unique correlation type_____
-    unique_data_dict = unique_data_dict, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
+    unique_data_dict, unique_best_data_dict, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
                                                                       unique_taste_names)
 
     # Plot all combinations
@@ -1105,14 +991,6 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                 combo_2 = eval(combo[1])[i_2]
                 if type(combo_2) == np.int64:
                     combo_2 = "epoch_" + str(combo_2)
-                f, ax = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    taste_combinations), figsize=(len(taste_combinations)*5, combo_lengths[2]*5))
-                f_norm, ax_norm = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    taste_combinations), figsize=(len(taste_combinations)*5, combo_lengths[2]*5))
-                f_mean, ax_mean = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    taste_combinations), figsize=(len(taste_combinations)*5, combo_lengths[2]*5))
-                f_mean_norm, ax_mean_norm = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    taste_combinations), figsize=(len(taste_combinations)*5, combo_lengths[2]*5))
                 f_mean_diff, ax_mean_diff = plt.subplots(
                     ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 5))
                 max_diff = 0
@@ -1141,25 +1019,14 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                         taste_2 = tp[1]
                         title = taste_2 + ' - ' + taste_1
                         mean_diffs = []
-                        cum_dist_collection = []
                         cum_dist_labels = []
                         counter = 0
                         for g_n in unique_given_names:
                             try:
                                 data_1 = unique_data_dict[corr_name][g_n][seg_name][taste_1]['data'][:, e_i]
                                 counts_1, _ = np.histogram(data_1, bin_edges)
-                                counts_1_smooth = savgol_filter(counts_1, np.ceil(
-                                    len(data_1)/100).astype('int'), polyorder=1)
-                                counts_1_smooth_density = counts_1_smooth / \
-                                    np.sum(counts_1_smooth)
                                 data_2 = unique_data_dict[corr_name][g_n][seg_name][taste_2]['data'][:, e_i]
                                 counts_2, _ = np.histogram(data_2, bin_edges)
-                                counts_2_smooth = savgol_filter(counts_2, np.ceil(
-                                    len(data_2)/100).astype('int'), polyorder=1)
-                                counts_2_smooth_density = counts_2_smooth / \
-                                    np.sum(counts_2_smooth)
-                                cum_dist_collection.append(
-                                    counts_2_smooth_density-counts_1_smooth_density)
                                 cum_dist_labels.append(
                                     [g_n + '(' + str(counter) + ')'])
                                 mean_diffs.extend(
@@ -1167,163 +1034,12 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                                 counter += 1
                             except:
                                 print("\tSkipping invalid dataset.")
-                        cum_dist_collection_array = np.array(
-                            cum_dist_collection)
-                        num_cum_dist = len(cum_dist_labels)
                         # Collect mean distribution differences
                         mean_diff_collection[tp_i] = dict()
                         mean_diff_collection[tp_i]['data'] = mean_diffs
                         mean_diff_collection[tp_i]['labels'] = cum_dist_labels
                         mean_diff_labels.append(taste_2 + ' - ' + taste_1)
-                        if num_cum_dist >= 1:
-                            mean_cum_dist = np.nanmean(
-                                np.array(cum_dist_collection), 0)
-                            std_cum_dist = np.nanstd(
-                                np.array(cum_dist_collection), 0)
-                            half_means = np.concatenate((np.mean(
-                                mean_cum_dist[:500])*np.ones(500), np.mean(mean_cum_dist[500:])*np.ones(500)))
-                            max_cum_dist = np.max(
-                                np.array(cum_dist_collection))
-                            if max_cum_dist > max_diff:
-                                max_diff = max_cum_dist
-                            min_cum_dist = np.min(
-                                np.array(cum_dist_collection))
-                            if min_cum_dist < min_diff:
-                                min_diff = min_cum_dist
-                            std_y_low = mean_cum_dist-std_cum_dist
-                            std_y_high = mean_cum_dist+std_cum_dist
-                        # Plot distribution differences as is
-                        ax[i_3, tp_i].axhline(
-                            0, label='_', alpha=0.2, color='k')
-                        ax[i_3, tp_i].axvline(
-                            0.5, label='_', alpha=0.2, color='k')
-                        for c_i in range(len(cum_dist_collection)):
-                            ax[i_3, tp_i].plot(
-                                bin_x_vals, cum_dist_collection[c_i], label=cum_dist_labels[c_i], alpha=0.75)
-                        try:
-                            # Create std shading
-                            ax[i_3, tp_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            # Plot mean of all curves
-                            ax[i_3, tp_i].plot(
-                                bin_x_vals, mean_cum_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax[i_3, tp_i].plot(
-                                bin_x_vals, half_means, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-
-                            ax_mean[i_3, tp_i].axhline(
-                                0, label='_', alpha=0.2, color='k')
-                            ax_mean[i_3, tp_i].axvline(
-                                0.5, label='_', alpha=0.2, color='k')
-                            ax_mean[i_3, tp_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            ax_mean[i_3, tp_i].plot(
-                                bin_x_vals, mean_cum_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax_mean[i_3, tp_i].plot(
-                                bin_x_vals, half_means, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-                        except:
-                            print("\tNo Mean Plotted.")
-                        ax[i_3, tp_i].legend(fontsize='8', loc='lower left')
-                        ax[i_3, tp_i].set_xlim([0, 1.1])
-                        ax[i_3, tp_i].set_xlabel(xlabel)
-                        ax[i_3, tp_i].set_title(title)
-                        # Plot normalized distribution differences: |max diff| = 1
-                        ax_norm[i_3, tp_i].axhline(
-                            0, label='_', alpha=0.2, color='k')
-                        ax_norm[i_3, tp_i].axvline(
-                            0.5, label='_', alpha=0.2, color='k')
-                        ax_mean_norm[i_3, tp_i].axhline(
-                            0, label='_', alpha=0.2, color='k')
-                        ax_mean_norm[i_3, tp_i].axvline(
-                            0.5, label='_', alpha=0.2, color='k')
-                        if num_cum_dist > 0:
-                            try:
-                                norm_dist = cum_dist_collection_array/(np.expand_dims(np.nanmax(np.abs(
-                                    cum_dist_collection), 1), 1)*np.ones(np.shape(cum_dist_collection_array)))
-                            except:
-                                norm_dist = cum_dist_collection_array / \
-                                    (np.nanmax(np.abs(cum_dist_collection)) *
-                                     np.ones(np.shape(cum_dist_collection_array)))
-                        for c_i in range(len(cum_dist_collection)):
-                            ax_norm[i_3, tp_i].plot(
-                                bin_x_vals, norm_dist[c_i, :], label=cum_dist_labels[c_i], alpha=0.75)
-                        if num_cum_dist > 0:
-                            mean_norm_dist = np.nanmean(norm_dist, 0)
-                            std_norm_dist = np.nanstd(norm_dist, 0)
-                            half_means_norm = np.concatenate((np.nanmean(
-                                mean_norm_dist[:500])*np.ones(500), np.nanmean(mean_norm_dist[500:])*np.ones(500)))
-                            # Create std shading
-                            std_y_low = mean_norm_dist-std_norm_dist
-                            std_y_high = mean_norm_dist+std_norm_dist
-                            ax_norm[i_3, tp_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            # Plot mean of all curves
-                            ax_norm[i_3, tp_i].plot(
-                                bin_x_vals, mean_norm_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax_norm[i_3, tp_i].plot(
-                                bin_x_vals, half_means_norm, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-                            # Plot mean on separate axes
-                            ax_mean_norm[i_3, tp_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            ax_mean_norm[i_3, tp_i].plot(
-                                bin_x_vals, mean_norm_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax_mean_norm[i_3, tp_i].plot(
-                                bin_x_vals, half_means_norm, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-                        ax_norm[i_3, tp_i].legend(
-                            fontsize='8', loc='lower left')
-                        ax_norm[i_3, tp_i].set_xlim([0, 1.1])
-                        ax_norm[i_3, tp_i].set_xlabel(xlabel)
-                        ax_norm[i_3, tp_i].set_title(title)
-                        # Mean plots cleanups
-                        ax_mean[i_3, tp_i].legend(
-                            fontsize='8', loc='lower left')
-                        ax_mean[i_3, tp_i].set_xlim([0, 1.1])
-                        ax_mean[i_3, tp_i].set_xlabel(xlabel)
-                        ax_mean[i_3, tp_i].set_title(title)
-                        ax_mean_norm[i_3, tp_i].legend(
-                            fontsize='8', loc='lower left')
-                        ax_mean_norm[i_3, tp_i].set_xlim([0, 1.1])
-                        ax_mean_norm[i_3, tp_i].set_xlabel(xlabel)
-                        ax_mean_norm[i_3, tp_i].set_title(title)
-                        # Calculate distribution differences significance above 0 using percentile
-                        true_sig_bins = np.zeros(len(bin_x_vals)+2)
-                        norm_sig_bins = np.zeros(len(bin_x_vals)+2)
-                        if num_cum_dist > 1:  # Hopefully that means that there are far more than 1, or else this is silly
-                            for b_i, b_val in enumerate(bin_x_vals):
-                                # True data
-                                bin_dist = cum_dist_collection_array[:, b_i]
-                                cutoff_percentile = np.percentile(bin_dist, 5)
-                                if 0 < cutoff_percentile:
-                                    true_sig_bins[b_i+1] = 1
-                                # Normalized data
-                                bin_dist = norm_dist[:, b_i]
-                                cutoff_percentile = np.percentile(bin_dist, 5)
-                                if 0 < cutoff_percentile:
-                                    norm_sig_bins[b_i+1] = 1
-                        # Plot significance intervals as yellow shaded vertical bars
-                        true_bin_starts = np.where(
-                            np.diff(true_sig_bins) == 1)[0]
-                        true_bin_ends = np.where(
-                            np.diff(true_sig_bins) == -1)[0] - 1
-                        norm_bin_starts = np.where(
-                            np.diff(norm_sig_bins) == 1)[0]
-                        norm_bin_ends = np.where(
-                            np.diff(norm_sig_bins) == -1)[0] - 1
-                        if len(true_bin_starts) > 0:
-                            for tb_i in range(len(true_bin_starts)):
-                                start_i = bin_x_vals[true_bin_starts[tb_i]]
-                                end_i = bin_x_vals[true_bin_ends[tb_i]]
-                                ax[i_3, tp_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow')
-                                ax_mean[i_3, tp_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow')
-                        if len(norm_bin_starts) > 0:
-                            for nb_i in range(len(norm_bin_starts)):
-                                start_i = bin_x_vals[norm_bin_starts[nb_i]]
-                                end_i = bin_x_vals[norm_bin_ends[nb_i]]
-                                ax_norm[i_3, tp_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow')
-                                ax_mean_norm[i_3, tp_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow')
+                    
                     # Plot box plots of mean correlation differences
                     ax_mean_diff[i_3].axhline(
                         0, label='_', alpha=0.2, color='k', linestyle='dashed')
@@ -1380,12 +1096,7 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                         np.arange(1, len(mean_diff_collection)+1), mean_diff_labels, rotation=45)
                     ax_mean_diff[i_3].set_title(xlabel)
                     ax_mean_diff[i_3].set_ylabel('Mean Correlation Difference')
-                    # Update axis labels of different plots
-                    ax[i_3, 0].set_ylabel('Density Difference')
-                    ax_norm[i_3, 0].set_ylabel('Normalized Density Difference')
-                    ax_mean[i_3, 0].set_ylabel('Density Difference')
-                    ax_mean_norm[i_3, 0].set_ylabel(
-                        'Normalized Density Difference')
+                    
                 # Update all plots with remaining values
                 for i_3 in range(combo_lengths[2]):
                     # Add significance data
@@ -1415,50 +1126,9 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                     # Adjust y-limits
                     ax_mean_diff[i_3].set_ylim(
                         [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
-                    for tp_i in range(len(taste_combinations)):
-                        ax[i_3, tp_i].set_ylim([min_diff, max_diff])
-                        ax_norm[i_3, tp_i].set_ylim([-1.01, 1.01])
-                        ax_mean[i_3, tp_i].set_ylim([min_diff, max_diff])
-                        ax_mean_norm[i_3, tp_i].set_ylim([-1.01, 1.01])
                 # Finish plots with titles and save
-                f.suptitle('Probability Density Difference: ' +
-                           combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f.tight_layout()
                 f_pop_vec_plot_name = combo_1.replace(
                     ' ', '_') + '_' + combo_2.replace(' ', '_')
-                f.savefig(os.path.join(
-                    true_save, f_pop_vec_plot_name) + '.png')
-                f.savefig(os.path.join(
-                    true_save, f_pop_vec_plot_name) + '.svg')
-                plt.close(f)
-
-                f_norm.suptitle('Normalized Probability Density Difference: ' +
-                                combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f_norm.tight_layout()
-                f_norm.savefig(os.path.join(
-                    norm_save, f_pop_vec_plot_name) + '_norm.png')
-                f_norm.savefig(os.path.join(
-                    norm_save, f_pop_vec_plot_name) + '_norm.svg')
-                plt.close(f_norm)
-
-                f_mean.suptitle('Mean Probability Density Difference: ' +
-                                combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f_mean.tight_layout()
-                f_mean.savefig(os.path.join(
-                    mean_save, f_pop_vec_plot_name) + '_mean.png')
-                f_mean.savefig(os.path.join(
-                    mean_save, f_pop_vec_plot_name) + '_mean.svg')
-                plt.close(f_mean)
-
-                f_mean_norm.suptitle('Normalized Mean Probability Density Difference: ' +
-                                     combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f_mean_norm.tight_layout()
-                f_mean_norm.savefig(os.path.join(
-                    mean_norm_save, f_pop_vec_plot_name) + '_mean_norm.png')
-                f_mean_norm.savefig(os.path.join(
-                    mean_norm_save, f_pop_vec_plot_name) + '_mean_norm.svg')
-                plt.close(f_mean_norm)
-
                 f_mean_diff.suptitle('Mean Correlation Difference: ' +
                                      combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
                 f_mean_diff.tight_layout()
@@ -1492,18 +1162,6 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
     bin_x_vals = np.arange(0, 1, 1/1000)
     
     # Create further save dirs
-    true_save = os.path.join(save_dir, 'True')
-    if not os.path.isdir(true_save):
-        os.mkdir(true_save)
-    norm_save = os.path.join(save_dir, 'Normalized')
-    if not os.path.isdir(norm_save):
-        os.mkdir(norm_save)
-    mean_save = os.path.join(save_dir, 'Mean')
-    if not os.path.isdir(mean_save):
-        os.mkdir(mean_save)
-    mean_norm_save = os.path.join(save_dir, 'Mean_Normalized')
-    if not os.path.isdir(mean_norm_save):
-        os.mkdir(mean_norm_save)
     mean_diff_save = os.path.join(save_dir, 'Corr_Mean_Diffs')
     if not os.path.isdir(mean_diff_save):
         os.mkdir(mean_diff_save)
@@ -1516,7 +1174,7 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
             setattr(self, names[2], eval(combo[2])[i_3])
 
     # _____Reorganize data by unique correlation type_____
-    unique_data_dict = unique_data_dict, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
+    unique_data_dict, unique_best_data_dict, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
                                                                       unique_taste_names)
 
     # Plot all combinations
@@ -1556,14 +1214,6 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                 combo_2 = eval(combo[1])[i_2]
                 if type(combo_2) == np.int64:
                     combo_2 = "epoch_" + str(combo_2)
-                f, ax = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    epoch_combinations), figsize=(len(epoch_combinations)*5, combo_lengths[2]*5))
-                f_norm, ax_norm = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    epoch_combinations), figsize=(len(epoch_combinations)*5, combo_lengths[2]*5))
-                f_mean, ax_mean = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    epoch_combinations), figsize=(len(epoch_combinations)*5, combo_lengths[2]*5))
-                f_mean_norm, ax_mean_norm = plt.subplots(nrows=combo_lengths[2], ncols=len(
-                    epoch_combinations), figsize=(len(epoch_combinations)*5, combo_lengths[2]*5))
                 f_mean_diff, ax_mean_diff = plt.subplots(
                     ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 5))
                 max_diff = 0
@@ -1593,25 +1243,14 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                         title = 'Epoch ' + \
                             str(epoch_2) + ' - Epoch ' + str(epoch_1)
                         mean_diffs = []
-                        cum_dist_collection = []
                         cum_dist_labels = []
                         counter = 0
                         for g_n in unique_given_names:
                             try:
                                 data_1 = unique_data_dict[corr_name][g_n][seg_name][taste_name]['data'][:, epoch_1]
                                 counts_1, _ = np.histogram(data_1, bin_edges)
-                                counts_1_smooth = savgol_filter(counts_1, np.ceil(
-                                    len(data_1)/100).astype('int'), polyorder=1)
-                                counts_1_smooth_density = counts_1_smooth / \
-                                    np.sum(counts_1_smooth)
                                 data_2 = unique_data_dict[corr_name][g_n][seg_name][taste_name]['data'][:, epoch_2]
                                 counts_2, _ = np.histogram(data_2, bin_edges)
-                                counts_2_smooth = savgol_filter(counts_2, np.ceil(
-                                    len(data_2)/100).astype('int'), polyorder=1)
-                                counts_2_smooth_density = counts_2_smooth / \
-                                    np.sum(counts_2_smooth)
-                                cum_dist_collection.append(
-                                    counts_2_smooth_density-counts_1_smooth_density)
                                 cum_dist_labels.append(
                                     [g_n + '(' + str(counter) + ')'])
                                 mean_diffs.extend(
@@ -1619,163 +1258,12 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                                 counter += 1
                             except:
                                 print("\tSkipping invalid dataset.")
-                        cum_dist_collection_array = np.array(
-                            cum_dist_collection)
-                        num_cum_dist = len(cum_dist_labels)
                         # Collect mean distribution differences
                         mean_diff_collection[ep_i] = dict()
                         mean_diff_collection[ep_i]['data'] = mean_diffs
                         mean_diff_collection[ep_i]['labels'] = cum_dist_labels
                         mean_diff_labels.append(title)
-                        if num_cum_dist >= 1:
-                            mean_cum_dist = np.nanmean(
-                                np.array(cum_dist_collection), 0)
-                            std_cum_dist = np.nanstd(
-                                np.array(cum_dist_collection), 0)
-                            half_means = np.concatenate((np.mean(
-                                mean_cum_dist[:500])*np.ones(500), np.mean(mean_cum_dist[500:])*np.ones(500)))
-                            max_cum_dist = np.max(
-                                np.array(cum_dist_collection))
-                            if max_cum_dist > max_diff:
-                                max_diff = max_cum_dist
-                            min_cum_dist = np.min(
-                                np.array(cum_dist_collection))
-                            if min_cum_dist < min_diff:
-                                min_diff = min_cum_dist
-                            std_y_low = mean_cum_dist-std_cum_dist
-                            std_y_high = mean_cum_dist+std_cum_dist
-                        # Plot distribution differences as is
-                        ax[i_3, ep_i].axhline(
-                            0, label='_', alpha=0.2, color='k')
-                        ax[i_3, ep_i].axvline(
-                            0.5, label='_', alpha=0.2, color='k')
-                        for c_i in range(len(cum_dist_collection)):
-                            ax[i_3, ep_i].plot(
-                                bin_x_vals, cum_dist_collection[c_i], label=cum_dist_labels[c_i], alpha=0.75)
-                        try:
-                            # Create std shading
-                            ax[i_3, ep_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            # Plot mean of all curves
-                            ax[i_3, ep_i].plot(
-                                bin_x_vals, mean_cum_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax[i_3, ep_i].plot(
-                                bin_x_vals, half_means, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-
-                            ax_mean[i_3, ep_i].axhline(
-                                0, label='_', alpha=0.2, color='k')
-                            ax_mean[i_3, ep_i].axvline(
-                                0.5, label='_', alpha=0.2, color='k')
-                            ax_mean[i_3, ep_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            ax_mean[i_3, ep_i].plot(
-                                bin_x_vals, mean_cum_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax_mean[i_3, ep_i].plot(
-                                bin_x_vals, half_means, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-                        except:
-                            print("\tNo Mean Plotted.")
-                        ax[i_3, ep_i].legend(fontsize='8', loc='lower left')
-                        ax[i_3, ep_i].set_xlim([0, 1.1])
-                        ax[i_3, ep_i].set_xlabel(xlabel)
-                        ax[i_3, ep_i].set_title(title)
-                        # Plot normalized distribution differences: |max diff| = 1
-                        ax_norm[i_3, ep_i].axhline(
-                            0, label='_', alpha=0.2, color='k')
-                        ax_norm[i_3, ep_i].axvline(
-                            0.5, label='_', alpha=0.2, color='k')
-                        ax_mean_norm[i_3, ep_i].axhline(
-                            0, label='_', alpha=0.2, color='k')
-                        ax_mean_norm[i_3, ep_i].axvline(
-                            0.5, label='_', alpha=0.2, color='k')
-                        if num_cum_dist > 0:
-                            try:
-                                norm_dist = cum_dist_collection_array/(np.expand_dims(np.nanmax(np.abs(
-                                    cum_dist_collection), 1), 1)*np.ones(np.shape(cum_dist_collection_array)))
-                            except:
-                                norm_dist = cum_dist_collection_array / \
-                                    (np.nanmax(np.abs(cum_dist_collection)) *
-                                     np.ones(np.shape(cum_dist_collection_array)))
-                        for c_i in range(len(cum_dist_collection)):
-                            ax_norm[i_3, ep_i].plot(
-                                bin_x_vals, norm_dist[c_i, :], label=cum_dist_labels[c_i], alpha=0.75)
-                        if num_cum_dist > 0:
-                            mean_norm_dist = np.nanmean(norm_dist, 0)
-                            std_norm_dist = np.nanstd(norm_dist, 0)
-                            half_means_norm = np.concatenate((np.nanmean(
-                                mean_norm_dist[:500])*np.ones(500), np.nanmean(mean_norm_dist[500:])*np.ones(500)))
-                            # Create std shading
-                            std_y_low = mean_norm_dist-std_norm_dist
-                            std_y_high = mean_norm_dist+std_norm_dist
-                            ax_norm[i_3, ep_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            # Plot mean of all curves
-                            ax_norm[i_3, ep_i].plot(
-                                bin_x_vals, mean_norm_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax_norm[i_3, ep_i].plot(
-                                bin_x_vals, half_means_norm, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-                            # Plot mean on separate axes
-                            ax_mean_norm[i_3, ep_i].fill_between(
-                                bin_x_vals, std_y_low, std_y_high, alpha=0.2, color='k', label='Std')
-                            ax_mean_norm[i_3, ep_i].plot(
-                                bin_x_vals, mean_norm_dist, linewidth=3, linestyle='--', color='k', label='Mean')
-                            ax_mean_norm[i_3, ep_i].plot(
-                                bin_x_vals, half_means_norm, linewidth=3, linestyle='dotted', color='k', label='Mean-Binned')
-                        ax_norm[i_3, ep_i].legend(
-                            fontsize='8', loc='lower left')
-                        ax_norm[i_3, ep_i].set_xlim([0, 1.1])
-                        ax_norm[i_3, ep_i].set_xlabel(xlabel)
-                        ax_norm[i_3, ep_i].set_title(title)
-                        # Mean plots cleanups
-                        ax_mean[i_3, ep_i].legend(
-                            fontsize='8', loc='lower left')
-                        ax_mean[i_3, ep_i].set_xlim([0, 1.1])
-                        ax_mean[i_3, ep_i].set_xlabel(xlabel)
-                        ax_mean[i_3, ep_i].set_title(title)
-                        ax_mean_norm[i_3, ep_i].legend(
-                            fontsize='8', loc='lower left')
-                        ax_mean_norm[i_3, ep_i].set_xlim([0, 1.1])
-                        ax_mean_norm[i_3, ep_i].set_xlabel(xlabel)
-                        ax_mean_norm[i_3, ep_i].set_title(title)
-                        # Calculate distribution differences significance above 0 using percentile
-                        true_sig_bins = np.zeros(len(bin_x_vals)+2)
-                        norm_sig_bins = np.zeros(len(bin_x_vals)+2)
-                        if num_cum_dist > 1:  # Hopefully that means that there are far more than 1, or else this is silly
-                            for b_i, b_val in enumerate(bin_x_vals):
-                                # True data
-                                bin_dist = cum_dist_collection_array[:, b_i]
-                                cutoff_percentile = np.percentile(bin_dist, 5)
-                                if 0 < cutoff_percentile:
-                                    true_sig_bins[b_i+1] = 1
-                                # Normalized data
-                                bin_dist = norm_dist[:, b_i]
-                                cutoff_percentile = np.percentile(bin_dist, 5)
-                                if 0 < cutoff_percentile:
-                                    norm_sig_bins[b_i+1] = 1
-                        # Plot significance intervals as yellow shaded vertical bars
-                        true_bin_starts = np.where(
-                            np.diff(true_sig_bins) == 1)[0]
-                        true_bin_ends = np.where(
-                            np.diff(true_sig_bins) == -1)[0] - 1
-                        norm_bin_starts = np.where(
-                            np.diff(norm_sig_bins) == 1)[0]
-                        norm_bin_ends = np.where(
-                            np.diff(norm_sig_bins) == -1)[0] - 1
-                        if len(true_bin_starts) > 0:
-                            for tb_i in range(len(true_bin_starts)):
-                                start_i = bin_x_vals[true_bin_starts[tb_i]]
-                                end_i = bin_x_vals[true_bin_ends[tb_i]]
-                                ax[i_3, ep_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow')
-                                ax_mean[i_3, ep_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow')
-                        if len(norm_bin_starts) > 0:
-                            for nb_i in range(len(norm_bin_starts)):
-                                start_i = bin_x_vals[norm_bin_starts[nb_i]]
-                                end_i = bin_x_vals[norm_bin_ends[nb_i]]
-                                ax_norm[i_3, ep_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow')
-                                ax_mean_norm[i_3, ep_i].fill_betweenx(
-                                    np.array([-1, 1]), start_i, end_i, alpha=0.2, color='yellow')
+                        
                     # Plot box plots of mean correlation differences
                     ax_mean_diff[i_3].axhline(
                         0, label='_', alpha=0.2, color='k', linestyle='dashed')
@@ -1832,12 +1320,6 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                         np.arange(1, len(mean_diff_collection)+1), mean_diff_labels, rotation=45)
                     ax_mean_diff[i_3].set_title(xlabel)
                     ax_mean_diff[i_3].set_ylabel('Mean Correlation Difference')
-                    # Update axis labels of different plots
-                    ax[i_3, 0].set_ylabel('Density Difference')
-                    ax_norm[i_3, 0].set_ylabel('Normalized Density Difference')
-                    ax_mean[i_3, 0].set_ylabel('Density Difference')
-                    ax_mean_norm[i_3, 0].set_ylabel(
-                        'Normalized Density Difference')
                 # Update all plots with remaining values
                 for i_3 in range(combo_lengths[2]):
                     # Add significance data
@@ -1867,50 +1349,10 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                     # Adjust y-limits
                     ax_mean_diff[i_3].set_ylim(
                         [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
-                    for ep_i in range(len(epoch_combinations)):
-                        ax[i_3, ep_i].set_ylim([min_diff, max_diff])
-                        ax_norm[i_3, ep_i].set_ylim([-1.01, 1.01])
-                        ax_mean[i_3, ep_i].set_ylim([min_diff, max_diff])
-                        ax_mean_norm[i_3, ep_i].set_ylim([-1.01, 1.01])
                 # Finish plots with titles and save
-                f.suptitle('Probability Density Difference: ' +
-                           combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f.tight_layout()
                 f_pop_vec_plot_name = combo_1.replace(
                     ' ', '_') + '_' + combo_2.replace(' ', '_')
-                f.savefig(os.path.join(
-                    true_save, f_pop_vec_plot_name) + '.png')
-                f.savefig(os.path.join(
-                    true_save, f_pop_vec_plot_name) + '.svg')
-                plt.close(f)
-
-                f_norm.suptitle('Normalized Probability Density Difference: ' +
-                                combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f_norm.tight_layout()
-                f_norm.savefig(os.path.join(
-                    norm_save, f_pop_vec_plot_name) + '_norm.png')
-                f_norm.savefig(os.path.join(
-                    norm_save, f_pop_vec_plot_name) + '_norm.svg')
-                plt.close(f_norm)
-
-                f_mean.suptitle('Mean Probability Density Difference: ' +
-                                combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f_mean.tight_layout()
-                f_mean.savefig(os.path.join(
-                    mean_save, f_pop_vec_plot_name) + '_mean.png')
-                f_mean.savefig(os.path.join(
-                    mean_save, f_pop_vec_plot_name) + '_mean.svg')
-                plt.close(f_mean)
-
-                f_mean_norm.suptitle('Normalized Mean Probability Density Difference: ' +
-                                     combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
-                f_mean_norm.tight_layout()
-                f_mean_norm.savefig(os.path.join(
-                    mean_norm_save, f_pop_vec_plot_name) + '_mean_norm.png')
-                f_mean_norm.savefig(os.path.join(
-                    mean_norm_save, f_pop_vec_plot_name) + '_mean_norm.svg')
-                plt.close(f_mean_norm)
-
+                
                 f_mean_diff.suptitle('Mean Correlation Difference: ' +
                                      combo_1.replace(' ', '_') + ' x ' + combo_2.replace(' ', '_'))
                 f_mean_diff.tight_layout()
@@ -1933,6 +1375,7 @@ def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_seg
                 unique_data_dict[ucn][udn][usn] = dict()
                 for utn in unique_taste_names:
                     unique_data_dict[ucn][udn][usn][utn] = dict()
+    
     max_epochs = 0
     for d_i in corr_data:  # Each dataset
         dataset = corr_data[d_i]
@@ -1946,14 +1389,70 @@ def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_seg
             for seg_name in seg_names:
                 taste_names = list(corr_dev_stats[seg_name].keys())
                 for taste_name in taste_names:
-                    data = corr_dev_stats[seg_name][taste_name]['data']
-                    num_epochs = data.shape[-1]
-                    if num_epochs > max_epochs:
-                        max_epochs = num_epochs
-                    unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'] = data.reshape(
-                        -1, data.shape[-1])
-
-    return unique_data_dict, max_epochs
+                    try:
+                        data = corr_dev_stats[seg_name][taste_name]['data']
+                        num_epochs = data.shape[-1]
+                        if num_epochs > max_epochs:
+                            max_epochs = num_epochs
+                        unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'] = data.reshape(
+                            -1, data.shape[-1])
+                    except:
+                        unique_data_dict[corr_name][given_name][seg_name][taste_name]['data'] = np.array([])
+    
+    # _____Reorganize best corr data by unique correlation type_____
+    unique_best_data_dict = dict()
+    for ucn in unique_corr_names:
+        unique_best_data_dict[ucn] = dict()
+        for udn in unique_given_names:
+            unique_best_data_dict[ucn][udn] = dict()
+            for usn in unique_segment_names:
+                unique_best_data_dict[ucn][udn][usn] = dict()
+                for utn in unique_taste_names:
+                    unique_best_data_dict[ucn][udn][usn][utn] = dict()
+    
+    for d_i in corr_data:  # Each dataset
+        dataset = corr_data[d_i]
+        given_name = d_i
+        dataset_corr_data = dataset['corr_data']
+        corr_names = list(dataset_corr_data.keys())
+        for cn_i in corr_names:
+            corr_name = cn_i
+            corr_dev_stats = dataset_corr_data[cn_i]
+            seg_names = list(corr_dev_stats.keys())
+            for seg_name in seg_names:
+                data = corr_dev_stats[seg_name]
+                taste_names = list(corr_dev_stats[seg_name].keys())
+                try:
+                    num_dev = data[taste_names[0]]['num_dev']
+                    num_cp = data[taste_names[0]]['num_cp']
+                    #Store the index of [0] the best taste and [1] the best epoch
+                    #   Note, this is on-average the correlation is best across deliveries
+                    best_inds = -1*np.ones((num_dev,2))
+                    for dev_i in range(num_dev):
+                        corr_collection = np.zeros((len(taste_names),num_cp)) #average correlation across deliveries for each taste for each epoch
+                        for t_i, taste in enumerate(taste_names):
+                            corr_collection[t_i,:] = np.nanmean(data[taste]['data'][dev_i,:,:],0)
+                        max_inds = np.where(corr_collection == np.max(corr_collection))
+                        if len(max_inds[0]) > 0:
+                            best_inds[dev_i,0] = max_inds[0][0]
+                            best_inds[dev_i,1] = max_inds[1][0]
+                        else:
+                            best_inds[dev_i,0] = np.nan
+                            best_inds[dev_i,1] = np.nan
+                    #Now store the best correlation values by taste and epoch
+                    for t_i, taste in enumerate(taste_names):
+                        for cp_i in range(num_cp):
+                            corr_list = []
+                            dev_inds = np.where((best_inds[:,0] == t_i)*(best_inds[:,1] == cp_i))[0]
+                            for dev_i in dev_inds:
+                                corr_list.extend(data[taste]['data'][dev_i,:,cp_i])
+                            unique_best_data_dict[cn_i][d_i][seg_name][taste][cp_i] = corr_list
+                except: #No data
+                    for t_i, taste in enumerate(taste_names):
+                        for cp_i in range(num_cp):
+                            unique_best_data_dict[cn_i][d_i][seg_name][taste][cp_i] = []
+                        
+    return unique_data_dict, unique_best_data_dict, max_epochs
 
 def cross_dataset_seg_compare_means(seg_data,unique_given_names,unique_analysis_names,
                               unique_segment_names,unique_bin_sizes,save_dir):

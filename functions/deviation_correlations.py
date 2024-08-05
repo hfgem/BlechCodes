@@ -102,17 +102,17 @@ class run_deviation_correlations():
             self.hdf5_dir, data_group_name, 'discrim_neur'))
         # Convert discriminatory neuron data into pop_taste_cp_raster_inds shape
         # TODO: Test this first, then if going with this rework functions to fit instead!
-        num_discrim_cp = np.shape(discrim_neur)[0]
-        discrim_cp_raster_inds = []
-        for t_i in range(len(self.dig_in_names)):
-            t_cp_vec = np.ones(
-                (np.shape(pop_taste_cp_raster_inds[t_i])[0], num_discrim_cp))
-            t_cp_vec = (peak_epochs[:num_pt_cp] +
-                        int(self.pre_taste*1000))*t_cp_vec
-            discrim_cp_raster_inds.append(t_cp_vec)
-        self.num_discrim_cp = len(peak_epochs)
+        #num_discrim_cp = np.shape(discrim_neur)[0]
+        #discrim_cp_raster_inds = []
+        # for t_i in range(len(self.dig_in_names)):
+        #     t_cp_vec = np.ones(
+        #         (np.shape(pop_taste_cp_raster_inds[t_i])[0], num_discrim_cp))
+        #     t_cp_vec = (peak_epochs[:num_pt_cp] +
+        #                 int(self.pre_taste*1000))*t_cp_vec
+        #     discrim_cp_raster_inds.append(t_cp_vec)
+        #self.num_discrim_cp = len(peak_epochs)
         self.discrim_neur = discrim_neur
-        self.discrim_cp_raster_inds = discrim_cp_raster_inds
+        #self.discrim_cp_raster_inds = discrim_cp_raster_inds
 
     def calculate_correlations_all(self,):
         print("\tCalculate correlations for all neurons")
