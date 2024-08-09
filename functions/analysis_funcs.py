@@ -378,7 +378,7 @@ def get_bin_activity(segment_times_reshaped, segment_spike_times, bin_size,
     bin_fr_vecs_zscore = dict()
     for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
         seg_times = segment_times_reshaped[s_ind]
-        seg_len = seg_times[1] - seg_times[0] + 1
+        seg_len = np.ceil(seg_times[1] - seg_times[0] + 1).astype('int')
         seg_st = segment_spike_times[s_ind] 
         num_neur = len(seg_st)
         #Pull binary raster of segment
