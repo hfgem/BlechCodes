@@ -10,10 +10,10 @@ Functions to support compare_conditions.py in running cross-dataset analyses.
 
 import os
 import warnings
-import easygui
 import pickle
 import numpy as np
 import functions.hdf5_handling as hf5
+from tkinter.filedialog import askdirectory
 
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
@@ -58,8 +58,8 @@ class run_compare_conditions_analysis():
                 self.gather_dev_null_data()
         else:
             print("Please select a storage folder for results.")
-            self.save_dir = easygui.diropenbox(
-                title='Please select the storage folder.')
+            print('Please select the storage folder.')
+            self.save_dir = askdirectory()
             np.save(os.path.join(self.save_dir,'all_data_dict.npy'),\
                     self.all_data_dict,allow_pickle=True)
             self.gather_corr_data()

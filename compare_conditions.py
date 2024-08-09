@@ -10,8 +10,8 @@ Compare results across conditions in plots and with stats
 if __name__ == '__main__':
 
     import os
-    import easygui
     import numpy as np
+    from tkinter.filedialog import askdirectory
     from utils.replay_utils import import_metadata
     from utils.data_utils import import_data
     from functions.compare_conditions_analysis import run_compare_conditions_analysis
@@ -29,8 +29,8 @@ if __name__ == '__main__':
     bool_val = bool_input(
         "Do you have a file stored you'd like to continue analyzing [y/n]? ")
     if bool_val == 'y':
-        save_dir = easygui.diropenbox(
-            title='Please select the storage folder.')
+        print('Please select the storage folder.')
+        save_dir = askdirectory()
         try:
             all_data_dict = np.load(os.path.join(save_dir,'all_data_dict.npy'),allow_pickle=True).item()
         except:
