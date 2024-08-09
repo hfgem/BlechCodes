@@ -168,12 +168,13 @@ def calculate_fr_distribution(spike_times, bin_size):
             - spike_times: binary matrix of num_neur x num_time (in ms bins) with 1s where a neuron fires
             - bin_size: width (in seconds) of bins to calculate the number of spikes in
     """
+    num_neur, _ = np.shape(spike_times)
     bin_dt = int(bin_size*1000)
     bin_borders = np.arange(0, len(spike_times[0, :]), bin_dt)
     bin_frs = np.zeros(len(bin_borders)-1)
     for b_i in range(len(bin_borders)-1):
         bin_frs[b_i] = np.sum(
-            spike_times[:, bin_borders[b_i]:bin_borders[b_i+1]])/bin_size
+            spike_times[:, bin_borders[b_i]:bin_borders[b_i+1]])/num_neur/bin_size
 
     return str(bin_size), bin_frs
 

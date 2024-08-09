@@ -10,10 +10,10 @@ Functions to support compare_conditions.py in running cross-dataset analyses.
 
 import os
 import warnings
-import easygui
 import pickle
 import numpy as np
 import functions.hdf5_handling as hf5
+from tkinter.filedialog import askdirectory
 
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
@@ -58,8 +58,8 @@ class run_compare_conditions_analysis():
                 self.gather_dev_null_data()
         else:
             print("Please select a storage folder for results.")
-            self.save_dir = easygui.diropenbox(
-                title='Please select the storage folder.')
+            print('Please select the storage folder.')
+            self.save_dir = askdirectory()
             np.save(os.path.join(self.save_dir,'all_data_dict.npy'),\
                     self.all_data_dict,allow_pickle=True)
             self.gather_corr_data()
@@ -533,13 +533,13 @@ class run_compare_conditions_analysis():
             dig_in_names = data_dict['dig_in_names']
             rate_corr_data[data_name]['dig_in_names'] = dig_in_names
             seg_names_to_analyze = np.array(rate_corr_data[data_name]['segment_names'])[segments_to_analyze]
-            rate_corr_data[data_name]['seg_data'] = dict()
+            rate_corr_data[data_name]['rate_corr_data'] = dict()
             for nct in range(len(num_corr_types)):
                 corr_type = num_corr_types[nct]
-                rate_corr_data[data_name]['seg_data'][corr_type] = dict()
+                rate_corr_data[data_name]['rate_corr_data'][corr_type] = dict()
                 corr_dir = os.path.join(rate_corr_save_dir,corr_type)
                 try:
-                    rate_corr_data[data_name]['seg_data'][corr_type] = np.load(os.path.join(corr_dir,'popfr_corr_storage.npy'), allow_pickle=True).item()
+                    rate_corr_data[data_name]['rate_corr_data'][corr_type] = np.load(os.path.join(corr_dir,'popfr_corr_storage.npy'), allow_pickle=True).item()
                 except:
                     print("No population fr x taste correlation dictionary found for " + data_name + " corr " + corr_type)
                 #This data is organized by [seg_name][bin_size] gives the result array
@@ -601,7 +601,7 @@ class run_compare_conditions_analysis():
         if num_cond > 1:
             cdf.cross_dataset_pop_rate_taste_corr_plots(self.rate_corr_data, self.unique_given_names, 
                                                         self.unique_corr_types, self.unique_segment_names, 
-                                                        self.unique_taste_names, self.results_dir)
+                                                        self.unique_taste_names, results_dir)
         else:
            print("Not enough animals for segment comparison.")
            
