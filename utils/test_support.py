@@ -64,6 +64,62 @@ data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
 
+#%%
+
+import matplotlib.pyplot as plt
+
+#Calculate spike times for selected segment
+pre_seg_spikes = segment_spike_times[0]
+num_neur = len(pre_seg_spikes)
+time_to_plot = 5*60*1000
+spike_raster = np.zeros((num_neur,time_to_plot))
+spike_list = []
+for n_i in range(num_neur):
+    neur_spikes = np.array(pre_seg_spikes[n_i]).astype('int')
+    keep_spikes = (np.where(np.array(neur_spikes) < time_to_plot)[0]).astype('int')
+    spike_raster[n_i,np.array(neur_spikes)[keep_spikes]] = 1
+    spike_list.append(list(np.array(neur_spikes)[keep_spikes]))
+
+#Calculate Population Rate (Hz)
+bin_size = 40
+bin_starts = np.arange(0,time_to_plot,bin_size)
+pop_rate = np.zeros(np.shape(bin_starts))
+for b_ind, b_i in enumerate(bin_starts):
+    pop_rate[b_ind] = np.sum(spike_raster[:,b_i:b_i+bin_size])/num_neur/(bin_size/1000)
+
+#Firing Rate Vectors
+fr_vecs = np.zeros((num_neur,len(bin_starts)))
+for b_ind, b_i in enumerate(bin_starts):
+    fr_vecs[:,b_ind] = np.sum(spike_raster[:,b_i:b_i+bin_size],1)/(bin_size/1000)
+
+#Full Raster
+plt.figure(figsize=(20,2))
+plt.eventplot(spike_list, colors='k')
+plt.xticks(np.arange(0,time_to_plot,60000),np.arange(0,5,1))
+plt.xlabel('Time (min)')
+plt.ylabel('Neuron Index')
+plt.title('5 Minutes of Pre-Taste Rest')
+
+#Population Rate
+plt.figure(figsize=(20,2))
+plt.plot(pop_rate,c='k')
+len_bin_starts = len(bin_starts)
+min_step = len_bin_starts/5
+x_tick_vals = np.arange(0,len_bin_starts,min_step)
+plt.xticks(x_tick_vals,np.arange(0,5,1))
+plt.xlabel('Time (min)')
+plt.ylabel('Population Rate (Hz)')
+plt.title('5 Minutes of Pre-Taste Rest Population Rate')
+
+#Plot the firing rate vectors as an image
+plt.figure(figsize=(20,2))
+plt.imshow(np.flipud(fr_vecs),aspect='auto',cmap='jet')
+plt.xticks(x_tick_vals,np.arange(0,5,1))
+plt.xlabel('Time (min)')
+plt.ylabel('Population Rate (Hz)')
+plt.title('5 Minutes of Pre-Taste Rest Population Rate')
+
+
 #%% CP Dist Plots
 
 import matplotlib.pyplot as plt
@@ -187,40 +243,73 @@ os.chdir(blech_codes_path)
 import functions.compare_datasets_funcs as cdf
 import functions.compare_conditions_funcs as ccf
 
-warnings.filterwarnings("ignore")
+#%% Compare Conditions Pop Rate x Corr data
 
-dict_save_dir = os.path.join(save_dir, 'corr_data.npy')
-corr_data = np.load(dict_save_dir,allow_pickle=True).item()
-if not os.path.isdir(os.path.join(save_dir,'Correlations')):
-    os.mkdir(os.path.join(save_dir,'Correlations'))
-corr_results_dir = os.path.join(save_dir,'Correlations')
+num_datasets = len(all_data_dict)
+dataset_names = list(all_data_dict.keys())
+rate_corr_data = dict()
+for n_i in range(num_datasets):
+    data_name = dataset_names[n_i]
+    data_dict = all_data_dict[data_name]['data']
+    metadata = all_data_dict[data_name]['metadata']
+    data_save_dir = data_dict['data_path']
+    rate_corr_save_dir = os.path.join(data_save_dir,'Sliding_Correlations')
+    num_corr_types = os.listdir(rate_corr_save_dir)
+    rate_corr_data[data_name] = dict()
+    rate_corr_data[data_name]['num_neur'] = data_dict['num_neur']
+    segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+    rate_corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
+    rate_corr_data[data_name]['segment_names'] = data_dict['segment_names']
+    segment_times = data_dict['segment_times']
+    num_segments = len(rate_corr_data[data_name]['segment_names'])
+    rate_corr_data[data_name]['segment_times_reshaped'] = [
+        [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+    dig_in_names = data_dict['dig_in_names']
+    rate_corr_data[data_name]['dig_in_names'] = dig_in_names
+    seg_names_to_analyze = np.array(rate_corr_data[data_name]['segment_names'])[segments_to_analyze]
+    rate_corr_data[data_name]['rate_corr_data'] = dict()
+    for nct in range(len(num_corr_types)):
+        corr_type = num_corr_types[nct]
+        if corr_type[0] != '.': #Ignore '.DS_Store'
+            rate_corr_data[data_name]['rate_corr_data'][corr_type] = dict()
+            corr_dir = os.path.join(rate_corr_save_dir,corr_type)
+            try:
+                rate_corr_data[data_name]['rate_corr_data'][corr_type] = np.load(os.path.join(corr_dir,'popfr_corr_storage.npy'), allow_pickle=True).item()
+            except:
+                print("No population fr x taste correlation dictionary found for " + data_name + " corr " + corr_type)
+            #This data is organized by [seg_name][bin_size] gives the result array
+       
+np.save(os.path.join(save_dir, 'rate_corr_data.npy'),rate_corr_data,allow_pickle=True)
 
-unique_given_names = list(corr_data.keys())
+if not os.path.isdir(os.path.join(save_dir,'Sliding_Correlation_Comparison')):
+    os.mkdir(os.path.join(save_dir,'Sliding_Correlation_Comparison'))
+rate_corr_results_dir = os.path.join(save_dir,'Sliding_Correlation_Comparison')
+
+rate_corr_data = rate_corr_data
+unique_given_names = list(rate_corr_data.keys())
 unique_given_indices = np.sort(
     np.unique(unique_given_names, return_index=True)[1])
 unique_given_names = [unique_given_names[i]
                       for i in unique_given_indices]
-unique_corr_names = []
+unique_corr_types = []
 for name in unique_given_names:
-    unique_corr_names.extend(list(corr_data[name]['corr_data'].keys()))
-unique_corr_names = np.array(unique_corr_names)
+    unique_corr_types.extend(list(rate_corr_data[name]['rate_corr_data'].keys()))
+unique_corr_types = np.array(unique_corr_types)
 unique_corr_indices = np.sort(
-    np.unique(unique_corr_names, return_index=True)[1])
-unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
+    np.unique(unique_corr_types, return_index=True)[1])
+unique_corr_types = [unique_corr_types[i] for i in unique_corr_indices]
 unique_segment_names = []
 unique_taste_names = []
 for name in unique_given_names:
-    for corr_name in unique_corr_names:
+    for corr_name in unique_corr_types:
         try:
-            seg_names = list(
-                corr_data[name]['corr_data'][corr_name].keys())
-            unique_segment_names.extend(seg_names)
-            for seg_name in seg_names:
-                taste_names = list(
-                    corr_data[name]['corr_data'][corr_name][seg_name].keys())
+            segment_names = list(rate_corr_data[name]['rate_corr_data'][corr_name].keys())
+            unique_segment_names.extend(segment_names)
+            for seg_name in segment_names:
+                taste_names = list(rate_corr_data[name]['rate_corr_data'][corr_name][seg_name].keys())
                 unique_taste_names.extend(taste_names)
         except:
-            print(name + " does not have correlation data for " + corr_name)
+            print(name + " does not have data for " + corr_name)
 unique_segment_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i]
@@ -230,12 +319,6 @@ unique_taste_indices = np.sort(
 unique_taste_names = [unique_taste_names[i]
                       for i in unique_taste_indices]
 
-num_cond = len(corr_data)
-results_dir = corr_results_dir
-
-cross_segment_dir = os.path.join(
-    results_dir, 'cross_segment_plots')
-if os.path.isdir(cross_segment_dir) == False:
-    os.mkdir(cross_segment_dir)
-    
+num_cond = len(rate_corr_data)
+results_dir = rate_corr_results_dir
 

@@ -30,7 +30,7 @@ class run_sliding_correlations():
         self.gather_variables()
         self.calculate_bin_data()
         self.calculate_correlations_all()
-        self.calculate_correlations_zscore()
+        #self.calculate_correlations_zscore()
         
     def gather_variables(self,):
         # Directories
