@@ -69,17 +69,17 @@ class run_compare_conditions_analysis():
             self.gather_dev_stats_data()
             self.gather_dev_null_data()
         #Correlation comparisons
-        #self.find_corr_groupings()
-        #self.plot_corr_results()
+        self.find_corr_groupings()
+        self.plot_corr_results()
         #Segment comparisons
-        self.find_seg_groupings()
-        self.plot_seg_results()
+        #self.find_seg_groupings()
+        #self.plot_seg_results()
         #Changepoint comparisons
         #self.find_cp_groupings()
         #self.plot_cp_results()
         #Pop Rate x Taste Corr comparisons
-        self.find_rate_corr_groupings()
-        self.plot_rate_corr_results()
+        #self.find_rate_corr_groupings()
+        #self.plot_rate_corr_results()
         #Deviation Statistic comparisons
         #self.find_dev_stats_groupings()
         #self.plot_dev_stat_results()
@@ -226,12 +226,16 @@ class run_compare_conditions_analysis():
             print("\tComparing Segments")
             cdf.cross_segment_diffs(self.corr_data, cross_segment_dir, self.unique_given_names,
                                     self.unique_corr_names, self.unique_segment_names, self.unique_taste_names)
+            cdf.combined_corr_by_segment_dist(self.corr_data, cross_segment_dir, self.unique_given_names, 
+                                              self.unique_corr_names,self.unique_segment_names, self.unique_taste_names)
             cross_taste_dir = os.path.join(results_dir, 'cross_taste_plots')
             if os.path.isdir(cross_taste_dir) == False:
                 os.mkdir(cross_taste_dir)
             print("\tComparing Tastes")
             cdf.cross_taste_diffs(self.corr_data, cross_taste_dir, self.unique_given_names,
                                   self.unique_corr_names, self.unique_segment_names, self.unique_taste_names)
+            cdf.combined_corr_by_taste_dist(self.corr_data, cross_taste_dir, self.unique_given_names, 
+                                              self.unique_corr_names,self.unique_segment_names, self.unique_taste_names)
             cross_epoch_dir = os.path.join(results_dir, 'cross_epoch_plots')
             if os.path.isdir(cross_epoch_dir) == False:
                 os.mkdir(cross_epoch_dir)

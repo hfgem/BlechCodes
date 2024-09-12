@@ -243,82 +243,98 @@ os.chdir(blech_codes_path)
 import functions.compare_datasets_funcs as cdf
 import functions.compare_conditions_funcs as ccf
 
-#%% Compare Conditions Pop Rate x Corr data
+#%% Indiv animal correlation support
 
-num_datasets = len(all_data_dict)
-dataset_names = list(all_data_dict.keys())
-rate_corr_data = dict()
-for n_i in range(num_datasets):
-    data_name = dataset_names[n_i]
-    data_dict = all_data_dict[data_name]['data']
-    metadata = all_data_dict[data_name]['metadata']
-    data_save_dir = data_dict['data_path']
-    rate_corr_save_dir = os.path.join(data_save_dir,'Sliding_Correlations')
-    num_corr_types = os.listdir(rate_corr_save_dir)
-    rate_corr_data[data_name] = dict()
-    rate_corr_data[data_name]['num_neur'] = data_dict['num_neur']
-    segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-    rate_corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
-    rate_corr_data[data_name]['segment_names'] = data_dict['segment_names']
-    segment_times = data_dict['segment_times']
-    num_segments = len(rate_corr_data[data_name]['segment_names'])
-    rate_corr_data[data_name]['segment_times_reshaped'] = [
-        [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
-    dig_in_names = data_dict['dig_in_names']
-    rate_corr_data[data_name]['dig_in_names'] = dig_in_names
-    seg_names_to_analyze = np.array(rate_corr_data[data_name]['segment_names'])[segments_to_analyze]
-    rate_corr_data[data_name]['rate_corr_data'] = dict()
-    for nct in range(len(num_corr_types)):
-        corr_type = num_corr_types[nct]
-        if corr_type[0] != '.': #Ignore '.DS_Store'
-            rate_corr_data[data_name]['rate_corr_data'][corr_type] = dict()
-            corr_dir = os.path.join(rate_corr_save_dir,corr_type)
-            try:
-                rate_corr_data[data_name]['rate_corr_data'][corr_type] = np.load(os.path.join(corr_dir,'popfr_corr_storage.npy'), allow_pickle=True).item()
-            except:
-                print("No population fr x taste correlation dictionary found for " + data_name + " corr " + corr_type)
-            #This data is organized by [seg_name][bin_size] gives the result array
-       
-np.save(os.path.join(save_dir, 'rate_corr_data.npy'),rate_corr_data,allow_pickle=True)
+import os
+import json
+import gzip
+import tqdm
+import numpy as np
+import functions.dev_plot_funcs as dpf
+import functions.dev_funcs as df
+import functions.hdf5_handling as hf5
 
-if not os.path.isdir(os.path.join(save_dir,'Sliding_Correlation_Comparison')):
-    os.mkdir(os.path.join(save_dir,'Sliding_Correlation_Comparison'))
-rate_corr_results_dir = os.path.join(save_dir,'Sliding_Correlation_Comparison')
+# Directories
+dev_dir = metadata['dir_name'] + 'Deviations/'
+hdf5_dir = metadata['hdf5_dir']
+comp_dir = metadata['dir_name'] + 'dev_x_taste/'
+if os.path.isdir(comp_dir) == False:
+    os.mkdir(comp_dir)
+corr_dir = comp_dir + 'corr/'
+if os.path.isdir(corr_dir) == False:
+    os.mkdir(corr_dir)
+# Params/Variables
+num_neur = data_dict['num_neur']
+pre_taste = metadata['params_dict']['pre_taste']
+post_taste = metadata['params_dict']['post_taste']
+segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+epochs_to_analyze = metadata['params_dict']['epochs_to_analyze']
+segment_names = data_dict['segment_names']
+num_segments = len(segment_names)
+segment_spike_times = data_dict['segment_spike_times']
+segment_times = data_dict['segment_times']
+segment_times_reshaped = [
+    [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+# Remember this is 1 less than the number of epochs
+num_cp = metadata['params_dict']['num_cp']
+tastant_spike_times = data_dict['tastant_spike_times']
+start_dig_in_times = data_dict['start_dig_in_times']
+end_dig_in_times = data_dict['end_dig_in_times']
+dig_in_names = data_dict['dig_in_names']
+z_bin = metadata['params_dict']['z_bin']
+min_dev_size = metadata['params_dict']['min_dev_size']
 
-rate_corr_data = rate_corr_data
-unique_given_names = list(rate_corr_data.keys())
-unique_given_indices = np.sort(
-    np.unique(unique_given_names, return_index=True)[1])
-unique_given_names = [unique_given_names[i]
-                      for i in unique_given_indices]
-unique_corr_types = []
-for name in unique_given_names:
-    unique_corr_types.extend(list(rate_corr_data[name]['rate_corr_data'].keys()))
-unique_corr_types = np.array(unique_corr_types)
-unique_corr_indices = np.sort(
-    np.unique(unique_corr_types, return_index=True)[1])
-unique_corr_types = [unique_corr_types[i] for i in unique_corr_indices]
-unique_segment_names = []
-unique_taste_names = []
-for name in unique_given_names:
-    for corr_name in unique_corr_types:
-        try:
-            segment_names = list(rate_corr_data[name]['rate_corr_data'][corr_name].keys())
-            unique_segment_names.extend(segment_names)
-            for seg_name in segment_names:
-                taste_names = list(rate_corr_data[name]['rate_corr_data'][corr_name][seg_name].keys())
-                unique_taste_names.extend(taste_names)
-        except:
-            print(name + " does not have data for " + corr_name)
-unique_segment_indices = np.sort(
-    np.unique(unique_segment_names, return_index=True)[1])
-unique_segment_names = [unique_segment_names[i]
-                        for i in unique_segment_indices]
-unique_taste_indices = np.sort(
-    np.unique(unique_taste_names, return_index=True)[1])
-unique_taste_names = [unique_taste_names[i]
-                      for i in unique_taste_indices]
+print("\tNow importing calculated deviations")
+segment_deviations = []
+for s_i in tqdm.tqdm(segments_to_analyze):
+    filepath = dev_dir + \
+        segment_names[s_i] + '/deviations.json'
+    with gzip.GzipFile(filepath, mode="r") as f:
+        json_bytes = f.read()
+        json_str = json_bytes.decode('utf-8')
+        data = json.loads(json_str)
+        segment_deviations.append(data)
+print("\tNow pulling true deviation rasters")
+num_segments = len(segments_to_analyze)
+segment_spike_times_reshaped = [segment_spike_times[i]
+                       for i in segments_to_analyze]
+segment_times_reshaped = np.array(
+    [segment_times_reshaped[i] for i in segments_to_analyze])
+segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments,
+                                                                                                        segment_spike_times_reshaped,
+                                                                                                        segment_times_reshaped,
+                                                                                                        segment_deviations, z_bin)
 
-num_cond = len(rate_corr_data)
-results_dir = rate_corr_results_dir
+print("\tNow pulling changepoints")
+# Import changepoint data
+data_group_name = 'changepoint_data'
+pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'pop_taste_cp_raster_inds')
+pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
+num_pt_cp = num_cp + 2
 
+data_group_name = 'taste_discriminability'
+peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'peak_epochs'))
+discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
+    hdf5_dir, data_group_name, 'discrim_neur'))
+
+current_corr_dir = corr_dir + 'all_neur/'
+if os.path.isdir(current_corr_dir) == False:
+    os.mkdir(current_corr_dir)
+#neuron_keep_indices = np.ones((num_neur,num_cp+1))
+neuron_keep_indices = np.ones(np.shape(discrim_neur))
+
+best_dir = current_corr_dir + 'best/'
+if os.path.isdir(best_dir) == False:
+    os.mkdir(best_dir)
+    
+    
+dpf.best_corr_calc_plot(dig_in_names, epochs_to_analyze,
+                        segments_to_analyze, segment_names,
+                        segment_times_reshaped, segment_dev_times,
+                        dev_dir, min_dev_size, segment_spike_times,
+                        current_corr_dir, pop_taste_cp_raster_inds,
+                        tastant_spike_times, start_dig_in_times,
+                        end_dig_in_times, pre_taste, post_taste, num_neur,
+                        best_dir, no_indiv_plot = False)
