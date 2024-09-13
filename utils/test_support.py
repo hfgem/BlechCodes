@@ -149,99 +149,6 @@ for t_i in range(len(dig_in_names)):
     plt.xlabel('Time Post Taste Delivery (ms)')
     plt.ylabel('Density')
 
-#%% Compare Conditions Support
-
-import os
-import easygui
-import numpy as np
-from utils.replay_utils import import_metadata
-from utils.data_utils import import_data
-from functions.compare_conditions_analysis import run_compare_conditions_analysis
-from functions.compare_conditions_funcs import int_input, bool_input
-import functions.hdf5_handling as hf5
-
-# Grab current directory and data directory / metadata
-script_path = os.path.realpath(__file__)
-blechcodes_dir = os.path.dirname(script_path)
-
-all_data_dict = dict()
-save_dir = ''
-
-# _____Prompt user if they'd like to use previously stored correlation data_____
-print("If you previously started an analysis, you may have a all_data_dict.npy file in the analysis folder.")
-bool_val = bool_input(
-    "Do you have a file stored you'd like to continue analyzing [y/n]? ")
-if bool_val == 'y':
-    save_dir = easygui.diropenbox(
-        title='Please select the storage folder.')
-    try:
-        all_data_dict = np.load(os.path.join(save_dir,'all_data_dict.npy'),allow_pickle=True).item()
-    except:
-        print("All data dict not found in given save folder. Aborting.")
-        quit()
-else:
-    # _____Prompt user for the number of datasets needed in the analysis_____
-    print("Conditions include across days and across animals (the number of separate spike sorted datasets).")
-    num_cond = int_input(
-        "How many conditions-worth of correlation data do you wish to import for this comparative analysis (integer value)? ")
-    if num_cond >= 1:
-        print("Multiple file import selected.")
-    else:
-        print("Single file import selected.")
-
-    # _____Pull all data into a dictionary_____
-    all_data_dict = dict()
-    for nc in range(num_cond):
-        # _____Get the directory of the hdf5 file_____
-        print("Please select the folder where the data # " +
-              str(nc+1) + " is stored.")
-
-        # _____Import relevant data_____
-        metadata_handler = import_metadata([blechcodes_dir])
-        try:
-            dig_in_names = metadata_handler.info_dict['taste_params']['tastes']
-        except:
-            dig_in_names = []
-
-        # import data from hdf5
-        data_handler = import_data(
-            [metadata_handler.dir_name, metadata_handler.hdf5_dir, dig_in_names])
-
-        # repackage data from all handlers
-        metadata = dict()
-        for var in vars(metadata_handler):
-            metadata[var] = getattr(metadata_handler, var)
-        del metadata_handler
-
-        data_dict = dict()
-        for var in vars(data_handler):
-            data_dict[var] = getattr(data_handler, var)
-        del data_handler
-
-        # Grab colloquial name
-        print("Give a more colloquial name to the dataset.")
-        data_name = data_dict['data_path'].split('/')[-2]
-        given_name = input("How would you rename " + data_name + "? ")
-
-        all_data_dict[given_name] = dict()
-        all_data_dict[given_name]['data'] = data_dict
-        all_data_dict[given_name]['metadata'] = metadata
-
-        del data_dict, data_name, given_name, metadata, dig_in_names
-    del nc
-
-import os
-import warnings
-import easygui
-import pickle
-import numpy as np
-
-current_path = os.path.realpath(__file__)
-blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
-os.chdir(blech_codes_path)
-
-import functions.compare_datasets_funcs as cdf
-import functions.compare_conditions_funcs as ccf
 
 #%% Indiv animal correlation support
 
@@ -319,22 +226,73 @@ peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(
 discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
     hdf5_dir, data_group_name, 'discrim_neur'))
 
-current_corr_dir = corr_dir + 'all_neur/'
+current_corr_dir = corr_dir + 'all_neur_zscore/'
 if os.path.isdir(current_corr_dir) == False:
     os.mkdir(current_corr_dir)
-#neuron_keep_indices = np.ones((num_neur,num_cp+1))
 neuron_keep_indices = np.ones(np.shape(discrim_neur))
+# Calculate correlations
+df.calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vec_zscore, tastant_spike_times,
+                                     segment_times, segment_spike_times, start_dig_in_times, end_dig_in_times,
+                                     segment_names, dig_in_names, pre_taste, post_taste, pop_taste_cp_raster_inds,
+                                     current_corr_dir, neuron_keep_indices, segments_to_analyze)
+# Calculate significant events
+sig_dev, sig_dev_counts = df.calculate_significant_dev(segment_dev_times, 
+                                                       segment_times, dig_in_names,
+                                                       segment_names, current_corr_dir,
+                                                       segments_to_analyze)
 
+plot_dir = current_corr_dir + 'plots/'
+if os.path.isdir(plot_dir) == False:
+    os.mkdir(plot_dir)
+
+# Calculate stats
+print("\tCalculating Correlation Statistics")
+corr_dev_stats = df.pull_corr_dev_stats(
+    segment_names, dig_in_names, current_corr_dir, segments_to_analyze)
+print("\tPlotting Correlation Statistics")
+dpf.plot_stats(corr_dev_stats, segment_names, dig_in_names, plot_dir,
+               'Correlation', neuron_keep_indices, segments_to_analyze)
+print("\tPlotting Combined Correlation Statistics")
+segment_pop_vec_data = dpf.plot_combined_stats(corr_dev_stats, segment_names, dig_in_names,
+                                               plot_dir, 'Correlation', neuron_keep_indices, segments_to_analyze)
+segment_pop_vec_data = segment_pop_vec_data
+df.top_dev_corr_bins(corr_dev_stats, segment_names, dig_in_names,
+                     plot_dir, neuron_keep_indices, segments_to_analyze)
+
+print("\tCalculate statistical significance between correlation distributions.")
+current_stats_dir = current_corr_dir + 'stats/'
+if os.path.isdir(current_stats_dir) == False:
+    os.mkdir(current_stats_dir)
+
+# KS-test
+df.stat_significance(segment_pop_vec_data, segment_names, dig_in_names,
+                     current_stats_dir, 'population_vec_correlation', segments_to_analyze)
+
+# T-test less
+df.stat_significance_ttest_less(segment_pop_vec_data, segment_names,
+                                dig_in_names, current_stats_dir,
+                                'population_vec_correlation_ttest_less', segments_to_analyze)
+
+# T-test more
+df.stat_significance_ttest_more(segment_pop_vec_data, segment_names,
+                                dig_in_names, current_stats_dir,
+                                'population_vec_correlation_ttest_more', segments_to_analyze)
+
+# Mean compare
+df.mean_compare(segment_pop_vec_data, segment_names, dig_in_names,
+                current_stats_dir, 'population_vec_mean_difference', segments_to_analyze)
+
+print("\tDetermine best correlation per deviation and plot stats.")
 best_dir = current_corr_dir + 'best/'
 if os.path.isdir(best_dir) == False:
     os.mkdir(best_dir)
-    
-    
+
 dpf.best_corr_calc_plot(dig_in_names, epochs_to_analyze,
                         segments_to_analyze, segment_names,
-                        segment_times_reshaped, segment_dev_times,
+                        segment_times_reshaped, segment_dev_times, 
                         dev_dir, min_dev_size, segment_spike_times,
-                        current_corr_dir, pop_taste_cp_raster_inds,
-                        tastant_spike_times, start_dig_in_times,
-                        end_dig_in_times, pre_taste, post_taste, num_neur,
+                        current_corr_dir, pop_taste_cp_raster_inds, 
+                        tastant_spike_times, start_dig_in_times, 
+                        end_dig_in_times, pre_taste, 
+                        post_taste, num_neur,
                         best_dir, no_indiv_plot = False)

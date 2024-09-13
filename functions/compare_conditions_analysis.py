@@ -133,14 +133,17 @@ class run_compare_conditions_analysis():
                     for s_i in segments_to_analyze:
                         seg_name = corr_data[data_name]['segment_names'][s_i]
                         corr_data[data_name]['corr_data'][nct][seg_name] = dict()
+                        filename_best_corr = os.path.join(result_dir,seg_name + '_best_taste_epoch_array.npy')
+                        best_data = np.load(filename_best_corr)
+                        corr_data[data_name]['corr_data'][nct][seg_name]['best'] = best_data
                         for t_i in range(len(dig_in_names)):
                             taste_name = dig_in_names[t_i]
                             corr_data[data_name]['corr_data'][nct][seg_name][taste_name] = dict(
                             )
                             try:
-                                filename_pop_vec = os.path.join(
+                                filename_corr_pop_vec = os.path.join(
                                     result_dir, seg_name + '_' + taste_name + '_pop_vec.npy')
-                                data = np.load(filename_pop_vec)
+                                data = np.load(filename_corr_pop_vec)
                                 corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['data'] = data
                                 num_dev, num_deliv, num_cp = np.shape(data)
                                 corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_dev'] = num_dev
@@ -275,8 +278,6 @@ class run_compare_conditions_analysis():
             print("\tCross Epoch Plots.")
             ccf.cross_epoch(self.corr_data, cross_epoch_dir, self.unique_given_names,
                             self.unique_corr_names, self.unique_segment_names, self.unique_taste_names)
-
-        print("Done.")
 
     def import_seg_data(self,):
         """Import previously saved segment data"""

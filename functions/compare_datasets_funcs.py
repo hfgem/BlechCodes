@@ -84,22 +84,11 @@ def cross_dataset_dev_freq(corr_data, unique_given_names, unique_corr_names,
                     #Pull out frequency
                     dev_freq_dict[seg_name].extend([num_dev/seg_len_s])
                     #Pull out best designations
-                    best_inds = -1*np.ones((num_dev,2))
-                    for dev_i in range(num_dev):
-                        corr_collection = np.zeros((len(taste_names),num_cp)) #average correlation across deliveries for each taste for each epoch
-                        for t_i, taste in enumerate(taste_names):
-                            corr_collection[t_i,:] = np.nanmean(data[taste]['data'][dev_i,:,:],0)
-                        max_inds = np.where(corr_collection == np.max(corr_collection))
-                        if len(max_inds[0]) > 0:
-                            best_inds[dev_i,0] = max_inds[0][0]
-                            best_inds[dev_i,1] = max_inds[1][0]
-                        else:
-                            best_inds[dev_i,0] = np.nan
-                            best_inds[dev_i,1] = np.nan
+                    best_data = corr_data[g_n]['corr_data'][corr_name][seg_name]['best'] #num_dev x 2 (col 1 = taste, col2 = epoch)
                     #Now store the best correlation values by taste and epoch
                     for t_i, taste in enumerate(taste_names):
                         for cp_i in range(num_cp):
-                            dev_inds = np.where((best_inds[:,0] == t_i)*(best_inds[:,1] == cp_i))[0]
+                            dev_inds = np.where((best_data[:,0] == t_i)*(best_data[:,1] == cp_i))[0]
                             best_dev_freq_dict[seg_name][taste][cp_i].extend([len(dev_inds)/seg_len_s])
                 except:
                     print("No data.")
@@ -2054,18 +2043,7 @@ def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_seg
                     num_cp = data[taste_names[0]]['num_cp']
                     #Store the index of [0] the best taste and [1] the best epoch
                     #   Note, this is on-average the correlation is best across deliveries
-                    best_inds = -1*np.ones((num_dev,2))
-                    for dev_i in range(num_dev):
-                        corr_collection = np.zeros((len(taste_names),num_cp)) #average correlation across deliveries for each taste for each epoch
-                        for t_i, taste in enumerate(taste_names):
-                            corr_collection[t_i,:] = np.nanmean(data[taste]['data'][dev_i,:,:],0)
-                        max_inds = np.where(corr_collection == np.max(corr_collection))
-                        if len(max_inds[0]) > 0:
-                            best_inds[dev_i,0] = max_inds[0][0]
-                            best_inds[dev_i,1] = max_inds[1][0]
-                        else:
-                            best_inds[dev_i,0] = np.nan
-                            best_inds[dev_i,1] = np.nan
+                    best_inds = corr_dev_stats[seg_name]['best']
                     #Now store the best correlation values by taste and epoch
                     for t_i, taste in enumerate(taste_names):
                         for cp_i in range(num_cp):
@@ -2440,7 +2418,10 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
                             seg_epoch_means.append(list(np.nanmean(corr_array,0)))
                             seg_means.append(np.nanmean(corr_array))
                         except:
-                            print(name + ' does not contain ' + corr_type + ' segment ' + seg_name + ' taste ' + taste_name + ' data.')
+                            #print(name + ' does not contain ' + corr_type + ' segment ' + seg_name + ' taste ' + taste_name + ' data.')
+                            #Use nan placeholders
+                            seg_epoch_means.append([np.nan for e_i in range(3)])
+                            seg_means.append([np.nan])
                     mean_corr_dict[corr_type][taste_name][seg_name]['by_epoch'] = np.array(seg_epoch_means)
                     mean_corr_dict[corr_type][taste_name][seg_name]['all'] = np.array(seg_means)
 
@@ -2448,10 +2429,9 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
     
     #Create trend plots by epoch
     for corr_type in unique_corr_types:
-        f, ax = plt.subplots(nrows = len(unique_segment_names), ncols = len(unique_taste_names), figsize = (4*len(unique_taste_names),4*len(unique_segment_names)))
-        f_mean, ax_mean = plt.subplots(nrows = len(unique_segment_names), ncols = 1, figsize = (4,4*len(unique_segment_names)))
-        max_mean = 0
-        min_mean = 0
+        f, ax = plt.subplots(nrows = len(unique_segment_names), ncols = len(unique_taste_names), \
+                             figsize = (4*len(unique_taste_names),4*len(unique_segment_names)),\
+                                 sharex=True,sharey=True)
         for s_i, s_name in enumerate(unique_segment_names):
             for t_i, t_name in enumerate(unique_taste_names):
                 corr_array = mean_corr_dict[corr_type][t_name][s_name]['by_epoch']
@@ -2466,16 +2446,11 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
                         ax[s_i,t_i].scatter(x_vals + animal_x_jitter, corr_array[d_i,:], alpha=0.3, color='g')
                     ax[s_i,t_i].plot(x_vals,np.nanmean(corr_array,0),\
                                      label='Mean',linestyle='dashed',alpha=0.5,color='k')
-                    ax_mean[s_i].plot(x_vals,np.nanmean(corr_array,0),label=t_name,color=taste_colors[t_i])
                     ax[s_i,t_i].set_xticklabels(np.array(['Presence','Identity','Palatability']))
-                    ax_mean[s_i].set_xticks(x_vals,np.array(['Presence','Identity','Palatability'])) 
                     if s_i == 0:
                         ax[s_i,t_i].set_title(t_name)
-                        ax_mean[s_i].set_ylabel('Mean Correlation')
                     if t_i == 0:
                         ax[s_i,t_i].set_ylabel(s_name + '\nMean Correlation')
-                        ax_mean[s_i].set_title(s_name)
-                    ax_mean[s_i].legend(loc='lower right')
                     #Now calculate pairwise significance
                     epoch_pairs = list(combinations(np.arange(3),2))
                     for ep in epoch_pairs:
@@ -2495,24 +2470,11 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
                         if zero_percentile <= 5:
                             corr_max = corr_max*1.05
                             ax[s_i,t_i].text(e_i+1,corr_max,'*%',color='blue')
-                    if corr_min < min_mean:
-                        min_mean = corr_min
-                    if corr_max > max_mean:
-                        max_mean = corr_max
-        for s_i in range(len(unique_segment_names)):
-            ax_mean[s_i].set_ylim([min_mean - 0.1*np.abs(min_mean),max_mean + 0.1*max_mean])
-            for t_i in range(len(unique_taste_names)):
-                ax[s_i,t_i].set_ylim([min_mean - 0.1*np.abs(min_mean),max_mean + 0.1*max_mean])
         f.suptitle(corr_type + ' Mean Correlation of Population Rate to Bin Taste Correlation')
         plt.tight_layout()
         f.savefig(os.path.join(results_dir,corr_type + '_mean_trends_by_epoch.png'))
         f.savefig(os.path.join(results_dir,corr_type + '_mean_trends_by_epoch.svg'))
         plt.close(f)
-        f_mean.suptitle(corr_type + ' Cross-Animal Mean Correlation of Population Rate to Bin Taste Correlation')
-        plt.tight_layout()
-        f_mean.savefig(os.path.join(results_dir,corr_type + '_cross_animal_mean_trends_by_epoch.png'))
-        f_mean.savefig(os.path.join(results_dir,corr_type + '_cross_animal_mean_trends_by_epoch.svg'))
-        plt.close(f_mean)
    
     #Create trend plots of overall means
     for corr_type in unique_corr_types:
@@ -2599,7 +2561,7 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
             taste_max_corr = 0
             taste_min_corr = 1
             for s_i, s_name in enumerate(unique_segment_names):
-                corr_vec = mean_corr_dict[corr_type][taste_name][s_name]['all']
+                corr_vec = mean_corr_dict[corr_type][t_name][s_name]['all']
                 if len(corr_array) > 1:
                     corr_max = np.nanmax(corr_vec)
                     corr_min = np.nanmin(corr_vec)
