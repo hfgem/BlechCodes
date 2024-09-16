@@ -80,6 +80,7 @@ class run_deviation_correlations():
                                for i in self.segments_to_analyze]
         segment_times_reshaped = np.array(
             [self.segment_times_reshaped[i] for i in self.segments_to_analyze])
+        #The following rasters, times, vecs, and z-scored vecs are all only for the indices in segments_to_analyze
         segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments,
                                                                                                                 segment_spike_times_reshaped,
                                                                                                                 segment_times_reshaped,
@@ -251,10 +252,13 @@ class run_deviation_correlations():
         self.best_dir = self.current_corr_dir + 'best/'
         if os.path.isdir(self.best_dir) == False:
             os.mkdir(self.best_dir)
+            
+        segment_times_reshaped = np.array(
+            [self.segment_times_reshaped[i] for i in self.segments_to_analyze])
 
         dpf.best_corr_calc_plot(self.dig_in_names, self.epochs_to_analyze,
                                 self.segments_to_analyze, self.segment_names,
-                                self.segment_times_reshaped, self.segment_dev_times, 
+                                segment_times_reshaped, self.segment_dev_times, 
                                 self.dev_dir, self.min_dev_size, self.segment_spike_times,
                                 self.current_corr_dir, self.pop_taste_cp_raster_inds, 
                                 self.tastant_spike_times, self.start_dig_in_times, 
