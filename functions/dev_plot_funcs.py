@@ -906,14 +906,68 @@ def plot_dev_x_null_single_dist(null_data, true_val, plot_name, save_dir):
     f.savefig(os.path.join(save_dir, plot_name + '.png'))
     f.savefig(os.path.join(save_dir, plot_name + '.svg'))
 
-
 def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
-                        segment_names, segment_dev_times, dev_dir,
-                        corr_data_dir, save_dir):
+                        segment_names, segment_times_reshaped, segment_dev_times,
+                        dev_dir, min_dev_size, segment_spike_times, corr_data_dir,
+                        cp, tastant_spike_times, start_dig_in_times, end_dig_in_times,
+                        pre_taste, post_taste, num_neur, save_dir, no_indiv_plot = False):
     """This function calculates which deviation is correlated most to which
     condition and plots"""
 
     num_tastes = len(dig_in_names)
+    pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
+    post_taste_dt = np.ceil(post_taste*1000).astype('int')
+    half_min_dev_size = int(np.ceil(min_dev_size/2))
+    dev_buffer = 100 #ms before and after to plot
+    num_deliv_plot = 2 #Number of example taste delivery responses to plot
+    
+    if no_indiv_plot == False:
+        # Pull taste delivery fr vecs and rasters
+        all_taste_deliv_fr_vec = []
+        all_taste_deliv_rasters = dict()
+        for t_i in range(num_tastes):
+            taste_cp_pop = cp[t_i]
+            taste_spikes = tastant_spike_times[t_i]
+            # Note, num_cp = num epochs + 1 with the first value the taste delivery index
+            num_deliv, num_cp = np.shape(taste_cp_pop)
+            #Set up dictionary of rasters
+            all_taste_deliv_rasters[t_i] = dict()
+            for cp_i in range(num_cp):
+                all_taste_deliv_rasters[t_i][cp_i] = []
+            taste_deliv_len = [(end_dig_in_times[t_i][deliv_i] - start_dig_in_times[t_i]
+                                [deliv_i] + pre_taste_dt + post_taste_dt + 1) for deliv_i in range(num_deliv)]
+            deliv_adjustment = [start_dig_in_times[t_i][deliv_i] +
+                                pre_taste_dt for deliv_i in range(num_deliv)]
+            # Calculate delivery firing rate vectors
+            taste_deliv_fr_vec = np.zeros((num_deliv, num_cp-1, num_neur))
+            for deliv_i in range(num_deliv):
+                # Pull delivery raster
+                deliv_rast = np.zeros((num_neur, taste_deliv_len[deliv_i]))
+                for n_i in range(num_neur):
+                    n_st = taste_spikes[deliv_i][n_i]
+                    if len(n_st) >= 1:
+                        if len(n_st) > 1:
+                            neur_deliv_st = list(np.array(n_st).astype(
+                                'int') - deliv_adjustment[deliv_i])
+                        else:
+                            neur_deliv_st = int(
+                                n_st[0]) - deliv_adjustment[deliv_i]
+                        deliv_rast[n_i, neur_deliv_st] = 1
+                deliv_fr_vec = np.zeros((num_cp-1, num_neur))
+                for cp_i in range(num_cp-1):
+                    cp_vals = (taste_cp_pop[deliv_i, cp_i:cp_i+2]).astype('int')
+                    epoch_len = cp_vals[1] - cp_vals[0]
+                    #Pull out cp raster
+                    all_taste_deliv_rasters[t_i][cp_i].append(deliv_rast[:, cp_vals[0]:cp_vals[1]])
+                    # Pull out the delivery cp fr vector
+                    deliv_vec = np.sum(
+                        deliv_rast[:, cp_vals[0]:cp_vals[1]], 1)/(epoch_len/1000)  # in Hz
+                    deliv_fr_vec[cp_i, :] = deliv_vec
+                taste_deliv_fr_vec[deliv_i, :, :] = deliv_fr_vec
+            del taste_cp_pop, taste_spikes, num_deliv, num_cp, taste_deliv_len
+            del deliv_adjustment, deliv_i, deliv_rast, n_i, n_st, neur_deliv_st
+            del deliv_fr_vec, cp_i, cp_vals, epoch_len, deliv_vec
+            all_taste_deliv_fr_vec.append(taste_deliv_fr_vec)
 
     best_corr_labels = []
     best_corr_tastes = []
@@ -936,6 +990,7 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
     for s_ind, s_i in enumerate(segments_to_analyze):  # By rest interval
         # Store deviation events by sorted categories
         dev_label_ind = []
+        dev_taste_epoch_label = []
         dev_sorting = dict()
         for l_ind, l_name in enumerate(best_corr_labels):
             dev_sorting[l_name] = dict()
@@ -962,7 +1017,7 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
             [_, num_trials_i, _] = np.shape(t_data)
             num_trial_per_taste.append([num_trials_i])
             all_taste_corr.append(t_data)
-            mean_taste_corr.append(np.mean(t_data, 1))
+            mean_taste_corr.append(np.nanmean(t_data, 1))
 
         # Sort the deviation events by best correlation
         for d_i in range(num_dev):
@@ -973,11 +1028,103 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
             best_ind = np.argmax(corr_vals)
             dev_label_ind.extend([best_ind])
             l_name = best_corr_labels[best_ind]
+            taste_ind = best_corr_tastes[best_ind]
+            epoch_ind = best_corr_epochs[best_ind]
+            dev_taste_epoch_label.append([taste_ind,epoch_ind])
+            #Save to dictionary
             dev_sorting[l_name]['num_dev'] += 1
             dev_sorting[l_name]['start_times'].extend([start_dev_bouts[d_i]])
             dev_sorting[l_name]['end_times'].extend([end_dev_bouts[d_i]])
             dev_sorting[l_name]['corr_vals'].extend([corr_vals[best_ind]])
-
+            if no_indiv_plot == False:
+                if l_name == 'saccharin_1':
+                    #Pull the segment spike times for the deviation event + buffer
+                    dev_times = segment_dev_times[s_ind][:,d_i]
+                    seg_start = segment_times_reshaped[s_ind,0]
+                    dev_start = int(dev_times[0])
+                    dev_len = dev_times[1] - dev_start
+                    dev_rast_ind = []
+                    raster_len = np.ceil(2*dev_buffer + dev_len + 1).astype('int')
+                    dev_binary = np.zeros((num_neur, raster_len))
+                    dev_rast_times = []
+                    for n_i in range(num_neur):
+                        neur_spike_times = np.array(segment_spike_times[s_i][n_i]) - seg_start
+                        seg_spike_ind = np.where((neur_spike_times >= (dev_start - dev_buffer))*\
+                                                 (neur_spike_times <= (dev_start + dev_len + dev_buffer)))[0]
+                        if len(seg_spike_ind) > 0:
+                            seg_spike_times = np.sort(neur_spike_times[seg_spike_ind])
+                            reshape_spike_times = (seg_spike_times - (dev_start - dev_buffer)).astype('int')
+                            dev_rast_times.append(list(reshape_spike_times))
+                            dev_binary[n_i,reshape_spike_times] = 1
+                        else:
+                            dev_rast_times.append([])
+                    del neur_spike_times, seg_spike_ind
+                    #Create firing rates vector
+                    firing_rate_vec = np.zeros(raster_len)
+                    for rt_i in range(raster_len):
+                        min_t_i = max(rt_i-half_min_dev_size, 0)
+                        max_t_i = min(rt_i+half_min_dev_size, raster_len)
+                        firing_rate_vec[rt_i] = np.mean(
+                            np.sum(dev_binary[:, min_t_i:max_t_i], 1)/(half_min_dev_size*2/1000))
+                    rate_x_tick_labels = np.arange(dev_len + 2*dev_buffer + 1)
+                    #Create a plot of the deviation event and example taste event raster
+                    #As well as the firing rate vectors for both
+                    num_taste_deliv, _, _ = np.shape(all_taste_deliv_fr_vec[taste_ind])
+                    plot_true_indices = sample(
+                        list(np.arange(num_taste_deliv)), num_deliv_plot)
+                    dev_fig, dev_ax = plt.subplots(nrows=num_deliv_plot+2,ncols=2,figsize=(10,(num_deliv_plot+2)*4))
+                    #Collect the deviation and taste rasters
+                    _, dev_rast_len = np.shape(dev_binary)
+                    dev_fr_vec = np.sum(dev_binary,1)/(np.shape(dev_binary)[1]/1000)
+                    all_taste_rast_len = []
+                    for ax_ind, pti in enumerate(plot_true_indices):
+                        taste_cp_rast = all_taste_deliv_rasters[taste_ind][epoch_ind][pti]
+                        all_taste_rast_len.extend([np.shape(taste_cp_rast[1])])
+                    #Calculate the longest length raster to make the raster eventplots equal size
+                    max_len = np.max([np.max(all_taste_rast_len),dev_rast_len])
+                    #Plot the taste and epoch rasters
+                    dev_ax[0,0].eventplot(dev_rast_times)
+                    dev_ax[0,0].axvline(dev_buffer)
+                    dev_ax[0,0].axvline(dev_buffer+dev_len)
+                    dev_ax[0,0].axvline(max_len,color='k')
+                    dev_ax[0,0].set_title('Deviation Raster')
+                    #Plot the population rate for the deviation event
+                    dev_ax[0,1].plot(rate_x_tick_labels,firing_rate_vec)
+                    dev_ax[0,1].axvline(dev_buffer)
+                    dev_ax[0,1].axvline(dev_buffer+dev_len)
+                    dev_ax[0,1].axvline(max_len,color='k')
+                    #Plot the taste responses
+                    for ax_ind, pti in enumerate(plot_true_indices):
+                        #Pull raster for example taste delivery
+                        taste_cp_rast = all_taste_deliv_rasters[taste_ind][epoch_ind][pti]
+                        taste_rast_times = []
+                        for n_i in range(num_neur):
+                            taste_rast_times.append(list(np.where(taste_cp_rast[n_i,:] == 1)[0]))
+                        #Calculate firing rate vector for delivery
+                        taste_fr_vec = np.sum(taste_cp_rast,1)/(all_taste_rast_len[ax_ind][0]/1000)
+                        #Plot raster and vec
+                        dev_ax[ax_ind+1,0].eventplot(taste_rast_times)
+                        dev_ax[ax_ind+1,0].axvline(max_len,color='k')
+                        dev_ax[ax_ind+1,0].set_title('Ex Taste Raster ' + str(pti))
+                        dev_ax[ax_ind+1,1].imshow(np.expand_dims(taste_fr_vec,0),cmap='viridis')
+                        dev_ax[ax_ind+1,1].set_title('Taste Response Firing Rate Vector')
+                    #Plot the deviation firing rate vec as an imshow
+                    dev_ax[num_deliv_plot+1,0].imshow(np.expand_dims(dev_fr_vec,0),cmap='viridis')
+                    dev_ax[num_deliv_plot+1,0].set_title('Deviation Firing Rate Vector')
+                    #Plot the average taste firing rate vec as an imshow
+                    all_taste_fr_vec = all_taste_deliv_fr_vec[taste_ind][:,epoch_ind,:].squeeze()
+                    dev_ax[num_deliv_plot+1,1].imshow(np.expand_dims(np.nanmean(all_taste_fr_vec,0),0),cmap='viridis')
+                    dev_ax[num_deliv_plot+1,1].set_title('Average Taste Response Firing Rate Vector')
+                    #Add suptitle and clean up to save
+                    dev_fig.suptitle('Segment ' + str(s_i) + '\nDev ' + str(d_i) + '\nBest Fit ' + l_name)
+                    plt.tight_layout()
+                    dev_fig.savefig(os.path.join(save_dir, 'seg_' + str(s_i) + '_dev_'+str(d_i)+'_'+l_name+'.png'))
+                    dev_fig.savefig(os.path.join(save_dir, 'seg_' + str(s_i) + '_dev_'+str(d_i)+'_'+l_name+'.svg'))
+                    plt.close(dev_fig)
+        #Save label indices for later easy use
+        dev_taste_epoch_label_array = np.array(dev_taste_epoch_label)
+        np.save(os.path.join(corr_data_dir,segment_names[s_i] + '_best_taste_epoch_array.npy'),dev_taste_epoch_label_array)
+        
         # Calculate the fractions
         count_per_label = np.zeros(len(best_corr_labels))
         count_per_taste = np.zeros(num_tastes)
@@ -1000,6 +1147,7 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
                         fraction_per_epoch*100, label=segment_names[s_i])
 
         seg_data[s_i] = dev_sorting
+    
     ax_frac[0].set_ylabel('Percent of Deviation Events')
     ax_frac[0].set_xticks(np.arange(len(best_corr_labels)),
                           best_corr_labels, rotation=45)
@@ -1045,7 +1193,7 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
             ax_cum[s_ind, 0].set_xlim([-0.05, 1.05])
             ax_dens[s_ind, 0].plot(
                 density_x_vals, density_hist_data[0], color=taste_colors[t_i, :], label=dig_in_names[t_i])
-            ax_dens[s_ind, 0].set_ylim([-0.05, 1.05])
+            #ax_dens[s_ind, 0].set_ylim([-0.05, 1.05])
             ax_dens[s_ind, 0].set_xlim([-0.05, 1.05])
         # Epoch data
         epoch_density = []
@@ -1064,7 +1212,7 @@ def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
             ax_cum[s_ind, 1].set_xlim([-0.05, 1.05])
             ax_dens[s_ind, 1].plot(
                 density_x_vals, density_hist_data[0], color=epoch_colors[e_ind, :], label='Epoch ' + str(e_i))
-            ax_dens[s_ind, 1].set_ylim([-0.05, 1.05])
+            #ax_dens[s_ind, 1].set_ylim([-0.05, 1.05])
             ax_dens[s_ind, 1].set_xlim([-0.05, 1.05])
         # Plot cleanups
         ax_cum[s_ind, 0].set_ylabel(segment_names[s_i])

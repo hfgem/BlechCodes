@@ -18,7 +18,7 @@ from scipy.stats import ks_2samp, ttest_ind, percentileofscore
 from scipy.signal import savgol_filter
 
 
-def cross_dataset_dev_freq_taste(corr_data, unique_given_names, unique_corr_names,
+def cross_dataset_dev_freq(corr_data, unique_given_names, unique_corr_names,
                                  unique_segment_names, unique_taste_names, save_dir):
     """This function collects deviation correlation statistics across different
     datasets and plots the frequencies of deviation correlation events for 
@@ -41,498 +41,257 @@ def cross_dataset_dev_freq_taste(corr_data, unique_given_names, unique_corr_name
     """
     # Set parameters
     warnings.filterwarnings('ignore')
-    
-    _, _, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
-                                    unique_taste_names)
 
-    class cross_taste_attributes:
-        def __init__(self, combo, names, i_1, i_2, i_3, unique_corr_names,
-                     unique_segment_names, unique_epochs):
-            setattr(self, names[0], eval(combo[0])[i_1])
-            setattr(self, names[1], eval(combo[1])[i_2])
-            setattr(self, names[2], eval(combo[2])[i_3])
-
-    # Plot all combinations
-    unique_epochs = np.arange(max_epochs)
-    characteristic_list = ['unique_corr_names',
-                           'unique_segment_names', 'unique_epochs']
-    characteristic_dict = dict()
-    for cl in characteristic_list:
-        characteristic_dict[cl] = eval(cl)
-    name_list = ['corr_name', 'seg_name', 'e_i']
-    # Get attribute pairs for plotting views
-    all_combinations = list(combinations(characteristic_list, 2))
-    all_combinations_full = []
-    all_names_full = []
-    for ac in all_combinations:
-        ac_list = list(ac)
-        missing = np.setdiff1d(characteristic_list, ac_list)
-        full_combo = ac_list
-        full_combo.extend(missing)
-        all_combinations_full.append(full_combo)
-        names_combo = [
-            name_list[characteristic_list.index(c)] for c in full_combo]
-        all_names_full.append(names_combo)
-
-    for c_i in range(len(all_combinations_full)):
-        combo = all_combinations_full[c_i]
-        combo_lengths = [len(characteristic_dict[combo[i]])
-                         for i in range(len(combo))]
-        names = all_names_full[c_i]
-        for i_1 in range(combo_lengths[0]):
-            combo_1 = eval(combo[0])[i_1]
-            if type(combo_1) == np.int64:
-                combo_1 = "epoch_" + str(combo_1)
-            for i_2 in range(combo_lengths[1]):
-                combo_2 = eval(combo[1])[i_2]
-                if type(combo_2) == np.int64:
-                    combo_2 = "epoch_" + str(combo_2)
-                f_all, ax_all = plt.subplots(
-                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 5))
-                f_best, ax_best = plt.subplots(
-                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 5))
-                max_freq = 0
-                max_best_freq = 0
-                significance_storage = dict()
-                best_significance_storage = dict()
-                for i_3 in range(combo_lengths[2]):
-                    significance_storage[i_3] = dict()
-                    best_significance_storage[i_3] = dict()
-                    i3_label = eval(combo[2])[i_3]
-                    if type(i3_label) == np.int64:
-                        i3_label = "epoch_" + str(i3_label)
-                    # Begin pulling data
-                    att = cross_taste_attributes(combo, names, i_1, i_2, i_3, unique_corr_names,
-                                                 unique_segment_names, unique_epochs)
-                    corr_name = att.corr_name
-                    seg_name = att.seg_name
-                    e_i = att.e_i
-                    # For each animal collect frequency data for the deviation events which on average are most correlated to a particular taste
-                    dev_freq_dict = dict()
-                    for g_n in unique_given_names:
-                        dev_freq_dict[g_n] = dict()
-                        seg_ind = np.where([corr_data[g_n]['segment_names'][s_i] == seg_name for s_i in range(
-                            len(corr_data[g_n]['segment_names']))])[0][0]
-                        seg_len = corr_data[g_n]['segment_times_reshaped'][seg_ind][1] - \
-                            corr_data[g_n]['segment_times_reshaped'][seg_ind][0]
-                        seg_len_s = seg_len/1000
-                        try:
-                            taste_names = corr_data[g_n]['corr_data'][corr_name][seg_name].keys(
-                            )
-                            taste_mean_corrs = []
-                            for t_i, t_name in enumerate(taste_names):
-                                taste_corr_data = corr_data[g_n]['corr_data'][corr_name][seg_name][t_name]['data']
-                                taste_epoch_corr_data = taste_corr_data[:, :, e_i]
-                                taste_epoch_mean_corr = np.nanmean(
-                                    taste_epoch_corr_data, 1)
-                                taste_mean_corrs.append(
-                                    list(taste_epoch_mean_corr))
-                            best_taste_per_dev = np.argmax(
-                                np.array(taste_mean_corrs), 0)
-                            for t_i, t_name in enumerate(taste_names):
-                                taste_corr_inds = np.where(
-                                    best_taste_per_dev == t_i)[0]
-                                num_all_corr = len(taste_corr_inds)
-                                num_best_corr = len(np.where(np.array(taste_mean_corrs)[
-                                                    t_i, taste_corr_inds] > 0.5)[0])
-                                dev_freq_dict[g_n][t_name] = dict()
-                                dev_freq_dict[g_n][t_name]['all'] = num_all_corr/seg_len_s
-                                dev_freq_dict[g_n][t_name]['best'] = num_best_corr/seg_len_s
-                        except:
-                            print("No data.")
-                    # For each taste create boxplots of the rate distributions
-                    ax_all[i_3].axhline(
-                        0, label='_', alpha=0.2, color='k', linestyle='dashed')
-                    ax_best[i_3].axhline(
-                        0, label='_', alpha=0.2, color='k', linestyle='dashed')
-                    all_taste_data = []
-                    all_taste_data_indices = []
-                    all_best_taste_data = []
-                    all_best_taste_data_indices = []
-                    for t_i, t_name in enumerate(unique_taste_names):
-                        # all data
-                        taste_rates = []
-                        for g_n in unique_given_names:
-                            try:
-                                taste_rates.extend(
-                                    [dev_freq_dict[g_n][t_name]['all']])
-                            except:
-                                print("Skipping dataset.")
-                        if len(taste_rates) > 0:
-                            ax_all[i_3].scatter(np.random.normal(
-                                t_i+1, 0.04, size=len(taste_rates)), taste_rates, color='g', alpha=0.2)
-                            ax_all[i_3].boxplot([taste_rates], positions=[
-                                                t_i+1], sym='', meanline=True, medianprops=dict(linestyle='-', color='blue'), showcaps=True, showbox=True)
-                            if np.max(taste_rates) > max_freq:
-                                max_freq = np.max(taste_rates)
-                            all_taste_data.append(taste_rates)
-                            all_taste_data_indices.extend([t_i])
-                        # best data
-                        best_taste_rates = []
-                        for g_n in unique_given_names:
-                            try:
-                                best_taste_rates.extend(
-                                    [dev_freq_dict[g_n][t_name]['best']])
-                            except:
-                                print("Skipping dataset.")
-                        if len(best_taste_rates) > 0:
-                            ax_best[i_3].scatter(np.random.normal(
-                                t_i+1, 0.04, size=len(best_taste_rates)), best_taste_rates, color='g', alpha=0.2)
-                            ax_best[i_3].boxplot([best_taste_rates], positions=[
-                                                 t_i+1], sym='', meanline=True, medianprops=dict(linestyle='-', color='blue'), showcaps=True, showbox=True)
-                            if np.max(best_taste_rates) > max_best_freq:
-                                max_best_freq = np.max(best_taste_rates)
-                            all_best_taste_data.append(best_taste_rates)
-                            all_best_taste_data_indices.extend([t_i])
-                    ax_all[i_3].set_xticks(
-                        np.arange(1, len(unique_taste_names)+1), unique_taste_names)
-                    ax_all[i_3].set_xlabel(i3_label)
-                    ax_all[i_3].set_ylabel('Frequency (Hz)')
-                    ax_best[i_3].set_xticks(
-                        np.arange(1, len(unique_taste_names)+1), unique_taste_names)
-                    ax_best[i_3].set_xlabel(i3_label)
-                    ax_best[i_3].set_ylabel('Frequency (Hz)')
-                    # Test pairwise significance #TTEST
-                    pair_nums = list(combinations(all_taste_data_indices, 2))
-                    for pair_i, pair in enumerate(pair_nums):
-                        data_1 = all_taste_data[pair[0]]
-                        data_2 = all_taste_data[pair[1]]
-                        if (len(data_1) > 0)*(len(data_2) > 0):
-                            result = ttest_ind(data_1, data_2)
-                            if result[1] <= 0.05:
-                                ind_1 = pair[0] + 1
-                                ind_2 = pair[1] + 1
-                                significance_storage[i_3][pair_i] = dict()
-                                significance_storage[i_3][pair_i]['ind_1'] = ind_1
-                                significance_storage[i_3][pair_i]['ind_2'] = ind_2
-                    pair_nums = list(combinations(
-                        all_best_taste_data_indices, 2))
-                    for pair_i, pair in enumerate(pair_nums):
-                        data_1 = all_best_taste_data[pair[0]]
-                        data_2 = all_best_taste_data[pair[1]]
-                        if (len(data_1) > 0)*(len(data_2) > 0):
-                            result = ks_2samp(data_1, data_2)
-                            if result[1] <= 0.05:
-                                ind_1 = pair[0] + 1
-                                ind_2 = pair[1] + 1
-                                best_significance_storage[i_3][pair_i] = dict()
-                                best_significance_storage[i_3][pair_i]['ind_1'] = ind_1
-                                best_significance_storage[i_3][pair_i]['ind_2'] = ind_2
-                for i_3 in range(combo_lengths[2]):
-                    # Add significance data
-                    step = max_freq/10
-                    sig_height = max_freq + step
-                    sig_taste_data = significance_storage[i_3]
-                    for sp_i in list(sig_taste_data.keys()):
-                        ind_1 = sig_taste_data[sp_i]['ind_1']
-                        ind_2 = sig_taste_data[sp_i]['ind_2']
-                        ax_all[i_3].plot([ind_1, ind_2], [
-                                         sig_height, sig_height], color='k', linestyle='solid')
-                        ax_all[i_3].plot([ind_1, ind_1], [
-                                         sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
-                        ax_all[i_3].plot([ind_2, ind_2], [
-                                         sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
-                        ax_all[i_3].text(ind_1 + (ind_2-ind_1)/2, sig_height + step/2,
-                                         '*', horizontalalignment='center', verticalalignment='center')
-                        sig_height += step
-                    best_sig_height = max_best_freq + step
-                    best_sig_taste_data = best_significance_storage[i_3]
-                    for sp_i in list(best_sig_taste_data.keys()):
-                        ind_1 = sig_taste_data[sp_i]['ind_1']
-                        ind_2 = sig_taste_data[sp_i]['ind_2']
-                        ax_best[i_3].plot([ind_1, ind_2], [
-                                          best_sig_height, best_sig_height], color='k', linestyle='solid')
-                        ax_best[i_3].plot([ind_1, ind_1], [
-                                          best_sig_height-step/2, best_sig_height+step/2], color='k', linestyle='solid')
-                        ax_best[i_3].plot([ind_2, ind_2], [
-                                          best_sig_height-step/2, best_sig_height+step/2], color='k', linestyle='solid')
-                        ax_best[i_3].text(ind_1 + (ind_2-ind_1)/2, best_sig_height + step/2,
-                                          '*', horizontalalignment='center', verticalalignment='center')
-                        best_sig_height += step
-                    # Adjust y-limits
-                    ax_all[i_3].set_ylim([-1*step, sig_height])
-                    ax_best[i_3].set_ylim([-1*step, best_sig_height])
-                f_all.suptitle(combo_2)
-                f_all_name = combo_1.replace(
-                    ' ', '_') + '_' + combo_2.replace(' ', '_') + '_all'
-                plt.tight_layout()
-                f_all.savefig(os.path.join(save_dir, f_all_name) + '.png')
-                f_all.savefig(os.path.join(save_dir, f_all_name) + '.svg')
-                plt.close(f_all)
-                f_best.suptitle(combo_2)
-                f_best_name = combo_1.replace(
-                    ' ', '_') + '_' + combo_2.replace(' ', '_') + '_best'
-                plt.tight_layout()
-                f_best.savefig(os.path.join(save_dir, f_best_name) + '.png')
-                f_best.savefig(os.path.join(save_dir, f_best_name) + '.svg')
-                plt.close(f_best)
-
-
-def cross_dataset_dev_freq_seg(corr_data, unique_given_names, unique_corr_names,
-                               unique_segment_names, unique_taste_names, save_dir):
-    """This function collects deviation correlation statistics across different
-    datasets and plots the frequencies of deviation correlation events for 
-    different conditions
-    INPUTS:
-            - corr_data: dictionary containing correlation data across conditions.
-                    length = number of datasets
-                    corr_data[name] = dictionary of dataset data
-                    corr_data[name]['corr_data'] = dict of length #correlation types
-                    corr_data[name]['corr_data'][corr_name] = dict of length #segments
-                    corr_data[name]['corr_data'][corr_name][seg_name] = dict of length #tastes
-                    corr_data[name]['corr_data'][corr_name][seg_name][taste_name]['data'] = numpy 
-                            array of population average vector correlations [num_dev x num_trials x num_epochs]
-            - unique_given_names: unique names of datasets
-            - unique_corr_names: unique names of correlation analysis types
-            - unique_segment_names: unique names of experimental segments
-            - unique_taste_names: unique names of tastants
-            - save_dir: where to save resulting plots
-    OUTPUTS: plots and statistical significance tests comparing taste rates to each other
-    """
-    # Set parameters
-    warnings.filterwarnings('ignore')
-    
-    _, _, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
-                                    unique_taste_names)
-
-    class cross_seg_attributes:
-        def __init__(self, combo, names, i_1, i_2, i_3, unique_corr_names,
-                     unique_taste_names, unique_epochs):
-            setattr(self, names[0], eval(combo[0])[i_1])
-            setattr(self, names[1], eval(combo[1])[i_2])
-            setattr(self, names[2], eval(combo[2])[i_3])
+    max_epochs = 0
+    for corr_name in unique_corr_names:
+        for seg_name in unique_segment_names:
+            for g_n in unique_given_names:
+                for taste_name in unique_taste_names:
+                    try:
+                        num_cp = corr_data[g_n]['corr_data'][corr_name][seg_name][taste_name]['num_cp']
+                        if num_cp > max_epochs:
+                            max_epochs = num_cp
+                    except:
+                        max_epochs = max_epochs
 
     # Plot all combinations
-    unique_epochs = np.arange(max_epochs)
-    characteristic_list = ['unique_corr_names',
-                           'unique_taste_names', 'unique_epochs']
-    characteristic_dict = dict()
-    for cl in characteristic_list:
-        characteristic_dict[cl] = eval(cl)
-    name_list = ['corr_name', 'taste_name', 'e_i']
-    # Get attribute pairs for plotting views
-    all_combinations = list(combinations(characteristic_list, 2))
-    all_combinations_full = []
-    all_names_full = []
-    for ac in all_combinations:
-        ac_list = list(ac)
-        missing = np.setdiff1d(characteristic_list, ac_list)
-        full_combo = ac_list
-        full_combo.extend(missing)
-        all_combinations_full.append(full_combo)
-        names_combo = [
-            name_list[characteristic_list.index(c)] for c in full_combo]
-        all_names_full.append(names_combo)
-
-    for c_i in range(len(all_combinations_full)):
-        combo = all_combinations_full[c_i]
-        combo_lengths = [len(characteristic_dict[combo[i]])
-                         for i in range(len(combo))]
-        names = all_names_full[c_i]
-        for i_1 in range(combo_lengths[0]):
-            combo_1 = eval(combo[0])[i_1]
-            if type(combo_1) == np.int64:
-                combo_1 = "epoch_" + str(combo_1)
-            for i_2 in range(combo_lengths[1]):
-                combo_2 = eval(combo[1])[i_2]
-                if type(combo_2) == np.int64:
-                    combo_2 = "epoch_" + str(combo_2)
-                f_all, ax_all = plt.subplots(
-                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 5))
-                f_best, ax_best = plt.subplots(
-                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 5))
+    for corr_name in unique_corr_names:
+        dev_freq_dict = dict() #Overall frequency of deviation events
+        best_dev_freq_dict = dict() #Frequency of specialized deviation events
+        significance_storage = dict()
+        max_freq = 0
+        f_all = plt.figure(figsize=(5,5))
+        for seg_name in unique_segment_names:
+            dev_freq_dict[seg_name] = []
+            best_dev_freq_dict[seg_name] = dict()
+            for taste in unique_taste_names:
+                best_dev_freq_dict[seg_name][taste] = dict()
+                for cp_i in range(max_epochs):
+                    best_dev_freq_dict[seg_name][taste][cp_i] = []
+            
+            for g_n in unique_given_names:
+                seg_ind = np.where([corr_data[g_n]['segment_names'][s_i] == seg_name for s_i in range(
+                    len(corr_data[g_n]['segment_names']))])[0][0]
+                seg_len = corr_data[g_n]['segment_times_reshaped'][seg_ind][1] - \
+                    corr_data[g_n]['segment_times_reshaped'][seg_ind][0]
+                seg_len_s = seg_len/1000
+                try:
+                    taste_names = list(np.intersect1d(list(corr_data[g_n]['corr_data'][corr_name][seg_name].keys()),unique_taste_names))
+                    data = corr_data[g_n]['corr_data'][corr_name][seg_name]
+                    one_taste = taste_names[0]
+                    num_cp = data[one_taste]['num_cp']
+                    num_dev = data[one_taste]['num_dev']
+                    #Pull out frequency
+                    dev_freq_dict[seg_name].extend([num_dev/seg_len_s])
+                    #Pull out best designations
+                    best_data = corr_data[g_n]['corr_data'][corr_name][seg_name]['best'] #num_dev x 2 (col 1 = taste, col2 = epoch)
+                    #Now store the best correlation values by taste and epoch
+                    for t_i, taste in enumerate(taste_names):
+                        for cp_i in range(num_cp):
+                            dev_inds = np.where((best_data[:,0] == t_i)*(best_data[:,1] == cp_i))[0]
+                            best_dev_freq_dict[seg_name][taste][cp_i].extend([len(dev_inds)/seg_len_s])
+                except:
+                    print("No data.")
+        #____DEVIATION RATES____
+        # For each segment create boxplots of the rate distributions
+        plt.axhline(0, label='_', alpha=0.2, color='k', linestyle='dashed')
+        all_segment_data = []
+        all_segment_data_indices = []
+        for s_i,seg_name in enumerate(unique_segment_names):
+            seg_frequencies = dev_freq_dict[seg_name]
+            plt.scatter(np.random.normal(s_i+1, 0.04,size=len(seg_frequencies)),
+                          seg_frequencies, color='g',alpha=0.2)
+            plt.boxplot([seg_frequencies], positions=[
+                                s_i+1], sym='', meanline=True, medianprops=dict(linestyle='-', color='blue'), showcaps=True, showbox=True)
+            if len(seg_frequencies) > 0:
+                if np.max(seg_frequencies) > max_freq:
+                    max_freq = np.max(seg_frequencies)
+            all_segment_data.append(seg_frequencies)
+            all_segment_data_indices.extend([s_i])
+        plt.xticks(np.arange(1, len(unique_segment_names)+1), unique_segment_names)
+        plt.xlabel('Segment')
+        plt.ylabel('Frequency (Hz)')
+        # Test pairwise significance #TTEST
+        pair_nums = list(combinations(all_segment_data_indices, 2))
+        for pair_i, pair in enumerate(pair_nums):
+            data_1 = all_segment_data[pair[0]]
+            data_2 = all_segment_data[pair[1]]
+            if (len(data_1) > 0)*(len(data_2) > 0):
+                result = ttest_ind(data_1, data_2)
+                if result[1] <= 0.05:
+                    ind_1 = pair[0] + 1
+                    ind_2 = pair[1] + 1
+                    significance_storage[pair_i] = dict()
+                    significance_storage[pair_i]['ind_1'] = ind_1
+                    significance_storage[pair_i]['ind_2'] = ind_2
+        #Plot pairwise significance
+        step = max_freq/10
+        sig_height = max_freq + step
+        for sp_i in list(significance_storage.keys()):
+            ind_1 = significance_storage[sp_i]['ind_1']
+            ind_2 = significance_storage[sp_i]['ind_2']
+            plt.plot([ind_1, ind_2], [
+                             sig_height, sig_height], color='k', linestyle='solid')
+            plt.plot([ind_1, ind_1], [
+                             sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+            plt.plot([ind_2, ind_2], [
+                             sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+            plt.text(ind_1 + (ind_2-ind_1)/2, sig_height + step/2,
+                             '*', horizontalalignment='center', verticalalignment='center')
+            sig_height += step
+        #Finish up and save
+        plt.suptitle(corr_name)
+        plt.tight_layout()
+        f_all.savefig(os.path.join(save_dir, corr_name) + '.png')
+        f_all.savefig(os.path.join(save_dir, corr_name) + '.svg')
+        plt.close(f_all)
+        #____BEST DEVIATION RATES____
+        #best_dev_freq_dict[seg_name][taste][cp_i] = list of length num animals in Hz
+        f_best_taste, ax_best_taste = plt.subplots(ncols = len(unique_segment_names), \
+                                                    nrows = max_epochs, figsize=(len(unique_segment_names)*4,max_epochs*4), \
+                                                        sharex = True, sharey = True) #x-axis is tastes
+        for s_i,seg_name in enumerate(unique_segment_names):
+            for cp_i in range(max_epochs):
+                all_taste_freq = []
+                all_taste_freq_ind = []
                 max_freq = 0
-                max_best_freq = 0
+                # f_best_taste = plt.figure(figsize=(5,5))
+                #Scatter/boxplot the frequency data
+                for t_i,t_name in enumerate(unique_taste_names):
+                    try:
+                        taste_freq = best_dev_freq_dict[seg_name][t_name][cp_i]
+                        all_taste_freq.append(taste_freq)
+                        all_taste_freq_ind.extend([t_i])
+                        ax_best_taste[cp_i,s_i].scatter(np.random.normal(t_i+1, 0.04,size=len(taste_freq)),
+                                  taste_freq, color='g',alpha=0.2)
+                        ax_best_taste[cp_i,s_i].boxplot([taste_freq], positions=[
+                                        t_i+1], sym='', meanline=True, medianprops=dict(linestyle='-', color='blue'), \
+                                showcaps=True, showbox=True)
+                        # plt.scatter(np.random.normal(t_i+1, 0.04,size=len(taste_freq)),
+                        #           taste_freq, color='g',alpha=0.2)
+                        # plt.boxplot([taste_freq], positions=[
+                        #                 t_i+1], sym='', meanline=True, medianprops=dict(linestyle='-', color='blue'), \
+                        #         showcaps=True, showbox=True)
+                        if np.nanmax(taste_freq) > max_freq:
+                            max_freq = np.nanmax(taste_freq)
+                    except:
+                        print("No data.")
+                ax_best_taste[cp_i,s_i].set_xticks(np.arange(1,len(unique_taste_names)+1),unique_taste_names)
+                if s_i == 0:
+                    ax_best_taste[cp_i,s_i].set_ylabel('Epoch ' + str(cp_i) + '\nFrequency (Hz)')
+                if cp_i == 0:
+                    ax_best_taste[cp_i,s_i].set_title(seg_name)
+                # plt.xticks(np.arange(1,len(unique_taste_names)+1),unique_taste_names)
+                # plt.ylabel('Epoch ' + str(cp_i) + '\nFrequency (Hz)')
+                # plt.title(seg_name)
+                #Test pairwise significance
                 significance_storage = dict()
-                best_significance_storage = dict()
-                for i_3 in range(combo_lengths[2]):
-                    significance_storage[i_3] = dict()
-                    best_significance_storage[i_3] = dict()
-                    i3_label = eval(combo[2])[i_3]
-                    if type(i3_label) == np.int64:
-                        i3_label = "epoch_" + str(i3_label)
-                    # Begin pulling data
-                    att = cross_seg_attributes(combo, names, i_1, i_2, i_3, unique_corr_names,
-                                               unique_taste_names, unique_epochs)
-                    corr_name = att.corr_name
-                    taste_name = att.taste_name
-                    taste_ind = np.where([unique_taste_names[t_i] == taste_name for t_i in range(
-                        len(unique_taste_names))])[0][0]
-                    e_i = att.e_i
-                    # For each animal collect frequency data for the deviation events which on average are most correlated to a particular taste
-                    dev_freq_dict = dict()
-                    for g_n in unique_given_names:
-                        dev_freq_dict[g_n] = dict()
-                        try:
-                            segment_mean_corrs = []
-                            segment_lengths = []
-                            for s_i, s_name in enumerate(unique_segment_names):
-                                seg_ind = np.where([corr_data[g_n]['segment_names'][s_i] == s_name for s_i in range(
-                                    len(corr_data[g_n]['segment_names']))])[0][0]
-                                seg_len = corr_data[g_n]['segment_times_reshaped'][seg_ind][1] - \
-                                    corr_data[g_n]['segment_times_reshaped'][seg_ind][0]
-                                seg_len_s = seg_len/1000
-                                segment_lengths.extend([seg_len_s])
-                                seg_corr_data_by_taste = []
-                                for t_i, t_name in enumerate(unique_taste_names):
-                                    seg_corr_data = corr_data[g_n]['corr_data'][corr_name][s_name][t_name]['data']
-                                    seg_epoch_corr_data = seg_corr_data[:, :, e_i]
-                                    seg_epoch_mean_corr = np.nanmean(
-                                        seg_epoch_corr_data, 1)
-                                    seg_corr_data_by_taste.append(
-                                        list(seg_epoch_mean_corr))
-                                best_taste_per_dev = np.argmax(
-                                    np.array(seg_corr_data_by_taste), 0)
-                                dev_ind_for_taste = np.where(
-                                    best_taste_per_dev == taste_ind)[0]
-                                keep_dev_corrs = np.array(seg_corr_data_by_taste[taste_ind])[
-                                    dev_ind_for_taste]
-                                segment_mean_corrs.append(list(keep_dev_corrs))
-                            for s_i, s_name in enumerate(unique_segment_names):
-                                num_all_corr = len(segment_mean_corrs[s_i])
-                                num_best_corr = len(
-                                    np.where(np.array(segment_mean_corrs[s_i]) > 0.5)[0])
-                                dev_freq_dict[g_n][s_name] = dict()
-                                dev_freq_dict[g_n][s_name]['all'] = num_all_corr / \
-                                    segment_lengths[s_i]
-                                dev_freq_dict[g_n][s_name]['best'] = num_best_corr / \
-                                    segment_lengths[s_i]
-                        except:
-                            print("No data.")
-                    # For each taste create boxplots of the rate distributions
-                    ax_all[i_3].axhline(
-                        0, label='_', alpha=0.2, color='k', linestyle='dashed')
-                    ax_best[i_3].axhline(
-                        0, label='_', alpha=0.2, color='k', linestyle='dashed')
-                    all_segment_data = []
-                    all_segment_data_indices = []
-                    all_best_segment_data = []
-                    all_best_segment_data_indices = []
-                    for s_i, s_name in enumerate(unique_segment_names):
-                        # all data
-                        segment_rates = []
-                        for g_n in unique_given_names:
-                            try:
-                                segment_rates.extend(
-                                    [dev_freq_dict[g_n][s_name]['all']])
-                            except:
-                                print("Skipping dataset.")
-                        ax_all[i_3].scatter(np.random.normal(
-                            s_i+1, 0.04, size=len(segment_rates)), segment_rates, color='g', alpha=0.2)
-                        ax_all[i_3].boxplot([segment_rates], positions=[
-                                            s_i+1], sym='', meanline=True, medianprops=dict(linestyle='-', color='blue'), showcaps=True, showbox=True)
-                        if len(segment_rates) > 0:
-                            if np.max(segment_rates) > max_freq:
-                                max_freq = np.max(segment_rates)
-                            all_segment_data.append(segment_rates)
-                            all_segment_data_indices.append([s_i])
-                        # best data
-                        best_segment_rates = []
-                        for g_n in unique_given_names:
-                            try:
-                                best_segment_rates.extend(
-                                    [dev_freq_dict[g_n][s_name]['best']])
-                            except:
-                                print("Skipping dataset.")
-                        if len(best_segment_rates) > 0:
-                            ax_best[i_3].scatter(np.random.normal(
-                                s_i+1, 0.04, size=len(best_segment_rates)), best_segment_rates, color='g', alpha=0.2)
-                            ax_best[i_3].boxplot([best_segment_rates], positions=[
-                                                 s_i+1], sym='', meanline=True, medianprops=dict(linestyle='-', color='blue'), showcaps=True, showbox=True)
-                            if np.max(best_segment_rates) > max_best_freq:
-                                max_best_freq = np.max(best_segment_rates)
-                            all_best_segment_data.append(best_segment_rates)
-                            all_best_segment_data_indices.append([s_i])
-                    ax_all[i_3].set_xticks(
-                        np.arange(1, len(unique_segment_names)+1), unique_segment_names)
-                    ax_all[i_3].set_xlabel(i3_label)
-                    ax_all[i_3].set_ylabel('Frequency (Hz)')
-                    ax_best[i_3].set_xticks(
-                        np.arange(1, len(unique_segment_names)+1), unique_segment_names)
-                    ax_best[i_3].set_xlabel(i3_label)
-                    ax_best[i_3].set_ylabel('Frequency (Hz)')
-                    # Test pairwise significance #TTEST
-                    pair_nums = list(combinations(all_segment_data_indices, 2))
-                    for pair_i, pair in enumerate(pair_nums):
-                        try:
-                            data_1 = all_segment_data[pair[0]]
-                            data_2 = all_segment_data[pair[1]]
-                            if (len(data_1) > 0)*(len(data_2) > 0):
-                                result = ttest_ind(data_1, data_2)
-                                if result[1] <= 0.05:
-                                    ind_1 = pair[0] + 1
-                                    ind_2 = pair[1] + 1
-                                    significance_storage[i_3][pair_i] = dict()
-                                    significance_storage[i_3][pair_i]['ind_1'] = ind_1
-                                    significance_storage[i_3][pair_i]['ind_2'] = ind_2
-                        except:
-                            "Do Nothing"
-                    pair_nums = list(combinations(
-                        all_best_segment_data_indices, 2))
-                    for pair_i, pair in enumerate(pair_nums):
-                        try:
-                            data_1 = all_best_segment_data[pair[0]]
-                            data_2 = all_best_segment_data[pair[1]]
-                            if (len(data_1) > 0)*(len(data_2) > 0):
-                                result = ks_2samp(data_1, data_2)
-                                if result[1] <= 0.05:
-                                    ind_1 = pair[0] + 1
-                                    ind_2 = pair[1] + 1
-                                    best_significance_storage[i_3][pair_i] = dict(
-                                    )
-                                    best_significance_storage[i_3][pair_i]['ind_1'] = ind_1
-                                    best_significance_storage[i_3][pair_i]['ind_2'] = ind_2
-                        except:
-                            "Do Nothing"
-                for i_3 in range(combo_lengths[2]):
-                    # Add significance data
-                    step = max_freq/10
-                    sig_height = max_freq + step
-                    sig_taste_data = significance_storage[i_3]
-                    for sp_i in list(sig_taste_data.keys()):
-                        sp_int = int(sp_i)
-                        ind_1 = sig_taste_data[sp_i]['ind_1']
-                        ind_2 = sig_taste_data[sp_i]['ind_2']
-                        ax_all[i_3].plot([ind_1, ind_2], [
-                                         sig_height, sig_height], color='k', linestyle='solid')
-                        ax_all[i_3].plot([ind_1, ind_1], [
-                                         sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
-                        ax_all[i_3].plot([ind_2, ind_2], [
-                                         sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
-                        ax_all[i_3].text(ind_1 + (ind_2-ind_1)/2, sig_height + step/2,
-                                         '*', horizontalalignment='center', verticalalignment='center')
-                        sig_height += step
-                    best_sig_height = max_best_freq + step
-                    best_sig_taste_data = best_significance_storage[i_3]
-                    for sp_i in list(best_sig_taste_data.keys()):
-                        ind_1 = sig_taste_data[sp_i]['ind_1']
-                        ind_2 = sig_taste_data[sp_i]['ind_2']
-                        ax_best[i_3].plot([ind_1, ind_2], [
-                                          best_sig_height, best_sig_height], color='k', linestyle='solid')
-                        ax_best[i_3].plot([ind_1, ind_1], [
-                                          best_sig_height-step/2, best_sig_height+step/2], color='k', linestyle='solid')
-                        ax_best[i_3].plot([ind_2, ind_2], [
-                                          best_sig_height-step/2, best_sig_height+step/2], color='k', linestyle='solid')
-                        ax_best[i_3].text(ind_1 + (ind_2-ind_1)/2, best_sig_height + step/2,
-                                          '*', horizontalalignment='center', verticalalignment='center')
-                        best_sig_height += step
-                    # Adjust y-limits
-                    ax_all[i_3].set_ylim([-1*step, sig_height])
-                    ax_best[i_3].set_ylim([-1*step, best_sig_height])
-                f_all.suptitle(combo_2)
-                f_all_name = combo_1.replace(
-                    ' ', '_') + '_' + combo_2.replace(' ', '_') + '_all'
-                plt.tight_layout()
-                f_all.savefig(os.path.join(save_dir, f_all_name) + '.png')
-                f_all.savefig(os.path.join(save_dir, f_all_name) + '.svg')
-                plt.close(f_all)
-                f_best.suptitle(combo_2)
-                f_best_name = combo_1.replace(
-                    ' ', '_') + '_' + combo_2.replace(' ', '_') + '_best'
-                plt.tight_layout()
-                f_best.savefig(os.path.join(save_dir, f_best_name) + '.png')
-                f_best.savefig(os.path.join(save_dir, f_best_name) + '.svg')
-                plt.close(f_best)
+                pair_nums = list(combinations(all_taste_freq_ind, 2))
+                for pair_i, pair in enumerate(pair_nums):
+                    data_1 = all_taste_freq[pair[0]]
+                    data_2 = all_taste_freq[pair[1]]
+                    if (len(data_1) > 0)*(len(data_2) > 0):
+                        result = ttest_ind(data_1, data_2)
+                        if result[1] <= 0.05:
+                            ind_1 = pair[0] + 1
+                            ind_2 = pair[1] + 1
+                            significance_storage[pair_i] = dict()
+                            significance_storage[pair_i]['ind_1'] = ind_1
+                            significance_storage[pair_i]['ind_2'] = ind_2
+                #Plot pairwise significance
+                step = max_freq/10
+                sig_height = max_freq + step
+                for sp_i in list(significance_storage.keys()):
+                    ind_1 = significance_storage[sp_i]['ind_1']
+                    ind_2 = significance_storage[sp_i]['ind_2']
+                    ax_best_taste[cp_i,s_i].plot([ind_1, ind_2], [
+                                      sig_height, sig_height], color='k', linestyle='solid')
+                    ax_best_taste[cp_i,s_i].plot([ind_1, ind_1], [
+                                      sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                    ax_best_taste[cp_i,s_i].plot([ind_2, ind_2], [
+                                      sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                    ax_best_taste[cp_i,s_i].text(ind_1 + (ind_2-ind_1)/2, sig_height + step/2,
+                                      '*', horizontalalignment='center', verticalalignment='center')
+                    # plt.plot([ind_1, ind_2], [
+                    #                  sig_height, sig_height], color='k', linestyle='solid')
+                    # plt.plot([ind_1, ind_1], [
+                    #                  sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                    # plt.plot([ind_2, ind_2], [
+                    #                  sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                    # plt.text(ind_1 + (ind_2-ind_1)/2, sig_height + step/2,
+                    #                  '*', horizontalalignment='center', verticalalignment='center')
+                    sig_height += step
+                # plt.tight_layout()
+                # f_best_taste.savefig(os.path.join(save_dir, corr_name) + '_best_taste_'+str(cp_i)+'_'+seg_name+'.png')
+                # f_best_taste.savefig(os.path.join(save_dir, corr_name) + '_best_taste_'+str(cp_i)+'_'+seg_name+'.svg')
+        plt.suptitle(corr_name + '\nBest Deviation Rates')
+        plt.tight_layout()
+        f_best_taste.savefig(os.path.join(save_dir, corr_name) + '_best_taste.png')
+        f_best_taste.savefig(os.path.join(save_dir, corr_name) + '_best_taste.svg')
+        plt.close(f_best_taste)
+        
+        f_best_seg, ax_best_seg = plt.subplots(ncols = len(unique_taste_names), \
+                                               nrows = max_epochs, figsize=(4*len(unique_taste_names),4*max_epochs), \
+                                                   sharex = True, sharey = True) #x-axis is segments
+        for t_i, taste in enumerate(unique_taste_names):
+            for cp_i in range(max_epochs):
+                all_seg_freq = []
+                all_seg_freq_ind = []
+                max_freq = 0
+                #Scatter/boxplot the frequency data
+                for s_i,seg_name in enumerate(unique_segment_names):
+                    try:
+                        seg_freq = best_dev_freq_dict[seg_name][taste][cp_i]
+                        all_seg_freq.append(seg_freq)
+                        all_seg_freq_ind.extend([s_i])
+                        ax_best_seg[cp_i,t_i].scatter(np.random.normal(s_i+1, 0.04,size=len(seg_freq)),
+                                  seg_freq, color='g',alpha=0.2)
+                        ax_best_seg[cp_i,t_i].boxplot([seg_freq], positions=[
+                                        s_i+1], sym='', meanline=True, medianprops=dict(linestyle='-', color='blue'), \
+                                showcaps=True, showbox=True)
+                        if np.nanmax(seg_freq) > max_freq:
+                            max_freq = np.nanmax(seg_freq)
+                    except:
+                        print("No data.")
+                ax_best_seg[cp_i,t_i].set_xticks(np.arange(1,len(unique_segment_names)+1),unique_segment_names)
+                if t_i == 0:
+                    ax_best_seg[cp_i,t_i].set_ylabel('Epoch ' + str(cp_i) + '\nFrequency (Hz)')
+                if cp_i == 0:
+                    ax_best_seg[cp_i,t_i].set_title(taste)
+                #Test pairwise significance
+                significance_storage = dict()
+                pair_nums = list(combinations(all_seg_freq_ind, 2))
+                for pair_i, pair in enumerate(pair_nums):
+                    data_1 = all_seg_freq[pair[0]]
+                    data_2 = all_seg_freq[pair[1]]
+                    if (len(data_1) > 0)*(len(data_2) > 0):
+                        result = ttest_ind(data_1, data_2)
+                        if result[1] <= 0.05:
+                            ind_1 = pair[0] + 1
+                            ind_2 = pair[1] + 1
+                            significance_storage[pair_i] = dict()
+                            significance_storage[pair_i]['ind_1'] = ind_1
+                            significance_storage[pair_i]['ind_2'] = ind_2
+                #Plot pairwise significance
+                step = max_freq/10
+                sig_height = max_freq + step
+                for sp_i in list(significance_storage.keys()):
+                    ind_1 = significance_storage[sp_i]['ind_1']
+                    ind_2 = significance_storage[sp_i]['ind_2']
+                    ax_best_seg[cp_i,t_i].plot([ind_1, ind_2], [
+                                     sig_height, sig_height], color='k', linestyle='solid')
+                    ax_best_seg[cp_i,t_i].plot([ind_1, ind_1], [
+                                     sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                    ax_best_seg[cp_i,t_i].plot([ind_2, ind_2], [
+                                     sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                    ax_best_seg[cp_i,t_i].text(ind_1 + (ind_2-ind_1)/2, sig_height + step/2,
+                                     '*', horizontalalignment='center', verticalalignment='center')
+                    sig_height += step
+        plt.suptitle(corr_name + '\nBest Deviation Rates')
+        plt.tight_layout()
+        f_best_seg.savefig(os.path.join(save_dir, corr_name) + '_best_segment.png')
+        f_best_seg.savefig(os.path.join(save_dir, corr_name) + '_best_segment.svg')
+        plt.close(f_best_seg)
 
 
 def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_names,
@@ -614,9 +373,13 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                 if type(combo_2) == np.int64:
                     combo_2 = "epoch_" + str(combo_2)
                 f_mean_diff, ax_mean_diff = plt.subplots(
-                    ncols=combo_lengths[2], nrows=2, figsize=(combo_lengths[2]*5, 2*5))
+                    ncols=combo_lengths[2], nrows=2, \
+                        figsize=(combo_lengths[2]*5, 2*5), \
+                            sharex = True, sharey = True)
                 f_best_mean_diff, ax_best_mean_diff = plt.subplots(
-                    ncols=combo_lengths[2], nrows=2, figsize=(combo_lengths[2]*5, 2*5))
+                    ncols=combo_lengths[2], nrows=2, \
+                        figsize=(combo_lengths[2]*5, 2*5), \
+                        sharex = True, sharey = True)
                 max_mean_diff = 0
                 min_mean_diff = 0
                 max_best_mean_diff = 0
@@ -705,14 +468,15 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                         points_boxplot.append(list(points))
                     for m_i in range(len(best_mean_diff_collection)):
                         points_best = np.array(best_mean_diff_collection[m_i]['data'])
+                        points_best = points_best[~np.isnan(points_best)]
                         if len(points_best) > 0:
-                            if np.max(points_best) > max_best_mean_diff_i:
-                                max_best_mean_diff_i = np.max(points_best)
-                            if np.min(points_best) < min_best_mean_diff_i:
-                                min_best_mean_diff_i = np.min(points_best)
+                            if np.nanmax(points_best) > max_best_mean_diff_i:
+                                max_best_mean_diff_i = np.nanmax(points_best)
+                            if np.nanmin(points_best) < min_best_mean_diff_i:
+                                min_best_mean_diff_i = np.nanmin(points_best)
                             ax_best_mean_diff[0, i_3].scatter(np.random.normal(
                                 m_i+1, 0.04, size=len(points_best)), points_best, color='g', alpha=0.2)
-                            ax_best_mean_diff[0, i_3].boxplot([points_best[~np.isnan(points_best)]], positions=[
+                            ax_best_mean_diff[0, i_3].boxplot([points_best], positions=[
                                                          m_i+1], sym='', medianprops=dict(linestyle='-', color='blue'), showcaps=True, showbox=True)
                         points_boxplot_best.append(list(points_best))
                     if len(points_boxplot) > 0:
@@ -762,21 +526,21 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                                 if l_val[0] == ulabel:
                                     reshape_best_collection[u_index,label_i] = data[l_i]
                     for u_i in range(len(unique_data_labels)):
-                        ax_mean_diff[1, i_3].plot(
+                        ax_mean_diff[1, i_3].plot(np.arange(len(reshape_collection[u_i, :])) + 1,
                             reshape_collection[u_i, :], alpha=0.5, label=unique_data_labels[u_i])
-                    ax_mean_diff[1, i_3].plot(np.arange(len(mean_diff_labels)), np.nanmean(
+                    ax_mean_diff[1, i_3].plot(np.arange(len(mean_diff_labels))+1, np.nanmean(
                         reshape_collection, 0), color='k', alpha=1, linewidth=3)
                     ax_mean_diff[1, i_3].set_xticks(
-                        np.arange(len(mean_diff_labels)), mean_diff_labels, rotation=45)
+                        np.arange(len(mean_diff_labels))+1, mean_diff_labels, rotation=45)
                     ax_mean_diff[1, i_3].set_ylabel(
                         'Mean Correlation Difference')
                     for u_i in range(len(unique_best_data_labels)):
-                        ax_best_mean_diff[1, i_3].plot(
+                        ax_best_mean_diff[1, i_3].plot(np.arange(len(reshape_best_collection[u_i, :]))+1,
                             reshape_best_collection[u_i, :], alpha=0.5, label=unique_best_data_labels[u_i])
-                    ax_best_mean_diff[1, i_3].plot(np.arange(len(mean_diff_labels)), np.nanmean(
+                    ax_best_mean_diff[1, i_3].plot(np.arange(len(mean_diff_labels))+1, np.nanmean(
                         reshape_best_collection, 0), color='k', alpha=1, linewidth=3)
                     ax_best_mean_diff[1, i_3].set_xticks(
-                        np.arange(len(mean_diff_labels)), mean_diff_labels, rotation=45)
+                        np.arange(len(mean_diff_labels))+1, mean_diff_labels, rotation=45)
                     ax_best_mean_diff[1, i_3].set_ylabel(
                         'Mean Correlation Difference')
                     # Calculate significances
@@ -794,7 +558,17 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                             if zero_percentile >= 95:
                                 sig_inds.extend([points_ind+1])
                     significance_storage[i_3]['sig_dists'] = sig_inds
-                    
+                    # __All points above or below 0
+                    greater_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot):
+                        if len(np.where(np.array(points_dist) > 0)[0]) == len(points_dist):
+                            greater_inds.extend([points_ind+1])
+                    significance_storage[i_3]['greater_dists'] = greater_inds
+                    less_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot):
+                        if len(np.where(np.array(points_dist) < 0)[0]) == len(points_dist):
+                            less_inds.extend([points_ind+1])
+                    significance_storage[i_3]['less_dists'] = less_inds
                     sig_inds_best = []
                     for points_ind, points_dist in enumerate(points_boxplot_best):
                         # First check if positive or negative distribution on average
@@ -808,6 +582,17 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                             if zero_percentile >= 95:
                                 sig_inds_best.extend([points_ind+1])
                     best_significance_storage[i_3]['sig_dists'] = sig_inds_best
+                    # __All points above or below 0
+                    greater_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot_best):
+                        if len(np.where(np.array(points_dist) > 0)[0]) == len(points_dist):
+                            greater_inds.extend([points_ind+1])
+                    best_significance_storage[i_3]['greater_dists'] = greater_inds
+                    less_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot_best):
+                        if len(np.where(np.array(points_dist) < 0)[0]) == len(points_dist):
+                            less_inds.extend([points_ind+1])
+                    best_significance_storage[i_3]['less_dists'] = less_inds
                     # __Pairwise significance
                     pair_diffs = list(combinations(np.arange(len(mean_diff_collection)),2))
                     step = max_mean_diff_i/10
@@ -855,11 +640,29 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                     step = max_mean_diff/10
                     sig_height = max_mean_diff + step
                     sig_taste_data = significance_storage[i_3]
-                    for sp_i in list(sig_taste_data.keys()):
-                        try:  # Pair data
-                            ind_1 = sig_taste_data[sp_i]['ind_1']
-                            ind_2 = sig_taste_data[sp_i]['ind_2']
-                            marker = sig_taste_data[sp_i]['marker']
+                    for key in list(sig_taste_data.keys()):
+                        if key == 'sig_dists':  # Individual dist significance
+                            dist_sig_data = sig_taste_data[key]
+                            for sig_plot_ind in dist_sig_data:
+                                ax_mean_diff[0, i_3].text(
+                                    sig_plot_ind, sig_height, '*', horizontalalignment='center', \
+                                        verticalalignment='center',color='g')
+                        elif key == 'greater_dists':  
+                            side_data = sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_mean_diff[0, i_3].text(
+                                    sig_plot_ind-0.25, sig_height, '>0', horizontalalignment='center', \
+                                        verticalalignment='center',color='b')
+                        elif key == 'less_dists':  
+                            side_data = sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_mean_diff[0, i_3].text(
+                                    sig_plot_ind+0.25, sig_height, '<0', horizontalalignment='center', \
+                                        verticalalignment='center',color='r')
+                        else: # Pair data
+                            ind_1 = sig_taste_data[key]['ind_1']
+                            ind_2 = sig_taste_data[key]['ind_2']
+                            marker = sig_taste_data[key]['marker']
                             ax_mean_diff[0, i_3].plot(
                                 [ind_1, ind_2], [sig_height, sig_height], color='k', linestyle='solid')
                             ax_mean_diff[0, i_3].plot([ind_1, ind_1], [
@@ -871,59 +674,57 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                                     horizontalalignment='center', verticalalignment='center',\
                                         color='k')
                             sig_height += step
-                        except:  # Individual dist significance
-                            dist_sig_data = sig_taste_data[sp_i]
-                            for sig_plot_ind in dist_sig_data:
-                                ax_mean_diff[0, i_3].text(
-                                    sig_plot_ind, sig_height, '*', horizontalalignment='center', \
-                                        verticalalignment='center',color='g')
-                            sig_height += step
-                            
                     # Adjust y-limits
-                    ax_mean_diff[0, i_3].set_ylim(
-                        [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
-                    ax_mean_diff[1, i_3].set_ylim(
-                        [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
-                    ax_mean_diff[1, i_3].legend()
+                    #ax_mean_diff[0, i_3].set_ylim(
+                    #    [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
+                    #ax_mean_diff[1, i_3].set_ylim(
+                    #    [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
+                    #ax_mean_diff[1, i_3].legend()
                     
                     # Add best significance data
-                    step = max_best_mean_diff/10
-                    best_sig_height = max_best_mean_diff + step
+                    best_step = max_best_mean_diff/10
+                    best_sig_height = max_best_mean_diff + best_step
                     best_sig_taste_data = best_significance_storage[i_3]
-                    for sp_i in list(best_sig_taste_data.keys()):
-                        try:  # Pair data
-                            ind_1 = best_sig_taste_data[sp_i]['ind_1']
-                            ind_2 = best_sig_taste_data[sp_i]['ind_2']
-                            marker = best_sig_taste_data[sp_i]['marker']
-                            ax_mean_diff[0, i_3].plot(
+                    for key in list(best_sig_taste_data.keys()):
+                        if key == 'sig_dists':  # Individual dist significance
+                            dist_sig_data = best_sig_taste_data[key]
+                            for sig_plot_ind in dist_sig_data:
+                                ax_best_mean_diff[0, i_3].text(
+                                    sig_plot_ind, best_sig_height, '*', horizontalalignment='center', \
+                                        verticalalignment='center',color='g')
+                        elif key == 'greater_dists':  
+                            side_data = best_sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_best_mean_diff[0, i_3].text(
+                                    sig_plot_ind+0.25, best_sig_height, '>0', horizontalalignment='center', \
+                                        verticalalignment='center',color='b')
+                        elif key == 'less_dists':  
+                            side_data = best_sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_best_mean_diff[0, i_3].text(
+                                    sig_plot_ind-0.25, best_sig_height, '<0', horizontalalignment='center', \
+                                        verticalalignment='center',color='r')
+                        else: # Pair data
+                            ind_1 = best_sig_taste_data[key]['ind_1']
+                            ind_2 = best_sig_taste_data[key]['ind_2']
+                            marker = best_sig_taste_data[key]['marker']
+                            ax_best_mean_diff[0, i_3].plot(
                                 [ind_1, ind_2], [best_sig_height, best_sig_height], color='k', linestyle='solid')
                             ax_best_mean_diff[0, i_3].plot([ind_1, ind_1], [
-                                                      best_sig_height-step/2, best_sig_height+step/2], color='k', linestyle='solid')
+                                                      best_sig_height-best_step/2, best_sig_height+best_step/2], color='k', linestyle='solid')
                             ax_best_mean_diff[0, i_3].plot([ind_2, ind_2], [
-                                                      best_sig_height-step/2, best_sig_height+step/2], color='k', linestyle='solid')
+                                                      best_sig_height-best_step/2, best_sig_height+best_step/2], color='k', linestyle='solid')
                             ax_best_mean_diff[0, i_3].text(
-                                ind_1 + (ind_2-ind_1)/2, best_sig_height + step/2, marker, \
-                                    horizontalalignment='center', verticalalignment='center', \
+                                ind_1 + (ind_2-ind_1)/2, best_sig_height + best_step/2, marker,\
+                                    horizontalalignment='center', verticalalignment='center',\
                                         color='k')
-                            best_sig_height += step
-                        except:  # Individual dist significance
-                            try:
-                                dist_sig_data = best_sig_taste_data[sp_i]
-                                for sig_plot_ind in dist_sig_data:
-                                    ax_best_mean_diff[0, i_3].text(
-                                        sig_plot_ind, best_sig_height, '*', \
-                                            horizontalalignment='center', \
-                                                verticalalignment='center', color='g')
-                                best_sig_height += step
-                            except:
-                                print("\tInvalid value.")
-                    
+                            best_sig_height += best_step
                     # Adjust y-limits
-                    ax_best_mean_diff[0, i_3].set_ylim(
-                        [min_best_mean_diff - np.abs(min_best_mean_diff)/5, best_sig_height + best_sig_height/5])
-                    ax_best_mean_diff[1, i_3].set_ylim(
-                        [min_best_mean_diff - np.abs(min_best_mean_diff)/5, best_sig_height + best_sig_height/5])
-                    ax_best_mean_diff[1, i_3].legend()
+                    #ax_best_mean_diff[0, i_3].set_ylim(
+                    #    [min_best_mean_diff - np.abs(min_best_mean_diff)/5, best_sig_height + best_sig_height/5])
+                    #ax_best_mean_diff[1, i_3].set_ylim(
+                    #    [min_best_mean_diff - np.abs(min_best_mean_diff)/5, best_sig_height + best_sig_height/5])
+                    #ax_best_mean_diff[1, i_3].legend()
                 f_pop_vec_plot_name = combo_1.replace(
                     ' ', '_') + '_' + combo_2.replace(' ', '_')
                 f_mean_diff.suptitle('Mean Correlation Difference: ' +
@@ -1019,9 +820,11 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                 if type(combo_2) == np.int64:
                     combo_2 = "epoch_" + str(combo_2)
                 f_mean_diff, ax_mean_diff = plt.subplots(
-                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 5))
+                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 5),\
+                        sharex = True, sharey = True)
                 f_best_mean_diff, ax_best_mean_diff = plt.subplots(
-                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 2*5))
+                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 2*5),\
+                        sharex = True, sharey = True)
                 max_mean_diff = 0
                 min_mean_diff = 0
                 max_best_mean_diff = 0
@@ -1150,7 +953,17 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                             if zero_percentile >= 95:
                                 sig_inds.extend([points_ind+1])
                     significance_storage[i_3]['sig_dists'] = sig_inds
-                    
+                    # __All points above or below 0
+                    greater_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot):
+                        if len(np.where(np.array(points_dist) > 0)[0]) == len(points_dist):
+                            greater_inds.extend([points_ind+1])
+                    significance_storage[i_3]['greater_dists'] = greater_inds
+                    less_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot):
+                        if len(np.where(np.array(points_dist) < 0)[0]) == len(points_dist):
+                            less_inds.extend([points_ind+1])
+                    significance_storage[i_3]['less_dists'] = less_inds
                     sig_inds_best = []
                     for points_ind, points_dist in enumerate(points_boxplot_best):
                         # First check if positive or negative distribution on average
@@ -1164,7 +977,17 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                             if zero_percentile >= 95:
                                 sig_inds_best.extend([points_ind+1])
                     best_significance_storage[i_3]['sig_dists'] = sig_inds_best
-                    
+                    # __All points above or below 0
+                    greater_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot_best):
+                        if len(np.where(np.array(points_dist) > 0)[0]) == len(points_dist):
+                            greater_inds.extend([points_ind+1])
+                    best_significance_storage[i_3]['greater_dists'] = greater_inds
+                    less_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot_best):
+                        if len(np.where(np.array(points_dist) < 0)[0]) == len(points_dist):
+                            less_inds.extend([points_ind+1])
+                    best_significance_storage[i_3]['less_dists'] = less_inds
                     # __Pairwise significance
                     pair_diffs = list(combinations(np.arange(len(mean_diff_collection)),2))
                     step = max_mean_diff_i/10
@@ -1207,70 +1030,90 @@ def cross_taste_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                         'Mean Correlation Difference')
                 # Update all plots with remaining values
                 for i_3 in range(combo_lengths[2]):
-                    # Add significance data
+                    # Add individual significance data
                     step = max_mean_diff/10
                     sig_height = max_mean_diff + step
                     sig_taste_data = significance_storage[i_3]
-                    for sp_i in list(sig_taste_data.keys()):
-                        try:  # Pair data
-                            ind_1 = sig_taste_data[sp_i]['ind_1']
-                            ind_2 = sig_taste_data[sp_i]['ind_2']
-                            marker = sig_taste_data[sp_i]['marker']
-                            ax_mean_diff[i_3].plot(
-                                [ind_1, ind_2], [sig_height, sig_height], color='k', linestyle='solid')
-                            ax_mean_diff[i_3].plot([ind_1, ind_1], [
-                                                   sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
-                            ax_mean_diff[i_3].plot([ind_2, ind_2], [
-                                                   sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
-                            ax_mean_diff[i_3].text(ind_1 + (ind_2-ind_1)/2, sig_height + step/2,
-                                                   marker, horizontalalignment='center', verticalalignment='center')
-                            sig_height += step
-                        except:  # Individual dist significance
-                            dist_sig_data = sig_taste_data[sp_i]
+                    for key in list(sig_taste_data.keys()):
+                        if key == 'sig_dists':  # Individual dist significance
+                            dist_sig_data = sig_taste_data[key]
                             for sig_plot_ind in dist_sig_data:
                                 ax_mean_diff[i_3].text(
                                     sig_plot_ind, sig_height, '*', horizontalalignment='center', \
                                         verticalalignment='center',color='g')
+                        elif key == 'greater_dists':  
+                            side_data = sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_mean_diff[i_3].text(
+                                    sig_plot_ind+0.25, sig_height, '>0', horizontalalignment='center', \
+                                        verticalalignment='center',color='b')
+                        elif key == 'less_dists':  
+                            side_data = sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_mean_diff[i_3].text(
+                                    sig_plot_ind-0.25, sig_height, '<0', horizontalalignment='center', \
+                                        verticalalignment='center',color='r')
+                        else: # Pair data
+                            ind_1 = sig_taste_data[key]['ind_1']
+                            ind_2 = sig_taste_data[key]['ind_2']
+                            marker = sig_taste_data[key]['marker']
+                            ax_mean_diff[i_3].plot(
+                                [ind_1, ind_2], [sig_height, sig_height], color='k', linestyle='solid')
+                            ax_mean_diff[i_3].plot([ind_1, ind_1], [
+                                                      sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                            ax_mean_diff[i_3].plot([ind_2, ind_2], [
+                                                      sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                            ax_mean_diff[i_3].text(
+                                ind_1 + (ind_2-ind_1)/2, sig_height + step/2, marker,\
+                                    horizontalalignment='center', verticalalignment='center',\
+                                        color='k')
                             sig_height += step
                     # Adjust y-limits
-                    ax_mean_diff[i_3].set_ylim(
-                        [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
+                    # ax_mean_diff[i_3].set_ylim(
+                    #     [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
                     
                     # Add best significance data
                     step = max_best_mean_diff/10
                     best_sig_height = max_best_mean_diff + step
                     best_sig_taste_data = best_significance_storage[i_3]
-                    for sp_i in list(best_sig_taste_data.keys()):
-                        try:  # Pair data
-                            ind_1 = best_sig_taste_data[sp_i]['ind_1']
-                            ind_2 = best_sig_taste_data[sp_i]['ind_2']
-                            marker = best_sig_taste_data[sp_i]['marker']
-                            ax_mean_diff[i_3].plot(
+                    for key in list(best_sig_taste_data.keys()):
+                        if key == 'sig_dists':  # Individual dist significance
+                            dist_sig_data = best_sig_taste_data[key]
+                            for sig_plot_ind in dist_sig_data:
+                                ax_best_mean_diff[i_3].text(
+                                    sig_plot_ind, best_sig_height, '*', horizontalalignment='center', \
+                                        verticalalignment='center',color='g')
+                        elif key == 'greater_dists':  
+                            side_data = best_sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_best_mean_diff[i_3].text(
+                                    sig_plot_ind+0.25, best_sig_height, '>0', horizontalalignment='center', \
+                                        verticalalignment='center',color='b')
+                        elif key == 'less_dists':  
+                            side_data = best_sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_best_mean_diff[i_3].text(
+                                    sig_plot_ind-0.25, best_sig_height, '<0', horizontalalignment='center', \
+                                        verticalalignment='center',color='r')
+                        else: # Pair data
+                            ind_1 = best_sig_taste_data[key]['ind_1']
+                            ind_2 = best_sig_taste_data[key]['ind_2']
+                            marker = best_sig_taste_data[key]['marker']
+                            ax_best_mean_diff[i_3].plot(
                                 [ind_1, ind_2], [best_sig_height, best_sig_height], color='k', linestyle='solid')
                             ax_best_mean_diff[i_3].plot([ind_1, ind_1], [
                                                       best_sig_height-step/2, best_sig_height+step/2], color='k', linestyle='solid')
                             ax_best_mean_diff[i_3].plot([ind_2, ind_2], [
                                                       best_sig_height-step/2, best_sig_height+step/2], color='k', linestyle='solid')
                             ax_best_mean_diff[i_3].text(
-                                ind_1 + (ind_2-ind_1)/2, best_sig_height + step/2, marker, \
-                                    horizontalalignment='center', verticalalignment='center', \
+                                ind_1 + (ind_2-ind_1)/2, best_sig_height + step/2, marker,\
+                                    horizontalalignment='center', verticalalignment='center',\
                                         color='k')
                             best_sig_height += step
-                        except:  # Individual dist significance
-                            try:
-                                dist_sig_data = best_sig_taste_data[sp_i]
-                                for sig_plot_ind in dist_sig_data:
-                                    ax_best_mean_diff[i_3].text(
-                                        sig_plot_ind, best_sig_height, '*', \
-                                            horizontalalignment='center', \
-                                                verticalalignment='center', color='g')
-                                best_sig_height += step
-                            except:
-                                print("\tInvalid value.")
                     
                     # Adjust y-limits
-                    ax_best_mean_diff[i_3].set_ylim(
-                        [min_best_mean_diff - np.abs(min_best_mean_diff)/5, best_sig_height + best_sig_height/5])
+                    # ax_best_mean_diff[i_3].set_ylim(
+                    #     [min_best_mean_diff - np.abs(min_best_mean_diff)/5, best_sig_height + best_sig_height/5])
                     
                 # Finish plots with titles and save
                 f_pop_vec_plot_name = combo_1.replace(
@@ -1369,9 +1212,11 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                 if type(combo_2) == np.int64:
                     combo_2 = "epoch_" + str(combo_2)
                 f_mean_diff, ax_mean_diff = plt.subplots(
-                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 5))
+                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 5),\
+                        sharex = True, sharey = True)
                 f_best_mean_diff, ax_best_mean_diff = plt.subplots(
-                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 2*5))
+                    ncols=combo_lengths[2], figsize=(combo_lengths[2]*5, 2*5),\
+                        sharex = True, sharey = True)
                 max_mean_diff = 0
                 min_mean_diff = 0
                 max_best_mean_diff = 0
@@ -1496,6 +1341,17 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                             if zero_percentile >= 95:
                                 sig_inds.extend([points_ind+1])
                     significance_storage[i_3]['sig_dists'] = sig_inds
+                    # __All points above or below 0
+                    greater_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot):
+                        if len(np.where(np.array(points_dist) > 0)[0]) == len(points_dist):
+                            greater_inds.extend([points_ind+1])
+                    significance_storage[i_3]['greater_dists'] = greater_inds
+                    less_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot):
+                        if len(np.where(np.array(points_dist) < 0)[0]) == len(points_dist):
+                            less_inds.extend([points_ind+1])
+                    significance_storage[i_3]['less_dists'] = less_inds
                     
                     sig_inds_best = []
                     for points_ind, points_dist in enumerate(points_boxplot_best):
@@ -1510,6 +1366,17 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                             if zero_percentile >= 95:
                                 sig_inds_best.extend([points_ind+1])
                     best_significance_storage[i_3]['sig_dists'] = sig_inds_best
+                    # __All points above or below 0
+                    greater_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot_best):
+                        if len(np.where(np.array(points_dist) > 0)[0]) == len(points_dist):
+                            greater_inds.extend([points_ind+1])
+                    best_significance_storage[i_3]['greater_dists'] = greater_inds
+                    less_inds = []
+                    for points_ind, points_dist in enumerate(points_boxplot_best):
+                        if len(np.where(np.array(points_dist) < 0)[0]) == len(points_dist):
+                            less_inds.extend([points_ind+1])
+                    best_significance_storage[i_3]['less_dists'] = less_inds
                     
                     # __Pairwise significance
                     pair_diffs = list(combinations(np.arange(len(mean_diff_collection)),2))
@@ -1557,66 +1424,86 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                     step = max_mean_diff/10
                     sig_height = max_mean_diff + step
                     sig_taste_data = significance_storage[i_3]
-                    for sp_i in list(sig_taste_data.keys()):
-                        try:  # Pair data
-                            ind_1 = sig_taste_data[sp_i]['ind_1']
-                            ind_2 = sig_taste_data[sp_i]['ind_2']
-                            marker = sig_taste_data[sp_i]['marker']
-                            ax_mean_diff[i_3].plot(
-                                [ind_1, ind_2], [sig_height, sig_height], color='k', linestyle='solid')
-                            ax_mean_diff[i_3].plot([ind_1, ind_1], [
-                                                   sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
-                            ax_mean_diff[i_3].plot([ind_2, ind_2], [
-                                                   sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
-                            ax_mean_diff[i_3].text(ind_1 + (ind_2-ind_1)/2, sig_height + step/2,
-                                                   marker, horizontalalignment='center', verticalalignment='center')
-                            sig_height += step
-                        except:  # Individual dist significance
-                            dist_sig_data = sig_taste_data[sp_i]
+                    for key in list(sig_taste_data.keys()):
+                        if key == 'sig_dists':  # Individual dist significance
+                            dist_sig_data = sig_taste_data[key]
                             for sig_plot_ind in dist_sig_data:
                                 ax_mean_diff[i_3].text(
                                     sig_plot_ind, sig_height, '*', horizontalalignment='center', \
-                                        verticalalignment='center', color='g')
+                                        verticalalignment='center',color='g')
+                        elif key == 'greater_dists':  
+                            side_data = sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_mean_diff[i_3].text(
+                                    sig_plot_ind+0.25, sig_height, '>0', horizontalalignment='center', \
+                                        verticalalignment='center',color='b')
+                        elif key == 'less_dists':  
+                            side_data = sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_mean_diff[i_3].text(
+                                    sig_plot_ind-0.25, sig_height, '<0', horizontalalignment='center', \
+                                        verticalalignment='center',color='r')
+                        else: # Pair data
+                            ind_1 = sig_taste_data[key]['ind_1']
+                            ind_2 = sig_taste_data[key]['ind_2']
+                            marker = sig_taste_data[key]['marker']
+                            ax_mean_diff[i_3].plot(
+                                [ind_1, ind_2], [sig_height, sig_height], color='k', linestyle='solid')
+                            ax_mean_diff[i_3].plot([ind_1, ind_1], [
+                                                      sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                            ax_mean_diff[i_3].plot([ind_2, ind_2], [
+                                                      sig_height-step/2, sig_height+step/2], color='k', linestyle='solid')
+                            ax_mean_diff[i_3].text(
+                                ind_1 + (ind_2-ind_1)/2, sig_height + step/2, marker,\
+                                    horizontalalignment='center', verticalalignment='center',\
+                                        color='k')
                             sig_height += step
                     # Adjust y-limits
-                    ax_mean_diff[i_3].set_ylim(
-                        [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
+                    # ax_mean_diff[i_3].set_ylim(
+                    #     [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
                     
                     # Add best significance data
                     step = max_best_mean_diff/10
                     best_sig_height = max_best_mean_diff + step
                     best_sig_taste_data = best_significance_storage[i_3]
-                    for sp_i in list(sig_taste_data.keys()):
-                        try:  # Pair data
-                            ind_1 = best_sig_taste_data[sp_i]['ind_1']
-                            ind_2 = best_sig_taste_data[sp_i]['ind_2']
-                            marker = best_sig_taste_data[sp_i]['marker']
-                            ax_mean_diff[i_3].plot(
+                    for key in list(best_sig_taste_data.keys()):
+                        if key == 'sig_dists':  # Individual dist significance
+                            dist_sig_data = best_sig_taste_data[key]
+                            for sig_plot_ind in dist_sig_data:
+                                ax_best_mean_diff[i_3].text(
+                                    sig_plot_ind, best_sig_height, '*', horizontalalignment='center', \
+                                        verticalalignment='center',color='g')
+                        elif key == 'greater_dists':  
+                            side_data = best_sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_best_mean_diff[i_3].text(
+                                    sig_plot_ind+0.25, best_sig_height, '>0', horizontalalignment='center', \
+                                        verticalalignment='center',color='b')
+                        elif key == 'less_dists':  
+                            side_data = best_sig_taste_data[key]
+                            for sig_plot_ind in side_data:
+                                ax_best_mean_diff[i_3].text(
+                                    sig_plot_ind-0.25, best_sig_height, '<0', horizontalalignment='center', \
+                                        verticalalignment='center',color='r')
+                        else: # Pair data
+                            ind_1 = best_sig_taste_data[key]['ind_1']
+                            ind_2 = best_sig_taste_data[key]['ind_2']
+                            marker = best_sig_taste_data[key]['marker']
+                            ax_best_mean_diff[i_3].plot(
                                 [ind_1, ind_2], [best_sig_height, best_sig_height], color='k', linestyle='solid')
                             ax_best_mean_diff[i_3].plot([ind_1, ind_1], [
                                                       best_sig_height-step/2, best_sig_height+step/2], color='k', linestyle='solid')
                             ax_best_mean_diff[i_3].plot([ind_2, ind_2], [
                                                       best_sig_height-step/2, best_sig_height+step/2], color='k', linestyle='solid')
                             ax_best_mean_diff[i_3].text(
-                                ind_1 + (ind_2-ind_1)/2, best_sig_height + step/2, marker, \
-                                    horizontalalignment='center', verticalalignment='center', \
+                                ind_1 + (ind_2-ind_1)/2, best_sig_height + step/2, marker,\
+                                    horizontalalignment='center', verticalalignment='center',\
                                         color='k')
                             best_sig_height += step
-                        except:  # Individual dist significance
-                            try:
-                                dist_sig_data = best_sig_taste_data[sp_i]
-                                for sig_plot_ind in dist_sig_data:
-                                    ax_best_mean_diff[i_3].text(
-                                        sig_plot_ind, best_sig_height, '*', \
-                                            horizontalalignment='center', \
-                                                verticalalignment='center', color='g')
-                                best_sig_height += step
-                            except:
-                                print("\tInvalid value.")
                             
                     # Adjust y-limits
-                    ax_best_mean_diff[i_3].set_ylim(
-                        [min_best_mean_diff - np.abs(min_best_mean_diff)/5, best_sig_height + best_sig_height/5])
+                    # ax_best_mean_diff[i_3].set_ylim(
+                    #     [min_best_mean_diff - np.abs(min_best_mean_diff)/5, best_sig_height + best_sig_height/5])
                     
                 # Finish plots with titles and save
                 f_pop_vec_plot_name = combo_1.replace(
@@ -1638,6 +1525,472 @@ def cross_epoch_diffs(corr_data, save_dir, unique_given_names, unique_corr_names
                 f_best_mean_diff.savefig(os.path.join(
                     mean_diff_save, f_pop_vec_plot_name) + '_mean_diff_best.svg')
                 plt.close(f_best_mean_diff)
+
+def combined_corr_by_segment_dist(corr_data, save_dir, unique_given_names, unique_corr_names,
+                        unique_segment_names, unique_taste_names):
+    """This function collects statistics across different correlation types and
+    plots them together by segment.
+    INPUTS:
+            - corr_data: dictionary containing correlation data across conditions.
+                    length = number of datasets
+                    corr_data[name] = dictionary of dataset data
+                    corr_data[name]['corr_data'] = dict of length #correlation types
+                    corr_data[name]['corr_data'][corr_name] = dict of length #segments
+                    corr_data[name]['corr_data'][corr_name][seg_name] = dict of length #tastes
+                    corr_data[name]['corr_data'][corr_name][seg_name][taste_name]['data'] = numpy 
+                            array of population average vector correlations [num_dev x num_trials x num_epochs]
+            - save_dir: directory to save the resulting plots
+            - unique_given_names: unique names of datasets
+            - unique_corr_names: unique names of correlation analysis types
+            - unique_segment_names: unique names of experimental segments
+            - unique_taste_names: unique names of tastants
+    OUTPUTS: plots and statistical significance tests
+    """
+    warnings.filterwarnings('ignore')
+    
+    colors = ['green','royalblue','blueviolet','teal','deeppink', \
+              'springgreen','turquoise', 'midnightblue']
+    
+    # Create further save dirs
+    corr_dist_save = os.path.join(save_dir, 'Corr_Combined_Dist')
+    if not os.path.isdir(corr_dist_save):
+        os.mkdir(corr_dist_save)
+    
+    class cross_segment_attributes:
+        def __init__(self, combo, names, i_1, i_2, i_3, unique_corr_names,
+                     unique_taste_names, unique_epochs):
+            setattr(self, names[0], eval(combo[0])[i_1])
+            setattr(self, names[1], eval(combo[1])[i_2])
+            setattr(self, names[2], eval(combo[2])[i_3])
+
+    # _____Reorganize data by unique correlation type_____
+    unique_data_dict, unique_best_data_dict, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
+                                                   unique_taste_names)
+    
+    # Plot all combinations
+    unique_epochs = np.arange(max_epochs)
+    characteristic_list = ['unique_corr_names',
+                           'unique_taste_names', 'unique_epochs']
+    characteristic_dict = dict()
+    for cl in characteristic_list:
+        characteristic_dict[cl] = eval(cl)
+    name_list = ['corr_name', 'taste_name', 'e_i']
+    # Get attribute pairs for plotting views
+    all_combinations = list(combinations(characteristic_list, 2))
+    all_combinations_full = []
+    all_names_full = []
+    for ac in all_combinations:
+        ac_list = list(ac)
+        missing = np.setdiff1d(characteristic_list, ac_list)
+        full_combo = ac_list
+        full_combo.extend(missing)
+        all_combinations_full.append(full_combo)
+        names_combo = [
+            name_list[characteristic_list.index(c)] for c in full_combo]
+        all_names_full.append(names_combo)
+    # Get segment pairs for comparison
+    segment_combinations = list(combinations(unique_segment_names, 2))
+
+    for c_i in range(len(all_combinations_full)):
+        combo = all_combinations_full[c_i]
+        combo_lengths = [len(characteristic_dict[combo[i]])
+                         for i in range(len(combo))]
+        names = all_names_full[c_i]
+        for i_1 in range(combo_lengths[0]):
+            combo_1 = eval(combo[0])[i_1]
+            if type(combo_1) == np.int64:
+                combo_1 = "epoch_" + str(combo_1)
+            for i_2 in range(combo_lengths[1]):
+                combo_2 = eval(combo[1])[i_2]
+                if type(combo_2) == np.int64:
+                    combo_2 = "epoch_" + str(combo_2)
+                f_cdf, ax_cdf = plt.subplots(
+                    ncols=combo_lengths[2], nrows=1, \
+                        figsize=(combo_lengths[2]*5, 5), \
+                            sharex = True, sharey = True)
+                f_pdf, ax_pdf = plt.subplots(
+                    ncols=combo_lengths[2], nrows=1, \
+                        figsize=(combo_lengths[2]*5, 5), \
+                            sharex = True, sharey = True)
+                f_cdf_best, ax_cdf_best = plt.subplots(
+                    ncols=combo_lengths[2], nrows=1, \
+                        figsize=(combo_lengths[2]*5, 5), \
+                            sharex = True, sharey = True)
+                f_pdf_best, ax_pdf_best = plt.subplots(
+                    ncols=combo_lengths[2], nrows=1, \
+                        figsize=(combo_lengths[2]*5, 5), \
+                            sharex = True, sharey = True)
+                
+                corr_storage = dict()
+                best_corr_storage = dict()
+                for i_3 in range(combo_lengths[2]):
+                    combo_3 = eval(combo[2])[i_3]
+                    if type(combo_3) == np.int64:
+                        combo_3 = "epoch_" + str(combo_3)
+                    corr_storage[combo_3] = dict()
+                    best_corr_storage[combo_3] = dict()
+                    # Begin pulling data
+                    att = cross_segment_attributes(combo, names, i_1, i_2, i_3, unique_corr_names,
+                                                   unique_taste_names, unique_epochs)
+                    corr_name = att.corr_name
+                    taste_name = att.taste_name
+                    e_i = att.e_i
+                    for s_i, seg in enumerate(unique_segment_names):
+                        corr_storage[combo_3][seg] = []
+                        best_corr_storage[combo_3][seg] = []
+                        for g_n in unique_given_names:
+                            try:
+                                #Regular data
+                                data = unique_data_dict[corr_name][g_n][seg][taste_name]['data'][:, e_i]
+                                corr_storage[combo_3][seg].extend(list(data))
+                            except:
+                                print("\tSkipping invalid dataset.")
+                            try:
+                                #Best data
+                                data = unique_best_data_dict[corr_name][g_n][seg][taste_name][e_i]
+                                best_corr_storage[combo_3][seg].extend(list(data))
+                            except:
+                                print("\tSkipping invalid dataset.")
+                        true_vals = len(corr_storage[combo_3][seg])
+                        best_vals = len(best_corr_storage[combo_3][seg])
+                        cdf_bins = min(1000,max(int(true_vals/100),20))
+                        pdf_bins = min(200,max(int(true_vals/1000),20))
+                        cdf_best_bins = min(1000,max(int(best_vals/20),20))
+                        pdf_best_bins = min(200,max(int(best_vals/50),20))
+                        ax_cdf[i_3].hist(corr_storage[combo_3][seg],bins=cdf_bins,histtype='step',\
+                                 density=True,cumulative=True,label=seg,color=colors[s_i])
+                        ax_pdf[i_3].hist(corr_storage[combo_3][seg],bins=pdf_bins,histtype='step',\
+                                 density=True,cumulative=False,label=seg,color=colors[s_i])
+                        ax_cdf_best[i_3].hist(best_corr_storage[combo_3][seg],\
+                                bins=cdf_best_bins,histtype='step',\
+                                    density=True,cumulative=True,label=seg,color=colors[s_i])
+                        ax_pdf_best[i_3].hist(best_corr_storage[combo_3][seg],\
+                                bins=pdf_best_bins,histtype='step',\
+                                    density=True,cumulative=False,label=seg,color=colors[s_i])
+                    #Now add significance
+                    reg_sig = ''
+                    best_sig = ''
+                    for sp_i, s_pair in enumerate(segment_combinations):
+                        seg_1 = s_pair[0]
+                        seg_2 = s_pair[1]
+                        pair_sig = seg_1 + ' x ' + seg_2
+                        best_pair_sig = seg_1 + ' x ' + seg_2
+                        #Start with regular corr significance
+                        data_1 = np.array(corr_storage[combo_3][seg_1])
+                        data_2 = np.array(corr_storage[combo_3][seg_2])
+                        if (len(data_1) > 1)*(len(data_2) > 1):
+                            ks_result = ks_2samp(data_1,data_2,nan_policy='omit')
+                            if ks_result[1] <= 0.05:
+                                pair_sig = pair_sig + ' K.S.= *'
+                            else:
+                                pair_sig = pair_sig + ' K.S.= n.s.'
+                            tt_result = ttest_ind(data_1[~np.isnan(data_1)],data_2[~np.isnan(data_2)])
+                            if tt_result[1] <= 0.05:
+                                pair_sig = pair_sig + ' T.T.= *'
+                            else:
+                                pair_sig = pair_sig + ' T.T.= n.s.'
+                            pair_sig = pair_sig + '\n'
+                            reg_sig = reg_sig + pair_sig
+                        
+                        #Now best corr significance
+                        best_data_1 = np.array(best_corr_storage[combo_3][seg_1])
+                        best_data_2 = np.array(best_corr_storage[combo_3][seg_2])
+                        if (len(best_data_1) > 1)*(len(best_data_2) > 1):
+                            ks_result = ks_2samp(best_data_1,best_data_2,nan_policy='omit')
+                            if ks_result[1] <= 0.05:
+                                best_pair_sig = best_pair_sig + ' K.S.= *'
+                            else:
+                                best_pair_sig = best_pair_sig + ' K.S.= n.s.'
+                            tt_result = ttest_ind(best_data_1[~np.isnan(best_data_1)],best_data_2[~np.isnan(best_data_2)])
+                            if tt_result[1] <= 0.05:
+                                best_pair_sig = best_pair_sig + ' T.T.= *'
+                            else:
+                                best_pair_sig = best_pair_sig + ' T.T.= n.s.'
+                            best_pair_sig = best_pair_sig + '\n'
+                            best_sig = best_sig + best_pair_sig
+                    #Plot significance
+                    ax_cdf[i_3].text(-0.5,0.5,reg_sig,horizontalalignment='left',\
+                                     verticalalignment='top',color='k',\
+                                     backgroundcolor='w',fontsize='x-small')
+                    ax_cdf_best[i_3].text(-0.5,0.5,best_sig,horizontalalignment='left',\
+                                     verticalalignment='top',color='k',\
+                                     backgroundcolor='w',fontsize='x-small')
+                    
+                    #Add legends
+                    ax_cdf[i_3].legend(loc='upper left')
+                    ax_pdf[i_3].legend(loc='upper left')
+                    ax_cdf_best[i_3].legend(loc='upper left')
+                    ax_pdf_best[i_3].legend(loc='upper left')
+                    #Add title and axes labels
+                    ax_cdf[i_3].set_title(combo_3)
+                    ax_pdf[i_3].set_title(combo_3)
+                    ax_cdf_best[i_3].set_title(combo_3)
+                    ax_pdf_best[i_3].set_title(combo_3)
+                    ax_cdf[i_3].set_xlabel('Correlation')
+                    ax_pdf[i_3].set_xlabel('Correlation')
+                    ax_cdf_best[i_3].set_xlabel('Correlation')
+                    ax_pdf_best[i_3].set_xlabel('Correlation')
+                    ax_cdf[i_3].set_ylabel('Cumulative Density')
+                    ax_pdf[i_3].set_ylabel('Density')
+                    ax_cdf_best[i_3].set_ylabel('Cumulative Density')
+                    ax_pdf_best[i_3].set_ylabel('Density')
+                #Add super title
+                analysis_name = combo_1 +'_x_' + combo_2
+                f_cdf.suptitle(analysis_name)
+                plt.tight_layout()
+                f_cdf.savefig(os.path.join(corr_dist_save,analysis_name + '_cdf.png'))
+                f_cdf.savefig(os.path.join(corr_dist_save,analysis_name + '_cdf.svg'))
+                plt.setp(ax_cdf, xlim=[0.5,1], ylim=[0.5,1])
+                f_cdf.savefig(os.path.join(corr_dist_save,analysis_name + '_cdf_zoom.png'))
+                f_cdf.savefig(os.path.join(corr_dist_save,analysis_name + '_cdf_zoom.svg'))
+                plt.close(f_cdf)
+                
+                f_pdf.suptitle(analysis_name)
+                plt.tight_layout()
+                f_pdf.savefig(os.path.join(corr_dist_save,analysis_name + '_pdf.png'))
+                f_pdf.savefig(os.path.join(corr_dist_save,analysis_name + '_pdf.svg'))
+                plt.close(f_pdf)
+                
+                f_cdf_best.suptitle(analysis_name + '_best')
+                plt.tight_layout()
+                f_cdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_cdf.png'))
+                f_cdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_cdf.svg'))
+                plt.setp(ax_cdf_best, xlim=[0.5,1], ylim=[0.5,1])
+                f_cdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_cdf_zoom.png'))
+                f_cdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_cdf_zoom.svg'))
+                plt.close(f_cdf_best)
+                
+                f_pdf_best.suptitle(analysis_name + '_best')
+                plt.tight_layout()
+                f_pdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_pdf.png'))
+                f_pdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_pdf.svg'))
+                plt.close(f_pdf_best)
+
+def combined_corr_by_taste_dist(corr_data, save_dir, unique_given_names, unique_corr_names,
+                      unique_segment_names, unique_taste_names):
+    """This function collects statistics across different correlation types and
+    plots them together
+    INPUTS:
+            - corr_data: dictionary containing correlation data across conditions.
+                    length = number of datasets
+                    corr_data[name] = dictionary of dataset data
+                    corr_data[name]['corr_data'] = dict of length #correlation types
+                    corr_data[name]['corr_data'][corr_name] = dict of length #segments
+                    corr_data[name]['corr_data'][corr_name][seg_name] = dict of length #tastes
+                    corr_data[name]['corr_data'][corr_name][seg_name][taste_name]['data'] = numpy 
+                            array of population average vector correlations [num_dev x num_trials x num_epochs]
+            - results_dir: directory to save the resulting plots
+            - unique_corr_names: unique names of correlation analyses to compare
+    OUTPUTS: plots and statistical significance tests
+    """
+    # Set parameters
+    warnings.filterwarnings('ignore')
+    
+    colors = ['green','royalblue','blueviolet','teal','deeppink', \
+              'springgreen','turquoise', 'midnightblue']
+    
+    # Create further save dirs
+    corr_dist_save = os.path.join(save_dir, 'Corr_Combined_Dist')
+    if not os.path.isdir(corr_dist_save):
+        os.mkdir(corr_dist_save)
+
+    class cross_taste_attributes:
+        def __init__(self, combo, names, i_1, i_2, i_3, unique_corr_names,
+                     unique_segment_names, unique_epochs):
+            setattr(self, names[0], eval(combo[0])[i_1])
+            setattr(self, names[1], eval(combo[1])[i_2])
+            setattr(self, names[2], eval(combo[2])[i_3])
+
+    # _____Reorganize data by unique correlation type_____
+    unique_data_dict, unique_best_data_dict, max_epochs = reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
+                                                                      unique_taste_names)
+
+    # Plot all combinations
+    unique_epochs = np.arange(max_epochs)
+    characteristic_list = ['unique_corr_names',
+                           'unique_segment_names', 'unique_epochs']
+    characteristic_dict = dict()
+    for cl in characteristic_list:
+        characteristic_dict[cl] = eval(cl)
+    name_list = ['corr_name', 'seg_name', 'e_i']
+    # Get attribute pairs for plotting views
+    all_combinations = list(combinations(characteristic_list, 2))
+    all_combinations_full = []
+    all_names_full = []
+    for ac in all_combinations:
+        ac_list = list(ac)
+        missing = np.setdiff1d(characteristic_list, ac_list)
+        full_combo = ac_list
+        full_combo.extend(missing)
+        all_combinations_full.append(full_combo)
+        names_combo = [
+            name_list[characteristic_list.index(c)] for c in full_combo]
+        all_names_full.append(names_combo)
+    # Get segment pairs for comparison
+    taste_combinations = list(combinations(unique_taste_names, 2))
+
+    for c_i in range(len(all_combinations_full)):
+        combo = all_combinations_full[c_i]
+        combo_lengths = [len(characteristic_dict[combo[i]])
+                         for i in range(len(combo))]
+        names = all_names_full[c_i]
+        for i_1 in range(combo_lengths[0]):
+            combo_1 = eval(combo[0])[i_1]
+            if type(combo_1) == np.int64:
+                combo_1 = "epoch_" + str(combo_1)
+            for i_2 in range(combo_lengths[1]):
+                combo_2 = eval(combo[1])[i_2]
+                if type(combo_2) == np.int64:
+                    combo_2 = "epoch_" + str(combo_2)
+                    f_cdf, ax_cdf = plt.subplots(
+                        ncols=combo_lengths[2], nrows=1, \
+                            figsize=(combo_lengths[2]*5, 5), \
+                                sharex = True, sharey = True)
+                    f_pdf, ax_pdf = plt.subplots(
+                        ncols=combo_lengths[2], nrows=1, \
+                            figsize=(combo_lengths[2]*5, 5), \
+                                sharex = True, sharey = True)
+                    f_cdf_best, ax_cdf_best = plt.subplots(
+                        ncols=combo_lengths[2], nrows=1, \
+                            figsize=(combo_lengths[2]*5, 5), \
+                                sharex = True, sharey = True)
+                    f_pdf_best, ax_pdf_best = plt.subplots(
+                        ncols=combo_lengths[2], nrows=1, \
+                            figsize=(combo_lengths[2]*5, 5), \
+                                sharex = True, sharey = True)
+                    corr_storage = dict()
+                    best_corr_storage = dict()
+                    for i_3 in range(combo_lengths[2]):
+                        combo_3 = eval(combo[2])[i_3]
+                        if type(combo_3) == np.int64:
+                            combo_3 = "epoch_" + str(combo_3)
+                        corr_storage[combo_3] = dict()
+                        best_corr_storage[combo_3] = dict()
+                        # Begin pulling data
+                        att = cross_taste_attributes(combo, names, i_1, i_2, i_3, unique_corr_names,
+                                                       unique_segment_names, unique_epochs)
+                        corr_name = att.corr_name
+                        seg_name = att.seg_name
+                        e_i = att.e_i
+                        for t_i, taste_name in enumerate(unique_taste_names):
+                            corr_storage[combo_3][taste_name] = []
+                            best_corr_storage[combo_3][taste_name] = []
+                            for g_n in unique_given_names:
+                                try:
+                                    #Regular data
+                                    data = unique_data_dict[corr_name][g_n][seg_name][taste_name]['data'][:, e_i]
+                                    corr_storage[combo_3][taste_name].extend(list(data))
+                                except:
+                                    print("\tSkipping invalid dataset.")
+                                try:
+                                    #Best data
+                                    data = unique_best_data_dict[corr_name][g_n][seg_name][taste_name][e_i]
+                                    best_corr_storage[combo_3][taste_name].extend(list(data))
+                                except:
+                                    print("\tSkipping invalid dataset.")
+                            true_vals = len(corr_storage[combo_3][taste_name])
+                            best_vals = len(best_corr_storage[combo_3][taste_name])
+                            cdf_bins = min(1000,max(int(true_vals/100),20))
+                            pdf_bins = min(200,max(int(true_vals/1000),20))
+                            cdf_best_bins = min(1000,max(int(best_vals/20),20))
+                            pdf_best_bins = min(200,max(int(best_vals/50),20))
+                            ax_cdf[i_3].hist(corr_storage[combo_3][taste_name],bins=cdf_bins,histtype='step',\
+                                     density=True,cumulative=True,label=taste_name,color=colors[t_i])
+                            ax_pdf[i_3].hist(corr_storage[combo_3][taste_name],bins=pdf_bins,histtype='step',\
+                                     density=True,cumulative=False,label=taste_name,color=colors[t_i])
+                            ax_cdf_best[i_3].hist(best_corr_storage[combo_3][taste_name],\
+                                    bins=cdf_best_bins,histtype='step',\
+                                        density=True,cumulative=True,label=taste_name,color=colors[t_i])
+                            ax_pdf_best[i_3].hist(best_corr_storage[combo_3][taste_name],\
+                                    bins=pdf_best_bins,histtype='step',\
+                                        density=True,cumulative=False,label=taste_name,color=colors[t_i])
+                        #Now add significance
+                        reg_sig = ''
+                        best_sig = ''
+                        for tp_i, t_pair in enumerate(taste_combinations):
+                            taste_1 = t_pair[0]
+                            taste_2 = t_pair[1]
+                            pair_sig = taste_1 + ' x ' + taste_2
+                            best_pair_sig = taste_1 + ' x ' + taste_2
+                            #Start with regular corr significance
+                            data_1 = np.array(corr_storage[combo_3][taste_1])
+                            data_2 = np.array(corr_storage[combo_3][taste_2])
+                            if (len(data_1) > 1)*(len(data_2) > 1):
+                                ks_result = ks_2samp(data_1,data_2,nan_policy='omit')
+                                if ks_result[1] <= 0.05:
+                                    pair_sig = pair_sig + ' K.S.= *'
+                                else:
+                                    pair_sig = pair_sig + ' K.S.= n.s.'
+                                tt_result = ttest_ind(data_1[~np.isnan(data_1)],data_2[~np.isnan(data_2)])
+                                if tt_result[1] <= 0.05:
+                                    pair_sig = pair_sig + ' T.T.= *'
+                                else:
+                                    pair_sig = pair_sig + ' T.T.= n.s.'
+                                pair_sig = pair_sig + '\n'
+                                reg_sig = reg_sig + pair_sig
+                            
+                            #Now best corr significance
+                            best_data_1 = np.array(best_corr_storage[combo_3][taste_1])
+                            best_data_2 = np.array(best_corr_storage[combo_3][taste_2])
+                            if (len(best_data_1) > 1)*(len(best_data_2) > 1):
+                                ks_result = ks_2samp(best_data_1,best_data_2,nan_policy='omit')
+                                if ks_result[1] <= 0.05:
+                                    best_pair_sig = best_pair_sig + ' K.S.= *'
+                                else:
+                                    best_pair_sig = best_pair_sig + ' K.S.= n.s.'
+                                tt_result = ttest_ind(best_data_1[~np.isnan(best_data_1)],best_data_2[~np.isnan(best_data_2)])
+                                if tt_result[1] <= 0.05:
+                                    best_pair_sig = best_pair_sig + ' T.T.= *'
+                                else:
+                                    best_pair_sig = best_pair_sig + ' T.T.= n.s.'
+                                best_pair_sig = best_pair_sig + '\n'
+                                best_sig = best_sig + best_pair_sig
+                        ax_cdf[i_3].text(-0.5,0.5,reg_sig,horizontalalignment='left',\
+                                         verticalalignment='top',color='k',\
+                                         backgroundcolor='w',fontsize='x-small')
+                        ax_cdf_best[i_3].text(-0.5,0.5,best_sig,horizontalalignment='left',\
+                                         verticalalignment='top',color='k',\
+                                         backgroundcolor='w',fontsize='x-small')
+                        #Add legends
+                        ax_cdf[i_3].legend(loc='upper left')
+                        ax_pdf[i_3].legend(loc='upper left')
+                        ax_cdf_best[i_3].legend(loc='upper left')
+                        ax_pdf_best[i_3].legend(loc='upper left')
+                        #Add title and axes labels
+                        ax_cdf[i_3].set_title(combo_3)
+                        ax_pdf[i_3].set_title(combo_3)
+                        ax_cdf_best[i_3].set_title(combo_3)
+                        ax_pdf_best[i_3].set_title(combo_3)
+                        ax_cdf[i_3].set_xlabel('Correlation')
+                        ax_pdf[i_3].set_xlabel('Correlation')
+                        ax_cdf_best[i_3].set_xlabel('Correlation')
+                        ax_pdf_best[i_3].set_xlabel('Correlation')
+                        ax_cdf[i_3].set_ylabel('Cumulative Density')
+                        ax_pdf[i_3].set_ylabel('Density')
+                        ax_cdf_best[i_3].set_ylabel('Cumulative Density')
+                        ax_pdf_best[i_3].set_ylabel('Density')
+                    #Add super title
+                    analysis_name = combo_1 +'_x_' + combo_2
+                    f_cdf.suptitle(analysis_name)
+                    plt.tight_layout()
+                    f_cdf.savefig(os.path.join(corr_dist_save,analysis_name + '_cdf.png'))
+                    f_cdf.savefig(os.path.join(corr_dist_save,analysis_name + '_cdf.svg'))
+                    plt.close(f_cdf)
+                    f_pdf.suptitle(analysis_name)
+                    plt.tight_layout()
+                    f_pdf.savefig(os.path.join(corr_dist_save,analysis_name + '_pdf.png'))
+                    f_pdf.savefig(os.path.join(corr_dist_save,analysis_name + '_pdf.svg'))
+                    plt.close(f_pdf)
+                    f_cdf_best.suptitle(analysis_name + '_best')
+                    plt.tight_layout()
+                    f_cdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_cdf.png'))
+                    f_cdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_cdf.svg'))
+                    plt.close(f_cdf_best)
+                    f_pdf_best.suptitle(analysis_name + '_best')
+                    plt.tight_layout()
+                    f_pdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_pdf.png'))
+                    f_pdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_pdf.svg'))
+                    plt.close(f_pdf_best)
 
 def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_segment_names,
                     unique_taste_names):
@@ -1663,7 +2016,7 @@ def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_seg
             corr_dev_stats = dataset_corr_data[cn_i]
             seg_names = list(corr_dev_stats.keys())
             for seg_name in seg_names:
-                taste_names = list(corr_dev_stats[seg_name].keys())
+                taste_names = list(np.intersect1d(list(corr_dev_stats[seg_name].keys()),unique_taste_names))
                 for taste_name in taste_names:
                     try:
                         data = corr_dev_stats[seg_name][taste_name]['data']
@@ -1697,24 +2050,13 @@ def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_seg
             seg_names = list(corr_dev_stats.keys())
             for seg_name in seg_names:
                 data = corr_dev_stats[seg_name]
-                taste_names = list(corr_dev_stats[seg_name].keys())
+                taste_names = list(np.intersect1d(list(corr_dev_stats[seg_name].keys()),unique_taste_names))
                 try:
                     num_dev = data[taste_names[0]]['num_dev']
                     num_cp = data[taste_names[0]]['num_cp']
                     #Store the index of [0] the best taste and [1] the best epoch
                     #   Note, this is on-average the correlation is best across deliveries
-                    best_inds = -1*np.ones((num_dev,2))
-                    for dev_i in range(num_dev):
-                        corr_collection = np.zeros((len(taste_names),num_cp)) #average correlation across deliveries for each taste for each epoch
-                        for t_i, taste in enumerate(taste_names):
-                            corr_collection[t_i,:] = np.nanmean(data[taste]['data'][dev_i,:,:],0)
-                        max_inds = np.where(corr_collection == np.max(corr_collection))
-                        if len(max_inds[0]) > 0:
-                            best_inds[dev_i,0] = max_inds[0][0]
-                            best_inds[dev_i,1] = max_inds[1][0]
-                        else:
-                            best_inds[dev_i,0] = np.nan
-                            best_inds[dev_i,1] = np.nan
+                    best_inds = corr_dev_stats[seg_name]['best']
                     #Now store the best correlation values by taste and epoch
                     for t_i, taste in enumerate(taste_names):
                         for cp_i in range(num_cp):
@@ -1725,7 +2067,7 @@ def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_seg
                             unique_best_data_dict[cn_i][d_i][seg_name][taste][cp_i] = corr_list
                 except: #No data
                     for t_i, taste in enumerate(taste_names):
-                        for cp_i in range(num_cp):
+                        for cp_i in range(max_epochs):
                             unique_best_data_dict[cn_i][d_i][seg_name][taste][cp_i] = []
                         
     return unique_data_dict, unique_best_data_dict, max_epochs
@@ -1902,8 +2244,8 @@ def cross_dataset_seg_compare_mean_diffs(seg_data,unique_given_names,unique_anal
                     plt.scatter((diff_ind+1)*np.ones(len(nonnan_points)) + animal_x_jitter, nonnan_points, alpha=0.3, color='g')
                 #Plot if the distribution is significantly above 0
                 for diff_i in range(len(bs_diff_labels)):
-                    fifth_percentile = np.percentile(bs_diff_data[:,diff_i],5)
-                    if fifth_percentile > 0:
+                    zero_percentile = percentileofscore(bs_diff_data[:,diff_i],0)
+                    if zero_percentile <= 5:
                         plt.scatter([diff_i + 1],[max_val],marker='*',color='k',s=12)
                 #Now calculate pairwise significance
                 diff_pairs = list(combinations(np.arange(len(bs_diff_labels)),2))
@@ -1968,8 +2310,8 @@ def cross_dataset_seg_compare_mean_diffs(seg_data,unique_given_names,unique_anal
                 plt.scatter((diff_ind+1)*np.ones(len(nonnan_points)) + animal_x_jitter, nonnan_points, alpha=0.3, color='g')
             #Plot if the distribution is significantly above 0
             for diff_i in range(len(bs_diff_labels)):
-                fifth_percentile = np.percentile(bs_diff_data[:,diff_i],5)
-                if fifth_percentile > 0:
+                zero_percentile = percentileofscore(bs_diff_data[:,diff_i],0)
+                if zero_percentile <= 5:
                     plt.scatter([diff_i + 1],[max_val],marker='*',color='k',s=12)
             #Now calculate pairwise significance
             diff_pairs = list(combinations(np.arange(len(bs_diff_labels)),2))
@@ -2024,8 +2366,8 @@ def cross_dataset_seg_compare_mean_diffs(seg_data,unique_given_names,unique_anal
                 plt.scatter((diff_ind+1)*np.ones(len(nonnan_points)) + animal_x_jitter, nonnan_points, alpha=0.3, color='g')
             #Plot if the distribution is significantly above 0
             for diff_i in range(len(bs_diff_labels)):
-                fifth_percentile = np.percentile(bs_diff_data[:,diff_i],5)
-                if fifth_percentile > 0:
+                zero_percentile = percentileofscore(bs_diff_data[:,diff_i],0)
+                if zero_percentile < 5:
                     plt.scatter([diff_i + 1],[max_val],marker='*',color='k',s=12)
             #Now calculate pairwise significance
             diff_pairs = list(combinations(np.arange(len(bs_diff_labels)),2))
@@ -2081,25 +2423,31 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
     for corr_type in unique_corr_types:
         for taste_name in unique_taste_names:
                 for seg_name in unique_segment_names:
+                    seg_epoch_means = []
                     seg_means = []
                     for name in unique_given_names:
                         try:
                             corr_array = rate_corr_data[name]['rate_corr_data'][corr_type][seg_name][taste_name]
-                            seg_means.append(list(np.nanmean(corr_array,0)))
+                            seg_epoch_means.append(list(np.nanmean(corr_array,0)))
+                            seg_means.append(np.nanmean(corr_array))
                         except:
-                            print(name + ' does not contain ' + corr_type + ' segment ' + seg_name + ' taste ' + taste_name + ' data.')
-                    mean_corr_dict[corr_type][taste_name][seg_name] = np.array(seg_means)
+                            #print(name + ' does not contain ' + corr_type + ' segment ' + seg_name + ' taste ' + taste_name + ' data.')
+                            #Use nan placeholders
+                            seg_epoch_means.append([np.nan for e_i in range(3)])
+                            seg_means.append([np.nan])
+                    mean_corr_dict[corr_type][taste_name][seg_name]['by_epoch'] = np.array(seg_epoch_means)
+                    mean_corr_dict[corr_type][taste_name][seg_name]['all'] = np.array(seg_means)
 
-    #Create trend plots
     taste_colors = ['g','b','purple','c','m','k']
+    
+    #Create trend plots by epoch
     for corr_type in unique_corr_types:
-        f, ax = plt.subplots(nrows = len(unique_segment_names), ncols = len(unique_taste_names), figsize = (4*len(unique_taste_names),4*len(unique_segment_names)))
-        f_mean, ax_mean = plt.subplots(nrows = len(unique_segment_names), ncols = 1, figsize = (4,4*len(unique_segment_names)))
-        max_mean = 0
-        min_mean = 0
+        f, ax = plt.subplots(nrows = len(unique_segment_names), ncols = len(unique_taste_names), \
+                             figsize = (4*len(unique_taste_names),4*len(unique_segment_names)),\
+                                 sharex=True,sharey=True)
         for s_i, s_name in enumerate(unique_segment_names):
             for t_i, t_name in enumerate(unique_taste_names):
-                corr_array = mean_corr_dict[corr_type][t_name][s_name]
+                corr_array = mean_corr_dict[corr_type][t_name][s_name]['by_epoch']
                 if len(corr_array) > 0:
                     corr_max = np.nanmax(corr_array)
                     corr_min = np.nanmin(corr_array)
@@ -2111,16 +2459,11 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
                         ax[s_i,t_i].scatter(x_vals + animal_x_jitter, corr_array[d_i,:], alpha=0.3, color='g')
                     ax[s_i,t_i].plot(x_vals,np.nanmean(corr_array,0),\
                                      label='Mean',linestyle='dashed',alpha=0.5,color='k')
-                    ax_mean[s_i].plot(x_vals,np.nanmean(corr_array,0),label=t_name,color=taste_colors[t_i])
                     ax[s_i,t_i].set_xticklabels(np.array(['Presence','Identity','Palatability']))
-                    ax_mean[s_i].set_xticks(x_vals,np.array(['Presence','Identity','Palatability'])) 
                     if s_i == 0:
                         ax[s_i,t_i].set_title(t_name)
-                        ax_mean[s_i].set_ylabel('Mean Correlation')
                     if t_i == 0:
                         ax[s_i,t_i].set_ylabel(s_name + '\nMean Correlation')
-                        ax_mean[s_i].set_title(s_name)
-                    ax_mean[s_i].legend(loc='lower right')
                     #Now calculate pairwise significance
                     epoch_pairs = list(combinations(np.arange(3),2))
                     for ep in epoch_pairs:
@@ -2136,28 +2479,164 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
                             corr_max = corr_max*1.05
                     #Now calculate individual distribution significance > 0
                     for e_i in range(3):
-                        fifth_percentile = np.percentile(corr_array[:,e_i],5)
-                        if 0 <= fifth_percentile:
+                        zero_percentile = percentileofscore(corr_array[:,e_i],0)
+                        if zero_percentile <= 5:
                             corr_max = corr_max*1.05
-                            ax[s_i,t_i].scatter([e_i+1],[corr_max],marker='*',s=3,c='b')
-                    if corr_min < min_mean:
-                        min_mean = corr_min
-                    if corr_max > max_mean:
-                        max_mean = corr_max
-        for s_i in range(len(unique_segment_names)):
-            ax_mean[s_i].set_ylim([min_mean - 0.1*np.abs(min_mean),max_mean + 0.1*max_mean])
-            for t_i in range(len(unique_taste_names)):
-                ax[s_i,t_i].set_ylim([min_mean - 0.1*np.abs(min_mean),max_mean + 0.1*max_mean])
+                            ax[s_i,t_i].text(e_i+1,corr_max,'*%',color='blue')
         f.suptitle(corr_type + ' Mean Correlation of Population Rate to Bin Taste Correlation')
         plt.tight_layout()
-        f.savefig(os.path.join(results_dir,corr_type + '_mean_trends.png'))
-        f.savefig(os.path.join(results_dir,corr_type + '_mean_trends.svg'))
+        f.savefig(os.path.join(results_dir,corr_type + '_mean_trends_by_epoch.png'))
+        f.savefig(os.path.join(results_dir,corr_type + '_mean_trends_by_epoch.svg'))
         plt.close(f)
-        f_mean.suptitle(corr_type + ' Cross-Animal Mean Correlation of Population Rate to Bin Taste Correlation')
+   
+    #Create trend plots of overall means
+    for corr_type in unique_corr_types:
+        #By Segment
+        f_seg, ax_seg = plt.subplots(ncols = len(unique_segment_names), figsize = (4*len(unique_taste_names),4))
+        max_corr = 0
+        min_corr = 1
+        for s_i, s_name in enumerate(unique_segment_names):
+            ax_seg[s_i].axhline(0,linestyle='solid',color='b',alpha=0.3)
+            taste_data = []
+            taste_inds = []
+            seg_max_corr = 0
+            seg_min_corr = 1
+            for t_i, t_name in enumerate(unique_taste_names):
+                corr_vec = mean_corr_dict[corr_type][taste_name][s_name]['all']
+                if len(corr_array) > 1:
+                    corr_max = np.nanmax(corr_vec)
+                    corr_min = np.nanmin(corr_vec)
+                    ax_seg[s_i].scatter(np.random.normal(t_i+1, 0.04,size=len(corr_vec)),
+                                  corr_vec, color='g',alpha=0.2)
+                    ax_seg[s_i].boxplot([corr_vec],positions=[t_i+1], sym='', \
+                                    meanline=True, medianprops=dict(linestyle='-', color='blue'), \
+                                    showmeans=True, meanprops=dict(linestyle='-', color='red'), \
+                                    showcaps=True, showbox=True)
+                    if corr_max > seg_max_corr:
+                        seg_max_corr = corr_max
+                    if corr_min < seg_min_corr:
+                        seg_min_corr = corr_min
+                taste_data.append(corr_vec)
+                taste_inds.extend([t_i])
+            ax_seg[s_i].set_xticks(np.arange(1, len(unique_taste_names)+1), unique_taste_names)
+            ax_seg[s_i].set_title(s_name)
+            ax_seg[s_i].set_ylabel('Mean Correlation')
+            ax_seg[s_i].set_xlabel('Taste')
+            #Now calculate pairwise significance
+            taste_pairs = list(combinations(np.array(taste_inds),2))
+            for tp in taste_pairs:
+                t_1 = tp[0]
+                t_1_data = taste_data[t_1]
+                t_2 = tp[1]
+                t_2_data = taste_data[t_2]
+                ttest_result = ttest_ind(t_1_data[~np.isnan(t_1_data)],t_2_data[~np.isnan(t_2_data)])
+                if ttest_result[1] <= 0.05:
+                    ax_seg[s_i].plot([t_1+1, t_2+1],[corr_max,corr_max],color='k')
+                    seg_max_corr = seg_max_corr*1.05
+                    ax_seg[s_i].scatter([t_1+1+(t_2-t_1)/2],[corr_max],marker='*',s=3,c='k')
+                    seg_max_corr = seg_max_corr*1.05
+                ks_result = ks_2samp(t_1_data,t_2_data,nan_policy='omit')
+                if ks_result[1] <= 0.05:
+                    ax_seg[s_i].plot([t_1+1, t_2+1],[corr_max,corr_max],color='k')
+                    seg_max_corr = seg_max_corr*1.05
+                    ax_seg[s_i].text(t_1+1+(t_2-t_1)/2,corr_max, '* K',\
+                            horizontalalignment='center', verticalalignment='center',\
+                                color='r')
+                    seg_max_corr = seg_max_corr*1.05 
+            #Individual distribution significance > 0
+            for t_i in range(len(unique_taste_names)):
+                zero_percentile = percentileofscore(taste_data[t_i],0)
+                if zero_percentile <= 5:
+                    ax_seg[s_i].text(t_i+1,seg_max_corr,'*%',color='blue')
+                    seg_max_corr = seg_max_corr*1.05 
+                if len(np.where(taste_data[t_i] < 0)[0]) == 0:
+                    ax_seg[s_i].text(t_i+1,seg_max_corr,'*>0',color='blue')
+                    seg_max_corr = seg_max_corr*1.05 
+            if seg_max_corr > max_corr:
+                max_corr = seg_max_corr
+            if seg_min_corr < min_corr:
+                min_corr = seg_min_corr
+        for s_i in range(len(unique_segment_names)):
+            ax_seg[s_i].set_ylim([min_corr*1.05,max_corr*1.05])
+        f_seg.suptitle(corr_type + ' Mean Correlation of Population Rate to Bin Taste Correlation')
         plt.tight_layout()
-        f_mean.savefig(os.path.join(results_dir,corr_type + '_cross_animal_mean_trends.png'))
-        f_mean.savefig(os.path.join(results_dir,corr_type + '_cross_animal_mean_trends.svg'))
-        plt.close(f_mean)
+        f_seg.savefig(os.path.join(results_dir,corr_type + '_by_seg_mean_trends.png'))
+        f_seg.savefig(os.path.join(results_dir,corr_type + '_by_seg_mean_trends.svg'))
+        plt.close(f_seg)
+        #By Taste
+        f_taste, ax_taste = plt.subplots(ncols = len(unique_segment_names), figsize = (4*len(unique_taste_names),4))
+        max_corr = 0
+        min_corr = 1
+        for t_i, t_name in enumerate(unique_taste_names):
+            ax_taste[t_i].axhline(0,linestyle='solid',color='b',alpha=0.3)
+            seg_data = []
+            seg_inds = []
+            taste_max_corr = 0
+            taste_min_corr = 1
+            for s_i, s_name in enumerate(unique_segment_names):
+                corr_vec = mean_corr_dict[corr_type][t_name][s_name]['all']
+                if len(corr_array) > 1:
+                    corr_max = np.nanmax(corr_vec)
+                    corr_min = np.nanmin(corr_vec)
+                    ax_taste[t_i].scatter(np.random.normal(s_i+1, 0.04,size=len(corr_vec)),
+                                  corr_vec, color='g',alpha=0.2)
+                    ax_taste[t_i].boxplot([corr_vec],positions=[s_i+1], sym='', \
+                                    meanline=True, medianprops=dict(linestyle='-', color='blue'), \
+                                    showmeans=True, meanprops=dict(linestyle='-', color='red'), \
+                                        showcaps=True, showbox=True)
+                    if corr_max > taste_max_corr:
+                        taste_max_corr = corr_max
+                    if corr_min < taste_min_corr:
+                        taste_min_corr = corr_min
+                seg_data.append(corr_vec)
+                seg_inds.extend([s_i])
+            ax_taste[t_i].set_xticks(np.arange(1, len(unique_segment_names)+1), unique_segment_names)
+            ax_taste[t_i].set_title(t_name)
+            ax_taste[t_i].set_ylabel('Mean Correlation')
+            ax_taste[t_i].set_xlabel('Segment')
+            #Now calculate pairwise significance
+            seg_pairs = list(combinations(np.array(seg_inds),2))
+            for sp in seg_pairs:
+                s_1 = sp[0]
+                s_1_data = seg_data[s_1]
+                s_2 = sp[1]
+                s_2_data = seg_data[s_2]
+                ttest_result = ttest_ind(s_1_data[~np.isnan(s_1_data)],s_2_data[~np.isnan(s_2_data)])
+                if ttest_result[1] <= 0.05:
+                    ax_taste[t_i].plot([s_1+1, s_2+1],[corr_max,corr_max],color='k')
+                    taste_max_corr = taste_max_corr*1.05
+                    ax_taste[t_i].text(s_1+1+(s_2-s_1)/2,corr_max, '* T',\
+                            horizontalalignment='center', verticalalignment='center',\
+                                color='k')
+                    taste_max_corr = taste_max_corr*1.05
+                ks_result = ks_2samp(s_1_data,s_2_data,nan_policy='omit')
+                if ks_result[1] <= 0.05:
+                    ax_taste[t_i].plot([s_1+1, s_2+1],[corr_max,corr_max],color='k')
+                    taste_max_corr = taste_max_corr*1.05
+                    ax_taste[t_i].text(s_1+1+(s_2-s_1)/2,corr_max, '* K',\
+                            horizontalalignment='center', verticalalignment='center',\
+                                color='r')
+                    taste_max_corr = taste_max_corr*1.05 
+            #Individual distribution significance > 0
+            for s_i in range(len(unique_segment_names)):
+                zero_percentile = percentileofscore(seg_data[s_i],0)
+                if zero_percentile <= 5:
+                    ax_taste[t_i].text(s_i+1,taste_max_corr,'*%',color='blue')
+                    taste_max_corr = taste_max_corr*1.05 
+                if len(np.where(seg_data[s_i] < 0)[0]) == 0:
+                    ax_taste[t_i].text(s_i+1,taste_max_corr,'*>0',color='blue')
+                    taste_max_corr = taste_max_corr*1.05 
+            if taste_max_corr > max_corr:
+                max_corr = taste_max_corr
+            if taste_min_corr < min_corr:
+                min_corr = taste_min_corr
+        for t_i in range(len(unique_taste_names)):
+            ax_taste[t_i].set_ylim([min_corr*1.05,max_corr*1.05])
+        f_taste.suptitle(corr_type + ' Mean Correlation of Population Rate to Bin Taste Correlation')
+        plt.tight_layout()
+        f_taste.savefig(os.path.join(results_dir,corr_type + '_by_taste_mean_trends.png'))
+        f_taste.savefig(os.path.join(results_dir,corr_type + '_by_taste_mean_trends.svg'))
+        plt.close(f_taste)
             
 def cross_dataset_dev_stats_plots(dev_stats_data, unique_given_names, 
                                             unique_dev_stats_names, unique_segment_names, 

@@ -72,20 +72,20 @@ class run_compare_conditions_analysis():
         self.find_corr_groupings()
         self.plot_corr_results()
         #Segment comparisons
-        self.find_seg_groupings()
-        self.plot_seg_results()
+        #self.find_seg_groupings()
+        #self.plot_seg_results()
         #Changepoint comparisons
-        self.find_cp_groupings()
-        self.plot_cp_results()
+        #self.find_cp_groupings()
+        #self.plot_cp_results()
         #Pop Rate x Taste Corr comparisons
-        self.find_rate_corr_groupings()
-        self.plot_rate_corr_results()
+        #self.find_rate_corr_groupings()
+        #self.plot_rate_corr_results()
         #Deviation Statistic comparisons
-        self.find_dev_stats_groupings()
-        self.plot_dev_stat_results()
+        #self.find_dev_stats_groupings()
+        #self.plot_dev_stat_results()
         #Deviation True x Null comparisons
-        self.find_dev_null_groupings()
-        self.plot_dev_null_results()
+        #self.find_dev_null_groupings()
+        #self.plot_dev_null_results()
 
     def import_corr(self,):
         """Import previously saved correlation data"""
@@ -133,14 +133,17 @@ class run_compare_conditions_analysis():
                     for s_i in segments_to_analyze:
                         seg_name = corr_data[data_name]['segment_names'][s_i]
                         corr_data[data_name]['corr_data'][nct][seg_name] = dict()
+                        filename_best_corr = os.path.join(result_dir,seg_name + '_best_taste_epoch_array.npy')
+                        best_data = np.load(filename_best_corr)
+                        corr_data[data_name]['corr_data'][nct][seg_name]['best'] = best_data
                         for t_i in range(len(dig_in_names)):
                             taste_name = dig_in_names[t_i]
                             corr_data[data_name]['corr_data'][nct][seg_name][taste_name] = dict(
                             )
                             try:
-                                filename_pop_vec = os.path.join(
+                                filename_corr_pop_vec = os.path.join(
                                     result_dir, seg_name + '_' + taste_name + '_pop_vec.npy')
-                                data = np.load(filename_pop_vec)
+                                data = np.load(filename_corr_pop_vec)
                                 corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['data'] = data
                                 num_dev, num_deliv, num_cp = np.shape(data)
                                 corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_dev'] = num_dev
@@ -185,8 +188,8 @@ class run_compare_conditions_analysis():
                         corr_data[name]['corr_data'][corr_name].keys())
                     unique_segment_names.extend(seg_names)
                     for seg_name in seg_names:
-                        taste_names = list(
-                            corr_data[name]['corr_data'][corr_name][seg_name].keys())
+                        taste_names = list(np.setdiff1d(list(
+                            corr_data[name]['corr_data'][corr_name][seg_name].keys()),['best']))
                         unique_taste_names.extend(taste_names)
                 except:
                     print(name + " does not have correlation data for " + corr_name)
@@ -210,25 +213,14 @@ class run_compare_conditions_analysis():
 
         print("Beginning Plots.")
         if num_cond > 1:
-            # Cross-Dataset: different given names on the same axes
             # ____Deviation Event Frequencies____
             dev_freq_dir = os.path.join(results_dir, 'dev_frequency_plots')
             if os.path.isdir(dev_freq_dir) == False:
                 os.mkdir(dev_freq_dir)
-            print("\tCalculating Cross-Taste Deviation Frequencies")
-            taste_dev_freq_dir = os.path.join(dev_freq_dir, 'cross_tastes')
-            if os.path.isdir(taste_dev_freq_dir) == False:
-                os.mkdir(taste_dev_freq_dir)
-            cdf.cross_dataset_dev_freq_taste(self.corr_data, self.unique_given_names,
-                                             self.unique_corr_names, self.unique_segment_names,
-                                             self.unique_taste_names, taste_dev_freq_dir)
             print("\tCalculating Cross-Segment Deviation Frequencies")
-            seg_dev_freq_dir = os.path.join(dev_freq_dir, 'cross_segments')
-            if os.path.isdir(seg_dev_freq_dir) == False:
-                os.mkdir(seg_dev_freq_dir)
-            cdf.cross_dataset_dev_freq_seg(self.corr_data, self.unique_given_names,
-                                           self.unique_corr_names, self.unique_segment_names,
-                                           self.unique_taste_names, seg_dev_freq_dir)
+            cdf.cross_dataset_dev_freq(self.corr_data, self.unique_given_names,
+                                             self.unique_corr_names, self.unique_segment_names,
+                                             self.unique_taste_names, dev_freq_dir)
             # ____Correlation Distributions____
             cross_segment_dir = os.path.join(
                 results_dir, 'cross_segment_plots')
@@ -237,12 +229,16 @@ class run_compare_conditions_analysis():
             print("\tComparing Segments")
             cdf.cross_segment_diffs(self.corr_data, cross_segment_dir, self.unique_given_names,
                                     self.unique_corr_names, self.unique_segment_names, self.unique_taste_names)
+            cdf.combined_corr_by_segment_dist(self.corr_data, cross_segment_dir, self.unique_given_names, 
+                                              self.unique_corr_names,self.unique_segment_names, self.unique_taste_names)
             cross_taste_dir = os.path.join(results_dir, 'cross_taste_plots')
             if os.path.isdir(cross_taste_dir) == False:
                 os.mkdir(cross_taste_dir)
             print("\tComparing Tastes")
             cdf.cross_taste_diffs(self.corr_data, cross_taste_dir, self.unique_given_names,
                                   self.unique_corr_names, self.unique_segment_names, self.unique_taste_names)
+            cdf.combined_corr_by_taste_dist(self.corr_data, cross_taste_dir, self.unique_given_names, 
+                                              self.unique_corr_names,self.unique_segment_names, self.unique_taste_names)
             cross_epoch_dir = os.path.join(results_dir, 'cross_epoch_plots')
             if os.path.isdir(cross_epoch_dir) == False:
                 os.mkdir(cross_epoch_dir)
@@ -282,8 +278,6 @@ class run_compare_conditions_analysis():
             print("\tCross Epoch Plots.")
             ccf.cross_epoch(self.corr_data, cross_epoch_dir, self.unique_given_names,
                             self.unique_corr_names, self.unique_segment_names, self.unique_taste_names)
-
-        print("Done.")
 
     def import_seg_data(self,):
         """Import previously saved segment data"""
@@ -536,13 +530,14 @@ class run_compare_conditions_analysis():
             rate_corr_data[data_name]['rate_corr_data'] = dict()
             for nct in range(len(num_corr_types)):
                 corr_type = num_corr_types[nct]
-                rate_corr_data[data_name]['rate_corr_data'][corr_type] = dict()
-                corr_dir = os.path.join(rate_corr_save_dir,corr_type)
-                try:
-                    rate_corr_data[data_name]['rate_corr_data'][corr_type] = np.load(os.path.join(corr_dir,'popfr_corr_storage.npy'), allow_pickle=True).item()
-                except:
-                    print("No population fr x taste correlation dictionary found for " + data_name + " corr " + corr_type)
-                #This data is organized by [seg_name][bin_size] gives the result array
+                if corr_type[0] != '.': #Ignore '.DS_Store'
+                    rate_corr_data[data_name]['rate_corr_data'][corr_type] = dict()
+                    corr_dir = os.path.join(rate_corr_save_dir,corr_type)
+                    try:
+                        rate_corr_data[data_name]['rate_corr_data'][corr_type] = np.load(os.path.join(corr_dir,'popfr_corr_storage.npy'), allow_pickle=True).item()
+                    except:
+                        print("No population fr x taste correlation dictionary found for " + data_name + " corr " + corr_type)
+                    #This data is organized by [seg_name][bin_size] gives the result array
         self.rate_corr_data = rate_corr_data
         np.save(os.path.join(self.save_dir, 'rate_corr_data.npy'),rate_corr_data,allow_pickle=True)
         # Save the combined dataset somewhere...
@@ -563,7 +558,10 @@ class run_compare_conditions_analysis():
             np.unique(unique_given_names, return_index=True)[1])
         unique_given_names = [unique_given_names[i]
                               for i in unique_given_indices]
-        unique_corr_types = np.array([list(rate_corr_data[name]['rate_corr_data'].keys()) for name in unique_given_names]).flatten()
+        unique_corr_types = []
+        for name in unique_given_names:
+            unique_corr_types.extend(list(rate_corr_data[name]['rate_corr_data'].keys()))
+        unique_corr_types = np.array(unique_corr_types)
         unique_corr_indices = np.sort(
             np.unique(unique_corr_types, return_index=True)[1])
         unique_corr_types = [unique_corr_types[i] for i in unique_corr_indices]
@@ -594,7 +592,7 @@ class run_compare_conditions_analysis():
         self.unique_taste_names = unique_taste_names
     
     def plot_rate_corr_results(self,):
-        num_cond = len(self.seg_data)
+        num_cond = len(self.rate_corr_data)
         results_dir = self.rate_corr_results_dir
 
         print("Beginning Plots.")
