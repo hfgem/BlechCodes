@@ -76,7 +76,7 @@ def cross_dataset_dev_freq(corr_data, unique_given_names, unique_corr_names,
                     corr_data[g_n]['segment_times_reshaped'][seg_ind][0]
                 seg_len_s = seg_len/1000
                 try:
-                    taste_names = list(corr_data[g_n]['corr_data'][corr_name][seg_name].keys())
+                    taste_names = list(np.intersect1d(list(corr_data[g_n]['corr_data'][corr_name][seg_name].keys()),unique_taste_names))
                     data = corr_data[g_n]['corr_data'][corr_name][seg_name]
                     one_taste = taste_names[0]
                     num_cp = data[one_taste]['num_cp']
@@ -103,8 +103,9 @@ def cross_dataset_dev_freq(corr_data, unique_given_names, unique_corr_names,
                           seg_frequencies, color='g',alpha=0.2)
             plt.boxplot([seg_frequencies], positions=[
                                 s_i+1], sym='', meanline=True, medianprops=dict(linestyle='-', color='blue'), showcaps=True, showbox=True)
-            if np.max(seg_frequencies) > max_freq:
-                max_freq = np.max(seg_frequencies)
+            if len(seg_frequencies) > 0:
+                if np.max(seg_frequencies) > max_freq:
+                    max_freq = np.max(seg_frequencies)
             all_segment_data.append(seg_frequencies)
             all_segment_data_indices.extend([s_i])
         plt.xticks(np.arange(1, len(unique_segment_names)+1), unique_segment_names)
@@ -143,6 +144,7 @@ def cross_dataset_dev_freq(corr_data, unique_given_names, unique_corr_names,
         plt.tight_layout()
         f_all.savefig(os.path.join(save_dir, corr_name) + '.png')
         f_all.savefig(os.path.join(save_dir, corr_name) + '.svg')
+        plt.close(f_all)
         #____BEST DEVIATION RATES____
         #best_dev_freq_dict[seg_name][taste][cp_i] = list of length num animals in Hz
         f_best_taste, ax_best_taste = plt.subplots(ncols = len(unique_segment_names), \
@@ -226,6 +228,7 @@ def cross_dataset_dev_freq(corr_data, unique_given_names, unique_corr_names,
         plt.tight_layout()
         f_best_taste.savefig(os.path.join(save_dir, corr_name) + '_best_taste.png')
         f_best_taste.savefig(os.path.join(save_dir, corr_name) + '_best_taste.svg')
+        plt.close(f_best_taste)
         
         f_best_seg, ax_best_seg = plt.subplots(ncols = len(unique_taste_names), \
                                                nrows = max_epochs, figsize=(4*len(unique_taste_names),4*max_epochs), \
@@ -288,6 +291,7 @@ def cross_dataset_dev_freq(corr_data, unique_given_names, unique_corr_names,
         plt.tight_layout()
         f_best_seg.savefig(os.path.join(save_dir, corr_name) + '_best_segment.png')
         f_best_seg.savefig(os.path.join(save_dir, corr_name) + '_best_segment.svg')
+        plt.close(f_best_seg)
 
 
 def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_names,
@@ -1736,17 +1740,26 @@ def combined_corr_by_segment_dist(corr_data, save_dir, unique_given_names, uniqu
                 plt.tight_layout()
                 f_cdf.savefig(os.path.join(corr_dist_save,analysis_name + '_cdf.png'))
                 f_cdf.savefig(os.path.join(corr_dist_save,analysis_name + '_cdf.svg'))
+                plt.setp(ax_cdf, xlim=[0.5,1], ylim=[0.5,1])
+                f_cdf.savefig(os.path.join(corr_dist_save,analysis_name + '_cdf_zoom.png'))
+                f_cdf.savefig(os.path.join(corr_dist_save,analysis_name + '_cdf_zoom.svg'))
                 plt.close(f_cdf)
+                
                 f_pdf.suptitle(analysis_name)
                 plt.tight_layout()
                 f_pdf.savefig(os.path.join(corr_dist_save,analysis_name + '_pdf.png'))
                 f_pdf.savefig(os.path.join(corr_dist_save,analysis_name + '_pdf.svg'))
                 plt.close(f_pdf)
+                
                 f_cdf_best.suptitle(analysis_name + '_best')
                 plt.tight_layout()
                 f_cdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_cdf.png'))
                 f_cdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_cdf.svg'))
+                plt.setp(ax_cdf_best, xlim=[0.5,1], ylim=[0.5,1])
+                f_cdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_cdf_zoom.png'))
+                f_cdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_cdf_zoom.svg'))
                 plt.close(f_cdf_best)
+                
                 f_pdf_best.suptitle(analysis_name + '_best')
                 plt.tight_layout()
                 f_pdf_best.savefig(os.path.join(corr_dist_save,analysis_name + '_best_pdf.png'))
@@ -2003,7 +2016,7 @@ def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_seg
             corr_dev_stats = dataset_corr_data[cn_i]
             seg_names = list(corr_dev_stats.keys())
             for seg_name in seg_names:
-                taste_names = list(corr_dev_stats[seg_name].keys())
+                taste_names = list(np.intersect1d(list(corr_dev_stats[seg_name].keys()),unique_taste_names))
                 for taste_name in taste_names:
                     try:
                         data = corr_dev_stats[seg_name][taste_name]['data']
@@ -2037,7 +2050,7 @@ def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_seg
             seg_names = list(corr_dev_stats.keys())
             for seg_name in seg_names:
                 data = corr_dev_stats[seg_name]
-                taste_names = list(corr_dev_stats[seg_name].keys())
+                taste_names = list(np.intersect1d(list(corr_dev_stats[seg_name].keys()),unique_taste_names))
                 try:
                     num_dev = data[taste_names[0]]['num_dev']
                     num_cp = data[taste_names[0]]['num_cp']
@@ -2054,7 +2067,7 @@ def reorg_data_dict(corr_data, unique_corr_names, unique_given_names, unique_seg
                             unique_best_data_dict[cn_i][d_i][seg_name][taste][cp_i] = corr_list
                 except: #No data
                     for t_i, taste in enumerate(taste_names):
-                        for cp_i in range(num_cp):
+                        for cp_i in range(max_epochs):
                             unique_best_data_dict[cn_i][d_i][seg_name][taste][cp_i] = []
                         
     return unique_data_dict, unique_best_data_dict, max_epochs

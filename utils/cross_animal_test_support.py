@@ -184,8 +184,8 @@ for name in unique_given_names:
                 corr_data[name]['corr_data'][corr_name].keys())
             unique_segment_names.extend(seg_names)
             for seg_name in seg_names:
-                taste_names = list(
-                    corr_data[name]['corr_data'][corr_name][seg_name].keys())
+                taste_names = list(np.setdiff1d(list(
+                    corr_data[name]['corr_data'][corr_name][seg_name].keys()),['best']))
                 unique_taste_names.extend(taste_names)
         except:
             print(name + " does not have correlation data for " + corr_name)
