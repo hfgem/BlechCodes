@@ -819,6 +819,7 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
     p_taste = np.ones(num_tastes)/num_tastes  # P(taste)
     cmap = colormaps['jet']
     taste_colors = cmap(np.linspace(0, 1, num_tastes))
+    half_decode_bin_dt = np.ceil(e_len_dt/2).astype('int')
 
     # Jackknife decoding total number of trials
     total_trials = np.sum([len(all_trial_inds[t_i])
@@ -939,7 +940,7 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                 edi = np.ceil(
                     taste_start_dig_in[l_o_delivery_ind] + deliv_cp[e_i+1]).astype('int')
                 data_len = np.ceil(edi - sdi).astype('int')
-                new_time_bins = np.arange(25, data_len-25, 25)
+                new_time_bins = np.arange(half_decode_bin_dt, data_len-half_decode_bin_dt, e_skip_dt)
                 # ___Grab neuron firing rates in sliding bins
                 td_i_bin = np.zeros((num_neur, data_len+1))
                 for n_i in range(num_neur):
@@ -952,16 +953,16 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                 tb_fr = np.zeros((num_neur, len(new_time_bins)))
                 for tb_i, tb in enumerate(new_time_bins):
                     tb_fr[:, tb_i] = np.sum(
-                        td_i_bin[:, tb-25:tb+25], 1)/(50/1000)
+                        td_i_bin[:, tb-half_decode_bin_dt:tb+half_decode_bin_dt], 1)/(int(half_decode_bin_dt*2)/1000)
 
-                if np.min(all_train_data) >= 0:
+                if np.min(all_train_data) >= 0: #If it's not z-scored PCA to whiten
                     # PCA transform fr
                     try:
                         tb_fr_pca = pca_reduce.transform(tb_fr.T)
                     except:
                         tb_fr_pca = pca_reduce.transform(tb_fr)
                     list_tb_fr = list(tb_fr_pca)
-                else:
+                else: #If z-scored, train directly on data
                     list_tb_fr = list(tb_fr.T)
 
                 f_loo = plt.figure(figsize=(5, 5))
@@ -1102,6 +1103,284 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
 
     return epoch_success_storage, epoch_success_by_taste
 
+def decoding_all_combined(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
+                tastant_spike_times, cp_raster_inds,
+                pre_taste_dt, e_len_dt, e_skip_dt, dig_in_names,
+                save_dir, epochs_to_analyze=[]):
+    """This function trains a decoder with a given set of parameters to 
+    distinguish all taste-epoch firing rate distributions.
+    INPUTS:
+            - num_neur: number of neurons in dataset
+            - start_dig_in_times: times of taste deliveries
+            - tastant_fr_dist: firing rate distribution to fit over (train set)
+            - all_trial_inds: indices of all trials used in testing the fit
+            - tastant_spike_times: spike times for each tastant delivery
+            - cp_raster_inds: changepoint times for all taste deliveries
+            - pre_taste_dt: ms before taste delivery in cp_raster_inds
+            - e_len_dt: decoding chunk length
+            - e_skip_dt: decoding skip length
+            - dig_in_names: taste names
+            - save_dir: directory where to save results
+            - epochs_to_analyze: array of which epochs to analyze
+    OUTPUTS:
+            - Plots of decoder results on individual trials as well as overall success
+                    metrics.
+            - epoch_success_storage: vector of length number of epochs containing success
+                    percentages overall.
+            - epoch_success_by_taste: array of size num_epochs x num_tastes containing
+                    success percentages by decoded taste by epoch.
+    """
+    print("\t\tTesting GMM Taste-Epoch Category Decoder.")
+    # Variables
+    num_tastes = len(start_dig_in_times)
+    num_cp = len(tastant_fr_dist[0][0])
+    num_epochs_to_analyze = len(epochs_to_analyze)
+    num_cat = num_tastes*num_epochs_to_analyze
+    train_epochs = []
+    train_tastes = []
+    cat_names = []
+    for e_i in range(num_epochs_to_analyze):
+        for t_i in range(num_tastes):
+            train_epochs.extend([e_i])
+            train_tastes.extend([t_i])
+            cat_names.extend([dig_in_names[t_i] + ' ' + str(e_i)])
+    
+    #p_taste = np.ones(num_tastes)/num_tastes  # P(taste)
+    cmap = colormaps['jet']
+    t_e_colors = cmap(np.linspace(0,1,num_cat))
+    p_t_e = np.ones(num_cat)/(num_cat) #P(taste-epoch)
+    cmap = colormaps['twilight_shifted']
+    taste_colors = cmap(np.linspace(0, 1, num_tastes))
+    cmap = colormaps['cividis']
+    epoch_colors = cmap(np.linspace(0, 1, len(epochs_to_analyze)))
+    half_decode_bin_dt = np.ceil(e_len_dt/2).astype('int')
+
+    # Jackknife decoding total number of trials
+    taste_trial_counts = [len(all_trial_inds[t_i])
+                          for t_i in range(num_tastes)]
+    total_trials = np.sum([len(all_trial_inds[t_i])
+                          for t_i in range(num_tastes)])
+    total_trial_inds = np.arange(total_trials)
+    all_trial_taste_inds = np.array(
+        [t_i*np.ones(len(all_trial_inds[t_i])) for t_i in range(num_tastes)]).flatten()
+    all_trial_delivery_inds = np.array(
+        [all_trial_inds[t_i] for t_i in range(num_tastes)]).flatten()
+
+    if len(epochs_to_analyze) == 0:
+        epochs_to_analyze = np.arange(num_cp)
+    
+    # Save dir
+    decoder_save_dir = os.path.join(save_dir, 'GMM_All_Cat_Decoder_Tests')
+    if not os.path.isdir(decoder_save_dir):
+        os.mkdir(decoder_save_dir)
+
+    trial_decodes = os.path.join(
+        decoder_save_dir, 'Individual_Trials')
+    if not os.path.isdir(trial_decodes):
+        os.mkdir(trial_decodes)
+        
+    try:  # Try to import the decoding results
+        trial_success_storage = []
+        with open(os.path.join(decoder_save_dir, 'success_by_trial.csv'), newline='') as successtrialfile:
+            filereader = csv.reader(
+                successtrialfile, delimiter=',', quotechar='|')
+            for row in filereader:
+                trial_success_storage.append(np.array(row).astype('float'))
+        trial_success_storage = np.array(trial_success_storage).squeeze()
+        
+        trial_decode_storage = []
+        with open(os.path.join(decoder_save_dir, 'mean_cat_decode_components.csv'), newline='') as decodefile:
+            filereader = csv.reader(
+                decodefile, delimiter=',', quotechar='|')
+            for row in filereader:
+                trial_decode_storage.append(np.array(row).astype('float'))
+        trial_decode_storage = np.array(trial_decode_storage).squeeze()
+
+        trial_taste_decode_storage = []
+        with open(os.path.join(decoder_save_dir, 'mean_taste_decode_components.csv'), newline='') as decodefile:
+            filereader = csv.reader(
+                decodefile, delimiter=',', quotechar='|')
+            for row in filereader:
+                trial_taste_decode_storage.append(np.array(row).astype('float'))
+        trial_taste_decode_storage = np.array(trial_taste_decode_storage).squeeze()
+
+    except:  # Run decoding
+        # Fraction of the trial decoded as each taste for each component count
+        trial_decode_storage = np.zeros((total_trials, num_cat))
+        trial_taste_decode_storage = np.zeros((total_trials,num_tastes))
+        # Binary storage of successful decodes (max fraction of trial = taste delivered)
+        trial_success_storage = np.zeros(total_trials)
+
+        print('\t\t\t\tPerforming LOO Decoding')
+        # Which trial is being left out for decoding
+        for l_o_ind in tqdm.tqdm(total_trial_inds):
+            l_o_taste_ind = all_trial_taste_inds[l_o_ind].astype(
+                'int')  # Taste of left out trial
+            l_o_delivery_ind = all_trial_delivery_inds[l_o_ind].astype(
+                'int')  # Delivery index of left out trial
+
+            # Run gmm distribution fits to fr of each population for each taste
+            train_data = []
+            all_train_data = []
+            for tr_e_i in epochs_to_analyze:
+                for tr_t_i in range(num_tastes):
+                    train_taste_data = []
+                    taste_num_deliv = len(tastant_fr_dist[tr_t_i])
+                    for tr_d_i in range(taste_num_deliv):
+                        if (tr_d_i == l_o_delivery_ind) and (tr_t_i == l_o_taste_ind):
+                            # This is the Leave-One-Out trial so do nothing
+                            train_taste_data.extend([])
+                        else:
+                            if np.shape(tastant_fr_dist[tr_t_i][tr_d_i][tr_e_i])[0] == num_neur:
+                                train_taste_data.extend(
+                                    list(tastant_fr_dist[tr_t_i][tr_d_i][tr_e_i].T))
+                            else:
+                                train_taste_data.extend(
+                                    list(tastant_fr_dist[tr_t_i][tr_d_i][tr_e_i]))
+                    train_data.append(np.array(train_taste_data))
+                    all_train_data.extend(train_taste_data)
+            
+            # Run PCA transform only on non-z-scored data
+            if np.min(all_train_data) >= 0:
+                pca = PCA()
+                pca.fit(np.array(all_train_data).T)
+                exp_var = pca.explained_variance_ratio_
+                num_components = np.where(np.cumsum(exp_var) >= 0.9)[0][0]
+                pca_reduce = PCA(num_components)
+                pca_reduce.fit(np.array(all_train_data))
+            
+            # Grab trial firing rate data
+            t_cp_rast = cp_raster_inds[l_o_taste_ind]
+            taste_start_dig_in = start_dig_in_times[l_o_taste_ind]
+            deliv_cp = t_cp_rast[l_o_delivery_ind, :] - pre_taste_dt
+            sdi = np.ceil(
+                taste_start_dig_in[l_o_delivery_ind] + deliv_cp[0]).astype('int')
+            edi = np.ceil(
+                taste_start_dig_in[l_o_delivery_ind] + deliv_cp[-1]).astype('int')
+            data_len = np.ceil(edi - sdi).astype('int')
+            new_time_bins = np.arange(half_decode_bin_dt, data_len-half_decode_bin_dt, e_skip_dt)
+            # ___Grab neuron firing rates in sliding bins
+            td_i_bin = np.zeros((num_neur, data_len+1))
+            for n_i in range(num_neur):
+                n_i_spike_times = np.array(
+                    tastant_spike_times[l_o_taste_ind][l_o_delivery_ind][n_i] - sdi).astype('int')
+                keep_spike_times = n_i_spike_times[np.where(
+                    (0 <= n_i_spike_times)*(data_len >= n_i_spike_times))[0]]
+                td_i_bin[n_i, keep_spike_times] = 1
+            # Calculate the firing rate vectors for these bins
+            tb_fr = np.zeros((num_neur, len(new_time_bins)))
+            for tb_i, tb in enumerate(new_time_bins):
+                tb_fr[:, tb_i] = np.sum(
+                    td_i_bin[:, tb-half_decode_bin_dt:tb+half_decode_bin_dt], 1)/(int(half_decode_bin_dt*2)/1000)
+
+            if np.min(all_train_data) >= 0: #If it's not z-scored PCA to whiten
+                # PCA transform fr
+                try:
+                    tb_fr_pca = pca_reduce.transform(tb_fr.T)
+                except:
+                    tb_fr_pca = pca_reduce.transform(tb_fr)
+                list_tb_fr = list(tb_fr_pca)
+            else: #If z-scored, train directly on data
+                list_tb_fr = list(tb_fr.T)
+
+            f_loo = plt.figure(figsize=(5, 5))
+            plt.suptitle(
+                'Taste ' + dig_in_names[l_o_taste_ind] + ' Delivery ' + str(l_o_delivery_ind))
+            # Fit a Gaussian mixture model with the number of dimensions = number of neurons
+            all_taste_gmm = dict()
+            for tr_i in range(len(train_data)):
+                tr_t_i = train_tastes[tr_i]
+                tr_e_i = train_epochs[tr_i]
+                train_taste_data = train_data[tr_i]
+                if np.min(all_train_data) >= 0:
+                    # ___PCA Transformed Data
+                    transformed_test_taste_data = pca_reduce.transform(
+                        np.array(train_taste_data))
+                else:
+                    # ___True Data
+                    transformed_test_taste_data = np.array(
+                        train_taste_data)
+                gm = gmm(n_components=1, n_init=10).fit(
+                    transformed_test_taste_data)
+                # Insert here a line of fitting the Gamma-MM
+                all_taste_gmm[tr_i] = gm
+            
+            # Calculate decoding probabilities for given jackknifed trial
+
+            # Type 1: Bins of firing rates across the epoch of response
+            # ___Pass inputs to parallel computation on probabilities
+            inputs = zip(list_tb_fr, itertools.repeat(num_cat),
+                         itertools.repeat(all_taste_gmm), itertools.repeat(p_t_e))
+            pool = Pool(4)
+            tb_decode_prob = pool.map(
+                dp.segment_taste_decode_dependent_parallelized, inputs)
+            pool.close()
+            tb_decode_array = np.squeeze(np.array(tb_decode_prob)).T
+            # ___Plot decode results
+            for cat_i in range(num_cat):
+                plt.plot(new_time_bins+deliv_cp[0], tb_decode_array[cat_i, :],
+                         label=cat_names[cat_i], color=t_e_colors[cat_i])
+                plt.fill_between(
+                    new_time_bins+deliv_cp[0], tb_decode_array[cat_i, :], color=t_e_colors[cat_i], alpha=0.5, label='_')
+            plt.ylabel('P(Category)')
+            plt.ylim([-0.1, 1.1])
+            plt.xlabel('Time (ms)')
+            plt.legend(loc='upper right')
+            # ___Calculate the average fraction of the true category that was decoded correctly and store
+            cat_max_inds = np.argmax(tb_decode_array, 0)
+            cat_decode_fracs = [len(np.where(cat_max_inds == cat_i_decode)[
+                                      0])/len(new_time_bins) for cat_i_decode in range(num_cat)]
+            taste_decode_fracs = []
+            for taste_i in range(num_tastes):
+                taste_decode_fracs.append(np.sum(np.array(cat_decode_fracs)[np.where(np.array(train_tastes) == taste_i)[0]]))
+            trial_decode_storage[l_o_ind, :] = cat_decode_fracs
+            trial_taste_decode_storage[l_o_ind,:] = taste_decode_fracs
+            # ___Determine if in the trial the delivered taste is best
+            best_taste = np.argmax(taste_decode_fracs)
+            if (best_taste == l_o_taste_ind):
+                trial_success_storage[l_o_ind] = 1
+            # Save decoding figure
+            plt.tight_layout()
+            f_loo.savefig(os.path.join(trial_decodes, 'decoding_results_taste_' +
+                          str(l_o_taste_ind) + 'epoch_' + str(e_i) + '_delivery_' +
+                          str(l_o_delivery_ind) + '.png'))
+            f_loo.savefig(os.path.join(trial_decodes, 'decoding_results_taste_' +
+                          str(l_o_taste_ind) + 'epoch_' + str(e_i) + '_delivery_' + 
+                          str(l_o_delivery_ind) + '.svg'))
+            plt.close(f_loo)
+        
+        # Once all trials are decoded, save decoding success results
+        np.savetxt(os.path.join(decoder_save_dir,
+                   'success_by_trial.csv'), trial_success_storage, delimiter=',')
+        np.savetxt(os.path.join(decoder_save_dir,
+                   'mean_cat_decode_components.csv'), trial_decode_storage, delimiter=',')
+        np.savetxt(os.path.join(decoder_save_dir,
+                   'mean_taste_decode_components.csv'), trial_taste_decode_storage, delimiter=',')
+        
+    # Calculate overall decoding success by component count and taste
+    taste_success_percent = np.round(100*np.mean(trial_success_storage),2)
+        
+    #Plot the success by taste
+    taste_success = np.zeros(num_tastes)
+    
+    
+    # Plot the overall success results for different component counts
+    f_epochs = plt.figure(figsize=(5, 5))
+    plt.bar(np.arange(num_tastes), taste_success_percent)
+    plt.xticks(np.arange(num_tastes), labels=dig_in_names)
+    plt.ylim([0, 100])
+    plt.axhline(100/num_tastes, linestyle='dashed',
+                color='k', alpha=0.75, label='Chance')
+    plt.legend()
+    plt.xlabel('Taste')
+    plt.ylabel('Percent')
+    plt.title('Decoding Success')
+    f_epochs.savefig(os.path.join(decoder_save_dir, 'gmm_success.png'))
+    f_epochs.savefig(os.path.join(decoder_save_dir, 'gmm_success.svg'))
+    plt.close(f_epochs)
+
+    return taste_success_percent
+    
 
 def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
                          tastant_fr_dist, all_trial_inds, dig_in_names,

@@ -31,7 +31,7 @@ class run_dependent_bayes():
 		self.pull_fr_dist()
 		self.decode_all_neurons()
 		#self.decode_selective_neurons()
-		#self.decode_all_neurons_zscored()
+		self.decode_all_neurons_zscored()
 		#self.decode_selective_neurons_zscored()
 		
 	def gather_variables(self,):
@@ -87,22 +87,23 @@ class run_dependent_bayes():
 		#Import discriminability data
 		peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(self.hdf5_dir,'taste_discriminability','peak_epochs'))
 		discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(self.hdf5_dir,'taste_discriminability','discrim_neur'))
+		self.discrim_neur = discrim_neur
 		#Convert discriminatory neuron changepoint data into pop_taste_cp_raster_inds shape
 		#TODO: Add a flag for a user to select whether to use discriminatory neurons or selective neurons
-		num_discrim_cp = np.shape(peak_epochs)[0]
-		min_cp = np.min((num_pt_cp,num_discrim_cp))
-		discrim_cp_raster_inds = []
-		for t_i in range(len(self.dig_in_names)):
-			t_cp_vec = np.ones((np.shape(pop_taste_cp_raster_inds[t_i])[0],num_discrim_cp+1))
-			t_cp_vec = (peak_epochs[:min_cp] + int(self.pre_taste*1000))*t_cp_vec[:,:min_cp]
-			discrim_cp_raster_inds.append(t_cp_vec)
-		self.discrim_cp_raster_inds = discrim_cp_raster_inds
-		self.discrim_neur = discrim_neur
+# 		num_discrim_cp = np.shape(peak_epochs)[0]
+# 		min_cp = np.min((num_pt_cp,num_discrim_cp))
+# 		discrim_cp_raster_inds = []
+# 		for t_i in range(len(self.dig_in_names)):
+# 			t_cp_vec = np.ones((np.shape(pop_taste_cp_raster_inds[t_i])[0],num_discrim_cp+1))
+# 			t_cp_vec = (peak_epochs[:min_cp] + int(self.pre_taste*1000))*t_cp_vec[:,:min_cp]
+# 			discrim_cp_raster_inds.append(t_cp_vec)
+# 		self.discrim_cp_raster_inds = discrim_cp_raster_inds
+
 	   
 	def pull_fr_dist(self,):
 		print("\tPulling FR Distributions")
 		tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur, self.tastant_spike_times,
-	                                                                         self.discrim_cp_raster_inds, self.fr_bins,
+	                                                                         self.pop_taste_cp_raster_inds, self.fr_bins,
 	                                                                         self.start_dig_in_times, self.pre_taste_dt,
 	                                                                         self.post_taste_dt, self.trial_start_frac)
 		self.tastant_fr_dist_pop = tastant_fr_dist_pop
@@ -110,7 +111,7 @@ class run_dependent_bayes():
 		self.max_hz_pop = max_hz_pop
 		tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(self.num_neur, self.tastant_spike_times,
 	                                                                                                  self.segment_spike_times, self.segment_names,
-	                                                                                                  self.segment_times, self.discrim_cp_raster_inds,
+	                                                                                                  self.segment_times, self.pop_taste_cp_raster_inds,
 	                                                                                                  self.fr_bins, self.start_dig_in_times, self.pre_taste_dt,
 	                                                                                                  self.post_taste_dt, self.bin_dt, self.trial_start_frac)
 		self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
@@ -133,7 +134,7 @@ class run_dependent_bayes():
 		#Run the decoder success tests first
 		dt.test_decoder_params(self.dig_in_names, self.start_dig_in_times, self.num_neur, 
 						 self.tastant_spike_times, self.cur_dist,
-						 self.discrim_cp_raster_inds, self.pre_taste_dt, self.post_taste_dt, 
+						 self.self.pop_taste_cp_raster_inds, self.pre_taste_dt, self.post_taste_dt, 
 						 self.epochs_to_analyze, self.select_neur, self.e_skip_dt, 
 						 self.e_len_dt, self.main_decode_dir)
 		
