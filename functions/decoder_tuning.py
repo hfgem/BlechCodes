@@ -66,8 +66,8 @@ def test_decoder_params(dig_in_names, start_dig_in_times, num_neur, tastant_spik
                                                                        cp_raster_inds, tastant_fr_dist,
                                                                        all_trial_inds, dig_in_names,
                                                                        start_dig_in_times, pre_taste_dt,
-                                                                       post_taste_dt, save_dir,
-                                                                       epochs_to_analyze)
+                                                                       post_taste_dt, e_skip_dt, e_len_dt,
+                                                                       save_dir, epochs_to_analyze)
 
     # Both Models Plot
     plot_all_results(epochs_to_analyze, gmm_success_rates, nb_success_rates, num_tastes,
@@ -99,58 +99,26 @@ def plot_distributions(start_dig_in_times, tastant_fr_dist, epochs_to_analyze,
             dist_save, 'PCA_FR_distributions_'+str(e_i)+'.png'))
         if not file_exists:
             taste_data = []
-            all_data = []
-            all_data_labels = []
+            all_data = [] #Only true tastes - none is left out to differentiate more
+            all_data_labels = [] #Only true tastes - none is left out to differentiate more
             max_fr = 0
             for t_i in range(num_tastes):
                 train_taste_data = []
                 taste_num_deliv = len(tastant_fr_dist[t_i])
                 for d_i in range(taste_num_deliv):
-                    train_taste_data.extend(
-                        list(tastant_fr_dist[t_i][d_i][e_i].T))
+                    try:
+                        train_taste_data.extend(
+                            list(tastant_fr_dist[t_i][d_i][e_i].T))
+                    except:
+                        train_taste_data.extend([])
                 taste_data.append(np.array(train_taste_data))
                 if len(train_taste_data) > 0:
-                    if np.max(train_taste_data) > max_fr:
-                        max_fr = np.max(train_taste_data)
-                    all_data.extend(train_taste_data)
-                    all_data_labels.extend(
-                        list(t_i*np.ones(len(train_taste_data))))
-
-# 			#Calculate z-scored data
-# 			mean_fr = np.nanmean(np.array(all_data).T,1)
-# 			std_fr = np.nanstd(np.array(all_data).T,1)
-# 			z_scored_taste_data = [(taste_data[t_i] - mean_fr)/std_fr  for t_i in range(num_tastes)]
-# 			max_z_fr = np.max([np.nanmax(z_scored_taste_data[t_i]) for t_i in range(num_tastes)])
-# 			min_z_fr = np.min([np.nanmin(z_scored_taste_data[t_i]) for t_i in range(num_tastes)])
-#
-# 			#Plot firing rate distributions by neuron
-# 			f_true, ax_true = plt.subplots(nrows = int(neur_sqrt), ncols = int(neur_sqrt), figsize = (5*int(neur_sqrt),int(neur_sqrt)*5)) #Original firing rates
-# 			f_norm, ax_norm = plt.subplots(nrows = int(neur_sqrt), ncols = int(neur_sqrt), figsize = (5*int(neur_sqrt),int(neur_sqrt)*5)) #Cross-trial w/in neuron normalized firing rates
-# 			for n_i in range(num_neur):
-# 				neur_row, neur_col = np.argwhere(neur_map == n_i)[0]
-# 				for t_i in range(num_tastes):
-# 					#True data
-# 					ax_true[neur_row, neur_col].hist(taste_data[t_i][:,n_i],np.linspace(0,max_fr,100),density=True,histtype='bar', alpha=1/num_tastes, label=dig_in_names[t_i],color=taste_colors[t_i,:])
-# 					ax_true[neur_row, neur_col].set_xlabel('Firing Rate (Hz)')
-# 					ax_true[neur_row, neur_col].set_ylabel('P(FR)')
-# 					ax_true[neur_row, neur_col].set_title('Neuron ' + str(n_i))
-# 					if n_i == 0:
-# 						ax_true[neur_row, neur_col].legend(loc='upper right')
-# 					#Normalized data
-# 					ax_norm[neur_row, neur_col].hist(z_scored_taste_data[t_i][:,n_i],np.linspace(min_z_fr,max_z_fr,100),density=True,histtype='bar', alpha=1/num_tastes, label=dig_in_names[t_i],color=taste_colors[t_i,:])
-# 					ax_norm[neur_row, neur_col].set_xlabel('Z-Scored Firing Rate (Hz)')
-# 					ax_norm[neur_row, neur_col].set_ylabel('P(FR)')
-# 					ax_norm[neur_row, neur_col].set_title('Neuron ' + str(n_i))
-# 					if n_i == 0:
-# 						ax_norm[neur_row, neur_col].legend(loc='upper right')
-# 			f_true.tight_layout()
-# 			f_norm.tight_layout()
-# 			f_true.savefig(os.path.join(dist_save,'FR_distributions_'+str(e_i)+'.png'))
-# 			f_true.savefig(os.path.join(dist_save,'FR_distributions_'+str(e_i)+'.svg'))
-# 			plt.close(f_true)
-# 			f_norm.savefig(os.path.join(dist_save,'FR_distributions_norm_'+str(e_i)+'.png'))
-# 			f_norm.savefig(os.path.join(dist_save,'FR_distributions_norm_'+str(e_i)+'.svg'))
-# 			plt.close(f_norm)
+                    if t_i < num_tastes-1:
+                        if np.max(train_taste_data) > max_fr:
+                            max_fr = np.max(train_taste_data)
+                        all_data.extend(train_taste_data)
+                        all_data_labels.extend(
+                            list(t_i*np.ones(len(train_taste_data))))
             # Run PCA transform
             pca = PCA()
             pca.fit(np.array(all_data))
@@ -167,26 +135,57 @@ def plot_distributions(start_dig_in_times, tastant_fr_dist, epochs_to_analyze,
                                   (comp_sqrt, comp_sqrt))
             f_pca, ax_pca = plt.subplots(nrows=int(comp_sqrt), ncols=int(comp_sqrt), figsize=(
                 5*int(comp_sqrt), int(comp_sqrt)*5))  # PCA reduced firing rates
+            f_2pc, ax_2pc = plt.subplots(nrows=1,ncols=1,figsize=(5,5))
+            f_2pc_mean, ax_2pc_mean = plt.subplots(nrows=1,ncols=1,figsize=(5,5))
             for t_i in range(num_tastes):
                 transformed_data = pca_reduce.transform(
                     np.array(taste_data[t_i]))
+                #Plot component histograms
                 for c_i in range(num_components):
                     comp_row, comp_col = np.argwhere(comp_map == c_i)[0]
                     ax_pca[comp_row, comp_col].hist(transformed_data[:, c_i], np.linspace(
-                        min_pca, max_pca, 100), density=True, histtype='bar', alpha=1/num_tastes, label=dig_in_names[t_i], color=taste_colors[t_i, :])
+                        min_pca, max_pca, 100), density=True, histtype='bar', alpha=1/num_tastes, \
+                            label=dig_in_names[t_i], color=taste_colors[t_i, :])
                     ax_pca[comp_row, comp_col].set_xlabel('PCA(FR)')
                     ax_pca[comp_row, comp_col].set_ylabel('Probability')
                     ax_pca[comp_row, comp_col].set_title(
                         'Component ' + str(c_i))
                     if c_i == 0:
                         ax_pca[comp_row, comp_col].legend(loc='upper right')
+                #Plot components 1-v-2
+                ax_2pc.scatter(transformed_data[:,0],transformed_data[:,1],\
+                                  label=dig_in_names[t_i], color=taste_colors[t_i, :],\
+                                      alpha=0.3)
+                ax_2pc_mean.scatter(np.nanmean(transformed_data[:,0]),np.nanmean(transformed_data[:,1]),\
+                                  label=dig_in_names[t_i], color=taste_colors[t_i, :],\
+                                      alpha=0.5)
+                ax_2pc.legend(loc='upper right')
+                ax_2pc_mean.legend(loc='upper right')
+            ax_2pc.set_xlabel('Component 0')
+            ax_2pc.set_ylabel('Component 1')
+            ax_2pc.set_title('Epoch ' + str(e_ind))
+            ax_2pc_mean.set_xlabel('Component 0 Mean')
+            ax_2pc_mean.set_ylabel('Component 1 Mean')
+            ax_2pc_mean.set_title('Epoch ' + str(e_ind))
             f_pca.tight_layout()
             f_pca.savefig(os.path.join(
-                dist_save, 'PCA_FR_distributions_'+str(e_i)+'.png'))
+                dist_save, 'PCA_FR_distributions_'+str(e_ind)+'.png'))
             f_pca.savefig(os.path.join(
-                dist_save, 'PCA_FR_distributions_'+str(e_i)+'.svg'))
+                dist_save, 'PCA_FR_distributions_'+str(e_ind)+'.svg'))
             plt.close(f_pca)
-
+            f_2pc.tight_layout()
+            f_2pc.savefig(os.path.join(
+                dist_save, 'PCA_FR_2comp_scatter_'+str(e_ind)+'.png'))
+            f_2pc.savefig(os.path.join(
+                dist_save, 'PCA_FR_2comp_scatter_'+str(e_ind)+'.svg'))
+            plt.close(f_2pc)
+            f_2pc_mean.tight_layout()
+            f_2pc_mean.savefig(os.path.join(
+                dist_save, 'PCA_FR_2comp_scatter_'+str(e_ind)+'_means.png'))
+            f_2pc_mean.savefig(os.path.join(
+                dist_save, 'PCA_FR_2comp_scatter_'+str(e_ind)+'_means.svg'))
+            plt.close(f_2pc_mean)
+            
 
 def run_2step_epoch_taste_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                                   tastant_spike_times, cp_raster_inds,
@@ -780,8 +779,8 @@ def run_2step_istaste_whichtaste_decoder(num_neur, start_dig_in_times, tastant_f
         plt.close(f_loo)
 
     # Calculate success percents
-    whichtaste_success = np.mean(trial_success_storage)
-    istaste_success = np.mean(istaste_success_storage)
+    whichtaste_success = np.nanmean(trial_success_storage)
+    istaste_success = np.nanmean(istaste_success_storage)
 
 
 def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
@@ -825,10 +824,12 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
     total_trials = np.sum([len(all_trial_inds[t_i])
                           for t_i in range(num_tastes)])
     total_trial_inds = np.arange(total_trials)
-    all_trial_taste_inds = np.array(
-        [t_i*np.ones(len(all_trial_inds[t_i])) for t_i in range(num_tastes)]).flatten()
-    all_trial_delivery_inds = np.array(
-        [all_trial_inds[t_i] for t_i in range(num_tastes)]).flatten()
+    all_trial_taste_inds = []
+    for t_i in range(num_tastes):
+        all_trial_taste_inds.extend(list(t_i*np.ones(len(all_trial_inds[t_i]))))
+    all_trial_delivery_inds = []
+    for t_i in range(num_tastes):
+        all_trial_delivery_inds.extend(list(all_trial_inds[t_i]))
 
     if len(epochs_to_analyze) == 0:
         epochs_to_analyze = np.arange(num_cp)
@@ -877,7 +878,7 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
 
             # Calculate overall decoding success by component count
             taste_success_percent = np.round(
-                100*np.mean(trial_success_storage), 2)
+                100*np.nanmean(trial_success_storage), 2)
             epoch_success_storage[e_ind] = taste_success_percent
 
         except:  # Run decoding
@@ -897,12 +898,12 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
 
                 # Run gmm distribution fits to fr of each population for each taste
                 train_data = []
-                all_train_data = []
+                all_train_data = [] #Only true tastes - excluding "none"
                 #taste_bic_scores = np.zeros((len(component_counts),num_tastes))
                 for t_i in range(num_tastes):
                     train_taste_data = []
                     taste_num_deliv = len(tastant_fr_dist[t_i])
-                    for d_i in range(taste_num_deliv):
+                    for d_i in all_trial_inds[t_i]:
                         if (d_i == l_o_delivery_ind) and (t_i == l_o_taste_ind):
                             # This is the Leave-One-Out trial so do nothing
                             train_taste_data.extend([])
@@ -914,14 +915,9 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                                 train_taste_data.extend(
                                     list(tastant_fr_dist[t_i][d_i][e_i]))
                     train_data.append(np.array(train_taste_data))
-                    all_train_data.extend(train_taste_data)
-                    # Auto-fit the best number of GMM components
-                    # grid_search.fit(np.array(test_taste_data))
-                    #taste_bic_scores[:,t_i] = np.array((grid_search.cv_results_)["mean_test_score"])
-                # Calculate the best number of components
-                # best_component_count = plot_gmm_bic_scores(taste_bic_scores, component_counts, e_i, \
-                #							  dig_in_names, decoder_save_dir)
-
+                    if t_i < num_tastes-1:
+                        all_train_data.extend(train_taste_data)
+                    
                 # Run PCA transform only on non-z-scored data
                 if np.min(all_train_data) >= 0:
                     pca = PCA()
@@ -949,14 +945,17 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                     keep_spike_times = n_i_spike_times[np.where(
                         (0 <= n_i_spike_times)*(data_len >= n_i_spike_times))[0]]
                     td_i_bin[n_i, keep_spike_times] = 1
-                # Calculate the firing rate vectors for these bins
-                tb_fr = np.zeros((num_neur, len(new_time_bins)))
-                for tb_i, tb in enumerate(new_time_bins):
-                    tb_fr[:, tb_i] = np.sum(
-                        td_i_bin[:, tb-half_decode_bin_dt:tb+half_decode_bin_dt], 1)/(int(half_decode_bin_dt*2)/1000)
-
+                if len(new_time_bins) > 0:
+                    # Calculate the firing rate vectors for these bins
+                    tb_fr = np.zeros((num_neur, len(new_time_bins)))
+                    for tb_i, tb in enumerate(new_time_bins):
+                        tb_fr[:, tb_i] = np.sum(
+                            td_i_bin[:, tb-half_decode_bin_dt:tb+half_decode_bin_dt], 1)/(int(half_decode_bin_dt*2)/1000)
+                else:
+                    tb_fr = np.expand_dims(np.sum(td_i_bin,1)/((data_len+1)/1000),1)
+                    
                 if np.min(all_train_data) >= 0: #If it's not z-scored PCA to whiten
-                    # PCA transform fr
+                     # PCA transform fr
                     try:
                         tb_fr_pca = pca_reduce.transform(tb_fr.T)
                     except:
@@ -964,7 +963,7 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                     list_tb_fr = list(tb_fr_pca)
                 else: #If z-scored, train directly on data
                     list_tb_fr = list(tb_fr.T)
-
+                     
                 f_loo = plt.figure(figsize=(5, 5))
                 plt.suptitle(
                     'Taste ' + dig_in_names[l_o_taste_ind] + ' Delivery ' + str(l_o_delivery_ind))
@@ -997,19 +996,30 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                 pool.close()
                 tb_decode_array = np.squeeze(np.array(tb_decode_prob)).T
                 # ___Plot decode results
-                for t_i_plot in range(num_tastes):
-                    plt.plot(new_time_bins+deliv_cp[e_i], tb_decode_array[t_i_plot, :],
-                             label=dig_in_names[t_i_plot], color=taste_colors[t_i_plot])
-                    plt.fill_between(
-                        new_time_bins+deliv_cp[e_i], tb_decode_array[t_i_plot, :], color=taste_colors[t_i_plot], alpha=0.5, label='_')
+                if len(new_time_bins) > 0:
+                    for t_i_plot in range(num_tastes):
+                        plt.plot(new_time_bins+deliv_cp[e_i], tb_decode_array[t_i_plot, :],
+                                 label=dig_in_names[t_i_plot], color=taste_colors[t_i_plot])
+                        plt.fill_between(
+                            new_time_bins+deliv_cp[e_i], tb_decode_array[t_i_plot, :], color=taste_colors[t_i_plot], alpha=0.5, label='_')
+                    plt.xlabel('Time (ms)')
+                else:
+                    for t_i_plot in range(num_tastes):
+                        plt.axhline(tb_decode_array[t_i_plot],
+                                 label=dig_in_names[t_i_plot], color=taste_colors[t_i_plot])
+                        plt.fill_between([0,1],[0,0],[tb_decode_array[t_i_plot],tb_decode_array[t_i_plot]],
+                                         color=taste_colors[t_i_plot],alpha=0.5,label='_')
                 plt.ylabel('P(Taste)')
                 plt.ylim([-0.1, 1.1])
-                plt.xlabel('Time (ms')
+                
                 plt.legend(loc='upper right')
                 # ___Calculate the average fraction of the epoch that was decoded as each taste and store
-                taste_max_inds = np.argmax(tb_decode_array, 0)
-                taste_decode_fracs = [len(np.where(taste_max_inds == t_i_decode)[
-                                          0])/len(new_time_bins) for t_i_decode in range(num_tastes)]
+                if len(new_time_bins) > 0:
+                    taste_max_inds = np.argmax(tb_decode_array, 0)
+                    taste_decode_fracs = [len(np.where(taste_max_inds == t_i_decode)[
+                                              0])/len(new_time_bins) for t_i_decode in range(num_tastes)]
+                else:
+                    taste_decode_fracs = list(tb_decode_array)
                 trial_decode_storage[l_o_ind, :] = taste_decode_fracs
                 # ___Calculate the fraction of time in the epoch of each taste being best
                 best_taste = np.where(
@@ -1039,7 +1049,7 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
 
             # Calculate overall decoding success by component count
             taste_success_percent = np.round(
-                100*np.mean(trial_success_storage), 2)
+                100*np.nanmean(trial_success_storage), 2)
             epoch_success_storage[e_ind] = taste_success_percent
 
     # Plot the overall success results for different component counts across epochs
@@ -1067,20 +1077,20 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
         epoch_decode_percents = epoch_decode_storage[e_ind]
         success_by_taste = np.zeros(num_tastes)
         for t_i in range(num_tastes):
-            taste_trials = np.where(all_trial_taste_inds == t_i)[0]
+            taste_trials = np.where(np.array(all_trial_taste_inds) == t_i)[0]
             taste_trial_results_bin = np.zeros(len(taste_trials))
             for tt_ind, tt_i in enumerate(taste_trials):
                 trial_decode_results = epoch_decode_percents[tt_i, :]
                 best_taste = np.where(
                     trial_decode_results == np.max(trial_decode_results))[0]
                 if len(best_taste) == 1:
-                    if best_taste == t_i:
+                    if best_taste[0] == t_i:
                         taste_trial_results_bin[tt_ind] = 1
                 else:
                     # Taste is one of the predicted tastes in a "tie"
                     if len(np.where(best_taste == t_i)[0]) > 0:
                         taste_trial_results_bin[tt_ind] = 1
-            success_by_taste[t_i] = 100*np.mean(taste_trial_results_bin)
+            success_by_taste[t_i] = 100*np.nanmean(taste_trial_results_bin)
         epoch_success_by_taste[e_ind, :] = success_by_taste
         plt.scatter(np.arange(num_tastes), success_by_taste,
                     label='Epoch ' + str(e_i), color=epoch_colors[e_ind, :])
@@ -1238,7 +1248,8 @@ def decoding_all_combined(num_neur, start_dig_in_times, tastant_fr_dist, all_tri
                                 train_taste_data.extend(
                                     list(tastant_fr_dist[tr_t_i][tr_d_i][tr_e_i]))
                     train_data.append(np.array(train_taste_data))
-                    all_train_data.extend(train_taste_data)
+                    if tr_t_i < num_tastes-1:
+                        all_train_data.extend(train_taste_data)
             
             # Run PCA transform only on non-z-scored data
             if np.min(all_train_data) >= 0:
@@ -1358,7 +1369,7 @@ def decoding_all_combined(num_neur, start_dig_in_times, tastant_fr_dist, all_tri
                    'mean_taste_decode_components.csv'), trial_taste_decode_storage, delimiter=',')
         
     # Calculate overall decoding success by component count and taste
-    taste_success_percent = np.round(100*np.mean(trial_success_storage),2)
+    taste_success_percent = np.round(100*np.nanmean(trial_success_storage),2)
         
     #Plot the success by taste
     taste_success = np.zeros(num_tastes)
@@ -1385,7 +1396,7 @@ def decoding_all_combined(num_neur, start_dig_in_times, tastant_fr_dist, all_tri
 def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
                          tastant_fr_dist, all_trial_inds, dig_in_names,
                          start_dig_in_times, pre_taste_dt, post_taste_dt,
-                         save_dir, epochs_to_analyze=[]):
+                         e_skip_dt, e_len_dt, save_dir, epochs_to_analyze=[]):
     """This function trains a Gaussian Naive Bayes decoder to decode different 
     taste epochs from activity.
     INPUTS:
@@ -1417,15 +1428,18 @@ def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
     num_cp = len(tastant_fr_dist[0][0])
     cmap = colormaps['jet']
     taste_colors = cmap(np.linspace(0, 1, num_tastes))
+    half_len = np.ceil(e_len_dt/2).astype('int')
 
     # Jackknife decoding total number of trials
     total_trials = np.sum([len(all_trial_inds[t_i])
                           for t_i in range(num_tastes)])
     total_trial_inds = np.arange(total_trials)
-    all_trial_taste_inds = np.array(
-        [t_i*np.ones(len(all_trial_inds[t_i])) for t_i in range(num_tastes)]).flatten()
-    all_trial_delivery_inds = np.array(
-        [all_trial_inds[t_i] for t_i in range(num_tastes)]).flatten()
+    all_trial_taste_inds = []
+    for t_i in range(num_tastes):
+        all_trial_taste_inds.extend(list(t_i*np.ones(len(all_trial_inds[t_i]))))
+    all_trial_delivery_inds = []
+    for t_i in range(num_tastes):
+        all_trial_delivery_inds.extend(list(all_trial_inds[t_i]))
 
     if len(epochs_to_analyze) == 0:
         epochs_to_analyze = np.arange(num_cp)
@@ -1473,7 +1487,7 @@ def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
 
             # Calculate overall decoding success by component count
             taste_success_percent = np.round(
-                100*np.mean(trial_success_storage), 2)
+                100*np.nanmean(trial_success_storage), 2)
             epoch_success_storage[e_ind] = taste_success_percent
 
         except:  # Run decoding
@@ -1529,7 +1543,7 @@ def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
                 epoch_len = end_epoch - start_epoch
                 if epoch_len > 0:
                     # Decode 50 ms bins, skip ahead 25 ms
-                    new_time_bins = np.arange(25, epoch_len-25, 25)
+                    new_time_bins = np.arange(half_len, epoch_len-half_len, half_len)
                     f_loo = plt.figure(figsize=(5, 5))
                     plt.suptitle(
                         'Taste ' + dig_in_names[l_o_taste_ind] + ' Delivery ' + str(l_o_delivery_ind))
@@ -1542,24 +1556,37 @@ def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
                         keep_spike_times = n_i_spike_times[np.where(
                             (0 <= n_i_spike_times)*(epoch_len >= n_i_spike_times))[0]]
                         td_i_bin[n_i, keep_spike_times] = 1
-                    # Calculate the firing rate vectors for these bins
-                    tb_fr = np.zeros((num_neur, len(new_time_bins)))
-                    for tb_i, tb in enumerate(new_time_bins):
-                        tb_fr[:, tb_i] = np.sum(
-                            td_i_bin[:, tb-25:tb+25], 1)/(50/1000)
+                    if len(new_time_bins) > 0:
+                        # Calculate the firing rate vectors for these bins
+                        tb_fr = np.zeros((num_neur, len(new_time_bins)))
+                        for tb_i, tb in enumerate(new_time_bins):
+                            tb_fr[:, tb_i] = np.sum(
+                                td_i_bin[:, tb-half_len:tb+half_len], 1)/(half_len*2/1000)
+                    else:
+                        tb_fr = np.expand_dims(np.sum(td_i_bin,1)/((epoch_len+1)/1000),1)
                     list_tb_fr = list(tb_fr.T)
                     # Predict the results
                     deliv_test_predictions = gnb.predict_proba(list_tb_fr)
-                    taste_max_inds = np.argmax(deliv_test_predictions, 1)
-                    taste_decode_fracs = [len(np.where(taste_max_inds == t_i_decode)[
-                                              0])/len(new_time_bins) for t_i_decode in range(num_tastes)]
+                    if len(new_time_bins) > 0:
+                        taste_max_inds = np.argmax(deliv_test_predictions, 1)
+                        taste_decode_fracs = [len(np.where(taste_max_inds == t_i_decode)[
+                                                  0])/len(new_time_bins) for t_i_decode in range(num_tastes)]
+                    else:
+                        taste_decode_fracs = list(deliv_test_predictions[0])
                     trial_decode_storage[l_o_ind, :] = taste_decode_fracs
                     # ___Plot decode results
-                    for t_i_plot in range(num_tastes):
-                        plt.plot(new_time_bins+deliv_cp[e_i], deliv_test_predictions[:, t_i_plot],
-                                 label=dig_in_names[t_i_plot], color=taste_colors[t_i_plot])
-                        plt.fill_between(
-                            new_time_bins+deliv_cp[e_i], deliv_test_predictions[:, t_i_plot], color=taste_colors[t_i_plot], alpha=0.5, label='_')
+                    if len(new_time_bins) > 0:
+                        for t_i_plot in range(num_tastes):
+                            plt.plot(new_time_bins+deliv_cp[e_i], deliv_test_predictions[:, t_i_plot],
+                                     label=dig_in_names[t_i_plot], color=taste_colors[t_i_plot])
+                            plt.fill_between(
+                                new_time_bins+deliv_cp[e_i], deliv_test_predictions[:, t_i_plot], color=taste_colors[t_i_plot], alpha=0.5, label='_')
+                    else:
+                        for t_i_plot in range(num_tastes):
+                            plt.axhline(deliv_test_predictions[0][t_i_plot],
+                                     label=dig_in_names[t_i_plot], color=taste_colors[t_i_plot])
+                            plt.fill_between([0,1],[0,0],[deliv_test_predictions[0][t_i_plot],deliv_test_predictions[0][t_i_plot]],
+                                             color=taste_colors[t_i_plot],alpha=0.5,label='_')
                     plt.ylabel('P(Taste)')
                     plt.ylim([-0.1, 1.1])
                     plt.xlabel('Time (ms')
@@ -1592,7 +1619,7 @@ def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
 
             # Calculate overall decoding success by component count
             taste_success_percent = np.round(
-                100*np.mean(trial_success_storage), 2)
+                100*np.nanmean(trial_success_storage), 2)
             epoch_success_storage[e_ind] = taste_success_percent
 
     # Plot the success results for different component counts across epochs
@@ -1618,20 +1645,20 @@ def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
         epoch_decode_percents = epoch_decode_storage[e_ind]
         success_by_taste = np.zeros(num_tastes)
         for t_i in range(num_tastes):
-            taste_trials = np.where(all_trial_taste_inds == t_i)[0]
+            taste_trials = np.where(np.array(all_trial_taste_inds) == t_i)[0]
             taste_trial_results_bin = np.zeros(len(taste_trials))
             for tt_ind, tt_i in enumerate(taste_trials):
                 trial_decode_results = epoch_decode_percents[tt_i, :]
                 best_taste = np.where(
                     trial_decode_results == np.max(trial_decode_results))[0]
                 if len(best_taste) == 1:
-                    if best_taste == t_i:
+                    if best_taste[0] == t_i:
                         taste_trial_results_bin[tt_ind] = 1
                 else:
                     # Taste is one of the predicted tastes in a "tie"
                     if len(np.where(best_taste == t_i)[0]) > 0:
                         taste_trial_results_bin[tt_ind] = 1
-            success_by_taste[t_i] = 100*np.mean(taste_trial_results_bin)
+            success_by_taste[t_i] = 100*np.nanmean(taste_trial_results_bin)
         epoch_success_by_taste[e_ind, :] = success_by_taste
         plt.scatter(np.arange(num_tastes), success_by_taste,
                     label='Epoch ' + str(e_i), color=epoch_colors[e_ind, :])
@@ -1680,9 +1707,9 @@ def plot_gmm_bic_scores(taste_bic_scores, component_counts, e_i,
     for t_i in range(num_tastes):
         plt.plot(component_counts,
                  taste_bic_scores[:, t_i], label=dig_in_names[t_i], alpha=0.5)
-    plt.plot(component_counts, np.mean(taste_bic_scores, 1),
+    plt.plot(component_counts, np.nanmean(taste_bic_scores, 1),
              color='k', linestyle='dashed', alpha=1, label='Mean')
-    plt.plot(component_counts, np.mean(
+    plt.plot(component_counts, np.nanmean(
         taste_bic_scores[:, :-1], 1), color='k', linestyle='dotted', alpha=1, label='True Taste Mean')
     plt.legend()
     plt.title('GMM Fit BIC Scores')
@@ -1695,7 +1722,7 @@ def plot_gmm_bic_scores(taste_bic_scores, component_counts, e_i,
 
     # The best number of components is that which has the lowest average BIC for the true tastes
     best_component_count = component_counts[np.argmin(
-        np.mean(taste_bic_scores[:, :-1], 1))]
+        np.nanmean(taste_bic_scores[:, :-1], 1))]
 
     return best_component_count
 

@@ -65,6 +65,8 @@ data_dict['tastant_spike_times'] = tastant_spike_times
 
 #%% Decoder Tuning Support
 
+import functions.decoder_tuning as dt
+
 #Directories
 hdf5_dir = metadata['hdf5_dir']
 bayes_dir = metadata['dir_name'] + 'Bayes_Dependent_Decoding/'
@@ -125,6 +127,9 @@ for t_i in range(len(dig_in_names)):
 	t_cp_vec = np.ones((np.shape(pop_taste_cp_raster_inds[t_i])[0],num_discrim_cp+1))
 	t_cp_vec = (peak_epochs[:min_cp] + int(pre_taste*1000))*t_cp_vec[:,:min_cp]
 	discrim_cp_raster_inds.append(t_cp_vec)
+    
+fr_bins = [0.1,0.25,0.5]
+e_len_dt = 250
 
 print("\tPulling FR Distributions")
 tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(num_neur, tastant_spike_times,
@@ -144,11 +149,8 @@ if os.path.isdir(main_decode_dir) == False:
 cur_dist = tastant_fr_dist_pop
 select_neur = np.ones(np.shape(discrim_neur))
 
-"""
-		dt.test_decoder_params(self.dig_in_names, self.start_dig_in_times, self.num_neur, 
-						 self.tastant_spike_times, self.cur_dist,
-						 self.self.pop_taste_cp_raster_inds, self.pre_taste_dt, self.post_taste_dt, 
-						 self.epochs_to_analyze, self.select_neur, self.e_skip_dt, 
-						 self.e_len_dt, self.main_decode_dir)
-"""
-
+dt.test_decoder_params(dig_in_names, start_dig_in_times, num_neur, 
+						tastant_spike_times, cur_dist,
+						pop_taste_cp_raster_inds, pre_taste_dt, post_taste_dt, 
+						epochs_to_analyze, select_neur, e_skip_dt, 
+						e_len_dt, main_decode_dir)

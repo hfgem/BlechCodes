@@ -134,7 +134,7 @@ class run_dependent_bayes():
 		#Run the decoder success tests first
 		dt.test_decoder_params(self.dig_in_names, self.start_dig_in_times, self.num_neur, 
 						 self.tastant_spike_times, self.cur_dist,
-						 self.self.pop_taste_cp_raster_inds, self.pre_taste_dt, self.post_taste_dt, 
+						 self.pop_taste_cp_raster_inds, self.pre_taste_dt, self.post_taste_dt, 
 						 self.epochs_to_analyze, self.select_neur, self.e_skip_dt, 
 						 self.e_len_dt, self.main_decode_dir)
 		
