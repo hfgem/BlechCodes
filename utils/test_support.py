@@ -128,8 +128,8 @@ for t_i in range(len(dig_in_names)):
 	t_cp_vec = (peak_epochs[:min_cp] + int(pre_taste*1000))*t_cp_vec[:,:min_cp]
 	discrim_cp_raster_inds.append(t_cp_vec)
     
-fr_bins = [0.1,0.25,0.5]
-e_len_dt = 250
+fr_bins = [2] #Train on full epoch
+e_len_dt = 2000 #Test on full epoch
 
 print("\tPulling FR Distributions")
 tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(num_neur, tastant_spike_times,
@@ -154,3 +154,9 @@ dt.test_decoder_params(dig_in_names, start_dig_in_times, num_neur,
 						pop_taste_cp_raster_inds, pre_taste_dt, post_taste_dt, 
 						epochs_to_analyze, select_neur, e_skip_dt, 
 						e_len_dt, main_decode_dir)
+
+#%% Variable names for running directly within functions/decoder_tuning.py
+tastant_fr_dist = cur_dist
+cp_raster_inds = pop_taste_cp_raster_inds
+taste_select_neur = select_neur
+save_dir = main_decode_dir

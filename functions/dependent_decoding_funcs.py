@@ -94,12 +94,16 @@ def taste_fr_dist(num_neur, tastant_spike_times, cp_raster_inds, fr_bins,
                             fr_bin_dt = np.ceil(fr_half_bin*2).astype('int')
                             new_time_bins = np.arange(
                                 fr_half_bin, epoch_len-fr_half_bin, quart_bin)
-                            # Calculate the firing rate vectors for these bins
-                            tb_fr = np.zeros((num_neur, len(new_time_bins)))
-                            for tb_i, tb in enumerate(new_time_bins):
-                                tb_fr[:, tb_i] = np.sum(
-                                    td_i_bin[:, tb-fr_half_bin:tb+fr_half_bin], 1)/(fr_bin_dt/1000)
-                            all_tb_fr.extend(list(tb_fr.T))
+                            if len(new_time_bins) < 1:
+                                tb_fr = list(np.sum(td_i_bin,1)/(np.shape(td_i_bin)[1]/1000))
+                                all_tb_fr.extend([tb_fr])
+                            else:
+                                # Calculate the firing rate vectors for these bins
+                                tb_fr = np.zeros((num_neur, len(new_time_bins)))
+                                for tb_i, tb in enumerate(new_time_bins):
+                                    tb_fr[:, tb_i] = np.sum(
+                                        td_i_bin[:, tb-fr_half_bin:tb+fr_half_bin], 1)/(fr_bin_dt/1000)
+                                all_tb_fr.extend(list(tb_fr.T))
                         all_tb_fr = np.array(all_tb_fr).T
                         # Store the firing rate vectors
                         tastant_fr_dist[t_i][d_i -
@@ -697,11 +701,15 @@ def taste_fr_dist_zscore(num_neur, tastant_spike_times, segment_spike_times,
                             new_time_bins = np.arange(
                                 fr_half_bin, epoch_len-fr_half_bin, quart_bin)
                             # Calculate the firing rate vectors for these bins
-                            tb_fr = np.zeros((num_neur, len(new_time_bins)))
-                            for tb_i, tb in enumerate(new_time_bins):
-                                tb_fr[:, tb_i] = np.sum(
-                                    td_i_bin[:, tb-fr_half_bin:tb+fr_half_bin], 1)/(fr_bin_dt/1000)
-                            all_tb_fr.extend(list(tb_fr.T))
+                            if len(new_time_bins) < 1:
+                                tb_fr = list(np.sum(td_i_bin,1)/(np.shape(td_i_bin)[1]/1000))
+                                all_tb_fr.extend([tb_fr])
+                            else:
+                                tb_fr = np.zeros((num_neur, len(new_time_bins)))
+                                for tb_i, tb in enumerate(new_time_bins):
+                                    tb_fr[:, tb_i] = np.sum(
+                                        td_i_bin[:, tb-fr_half_bin:tb+fr_half_bin], 1)/(fr_bin_dt/1000)
+                                all_tb_fr.extend(list(tb_fr.T))
                         all_tb_fr = np.array(all_tb_fr).T
                         # Z-score firing rates
                         bst_hz_z = (
