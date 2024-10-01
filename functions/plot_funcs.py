@@ -199,14 +199,15 @@ def PSTH_plots(fig_save_dir, num_tastes, num_neur, dig_in_names,
             end_i = start_i + dt_total
             # Perform Gaussian convolution
             PSTH_spikes = firing_rate_array[:, start_i:end_i]
+            len_PSTH_spikes = np.shape(PSTH_spikes)[1]
             plt.subplot(num_deliv, 1, t_d_i+1)
             # Update to have x-axis in time
             for i in range(num_neur):
-                plt.plot(PSTH_true_times, PSTH_spikes[i, :])
+                plt.plot(PSTH_true_times[:len_PSTH_spikes], PSTH_spikes[i, :])
             del i
             plt.axvline(start_deliv_interval, color='r')
             plt.axvline(end_deliv_interval, color='r')
-            all_PSTH[t_d_i, :, :] = PSTH_spikes
+            all_PSTH[t_d_i, :, :len_PSTH_spikes] = PSTH_spikes
         del t_d_i, start_i, end_i, PSTH_spikes
         tastant_name = dig_in_names[t_i]
         im_name = ('_').join((tastant_name).split(' ')) + '_PSTHs'
