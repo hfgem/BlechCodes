@@ -20,7 +20,6 @@ os.chdir(blech_codes_path)
 import functions.analysis_funcs as af
 import functions.hdf5_handling as hf5
 import functions.dependent_decoding_funcs as ddf
-import functions.decoding_funcs as df
 from utils.replay_utils import import_metadata, state_tracker
 from utils.data_utils import import_data
 
@@ -128,7 +127,7 @@ for t_i in range(len(dig_in_names)):
 	t_cp_vec = (peak_epochs[:min_cp] + int(pre_taste*1000))*t_cp_vec[:,:min_cp]
 	discrim_cp_raster_inds.append(t_cp_vec)
     
-fr_bins = [2] #Train on full epoch
+fr_bins = [0.5,1,2] #Train on full epoch
 e_len_dt = 2000 #Test on full epoch
 
 print("\tPulling FR Distributions")

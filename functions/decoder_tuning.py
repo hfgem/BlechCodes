@@ -169,6 +169,7 @@ def plot_distributions(start_dig_in_times, tastant_fr_dist, epochs_to_analyze,
                     plt.tight_layout()
                     plt.savefig(os.path.join(
                         fr_save, 'FR_n_'+str(n_1)+'_n_'+str(n_2)+'.png'))
+                    plt.close(f_pair)
             
             # Run PCA transform
             pca = PCA()
