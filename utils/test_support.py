@@ -64,7 +64,8 @@ data_dict['tastant_spike_times'] = tastant_spike_times
 
 #%% Decoder Tuning Support
 
-import functions.decoder_tuning as dt
+import functions.decoding_funcs as df
+import functions.dependent_decoding_funcs as ddf
 
 #Directories
 hdf5_dir = metadata['hdf5_dir']
@@ -121,12 +122,7 @@ discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(hdf5_dir,'taste_discriminabili
 #TODO: Add a flag for a user to select whether to use discriminatory neurons or selective neurons
 num_discrim_cp = np.shape(peak_epochs)[0]
 min_cp = np.min((num_pt_cp,num_discrim_cp))
-discrim_cp_raster_inds = []
-for t_i in range(len(dig_in_names)):
-	t_cp_vec = np.ones((np.shape(pop_taste_cp_raster_inds[t_i])[0],num_discrim_cp+1))
-	t_cp_vec = (peak_epochs[:min_cp] + int(pre_taste*1000))*t_cp_vec[:,:min_cp]
-	discrim_cp_raster_inds.append(t_cp_vec)
-    
+
 fr_bins = [0.5,1,2] #Train on full epoch
 e_len_dt = 2000 #Test on full epoch
 
@@ -148,14 +144,31 @@ if os.path.isdir(main_decode_dir) == False:
 cur_dist = tastant_fr_dist_pop
 select_neur = np.ones(np.shape(discrim_neur))
 
-dt.test_decoder_params(dig_in_names, start_dig_in_times, num_neur, 
-						tastant_spike_times, cur_dist,
-						pop_taste_cp_raster_inds, pre_taste_dt, post_taste_dt, 
-						epochs_to_analyze, select_neur, e_skip_dt, 
-						e_len_dt, main_decode_dir)
+print("\tDecoding all neurons")
+all_neur_dir = bayes_dir + 'All_Neurons/'
+if os.path.isdir(all_neur_dir) == False:
+    os.mkdir(all_neur_dir)
+    
+decode_dir = all_neur_dir + 'GMM_Decoding/'
+if os.path.isdir(decode_dir) == False:
+    os.mkdir(decode_dir)
 
-#%% Variable names for running directly within functions/decoder_tuning.py
-tastant_fr_dist = cur_dist
-cp_raster_inds = pop_taste_cp_raster_inds
-taste_select_neur = select_neur
-save_dir = main_decode_dir
+taste_select_neur = np.ones(np.shape(discrim_neur))
+
+ddf.decode_epochs(tastant_fr_dist_pop, 	segment_spike_times,
+                  	post_taste_dt, 	e_skip_dt, 	e_len_dt,
+                  	dig_in_names, 	segment_times, 	segment_names,
+                  	start_dig_in_times, 	taste_num_deliv, select_neur,
+                  	max_hz_pop, decode_dir, 	neuron_count_thresh,
+                  	False, epochs_to_analyze, 	segments_to_analyze)
+
+print("\t\tPlotting Decoded Results")
+df.plot_decoded(	tastant_fr_dist_pop, num_tastes, num_neur,
+                segment_spike_times, 	tastant_spike_times,
+                	start_dig_in_times, 	end_dig_in_times, 	post_taste_dt,
+                	pre_taste_dt, 	pop_taste_cp_raster_inds, 	bin_dt, dig_in_names,
+                	segment_times, 	segment_names, 	taste_num_deliv,
+                	taste_select_neur, 	decode_dir, 	max_decode, 	max_hz_pop,
+                	seg_stat_bin, 	neuron_count_thresh, 	trial_start_frac,
+                	epochs_to_analyze, 	segments_to_analyze, 	decode_prob_cutoff)
+
