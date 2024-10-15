@@ -60,13 +60,14 @@ class run_dependent_bayes():
 		self.dig_in_names = self.data_dict['dig_in_names']
 		self.num_tastes = len(self.dig_in_names)
 		#Bayes Params/Variables
-		self.skip_time = self.metadata['params_dict']['bayes_params']['skip_time']
-		self.skip_dt = np.ceil(self.skip_time*1000).astype('int')
 		self.e_skip_time = self.metadata['params_dict']['bayes_params']['e_skip_time']
 		self.e_skip_dt = np.ceil(self.e_skip_time*1000).astype('int')
 		self.fr_bins = self.metadata['params_dict']['bayes_params']['fr_bins']
-		self.e_len_time = self.metadata['params_dict']['bayes_params']['e_len_time']
-		self.e_len_dt = np.ceil(self.e_len_time*1000).astype('int')
+		self.taste_e_len_time = self.metadata['params_dict']['bayes_params']['taste_e_len_time']
+		self.taste_e_len_dt = np.ceil(self.e_len_time*1000).astype('int')
+		self.seg_e_len_time = self.metadata['params_dict']['bayes_params']['seg_e_len_time']
+		self.seg_e_len_dt = np.ceil(self.seg_e_len_time*1000).astype('int') 
+		self.bayes_fr_bins = self.metadata['params_dict']['bayes_params']['fr_bins']
 		self.neuron_count_thresh = self.metadata['params_dict']['bayes_params']['neuron_count_thresh']
 		self.max_decode = self.metadata['params_dict']['bayes_params']['max_decode']
 		self.seg_stat_bin = self.metadata['params_dict']['bayes_params']['seg_stat_bin']
@@ -93,7 +94,7 @@ class run_dependent_bayes():
 	def pull_fr_dist(self,):
 		print("\tPulling FR Distributions")
 		tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur, self.tastant_spike_times,
-																			 self.pop_taste_cp_raster_inds, self.fr_bins,
+																			 self.pop_taste_cp_raster_inds, self.bayes_fr_bins,
 																			 self.start_dig_in_times, self.pre_taste_dt,
 																			 self.post_taste_dt, self.trial_start_frac)
 		self.tastant_fr_dist_pop = tastant_fr_dist_pop
@@ -102,10 +103,9 @@ class run_dependent_bayes():
 		tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(self.num_neur, self.tastant_spike_times,
 																									  self.segment_spike_times, self.segment_names,
 																									  self.segment_times, self.pop_taste_cp_raster_inds,
-																									  self.fr_bins, self.start_dig_in_times, self.pre_taste_dt,
+																									  self.bayes_fr_bins, self.start_dig_in_times, self.pre_taste_dt,
 																									  self.post_taste_dt, self.bin_dt, self.trial_start_frac)
 		self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
-		self.taste_num_deliv = taste_num_deliv
 		self.max_hz_z_pop = max_hz_z_pop
 		self.min_hz_z_pop = min_hz_z_pop
 		
@@ -121,7 +121,7 @@ class run_dependent_bayes():
 								self.tastant_spike_times, self.cur_dist,
 								self.pop_taste_cp_raster_inds, self.pre_taste_dt, self.post_taste_dt, 
 								self.epochs_to_analyze, self.select_neur, self.e_skip_dt, 
-								self.e_len_dt, self.main_decode_dir)
+								self.taste_e_len_dt, self.main_decode_dir)
 		
 		
 	def decode_all_neurons(self,):
@@ -137,24 +137,11 @@ class run_dependent_bayes():
 		if os.path.isdir(self.decode_dir) == False:
 			os.mkdir(self.decode_dir)
 		ddf.decode_epochs(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
-						  self.e_skip_dt, self.e_len_dt, self.dig_in_names, 
+						  self.e_skip_dt, self.seg_e_len_dt, self.dig_in_names, 
 						  self.segment_times, self.segment_names, self.start_dig_in_times,
 						  self.taste_num_deliv, self.select_neur, self.max_hz_pop,
 						  self.decode_dir, self.neuron_count_thresh, self.trial_start_frac,
 						  False, self.epochs_to_analyze, self.segments_to_analyze)
-		
-		self.plot_decode_results()
-		
-		#Run nb decoder over rest intervals
-		self.decode_dir = self.main_decode_dir + 'nb/'
-		if os.path.isdir(self.decode_dir) == False:
-			os.mkdir(self.decode_dir)
-		ddf.decode_epochs_nb(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
-						  self.e_skip_dt, self.e_len_dt, self.dig_in_names, 
-						  self.segment_times, self.segment_names, self.start_dig_in_times,
-						  self.taste_num_deliv, self.select_neur, self.max_hz_pop,
-						  self.decode_dir, self.neuron_count_thresh, self.trial_start_frac,
-						  self.epochs_to_analyze, self.segments_to_analyze)
 		
 		self.plot_decode_results()
 		
@@ -190,25 +177,12 @@ class run_dependent_bayes():
 			os.mkdir(self.decode_dir)
             
 		ddf.decode_epochs(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
-						  self.e_skip_dt, self.e_len_dt, self.dig_in_names, 
+						  self.e_skip_dt, self.seg_e_len_dt, self.dig_in_names, 
 						  self.segment_times, self.segment_names, self.start_dig_in_times,
 						  self.taste_num_deliv, self.select_neur, self.max_hz_z_pop,
 						  self.decode_dir, self.neuron_count_thresh, self.trial_start_frac,
 						  True, self.epochs_to_analyze, self.segments_to_analyze)
 		
-		
-		self.plot_decode_results()
-		
-		#Run nb decoder over rest intervals
-		self.decode_dir = self.main_decode_dir + 'nb/'
-		if os.path.isdir(self.decode_dir) == False:
-			os.mkdir(self.decode_dir)
-		ddf.decode_epochs_nb_zscore(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
-						  self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
-						  self.bin_dt, self.segment_names, self.start_dig_in_times, 
-						  self.taste_num_deliv, self.select_neur, self.max_hz_z_pop,
-						  self.decode_dir, self.neuron_count_thresh, self.trial_start_frac,
-						  self.epochs_to_analyze,self.segments_to_analyze)
 		
 		self.plot_decode_results()
 		
@@ -223,7 +197,7 @@ class run_dependent_bayes():
 		self.cur_dist = self.tastant_fr_dist_z_pop
 		
 		ddf.decode_epochs_zscore(self.cur_dist, self.segment_spike_times, self.post_taste_dt,
-						 self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
+						 self.e_skip_dt, self.seg_e_len_dt, self.dig_in_names, self.segment_times,
 						  self.bin_dt, self.segment_names, self.start_dig_in_times, 
 						  self.taste_num_deliv, self.select_neur, self.max_hz_z_pop, 
 						  self.decode_dir, self.neuron_count_thresh, self.trial_start_frac, 

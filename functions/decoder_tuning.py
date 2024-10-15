@@ -21,6 +21,7 @@ from multiprocess import Pool
 from sklearn.mixture import GaussianMixture as gmm
 #from sklearn.model_selection import GridSearchCV
 from sklearn.decomposition import PCA
+from sklearn.neighbors import NeighborhoodComponentsAnalysis
 from sklearn.naive_bayes import GaussianNB
 #from random import choices, sample
 import functions.decode_parallel as dp
@@ -29,7 +30,8 @@ from sklearn import svm
 
 def test_decoder_params(dig_in_names, start_dig_in_times, num_neur, tastant_spike_times,
                         tastant_fr_dist, cp_raster_inds, pre_taste_dt, post_taste_dt,
-                        epochs_to_analyze, taste_select_neur, e_skip_dt, e_len_dt, save_dir):
+                        epochs_to_analyze, taste_select_neur, e_skip_dt, e_len_dt, 
+                        max_hz, save_dir):
     """This function tests different decoder types to determine
     the best combination to use in replay decoding
     INPUTS:
@@ -60,25 +62,26 @@ def test_decoder_params(dig_in_names, start_dig_in_times, num_neur, tastant_spik
                                                                 tastant_fr_dist, all_trial_inds,
                                                                 tastant_spike_times, cp_raster_inds,
                                                                 pre_taste_dt, e_len_dt, e_skip_dt,
-                                                                dig_in_names, save_dir,
+                                                                dig_in_names, max_hz, save_dir,
                                                                 epochs_to_analyze)
 
-    # Run Naive Bayes decoder to test
-    nb_success_rates, nb_success_rates_by_taste = naive_bayes_decoding(num_neur, tastant_spike_times,
-                                                                        cp_raster_inds, tastant_fr_dist,
-                                                                        all_trial_inds, dig_in_names,
-                                                                        start_dig_in_times, pre_taste_dt,
-                                                                        post_taste_dt, e_skip_dt, e_len_dt,
-                                                                        save_dir, epochs_to_analyze)
+    # # Run Naive Bayes decoder to test
+    # nb_success_rates, nb_success_rates_by_taste = naive_bayes_decoding(num_neur, tastant_spike_times,
+    #                                                                     cp_raster_inds, tastant_fr_dist,
+    #                                                                     all_trial_inds, dig_in_names,
+    #                                                                     start_dig_in_times, pre_taste_dt,
+    #                                                                     post_taste_dt, e_skip_dt, e_len_dt,
+    #                                                                     max_hz, save_dir, epochs_to_analyze)
     
-    # Run SVM classifier to test
-    svm_success_rates, svm_success_rates_by_taste = svm_classification(num_neur, tastant_spike_times, cp_raster_inds,
-                                                                       tastant_fr_dist, all_trial_inds, dig_in_names,
-                                                                       start_dig_in_times, pre_taste_dt, post_taste_dt,
-                                                                       e_skip_dt, e_len_dt, save_dir, epochs_to_analyze)
-    # Both Models Plot
-    plot_all_results(epochs_to_analyze, gmm_success_rates, nb_success_rates, svm_success_rates,
-                     num_tastes, save_dir)
+    # # Run SVM classifier to test
+    # svm_success_rates, svm_success_rates_by_taste = svm_classification(num_neur, tastant_spike_times, cp_raster_inds,
+    #                                                                    tastant_fr_dist, all_trial_inds, dig_in_names,
+    #                                                                    start_dig_in_times, pre_taste_dt, post_taste_dt,
+    #                                                                    e_skip_dt, e_len_dt, max_hz, 
+    #                                                                    save_dir, epochs_to_analyze)
+    # # Both Models Plot
+    # plot_all_results(epochs_to_analyze, gmm_success_rates, nb_success_rates, svm_success_rates,
+    #                  num_tastes, save_dir)
 
 
 def plot_distributions(start_dig_in_times, tastant_fr_dist, epochs_to_analyze,
@@ -110,6 +113,8 @@ def plot_distributions(start_dig_in_times, tastant_fr_dist, epochs_to_analyze,
             dist_save, 'PCA_FR_distributions_'+str(e_i)+'.png'))
         if not file_exists:
             taste_data = []
+            taste_data_combined = []
+            taste_data_labels = []
             all_data = [] #Only true tastes - none is left out to differentiate more
             all_data_labels = [] #Only true tastes - none is left out to differentiate more
             max_fr = 0
@@ -123,6 +128,8 @@ def plot_distributions(start_dig_in_times, tastant_fr_dist, epochs_to_analyze,
                     except:
                         train_taste_data.extend([])
                 taste_data.append(np.array(train_taste_data))
+                taste_data_combined.extend(train_taste_data)
+                taste_data_labels.extend(list(t_i*np.ones(len(train_taste_data))))
                 if len(train_taste_data) > 0:
                     if t_i < num_tastes-1:
                         if np.max(train_taste_data) > max_fr:
@@ -131,45 +138,45 @@ def plot_distributions(start_dig_in_times, tastant_fr_dist, epochs_to_analyze,
                         all_data_labels.extend(
                             list(t_i*np.ones(len(train_taste_data))))
             
-            # Plot Neuron Firing Rates
-            f_true, ax_true = plt.subplots(nrows = int(neur_sqrt),ncols = int(neur_sqrt), 
-                                           figsize=(5*int(neur_sqrt), int(neur_sqrt)*5),
-                                           sharex = True)
-            neur_map = np.reshape(np.arange(square_num),(neur_sqrt,neur_sqrt))
-            for n_i in range(num_neur):
-                neur_row, neur_col = np.argwhere(neur_map == n_i)[0]
-                ax_true[neur_row,neur_col].set_title('Neuron ' + str(n_i))
-                ax_true[neur_row,neur_col].set_xlabel('FR')
-                ax_true[neur_row,neur_col].set_ylabel('Probability')
-                for t_i in range(num_tastes):
-                    neur_data = taste_data[t_i][n_i,:]
-                    ax_true[neur_row,neur_col].hist(neur_data, 10, density=True, histtype='bar', alpha=1/num_tastes, \
-                            label=dig_in_names[t_i], color=taste_colors[t_i, :])
-                if n_i == 0:
-                    ax_true[neur_row,neur_col].legend(loc='upper right')
-            f_true.tight_layout()
-            f_true.savefig(os.path.join(
-                fr_save, 'FR_distributions_'+str(e_ind)+'.png'))
-            f_true.savefig(os.path.join(
-                fr_save, 'FR_distributions_'+str(e_ind)+'.svg'))
-            plt.close(f_true)
+            # # Plot Neuron Firing Rates
+            # f_true, ax_true = plt.subplots(nrows = int(neur_sqrt),ncols = int(neur_sqrt), 
+            #                                figsize=(5*int(neur_sqrt), int(neur_sqrt)*5),
+            #                                sharex = True)
+            # neur_map = np.reshape(np.arange(square_num),(neur_sqrt,neur_sqrt))
+            # for n_i in range(num_neur):
+            #     neur_row, neur_col = np.argwhere(neur_map == n_i)[0]
+            #     ax_true[neur_row,neur_col].set_title('Neuron ' + str(n_i))
+            #     ax_true[neur_row,neur_col].set_xlabel('FR')
+            #     ax_true[neur_row,neur_col].set_ylabel('Probability')
+            #     for t_i in range(num_tastes):
+            #         neur_data = taste_data[t_i][n_i,:]
+            #         ax_true[neur_row,neur_col].hist(neur_data, 10, density=True, histtype='bar', alpha=1/num_tastes, \
+            #                 label=dig_in_names[t_i], color=taste_colors[t_i, :])
+            #     if n_i == 0:
+            #         ax_true[neur_row,neur_col].legend(loc='upper right')
+            # f_true.tight_layout()
+            # f_true.savefig(os.path.join(
+            #     fr_save, 'FR_distributions_'+str(e_ind)+'.png'))
+            # f_true.savefig(os.path.join(
+            #     fr_save, 'FR_distributions_'+str(e_ind)+'.svg'))
+            # plt.close(f_true)
             
-            # Scatter Plot Pairs of Neuron Firing Rates
-            for n_1 in range(num_neur-1):
-                for n_2 in np.arange(n_1+1,num_neur):
-                    f_pair = plt.figure(figsize=(5,5))
-                    for t_i in range(num_tastes):
-                        neur_data1 = taste_data[t_i][n_1,:]
-                        neur_data2 = taste_data[t_i][n_2,:]
-                        plt.scatter(neur_data1,neur_data2,alpha=1/num_tastes, \
-                                    label=dig_in_names[t_i], color=taste_colors[t_i, :])
-                    plt.xlabel('Neuron ' + str(n_1))
-                    plt.ylabel('Neuron ' + str(n_2))
-                    plt.legend(loc='upper right')
-                    plt.tight_layout()
-                    plt.savefig(os.path.join(
-                        fr_save, 'FR_n_'+str(n_1)+'_n_'+str(n_2)+'.png'))
-                    plt.close(f_pair)
+            # # Scatter Plot Pairs of Neuron Firing Rates
+            # for n_1 in range(num_neur-1):
+            #     for n_2 in np.arange(n_1+1,num_neur):
+            #         f_pair = plt.figure(figsize=(5,5))
+            #         for t_i in range(num_tastes):
+            #             neur_data1 = taste_data[t_i][n_1,:]
+            #             neur_data2 = taste_data[t_i][n_2,:]
+            #             plt.scatter(neur_data1,neur_data2,alpha=1/num_tastes, \
+            #                         label=dig_in_names[t_i], color=taste_colors[t_i, :])
+            #         plt.xlabel('Neuron ' + str(n_1))
+            #         plt.ylabel('Neuron ' + str(n_2))
+            #         plt.legend(loc='upper right')
+            #         plt.tight_layout()
+            #         plt.savefig(os.path.join(
+            #             fr_save, 'FR_n_'+str(n_1)+'_n_'+str(n_2)+'.png'))
+            #         plt.close(f_pair)
             
             # Run PCA transform
             pca = PCA()
@@ -246,7 +253,7 @@ def plot_distributions(start_dig_in_times, tastant_fr_dist, epochs_to_analyze,
 def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                 tastant_spike_times, cp_raster_inds,
                 pre_taste_dt, e_len_dt, e_skip_dt, dig_in_names,
-                save_dir, epochs_to_analyze=[]):
+                max_hz, save_dir, epochs_to_analyze=[]):
     """This function runs a decoder with a given set of parameters and returns
     the decoding probabilities of taste delivery periods
     INPUTS:
@@ -260,6 +267,7 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
             - e_len_dt: decoding chunk length
             - e_skip_dt: decoding skip length
             - dig_in_names: taste names
+            - max_hz: maximum firing rate in taste data
             - save_dir: directory where to save results
             - epochs_to_analyze: array of which epochs to analyze
     OUTPUTS:
@@ -358,11 +366,13 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
 
                 # Run gmm distribution fits to fr of each population for each taste
                 train_data = []
-                all_train_data = [] #Only true tastes - excluding "none"
+                train_data_combined = []
+                train_data_labels = []
+                true_taste_train_data = [] #Only true tastes - excluding "none"
+                true_taste_train_labels = []
                 #taste_bic_scores = np.zeros((len(component_counts),num_tastes))
                 for t_i in range(num_tastes):
                     train_taste_data = []
-                    taste_num_deliv = len(tastant_fr_dist[t_i])
                     for d_i in all_trial_inds[t_i]:
                         if (d_i == l_o_delivery_ind) and (t_i == l_o_taste_ind):
                             # This is the Leave-One-Out trial so do nothing
@@ -374,20 +384,29 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                             else:
                                 train_taste_data.extend(
                                     list(tastant_fr_dist[t_i][d_i][e_i]))
-                    train_data.append(np.array(train_taste_data))
                     if t_i < num_tastes-1:
-                        all_train_data.extend(train_taste_data)
+                        true_taste_train_data.extend(train_taste_data)
+                        true_taste_train_labels.extend(list(t_i*np.ones(len(train_taste_data))))
+                    else: #None condition - augment with randomized data
+                        neur_max = np.expand_dims(np.max(np.array(train_taste_data),0),1)
+                        train_taste_data.extend(list((neur_max*np.random.rand(num_neur,100)).T))
+                        train_taste_data.extend(list(((neur_max/10)*np.random.rand(num_neur,100)).T))
+                        train_taste_data.extend(list((np.eye(num_neur)).T))
+                    train_data.append(np.array(train_taste_data))
+                    train_data_combined.extend(train_taste_data)
+                    train_data_labels.extend(list(t_i*np.ones(len(train_taste_data))))
                     
                 # Run PCA transform only on non-z-scored data
-                if np.min(all_train_data) >= 0:
+                if np.min(true_taste_train_data) >= 0:
+                    #PCA
                     pca = PCA()
-                    pca.fit(np.array(all_train_data).T)
+                    pca.fit(np.array(true_taste_train_data).T)
                     exp_var = pca.explained_variance_ratio_
                     num_components = np.where(np.cumsum(exp_var) >= 0.9)[0][0]
                     if num_components == 0:
                         num_components = 3
                     pca_reduce = PCA(num_components)
-                    pca_reduce.fit(np.array(all_train_data))
+                    pca_reduce.fit(np.array(true_taste_train_data))
 
                 # Grab trial firing rate data
                 t_cp_rast = cp_raster_inds[l_o_taste_ind]
@@ -416,7 +435,7 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                 else:
                     tb_fr = np.expand_dims(np.sum(td_i_bin,1)/((data_len+1)/1000),1)
                     
-                if np.min(all_train_data) >= 0: #If it's not z-scored PCA to whiten
+                if np.min(true_taste_train_data) >= 0: #If it's not z-scored PCA to whiten
                      # PCA transform fr
                     try:
                         tb_fr_pca = pca_reduce.transform(tb_fr.T)
@@ -433,7 +452,7 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
                 all_taste_gmm = dict()
                 for t_i in range(num_tastes):
                     train_taste_data = train_data[t_i]
-                    if np.min(all_train_data) >= 0:
+                    if np.min(true_taste_train_data) >= 0:
                         # ___PCA Transformed Data
                         transformed_test_taste_data = pca_reduce.transform(
                             np.array(train_taste_data))
@@ -579,7 +598,7 @@ def run_decoder(num_neur, start_dig_in_times, tastant_fr_dist, all_trial_inds,
 def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
                          tastant_fr_dist, all_trial_inds, dig_in_names,
                          start_dig_in_times, pre_taste_dt, post_taste_dt,
-                         e_skip_dt, e_len_dt, save_dir, epochs_to_analyze=[]):
+                         e_skip_dt, e_len_dt, max_hz, save_dir, epochs_to_analyze=[]):
     """This function trains a Gaussian Naive Bayes decoder to decode different 
     taste epochs from activity.
     INPUTS:
@@ -706,8 +725,17 @@ def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
                             train_fr_data.extend([])  # Basically do nothing
                         else:
                             tb_fr = tastant_fr_dist[t_i][d_i][e_i]
-                            list_tb_fr = list(tb_fr.T)
-                            train_fr_data.extend(list_tb_fr)
+                            list_tb_fr = []
+                            for tbfr_i in range(np.shape(tb_fr)[1]):
+                                list_tb_fr.append(list(tb_fr[:,tbfr_i]))
+                            if t_i < num_tastes - 1:
+                                train_fr_data.extend(list_tb_fr)
+                            else: #None condition - augment with randomized data
+                                for a_i in range(100): #100 augmented sets spanning the full FR range
+                                    list_tb_fr.append(list(max_hz*np.random.rand(num_neur)))
+                                for a_i in range(100): #100 augmented sets spanning the low FR range
+                                    list_tb_fr.append(list((max_hz/10)*np.random.rand(num_neur)))
+                                train_fr_data.extend(list_tb_fr)
                             bst_hz_labels = list(t_i*np.ones(len(list_tb_fr)))
                             train_fr_labels.extend(bst_hz_labels)
 
@@ -860,7 +888,7 @@ def naive_bayes_decoding(num_neur, tastant_spike_times, cp_raster_inds,
 def svm_classification(num_neur, tastant_spike_times, cp_raster_inds,
                          tastant_fr_dist, all_trial_inds, dig_in_names,
                          start_dig_in_times, pre_taste_dt, post_taste_dt,
-                         e_skip_dt, e_len_dt, save_dir, epochs_to_analyze=[]):
+                         e_skip_dt, e_len_dt, max_hz, save_dir, epochs_to_analyze=[]):
     """This function trains an SVM to classify different tastes from firing rates.
     It is run in a LOO fashion to classify one left out delivery trial based on the
     fit for all the others.
@@ -987,8 +1015,17 @@ def svm_classification(num_neur, tastant_spike_times, cp_raster_inds,
                             train_fr_data.extend([])  # Basically do nothing
                         else:
                             tb_fr = tastant_fr_dist[t_i][d_i][e_i]
-                            list_tb_fr = list(tb_fr.T)
-                            train_fr_data.extend(list_tb_fr)
+                            list_tb_fr = []
+                            for tbfr_i in range(np.shape(tb_fr)[1]):
+                                list_tb_fr.append(list(tb_fr[:,tbfr_i]))
+                            if t_i < num_tastes - 1:
+                                train_fr_data.extend(list_tb_fr)
+                            else: #None condition - augment with randomized data
+                                for a_i in range(100): #100 augmented sets spanning the full FR range
+                                    list_tb_fr.append(list(max_hz*np.random.rand(num_neur)))
+                                for a_i in range(100): #100 augmented sets spanning the low FR range
+                                    list_tb_fr.append(list((max_hz/10)*np.random.rand(num_neur)))
+                                train_fr_data.extend(list_tb_fr)
                             bst_hz_labels = list(t_i*np.ones(len(list_tb_fr)))
                             train_fr_labels.extend(bst_hz_labels)
                             

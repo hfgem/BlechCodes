@@ -67,10 +67,12 @@ class run_deviation_dependent_bayes():
         self.min_dev_size = self.metadata['params_dict']['min_dev_size']
         # Decoding Params/Variables
         self.e_skip_time = self.metadata['params_dict']['bayes_params']['e_skip_time']
-        self.e_len_time = self.metadata['params_dict']['bayes_params']['e_len_time']
         self.e_skip_dt = np.ceil(self.e_skip_time*1000).astype('int')
-        self.e_len_dt = np.ceil(self.e_len_time*1000).astype('int')
-        self.fr_bins = self.metadata['params_dict']['bayes_params']['fr_bins']
+        self.taste_e_len_time = self.metadata['params_dict']['bayes_params']['taste_e_len_time']
+        self.taste_e_len_dt = np.ceil(self.e_len_time*1000).astype('int')
+        self.seg_e_len_time = self.metadata['params_dict']['bayes_params']['seg_e_len_time']
+        self.seg_e_len_dt = np.ceil(self.seg_e_len_time*1000).astype('int') 
+        self.bayes_fr_bins = self.metadata['params_dict']['bayes_params']['fr_bins']
         self.neuron_count_thresh = self.metadata['params_dict']['bayes_params']['neuron_count_thresh']
         self.max_decode = self.metadata['params_dict']['bayes_params']['max_decode']
         self.seg_stat_bin = self.metadata['params_dict']['bayes_params']['seg_stat_bin']
@@ -118,20 +120,18 @@ class run_deviation_dependent_bayes():
 
     def pull_fr_dist(self,):
         print("\tPulling FR Distributions")
-        tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur,
-                                                                             self.num_cp, self.tastant_spike_times,
-                                                                             self.pop_taste_cp_raster_inds,
-                                                                             self.start_dig_in_times, self.pre_taste_dt,
-                                                                             self.post_taste_dt, self.trial_start_frac)
+        tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur, self.tastant_spike_times,
+                                                                        	 self.pop_taste_cp_raster_inds, self.bayes_fr_bins,
+                                                                        	 self.start_dig_in_times, self.pre_taste_dt,
+                                                                        	 self.post_taste_dt, self.trial_start_frac)
         self.tastant_fr_dist_pop = tastant_fr_dist_pop
         self.taste_num_deliv = taste_num_deliv
         self.max_hz_pop = max_hz_pop
-        tastant_fr_dist_z_pop, _, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(self.num_neur,
-                                                                                        self.num_cp, self.tastant_spike_times,
-                                                                                        self.segment_spike_times, self.segment_names,
-                                                                                        self.segment_times, self.pop_taste_cp_raster_inds,
-                                                                                        self.start_dig_in_times, self.pre_taste_dt,
-                                                                                        self.post_taste_dt, self.bin_dt, self.trial_start_frac)
+        tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(self.num_neur, self.tastant_spike_times,
+                                                                                                	  self.segment_spike_times, self.segment_names,
+                                                                                                	  self.segment_times, self.pop_taste_cp_raster_inds,
+                                                                                                	  self.bayes_fr_bins, self.start_dig_in_times, self.pre_taste_dt,
+                                                                                                	  self.post_taste_dt, self.bin_dt, self.trial_start_frac)
         self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
         self.max_hz_z_pop = max_hz_z_pop
         self.min_hz_z_pop = min_hz_z_pop

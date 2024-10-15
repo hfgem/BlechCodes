@@ -458,10 +458,10 @@ def taste_fr_dist_zscore(num_neur, num_cp, tastant_spike_times, segment_spike_ti
 
 def plot_decoded(fr_dist, num_tastes, num_neur, segment_spike_times, tastant_spike_times,
                  start_dig_in_times, end_dig_in_times, post_taste_dt, pre_taste_dt,
-                 cp_raster_inds, bin_dt, dig_in_names, segment_times,
+                 cp_raster_inds, z_bin_dt, dig_in_names, segment_times,
                  segment_names, taste_num_deliv, taste_select_epoch,
                  save_dir, max_decode, max_hz, seg_stat_bin,
-                 neuron_count_thresh, trial_start_frac=0,
+                 neuron_count_thresh, e_len_dt, trial_start_frac=0,
                  epochs_to_analyze=[], segments_to_analyze=[],
                  decode_prob_cutoff=0.95):
     """Function to plot the periods when something other than no taste is 
@@ -475,7 +475,8 @@ def plot_decoded(fr_dist, num_tastes, num_neur, segment_spike_times, tastant_spi
         (num_cp, num_segments, num_tastes))
     epoch_seg_taste_times_best = np.zeros((num_cp, num_segments, num_tastes))
     epoch_seg_lengths = np.zeros((num_cp, num_segments, num_tastes))
-    half_bin_z_dt = np.floor(bin_dt/2).astype('int')
+    half_bin_z_dt = np.floor(z_bin_dt/2).astype('int')
+    half_bin_decode_dt = np.floor(e_len_dt/2).astype('int')
 
     if len(epochs_to_analyze) == 0:
         epochs_to_analyze = np.arange(num_cp)
@@ -565,11 +566,25 @@ def plot_decoded(fr_dist, num_tastes, num_neur, segment_spike_times, tastant_spi
             # Store binary decoding results
             decoded_taste_bin = np.zeros((num_tastes, len(decoded_taste_max)))
             for t_i in range(num_tastes):
-                decoded_taste_bin[t_i, np.where(
-                    decoded_taste_max == t_i)[0]] = 1
+                times_decoded_taste_max = np.where(decoded_taste_max == t_i)[0]
+                #Now spread these times based on the full decoding bin
+                for diff_i in np.arange(-1*half_bin_decode_dt,half_bin_decode_dt):
+                    times_decoded_shifted = times_decoded_taste_max + diff_i
+                    times_decoded_shifted = times_decoded_shifted[np.where((times_decoded_shifted>0)*(times_decoded_shifted<len(decoded_taste_max)))[0]]
+                    decoded_taste_bin[t_i, times_decoded_shifted] = 1
             # To ensure starts and ends of bins align
             decoded_taste_bin[:, 0] = 0
             decoded_taste_bin[:, -1] = 0
+            
+            #Test for periods that are overlapping and remove from decoded_taste_bin
+            summed_decode = np.sum(decoded_taste_bin,0)
+            overlap_bin = (summed_decode > 1).astype('int')
+            overlap_diff = np.diff(overlap_bin)
+            overlap_starts = np.where(overlap_diff == 1)[0]+1
+            overlap_ends = np.where(overlap_diff == -1)[0]+1
+            for o_i in range(len(overlap_starts)):
+                decoded_taste_bin[:,overlap_starts[o_i]:overlap_ends[o_i]] = 0
+                decoded_taste_bin[-1,overlap_starts[o_i]:overlap_ends[o_i]] = 1
 
             # For each taste (except none) calculate start and end times of decoded intervals and plot
             all_taste_fr_vecs = []
@@ -670,20 +685,25 @@ def plot_decoded(fr_dist, num_tastes, num_neur, segment_spike_times, tastant_spi
                 decoded_taste_prob = seg_decode_epoch_prob[t_i, :]
                 decoded_taste[decoded_taste_prob < decode_prob_cutoff] = 0
                 diff_decoded_taste = np.diff(decoded_taste)
-                start_decoded = np.where(diff_decoded_taste == 1)[0] + 1
-                end_decoded = np.where(diff_decoded_taste == -1)[0] + 1
+                start_decoded = np.where(diff_decoded_taste == 1)[0] + 1 - half_bin_decode_dt
+                end_decoded = np.where(diff_decoded_taste == -1)[0] + 1 + half_bin_decode_dt
                 num_decoded = len(start_decoded)
                 num_neur_decoded = np.zeros(num_decoded)
                 prob_decoded = np.zeros(num_decoded)
                 for nd_i in range(num_decoded):
                     d_start = start_decoded[nd_i]
+                    if d_start < 0:
+                        d_start = 0
                     d_end = end_decoded[nd_i]
+                    if d_end > seg_len:
+                        d_end = seg_len
                     d_len = d_end-d_start
-                    for n_i in range(num_neur):
-                        if len(np.where(segment_spike_times_s_i_bin[n_i, d_start:d_end])[0]) > 0:
-                            num_neur_decoded[nd_i] += 1
-                    prob_decoded[nd_i] = np.mean(
-                        seg_decode_epoch_prob[t_i, d_start:d_end])
+                    if d_len > 0:
+                        for n_i in range(num_neur):
+                            if len(np.where(segment_spike_times_s_i_bin[n_i, d_start:d_end])[0]) > 0:
+                                num_neur_decoded[nd_i] += 1
+                        prob_decoded[nd_i] = np.mean(
+                            seg_decode_epoch_prob[t_i, d_start:d_end])
 
                 # Save the percent taste decoded matching threshold
                 epoch_seg_taste_times[e_i, s_i, t_i] = np.sum(decoded_taste)

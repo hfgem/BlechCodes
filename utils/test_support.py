@@ -62,8 +62,9 @@ tastant_spike_times = af.calc_tastant_spike_times(data_dict['segment_times'],dat
 data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
-#%% Decoder Tuning Support
+#%% Decoder Support
 
+import functions.decoder_tuning as dt
 import functions.decoding_funcs as df
 import functions.dependent_decoding_funcs as ddf
 
@@ -97,18 +98,20 @@ skip_time = metadata['params_dict']['bayes_params']['skip_time']
 skip_dt = np.ceil(skip_time*1000).astype('int')
 e_skip_time = metadata['params_dict']['bayes_params']['e_skip_time']
 e_skip_dt = np.ceil(e_skip_time*1000).astype('int')
-e_len_time = metadata['params_dict']['bayes_params']['e_len_time']
-e_len_dt = np.ceil(e_len_time*1000).astype('int')
+taste_e_len_time = metadata['params_dict']['bayes_params']['taste_e_len_time']
+taste_e_len_dt = np.ceil(taste_e_len_time*1000).astype('int') 
+seg_e_len_time = metadata['params_dict']['bayes_params']['seg_e_len_time']
+seg_e_len_dt = np.ceil(seg_e_len_time*1000).astype('int') 
+bayes_fr_bins = metadata['params_dict']['bayes_params']['fr_bins']
 neuron_count_thresh = metadata['params_dict']['bayes_params']['neuron_count_thresh']
 max_decode = metadata['params_dict']['bayes_params']['max_decode']
 seg_stat_bin = metadata['params_dict']['bayes_params']['seg_stat_bin']
 trial_start_frac = metadata['params_dict']['bayes_params']['trial_start_frac']
 decode_prob_cutoff = metadata['params_dict']['bayes_params']['decode_prob_cutoff']
-bin_time = metadata['params_dict']['bayes_params']['bin_time']
+bin_time = metadata['params_dict']['bayes_params']['z_score_bin_time']
 bin_dt = np.ceil(bin_time*1000).astype('int')
 #Import changepoint data
 pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir,'changepoint_data','pop_taste_cp_raster_inds')
-pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
 num_pt_cp = num_cp + 2
 #Import taste selectivity data
 try:
@@ -123,19 +126,16 @@ discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(hdf5_dir,'taste_discriminabili
 num_discrim_cp = np.shape(peak_epochs)[0]
 min_cp = np.min((num_pt_cp,num_discrim_cp))
 
-fr_bins = [0.5,1,2] #Train on full epoch
-e_len_dt = 2000 #Test on full epoch
-
 print("\tPulling FR Distributions")
 tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(num_neur, tastant_spike_times,
-                                                                  pop_taste_cp_raster_inds, fr_bins,
+                                                                  pop_taste_cp_raster_inds, bayes_fr_bins,
                                                                   start_dig_in_times, pre_taste_dt,
                                                                   post_taste_dt, trial_start_frac)
 
 tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(num_neur, tastant_spike_times,
                                                                                            segment_spike_times, segment_names,
                                                                                            segment_times, pop_taste_cp_raster_inds,
-                                                                                           fr_bins, start_dig_in_times, pre_taste_dt,
+                                                                                           bayes_fr_bins, start_dig_in_times, pre_taste_dt,
                                                                                            post_taste_dt, bin_dt, trial_start_frac)
 
 main_decode_dir = bayes_dir + 'All_Neurons/'
@@ -148,19 +148,44 @@ print("\tDecoding all neurons")
 all_neur_dir = bayes_dir + 'All_Neurons/'
 if os.path.isdir(all_neur_dir) == False:
     os.mkdir(all_neur_dir)
-    
+
+#%% Decoder tuning support
+
+dt.test_decoder_params(dig_in_names, start_dig_in_times, num_neur, tastant_spike_times,
+                        tastant_fr_dist_pop, pop_taste_cp_raster_inds, pre_taste_dt, post_taste_dt,
+                        epochs_to_analyze, select_neur, e_skip_dt, taste_e_len_dt, 
+                        max_hz_pop, main_decode_dir)
+
+# tastant_fr_dist = tastant_fr_dist_pop
+# cp_raster_inds = pop_taste_cp_raster_inds
+# taste_select_neur = select_neur
+# max_hz = max_hz_pop
+# save_dir = main_decode_dir
+
+#%% Decoder pipeline support
+
 decode_dir = all_neur_dir + 'GMM_Decoding/'
 if os.path.isdir(decode_dir) == False:
     os.mkdir(decode_dir)
-
+    
 taste_select_neur = np.ones(np.shape(discrim_neur))
 
+seg_e_len_dt = 20
+
 ddf.decode_epochs(tastant_fr_dist_pop, 	segment_spike_times,
-                  	post_taste_dt, 	e_skip_dt, 	e_len_dt,
+                  	post_taste_dt, 	e_skip_dt, 	seg_e_len_dt,
                   	dig_in_names, 	segment_times, 	segment_names,
                   	start_dig_in_times, 	taste_num_deliv, select_neur,
-                  	max_hz_pop, decode_dir, 	neuron_count_thresh,
-                  	False, epochs_to_analyze, 	segments_to_analyze)
+                  	max_hz_pop, decode_dir, 	neuron_count_thresh, decode_prob_cutoff,
+                  	False, epochs_to_analyze, segments_to_analyze)
+
+tastant_fr_dist = tastant_fr_dist_pop
+e_len_dt = seg_e_len_dt
+taste_select_epoch = select_neur
+max_hz = max_hz_pop
+save_dir = decode_dir
+
+decode_prob_cutoff = 0.9 #1 - 1/num_tastes
 
 print("\t\tPlotting Decoded Results")
 df.plot_decoded(	tastant_fr_dist_pop, num_tastes, num_neur,
@@ -168,7 +193,9 @@ df.plot_decoded(	tastant_fr_dist_pop, num_tastes, num_neur,
                 	start_dig_in_times, 	end_dig_in_times, 	post_taste_dt,
                 	pre_taste_dt, 	pop_taste_cp_raster_inds, 	bin_dt, dig_in_names,
                 	segment_times, 	segment_names, 	taste_num_deliv,
-                	taste_select_neur, 	decode_dir, 	max_decode, 	max_hz_pop,
-                	seg_stat_bin, 	neuron_count_thresh, 	trial_start_frac,
+                	taste_select_epoch, 	decode_dir, 	max_decode, 	max_hz_pop,
+                	seg_stat_bin, 	neuron_count_thresh, 	seg_e_len_dt, trial_start_frac,
                 	epochs_to_analyze, 	segments_to_analyze, 	decode_prob_cutoff)
+
+
 
