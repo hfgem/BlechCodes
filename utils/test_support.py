@@ -66,6 +66,7 @@ data_dict['tastant_spike_times'] = tastant_spike_times
 
 import functions.decoder_tuning as dt
 import functions.decoding_funcs as df
+import functions.plot_decoding_funcs as pdf
 import functions.dependent_decoding_funcs as ddf
 
 #Directories
@@ -188,7 +189,7 @@ save_dir = decode_dir
 decode_prob_cutoff = 0.9 #1 - 1/num_tastes
 
 print("\t\tPlotting Decoded Results")
-df.plot_decoded(	tastant_fr_dist_pop, num_tastes, num_neur,
+pdf.plot_decoded(	tastant_fr_dist_pop, num_tastes, num_neur,
                 segment_spike_times, 	tastant_spike_times,
                 	start_dig_in_times, 	end_dig_in_times, 	post_taste_dt,
                 	pre_taste_dt, 	pop_taste_cp_raster_inds, 	bin_dt, dig_in_names,
@@ -197,5 +198,71 @@ df.plot_decoded(	tastant_fr_dist_pop, num_tastes, num_neur,
                 	seg_stat_bin, 	neuron_count_thresh, 	seg_e_len_dt, trial_start_frac,
                 	epochs_to_analyze, 	segments_to_analyze, 	decode_prob_cutoff)
 
+#%% Deviation Decoding Pipeline support
 
+import functions.dev_funcs as dev_f
+import functions.dependent_decoding_funcs as ddf
+
+dev_dir = metadata['dir_name'] + 'Deviations/'
+bayes_dir = metadata['dir_name'] + 'Deviation_Dependent_Decoding/'
+if os.path.isdir(bayes_dir) == False:
+    os.mkdir(bayes_dir)
+
+print("\tNow importing calculated deviations")
+
+num_seg_to_analyze = len(segments_to_analyze)
+segment_names_to_analyze = [segment_names[i] for i in segments_to_analyze]
+segment_times_to_analyze_reshaped = [
+    [segment_times[i], segment_times[i+1]] for i in segments_to_analyze]
+segment_spike_times_to_analyze = [segment_spike_times[i] for i in segments_to_analyze]
+
+segment_deviations = []
+for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
+    filepath = dev_dir + \
+        segment_names_to_analyze[s_i] + '/deviations.json'
+    with gzip.GzipFile(filepath, mode="r") as f:
+        json_bytes = f.read()
+        json_str = json_bytes.decode('utf-8')
+        data = json.loads(json_str)
+        segment_deviations.append(data)
+
+print("\tNow pulling true deviation rasters")
+segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, segment_dev_fr_vecs_zscore = dev_f.create_dev_rasters(num_seg_to_analyze, 
+                                                        segment_spike_times_to_analyze,
+                                                        np.array(segment_times_to_analyze_reshaped),
+                                                        segment_deviations, pre_taste)
+
+print("\tDecoding all neurons")
+all_neur_dir = bayes_dir + 'All_Neurons/'
+if os.path.isdir(all_neur_dir) == False:
+    os.mkdir(all_neur_dir)
+    
+taste_select_neur = np.ones(np.shape(pop_taste_cp_raster_inds))
+
+decode_dir = all_neur_dir + 'GMM_Decoding/'
+if os.path.isdir(decode_dir) == False:
+    os.mkdir(decode_dir)
+
+#Normal Decode
+ddf.decode_deviations_epochs(tastant_fr_dist, segment_spike_times, dig_in_names, 
+                  segment_times, segment_names, start_dig_in_times, taste_num_deliv,
+                  segment_dev_times, segment_dev_fr_vecs, taste_select_epoch, bin_dt,
+                  decode_dir, False, epochs_to_analyze, segments_to_analyze)
+
+print("\tDecoding all neurons z-scored")
+all_neur_dir = bayes_dir + 'All_Neurons_Z_Scored/'
+if os.path.isdir(all_neur_dir) == False:
+    os.mkdir(all_neur_dir)
+    
+taste_select_neur = np.ones(np.shape(pop_taste_cp_raster_inds))
+
+decode_dir = all_neur_dir + 'GMM_Decoding/'
+if os.path.isdir(decode_dir) == False:
+    os.mkdir(decode_dir)
+
+#Z-Scored Decode
+ddf.decode_deviations_epochs(tastant_fr_dist_z_pop, segment_spike_times, dig_in_names, 
+                  segment_times, segment_names, start_dig_in_times, taste_num_deliv,
+                  segment_dev_times, segment_dev_fr_vecs_zscore, taste_select_epoch, 
+                  bin_dt, decode_dir, True, epochs_to_analyze, segments_to_analyze)
 

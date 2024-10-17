@@ -39,7 +39,7 @@ class run_deviation_dependent_bayes():
         # Directories
         self.hdf5_dir = self.metadata['hdf5_dir']
         self.bayes_dir = self.metadata['dir_name'] + \
-            'Burst_Dependent_Decoding/'
+            'Deviation_Dependent_Decoding/'
         if os.path.isdir(self.bayes_dir) == False:
             os.mkdir(self.bayes_dir)
         self.dev_dir = self.metadata['dir_name'] + 'Deviations/'
@@ -101,10 +101,17 @@ class run_deviation_dependent_bayes():
 
     def import_deviations(self,):
         print("\tNow importing calculated deviations")
+        
+        num_seg_to_analyze = len(self.segments_to_analyze)
+        segment_names_to_analyze = [self.segment_names[i] for i in self.segments_to_analyze]
+        segment_times_to_analyze_reshaped = [
+            [self.segment_times[i], self.segment_times[i+1]] for i in self.segments_to_analyze]
+        segment_spike_times_to_analyze = [self.segment_spike_times[i] for i in self.segments_to_analyze]
+        
         segment_deviations = []
-        for s_i in tqdm.tqdm(range(self.num_segments)):
+        for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
             filepath = self.dev_dir + \
-                self.segment_names[s_i] + '/deviations.json'
+                segment_names_to_analyze[s_i] + '/deviations.json'
             with gzip.GzipFile(filepath, mode="r") as f:
                 json_bytes = f.read()
                 json_str = json_bytes.decode('utf-8')
@@ -112,11 +119,16 @@ class run_deviation_dependent_bayes():
                 segment_deviations.append(data)
 
         print("\tNow pulling true deviation rasters")
-        segment_dev_rasters, segment_dev_times, _ = dev_f.create_dev_rasters(self.num_segments, self.segment_spike_times,
-                                                                             np.array(self.segment_times_reshaped), self.segment_deviations, self.pre_taste)
+        segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
+            segment_dev_fr_vecs_zscore = dev_f.create_dev_rasters(num_seg_to_analyze, 
+                                                                segment_spike_times_to_analyze,
+                                                                np.array(segment_times_to_analyze_reshaped),
+                                                                segment_deviations, self.pre_taste)
 
         self.segment_dev_rasters = segment_dev_rasters
         self.segment_dev_times = segment_dev_times
+        self.segment_dev_fr_vecs = segment_dev_fr_vecs
+        self.segment_dev_fr_vecs_zscore = segment_dev_fr_vecs_zscore
 
     def pull_fr_dist(self,):
         print("\tPulling FR Distributions")

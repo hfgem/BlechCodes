@@ -20,6 +20,7 @@ import numpy as np
 import functions.hdf5_handling as hf5
 import functions.dependent_decoding_funcs as ddf
 import functions.decoding_funcs as df
+import functions.plot_decoding_funcs as pdf
 import functions.decoder_tuning as dt
 
 class run_dependent_bayes():
@@ -207,7 +208,7 @@ class run_dependent_bayes():
 		
 	def plot_decode_results(self,):
 		print("\t\tPlotting results")
-		df.plot_decoded(self.cur_dist, self.num_tastes, self.num_neur, self.segment_spike_times,
+		pdf.plot_decoded(self.cur_dist, self.num_tastes, self.num_neur, self.segment_spike_times,
 						self.tastant_spike_times, self.start_dig_in_times, 
 						self.end_dig_in_times, self.post_taste_dt, self.pre_taste_dt,
 						self.pop_taste_cp_raster_inds, self.bin_dt, self.dig_in_names, self.segment_times,
@@ -215,7 +216,7 @@ class run_dependent_bayes():
 						self.decode_dir, self.max_decode, self.max_hz_pop, self.seg_stat_bin,
 						self.neuron_count_thresh, self.trial_start_frac, self.epochs_to_analyze,
 						self.segments_to_analyze, self.decode_prob_cutoff)
-		df.plot_decoded_func_p(self.cur_dist, self.num_tastes, self.num_neur, 
+		pdf.plot_decoded_func_p(self.cur_dist, self.num_tastes, self.num_neur, 
 						 self.segment_spike_times, self.tastant_spike_times,
 						 self.start_dig_in_times, self.end_dig_in_times, self.post_taste_dt, 
 						 self.pop_taste_cp_raster_inds, self.e_skip_dt, self.e_len_dt, 
@@ -223,14 +224,14 @@ class run_dependent_bayes():
 						 self.taste_num_deliv, self.select_neur, self.decode_dir, 
 						 self.max_decode, self.max_hz_pop, self.seg_stat_bin,
 						 self.epochs_to_analyze, self.segments_to_analyze)
-		df.plot_decoded_func_n(self.cur_dist, self.num_tastes, self.num_neur, 
+		pdf.plot_decoded_func_n(self.cur_dist, self.num_tastes, self.num_neur, 
 						 self.segment_spike_times, self.tastant_spike_times, self.start_dig_in_times, 
 						 self.end_dig_in_times, self.post_taste_dt, self.pop_taste_cp_raster_inds,
 						 self.e_skip_dt, self.e_len_dt, self.dig_in_names, self.segment_times,
 						 self.segment_names, self.taste_num_deliv, self.select_neur,
 						 self.decode_dir, self.max_decode, self.max_hz_pop, self.seg_stat_bin,
 						 self.epochs_to_analyze, self.segments_to_analyze)
-		df.plot_combined_decoded(self.cur_dist,self.num_tastes, self.num_neur, self.segment_spike_times,
+		pdf.plot_combined_decoded(self.cur_dist,self.num_tastes, self.num_neur, self.segment_spike_times,
 						self.tastant_spike_times, self.start_dig_in_times, 
 						self.end_dig_in_times, self.post_taste_dt, self.pre_taste_dt,
 						self.pop_taste_cp_raster_inds, self.bin_dt, self.dig_in_names, 
