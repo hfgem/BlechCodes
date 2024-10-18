@@ -64,7 +64,6 @@ def plot_decoded(fr_dist, num_tastes, num_neur, segment_spike_times, tastant_spi
         mean_fr_taste = np.zeros(num_neur)
         std_fr_taste = np.ones(num_neur)
 
-    # for e_i in range(num_cp): #By epoch conduct decoding
     for e_i in epochs_to_analyze:
         print('\t\t\tPlotting Decoding for Epoch ' + str(e_i))
 
@@ -94,7 +93,7 @@ def plot_decoded(fr_dist, num_tastes, num_neur, segment_spike_times, tastant_spi
             seg_end = segment_times[s_i+1]
             seg_len = seg_end - seg_start  # in dt = ms
 
-            # Import raster plots for segment
+            # Pull binary spikes for segment
             segment_spike_times_s_i = segment_spike_times[s_i]
             segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
             for n_i in taste_select_neur:
