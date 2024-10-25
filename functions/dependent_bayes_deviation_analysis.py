@@ -154,20 +154,22 @@ class run_deviation_dependent_bayes():
         if os.path.isdir(all_neur_dir) == False:
             os.mkdir(all_neur_dir)
             
-        taste_select_neur = np.ones(np.shape(self.pop_taste_cp_raster_inds))
+        taste_select_neur = np.ones(np.shape(self.discrim_neur))
         self.taste_select_neur = taste_select_neur
         
         
-        decode_dir = self.all_neur_dir + 'GMM_Decoding/'
+        decode_dir = all_neur_dir + 'GMM_Decoding/'
         if os.path.isdir(decode_dir) == False:
             os.mkdir(decode_dir)
         self.decode_dir = decode_dir
-        ddf.decode_epochs(self.tastant_fr_dist_pop, self.segment_spike_times,
-                          self.post_taste_dt, self.e_skip_dt, self.e_len_dt,
-                          self.dig_in_names, self.segment_times, self.segment_names,
-                          self.start_dig_in_times, self.taste_num_deliv, self.select_neur,
-                          self.max_hz_pop, decode_dir, self.neuron_count_thresh,
-                          self.trial_start_frac, self.epochs_to_analyze, self.segments_to_analyze)
+        
+        ddf.decode_deviations_epochs(self.tastant_fr_dist_pop, self.segment_spike_times,
+                                     self.dig_in_names, self.segment_times, 
+                                     self.segment_names, self.start_dig_in_times, 
+                                     self.taste_num_deliv, self.segment_dev_times,
+                                     self.segment_dev_fr_vecs, self.taste_select_neur, 
+                                     self.bin_dt, self.decode_dir, False, 
+                                     self.epochs_to_analyze, self.segments_to_analyze)
 
         self.plot_decoded_data()
 
@@ -181,40 +183,40 @@ class run_deviation_dependent_bayes():
         taste_select_neur = self.discrim_neur
         self.taste_select_neur = taste_select_neur
 
-        ddf.decode_epochs(self.tastant_fr_dist_pop, self.segment_spike_times,
-                          self.post_taste_dt, self.e_skip_dt, self.e_len_dt,
-                          self.dig_in_names, self.segment_times, self.segment_names,
-                          self.start_dig_in_times, self.taste_num_deliv, self.select_neur,
-                          self.max_hz_pop, decode_dir, self.neuron_count_thresh,
-                          self.trial_start_frac, self.epochs_to_analyze, self.segments_to_analyze)
+        ddf.decode_deviations_epochs(self.tastant_fr_dist_pop, self.segment_spike_times,
+                                     self.dig_in_names, self.segment_times, 
+                                     self.segment_names, self.start_dig_in_times, 
+                                     self.taste_num_deliv, self.segment_dev_times,
+                                     self.segment_dev_fr_vecs, self.taste_select_neur, 
+                                     self.bin_dt, self.decode_dir, False, 
+                                     self.epochs_to_analyze, self.segments_to_analyze)
+
+    def decode_all_neurons_zscore(self,):
+        print("\tDecoding all neurons")
+        all_neur_z_dir = self.bayes_dir + 'All_Neurons_Z_Scored/'
+        if os.path.isdir(all_neur_z_dir) == False:
+            os.mkdir(all_neur_z_dir)
+            
+        taste_select_neur = np.ones(np.shape(self.discrim_neur))
+        self.taste_select_neur = taste_select_neur
+        
+        
+        decode_dir = all_neur_z_dir + 'GMM_Decoding/'
+        if os.path.isdir(decode_dir) == False:
+            os.mkdir(decode_dir)
+        self.decode_dir = decode_dir
+        
+        ddf.decode_deviations_epochs(self.tastant_fr_dist_z_pop, self.segment_spike_times,
+                                     self.dig_in_names, self.segment_times, 
+                                     self.segment_names, self.start_dig_in_times, 
+                                     self.taste_num_deliv, self.segment_dev_times,
+                                     self.segment_dev_fr_vecs, self.taste_select_neur, 
+                                     self.bin_dt, self.decode_dir, False, 
+                                     self.epochs_to_analyze, self.segments_to_analyze)
+
+        self.plot_decoded_data()
+
 
     def plot_decoded_data(self,):
         print("\t\tPlotting Decoded Results")
-        df.plot_decoded(self.tastant_fr_dist_pop, self.num_tastes, self.num_neur,
-                        self.num_cp, self.segment_spike_times, self.tastant_spike_times,
-                        self.start_dig_in_times, self.end_dig_in_times, self.post_taste_dt,
-                        self.pre_taste_dt, self.pop_taste_cp_raster_inds, self.bin_dt, self.dig_in_names,
-                        self.segment_times, self.segment_names, self.taste_num_deliv,
-                        self.taste_select_neur, self.decode_dir, self.max_decode, self.max_hz_pop,
-                        self.seg_stat_bin, self.neuron_count_thresh, self.trial_start_frac,
-                        self.epochs_to_analyze, self.segments_to_analyze, self.decode_prob_cutoff)
-
-        print("\t\tPlotting Results as a Function of Average Decoding Probability")
-        df.plot_decoded_func_p(self.tastant_fr_dist_pop, self.num_tastes, self.num_neur,
-                               self.num_cp, self.segment_spike_times, self.tastant_spike_times,
-                               self.start_dig_in_times, self.end_dig_in_times, self.post_taste_dt,
-                               self.pop_taste_cp_raster_inds, self.e_skip_dt, self.e_len_dt,
-                               self.dig_in_names, self.segment_times, self.segment_names,
-                               self.taste_num_deliv, self.taste_select_neur, self.decode_dir,
-                               self.max_decode, self.max_hz_pop, self.seg_stat_bin,
-                               self.epochs_to_analyze, self.segments_to_analyze)
-
-        print("Plotting Results as a Function of Co-Active Neurons")
-        df.plot_decoded_func_n(self.tastant_fr_dist_pop, self.num_tastes, self.num_neur,
-                               self.num_cp, self.segment_spike_times, self.tastant_spike_times,
-                               self.start_dig_in_times, self.end_dig_in_times, self.post_taste_dt,
-                               self.pop_taste_cp_raster_inds, self.e_skip_dt, self.e_len_dt,
-                               self.dig_in_names, self.segment_times, self.segment_names,
-                               self.taste_num_deliv, self.taste_select_neur, self.decode_dir,
-                               self.max_decode, self.max_hz_pop, self.seg_stat_bin,
-                               self.epochs_to_analyze, self.segments_to_analyze)
+        

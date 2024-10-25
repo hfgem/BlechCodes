@@ -7,6 +7,12 @@ Created on Thu Oct 17 10:25:40 2024
 
 This file is dedicated to plotting functions for sliding bin decoded replay events.
 """
+    
+import os
+import tqdm
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import colormaps, cm
 
 def plot_decoded(fr_dist, num_tastes, num_neur, segment_spike_times, tastant_spike_times,
                  start_dig_in_times, end_dig_in_times, post_taste_dt, pre_taste_dt,
@@ -576,7 +582,7 @@ def plot_decoded(fr_dist, num_tastes, num_neur, segment_spike_times, tastant_spi
                             ax[3, 1].set_title('Avg. Taste Resp. FR Z-Scored')
                             # Decoded Firing Rates x Average Firing Rates
                             max_lim = np.max(
-                                [np.max(d_fr_vec_z), np.max(taste_fr_vecs_mean)])
+                                [np.max(d_fr_vec), np.max(taste_fr_vecs_mean)])
                             ax[4, 0].plot([0, max_lim], [0, max_lim],
                                           alpha=0.5, linestyle='dashed')
                             ax[4, 0].scatter(taste_fr_vecs_mean, d_fr_vec)

@@ -653,25 +653,33 @@ def decode_deviations_epochs(tastant_fr_dist, segment_spike_times, dig_in_names,
                     if z_score == True:
                         pre_dev_fr = (pre_dev_fr - mean_fr)/std_fr
                     pre_dev_fr_mat.append(list(pre_dev_fr))
+                pre_dev_fr_mat = np.array(pre_dev_fr_mat)
                 
                 #Pull post-dev bin frs
                 post_dev_fr_mat = []
                 for dev_i in range(num_dev):
                     post_dev_start = seg_dev_times[1,dev_i]
-                    post_dev_end = np.min(pre_dev_end+dev_buffer,seg_len)
+                    post_dev_end = np.min([pre_dev_end+dev_buffer,seg_len])
                     post_dev_len = post_dev_end - post_dev_start
                     post_dev_bin = segment_spike_times_s_i_bin[:,post_dev_start:post_dev_end]
                     post_dev_fr = np.sum(post_dev_bin,1)/(post_dev_len/1000)
                     if z_score == True:
                         post_dev_fr = (post_dev_fr - mean_fr)/std_fr
                     post_dev_fr_mat.append(list(post_dev_fr))
+                post_dev_fr_mat = np.array(post_dev_fr_mat)
                 
                 #Converting to list for parallel processing
                 if np.min(true_taste_train_data) >= 0:    
                     dev_fr_pca = pca_reduce.transform(seg_dev_fr_mat.T)
                     list_dev_fr = list(dev_fr_pca)
+                    pre_dev_fr_pca = pca_reduce.transform(pre_dev_fr_mat)
+                    list_pre_dev_fr = list(pre_dev_fr_pca)
+                    post_dev_fr_pca = pca_reduce.transform(post_dev_fr_mat)
+                    list_post_dev_fr = list(post_dev_fr_pca)
                 else:
                     list_dev_fr = list(seg_dev_fr_mat.T)
+                    list_pre_dev_fr = list(pre_dev_fr_mat)
+                    list_post_dev_fr = list(post_dev_fr_mat)
                 del seg_dev_fr_mat
                 
                 # Pass inputs to parallel computation on probabilities
@@ -684,14 +692,14 @@ def decode_deviations_epochs(tastant_fr_dist, segment_spike_times, dig_in_names,
                     dp.segment_taste_decode_dependent_parallelized, inputs)
                 pool.close()
                 #Pre-Deviation Bins
-                inputs = zip(pre_dev_fr_mat, itertools.repeat(num_tastes),
+                inputs = zip(list_pre_dev_fr, itertools.repeat(num_tastes),
                               itertools.repeat(all_taste_gmm), itertools.repeat(p_taste_train_counts))
                 pool = Pool(4)
                 pre_dev_decode_prob = pool.map(
                     dp.segment_taste_decode_dependent_parallelized, inputs)
                 pool.close()
                 #Post-Deviation Bins
-                inputs = zip(post_dev_fr_mat, itertools.repeat(num_tastes),
+                inputs = zip(list_post_dev_fr, itertools.repeat(num_tastes),
                               itertools.repeat(all_taste_gmm), itertools.repeat(p_taste_train_counts))
                 pool = Pool(4)
                 post_dev_decode_prob = pool.map(
