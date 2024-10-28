@@ -151,17 +151,31 @@ if os.path.isdir(all_neur_dir) == False:
 
 #%% Decoder tuning support
 
-dt.test_decoder_params(dig_in_names, start_dig_in_times, num_neur, tastant_spike_times,
-                        tastant_fr_dist_pop, pop_taste_cp_raster_inds, pre_taste_dt, post_taste_dt,
-                        epochs_to_analyze, select_neur, e_skip_dt, taste_e_len_dt, 
-                        max_hz_pop, main_decode_dir)
+# dt.test_decoder_params(dig_in_names, start_dig_in_times, num_neur, tastant_spike_times,
+#                         tastant_fr_dist_pop, pop_taste_cp_raster_inds, pre_taste_dt, post_taste_dt,
+#                         epochs_to_analyze, select_neur, e_skip_dt, taste_e_len_dt, 
+#                         max_hz_pop, main_decode_dir)
 
-# tastant_fr_dist = tastant_fr_dist_pop
-# cp_raster_inds = pop_taste_cp_raster_inds
-# taste_select_neur = select_neur
-# max_hz = max_hz_pop
-# save_dir = main_decode_dir
-# e_len_dt = taste_e_len_dt
+tastant_fr_dist = tastant_fr_dist_pop
+cp_raster_inds = pop_taste_cp_raster_inds
+taste_select_neur = np.ones(np.shape(discrim_neur))
+max_hz = max_hz_pop
+save_dir = main_decode_dir
+e_len_dt = taste_e_len_dt
+
+# Get trial indices for train/test sets
+num_tastes = len(tastant_spike_times)
+all_trial_inds = []
+for t_i in range(num_tastes):
+    taste_trials = len(tastant_spike_times[t_i])
+    all_trial_inds.append(list(np.arange(taste_trials)))
+
+del t_i, taste_trials
+
+dt.multistep_epoch_decoder(num_neur, start_dig_in_times, tastant_fr_dist, 
+                all_trial_inds, tastant_spike_times, cp_raster_inds,
+                pre_taste_dt, e_len_dt, e_skip_dt, dig_in_names,
+                max_hz, save_dir, epochs_to_analyze)
 
 #%% Decoder pipeline support
 
