@@ -1462,7 +1462,8 @@ def multistep_epoch_decoder(num_neur, start_dig_in_times, tastant_fr_dist,
             for e_i in range(len(by_epoch_all_taste_train_data)):
                 all_taste_train_data = by_epoch_all_taste_train_data[e_i]
                 all_taste_gmm = dict()
-                f_taste_pca, ax_taste_pca = plt.subplots(ncols=3)
+                if l_o_ind == 0:
+                    f_taste_pca, ax_taste_pca = plt.subplots(ncols=3)
                 for t_i in range(len(all_taste_train_data)):
                     taste_train_data = np.array(all_taste_train_data[t_i])
                     if need_pca == 1:
@@ -1471,28 +1472,30 @@ def multistep_epoch_decoder(num_neur, start_dig_in_times, tastant_fr_dist,
                     else:
                         transformed_data = taste_train_data
                     #Plot
-                    ax_taste_pca[0].scatter(transformed_data[:,0],transformed_data[:,1],\
-                                            alpha=0.3, label=dig_in_names[t_i])
-                    ax_taste_pca[0].legend()
-                    ax_taste_pca[0].set_title('PCA 0 x 1')
-                    ax_taste_pca[1].scatter(transformed_data[:,1],transformed_data[:,2],\
-                                            alpha=0.3, label=dig_in_names[t_i])
-                    ax_taste_pca[1].legend()
-                    ax_taste_pca[1].set_title('PCA 1 x 2')
-                    ax_taste_pca[2].scatter(transformed_data[:,0],transformed_data[:,2],\
-                                            alpha=0.3, label=dig_in_names[t_i])
-                    ax_taste_pca[2].legend()
-                    ax_taste_pca[2].set_title('PCA 0 x 2')
+                    if l_o_ind == 0:
+                        ax_taste_pca[0].scatter(transformed_data[:,0],transformed_data[:,1],\
+                                                alpha=0.3, label=dig_in_names[t_i])
+                        ax_taste_pca[0].legend()
+                        ax_taste_pca[0].set_title('PCA 0 x 1')
+                        ax_taste_pca[1].scatter(transformed_data[:,1],transformed_data[:,2],\
+                                                alpha=0.3, label=dig_in_names[t_i])
+                        ax_taste_pca[1].legend()
+                        ax_taste_pca[1].set_title('PCA 1 x 2')
+                        ax_taste_pca[2].scatter(transformed_data[:,0],transformed_data[:,2],\
+                                                alpha=0.3, label=dig_in_names[t_i])
+                        ax_taste_pca[2].legend()
+                        ax_taste_pca[2].set_title('PCA 0 x 2')
                     #Fit GMM
                     gm = gmm(n_components=1, n_init=10).fit(
                         transformed_data)
                     all_taste_gmm[t_i] = gm
                 by_epoch_taste_gmm[e_i] = all_taste_gmm
-                plt.suptitle('Epoch ' + str(e_i))
-                plt.tight_layout()
-                f_taste_pca.savefig(os.path.join(decoder_save_dir,'epoch_' + str(e_i) + '_pca.png'))
-                f_taste_pca.savefig(os.path.join(decoder_save_dir,'epoch_' + str(e_i) + '_pca.svg'))
-                plt.close(f_taste_pca)
+                if l_o_ind == 0:
+                    plt.suptitle('Epoch ' + str(e_i))
+                    plt.tight_layout()
+                    f_taste_pca.savefig(os.path.join(decoder_save_dir,'epoch_' + str(e_i) + '_pca.png'))
+                    f_taste_pca.savefig(os.path.join(decoder_save_dir,'epoch_' + str(e_i) + '_pca.svg'))
+                    plt.close(f_taste_pca)
             
             # Grab trial firing rate data
             for e_ind, e_i in enumerate(epochs_to_analyze):
@@ -1551,6 +1554,16 @@ def multistep_epoch_decoder(num_neur, start_dig_in_times, tastant_fr_dist,
                  
                 #    taste decoding
                 if epoch_ind < len(epochs_to_analyze): #There is a true epoch selected and not "none"
+                    if need_pca == 1: #If it's not z-scored PCA to whiten
+                         # PCA transform fr
+                        try:
+                            tb_fr_pca = by_epoch_pca_reducers[epoch_ind].transform(tb_fr.T)
+                        except:
+                            tb_fr_pca = by_epoch_pca_reducers[epoch_ind].transform(tb_fr)
+                        list_tb_fr = list(tb_fr_pca)
+                    else: #If z-scored, train directly on data
+                        list_tb_fr = list(tb_fr.T)
+                
                     inputs = zip(list_tb_fr, itertools.repeat(num_tastes),
                                  itertools.repeat(by_epoch_taste_gmm[epoch_ind]), itertools.repeat(by_epoch_all_taste_prob[epoch_ind]))
                     pool = Pool(4)
@@ -1661,8 +1674,8 @@ def multistep_taste_decoder(num_neur, start_dig_in_times, tastant_fr_dist,
     num_tastes = len(start_dig_in_times)
     num_cp = len(tastant_fr_dist[0][0])
     p_taste = np.ones(num_tastes)/num_tastes  # P(taste)
-    cmap = colormaps['jet']
-    taste_colors = cmap(np.linspace(0, 1, num_tastes))
+    cmap = colormaps['cividis']
+    epoch_colors = cmap(np.linspace(0, 1, num_tastes))
     half_decode_bin_dt = np.ceil(e_len_dt/2).astype('int')
 
     # Jackknife decoding total number of trials
@@ -1691,4 +1704,347 @@ def multistep_taste_decoder(num_neur, start_dig_in_times, tastant_fr_dist,
     if not os.path.isdir(trial_decodes):
         os.mkdir(trial_decodes)
         
-    
+    try:  # Try to import the decoding results
+        print("Import statements here.")
+        
+        trial_epoch_success_storage = []
+        with open(os.path.join(decoder_save_dir, 'trial_epoch_success_storage.csv'), newline='') as successtrialfile:
+            filereader = csv.reader(
+                successtrialfile, delimiter=',', quotechar='|')
+            for row in filereader:
+                trial_epoch_success_storage.append(np.array(row).astype('float'))
+        trial_epoch_success_storage = np.array(trial_epoch_success_storage).squeeze()
+        
+        trial_taste_success_storage = []
+        with open(os.path.join(decoder_save_dir, 'trial_taste_success_storage.csv'), newline='') as successtrialfile:
+            filereader = csv.reader(
+                successtrialfile, delimiter=',', quotechar='|')
+            for row in filereader:
+                trial_taste_success_storage.append(np.array(row).astype('float'))
+        trial_taste_success_storage = np.array(trial_taste_success_storage).squeeze()
+        
+        #Print success
+        overall_taste_success = np.sum(trial_taste_success_storage)/(total_trials*num_cp)
+        by_epoch_taste_success = np.sum(trial_taste_success_storage,0)/(total_trials)
+        print("\nOverall success in taste decoding:")
+        print(overall_taste_success)
+        print("By-epoch success in taste decoding:")
+        print(by_epoch_taste_success)
+        
+        overall_epoch_success = np.sum(trial_epoch_success_storage)/(total_trials*num_cp)
+        by_epoch_epoch_success = np.sum(trial_epoch_success_storage,0)/(total_trials)
+        print("\nOverall success in epoch decoding:")
+        print(overall_epoch_success)
+        print("By-epoch success in epoch decoding:")
+        print(by_epoch_epoch_success)
+        
+    except: # Run decoding
+        #Probabilities of decoding for each trial of which epoch it came from
+        #following determination of a taste
+        trial_epoch_decode_storage = np.zeros((total_trials, num_cp, num_cp))
+        #Probabilities of decoding for each trial which taste it was
+        trial_taste_decode_storage = np.zeros((total_trials, num_cp, num_tastes))
+        #Binary storage of whether the taste was correctly decoded from that trial's epoch of activity
+        trial_taste_success_storage = np.zeros((total_trials, num_cp))
+        #Binary storage of whether the epoch was correctly decoded following taste designation
+        trial_epoch_success_storage = np.zeros((total_trials, num_cp))
+        
+        print('\t\t\t\tPerforming LOO Decoding')
+        # Which trial is being left out for decoding
+        for l_o_ind in tqdm.tqdm(total_trial_inds):
+            l_o_taste_ind = all_trial_taste_inds[l_o_ind].astype(
+                'int')  # Taste of left out trial
+            l_o_delivery_ind = all_trial_delivery_inds[l_o_ind].astype(
+                'int')  # Delivery index of left out trial
+            
+            #Collect firing rate data for GMM Fits
+            true_taste_train_data = []
+            true_taste_train_data_labels = []
+            none_train_data = []
+            by_taste_all_epoch_train_data = []
+            by_taste_all_epoch_prob = []
+            for t_i in range(num_tastes):
+                train_true_taste_data = []
+                train_taste_epoch_data = []
+                train_taste_epoch_counts = []
+                for e_i in epochs_to_analyze:
+                    train_epoch_data = []
+                    for d_i in all_trial_inds[t_i]:
+                        if (d_i == l_o_delivery_ind) and (t_i == l_o_taste_ind):
+                            # This is the Leave-One-Out trial so do nothing
+                            train_epoch_data.extend([])
+                        else:
+                            if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
+                                train_epoch_data.extend(
+                                    list(tastant_fr_dist[t_i][d_i][e_i].T))
+                                if t_i < num_tastes-1:
+                                    train_true_taste_data.extend(
+                                        list(tastant_fr_dist[t_i][d_i][e_i].T))
+                                else:
+                                    none_train_data.extend(
+                                        list(tastant_fr_dist[t_i][d_i][e_i].T))
+                            else:
+                                train_epoch_data.extend(
+                                    list(tastant_fr_dist[t_i][d_i][e_i]))
+                                if t_i < num_tastes-1:
+                                    train_true_taste_data.extend(
+                                        list(tastant_fr_dist[t_i][d_i][e_i]))
+                                else:
+                                    none_train_data.extend(
+                                        list(tastant_fr_dist[t_i][d_i][e_i]))
+                    train_taste_epoch_data.append(train_epoch_data)
+                    train_taste_epoch_counts.extend([len(train_epoch_data)])
+                true_taste_train_data.extend(train_true_taste_data)
+                true_taste_train_data_labels.extend(list(t_i*np.ones(len(train_true_taste_data))))
+                by_taste_all_epoch_train_data.append(train_taste_epoch_data)
+                by_taste_all_epoch_prob.append(np.array(train_taste_epoch_counts)/np.sum(np.array(train_taste_epoch_counts)))
+            
+            #combine none and true taste for gmm fitting and predictions
+            all_taste_train_data = []
+            all_taste_train_labels = []
+            for t_i in range(num_tastes-1):
+                true_taste_inds = np.where(np.array(true_taste_train_data_labels) == t_i)[0]
+                all_taste_train_data.append(np.array(true_taste_train_data)[true_taste_inds])
+            all_taste_train_data.append(np.array(none_train_data))
+            count_all_taste = [len(all_taste_train_data[t_i]) for t_i in range(num_tastes)]
+            p_all_taste = np.array(count_all_taste)/np.sum(np.array(count_all_taste))
+            
+            #Run PCA transform only on non-z-scored data
+            need_pca = 0
+            by_taste_pca_reducers = dict()
+            if np.min(np.array(true_taste_train_data)) >= 0:
+                need_pca = 1
+                #Taste-Based PCA
+                taste_pca = PCA()
+                taste_pca.fit(np.array(true_taste_train_data).T)
+                exp_var = taste_pca.explained_variance_ratio_
+                num_components = np.where(np.cumsum(exp_var) >= 0.9)[0][0]
+                if num_components == 0:
+                    num_components = 3
+                pca_reduce_taste = PCA(num_components)
+                pca_reduce_taste.fit(np.array(true_taste_train_data))
+                
+                #Within taste epoch-based PCA
+                for t_i in range(num_tastes-1):
+                    epoch_train_data_concat = []
+                    for e_i in range(num_cp):
+                        epoch_train_data_concat.extend(by_taste_all_epoch_train_data[t_i][e_i])
+                    epoch_taste_pca = PCA()
+                    epoch_taste_pca.fit(np.array(epoch_train_data_concat).T)
+                    exp_var = epoch_taste_pca.explained_variance_ratio_
+                    num_components = np.where(np.cumsum(exp_var) >= 0.9)[0][0]
+                    if num_components == 0:
+                        num_components = 3
+                    pca_reduce = PCA(num_components)
+                    pca_reduce.fit(np.array(epoch_train_data_concat))
+                    by_taste_pca_reducers[t_i] = pca_reduce
+            
+            #Run GMM fits to distributions of each taste
+            #Also run GMM fits to epoch distributions within each taste except none
+            all_taste_gmm = dict()
+            by_taste_epoch_gmm = dict()
+            if l_o_ind == 0:
+                f_taste_pca, ax_taste_pca = plt.subplots(ncols = 3)
+            for t_i in range(num_tastes):
+                taste_train_data = np.array(all_taste_train_data[t_i])
+                if need_pca == 1:
+                    transformed_data = pca_reduce_taste.transform(taste_train_data)
+                else:
+                    transformed_data = taste_train_data
+                #Plot transformed data
+                if l_o_ind == 0:
+                    taste_label = dig_in_names[t_i]
+                    ax_taste_pca[0].scatter(transformed_data[:,0],transformed_data[:,1],\
+                                            alpha=0.3, label=taste_label)
+                    ax_taste_pca[0].legend()
+                    ax_taste_pca[0].set_title('PCA 0 x 1')
+                    ax_taste_pca[1].scatter(transformed_data[:,1],transformed_data[:,2],\
+                                            alpha=0.3, label=taste_label)
+                    ax_taste_pca[1].legend()
+                    ax_taste_pca[1].set_title('PCA 1 x 2')
+                    ax_taste_pca[2].scatter(transformed_data[:,0],transformed_data[:,2],\
+                                            alpha=0.3, label=taste_label)
+                    ax_taste_pca[2].legend()
+                    ax_taste_pca[2].set_title('PCA 0 x 2')
+                #Fit GMM
+                gm = gmm(n_components=1, n_init=10).fit(
+                    transformed_data)
+                all_taste_gmm[t_i] = gm
+                
+                if t_i < num_tastes-1:
+                    by_taste_epoch_gmm[t_i] = dict()
+                    if l_o_ind == 0:
+                        f_epoch_pca, ax_epoch_pca = plt.subplots(ncols=3)
+                    for e_i in range(num_cp):
+                        taste_epoch_train_data = np.array(by_taste_all_epoch_train_data[t_i][e_i])
+                        if need_pca == 1:
+                            transformed_data = by_taste_pca_reducers[t_i].transform(taste_epoch_train_data)
+                        else:
+                            transformed_data = taste_epoch_train_data
+                        if l_o_ind == 0:
+                            epoch_label = "Epoch " + str(e_i)
+                            ax_epoch_pca[0].scatter(transformed_data[:,0],transformed_data[:,1],\
+                                                    alpha=0.3, label=epoch_label)
+                            ax_epoch_pca[0].legend()
+                            ax_epoch_pca[0].set_title('PCA 0 x 1')
+                            ax_epoch_pca[1].scatter(transformed_data[:,1],transformed_data[:,2],\
+                                                    alpha=0.3, label=epoch_label)
+                            ax_epoch_pca[1].legend()
+                            ax_epoch_pca[1].set_title('PCA 1 x 2')
+                            ax_epoch_pca[2].scatter(transformed_data[:,0],transformed_data[:,2],\
+                                                    alpha=0.3, label=epoch_label)
+                            ax_epoch_pca[2].legend()
+                            ax_epoch_pca[2].set_title('PCA 0 x 2')
+                        #Fit GMM
+                        gm = gmm(n_components=1, n_init=10).fit(
+                            transformed_data)
+                        by_taste_epoch_gmm[t_i][e_i] = gm
+                    if l_o_ind == 0:
+                        plt.suptitle(dig_in_names[t_i])
+                        plt.tight_layout()
+                        f_epoch_pca.savefig(os.path.join(decoder_save_dir,dig_in_names[t_i] + '_pca.png'))
+                        f_epoch_pca.savefig(os.path.join(decoder_save_dir,dig_in_names[t_i] + '_pca.svg'))
+                        plt.close(f_epoch_pca)
+                        
+            if l_o_ind == 0:
+                plt.tight_layout()
+                f_taste_pca.savefig(os.path.join(decoder_save_dir,'taste_pca.png'))
+                f_taste_pca.savefig(os.path.join(decoder_save_dir,'taste_pca.svg'))
+                plt.close(f_taste_pca)
+                
+            #Grab trial firing rate data
+            for e_ind, e_i in enumerate(epochs_to_analyze):
+                t_cp_rast = cp_raster_inds[l_o_taste_ind]
+                taste_start_dig_in = start_dig_in_times[l_o_taste_ind]
+                deliv_cp = t_cp_rast[l_o_delivery_ind, :] - pre_taste_dt
+                sdi = np.ceil(
+                    taste_start_dig_in[l_o_delivery_ind] + deliv_cp[e_i]).astype('int')
+                edi = np.ceil(
+                    taste_start_dig_in[l_o_delivery_ind] + deliv_cp[e_i+1]).astype('int')
+                data_len = np.ceil(edi - sdi).astype('int')
+                new_time_bins = np.arange(half_decode_bin_dt, data_len-half_decode_bin_dt, e_skip_dt)
+                # ___Grab neuron firing rates in sliding bins
+                td_i_bin = np.zeros((num_neur, data_len+1))
+                for n_i in range(num_neur):
+                    n_i_spike_times = np.array(
+                        tastant_spike_times[l_o_taste_ind][l_o_delivery_ind][n_i] - sdi).astype('int')
+                    keep_spike_times = n_i_spike_times[np.where(
+                        (0 <= n_i_spike_times)*(data_len >= n_i_spike_times))[0]]
+                    td_i_bin[n_i, keep_spike_times] = 1
+                if len(new_time_bins) > 1:
+                    # Calculate the firing rate vectors for these bins
+                    tb_fr = np.zeros((num_neur, len(new_time_bins)))
+                    for tb_i, tb in enumerate(new_time_bins):
+                        tb_fr[:, tb_i] = np.sum(
+                            td_i_bin[:, tb-half_decode_bin_dt:tb+half_decode_bin_dt], 1)/(int(half_decode_bin_dt*2)/1000)
+                else:
+                    tb_fr = np.expand_dims(np.sum(td_i_bin,1)/((data_len+1)/1000),1)
+                    
+                if need_pca == 1: #If it's not z-scored PCA to whiten
+                    try:
+                        tb_fr_pca = pca_reduce_taste.transform(tb_fr.T)
+                    except:
+                        tb_fr_pca = pca_reduce_taste.transform(tb_fr)
+                    list_tb_fr = list(tb_fr_pca)
+                else:
+                    list_tb_fr = list(tb_fr.T)
+                
+                #Run decoders in order of epoch first and then taste
+                #    taste decoding
+                inputs = zip(list_tb_fr, itertools.repeat(len(all_taste_gmm)),
+                             itertools.repeat(all_taste_gmm), itertools.repeat(p_all_taste))
+                pool = Pool(4)
+                tb_taste_decode_prob = pool.map(
+                    dp.segment_taste_decode_dependent_parallelized, inputs)
+                pool.close()
+                tb_taste_decode_array = np.squeeze(np.array(tb_taste_decode_prob)).T
+                trial_taste_decode_storage[l_o_ind,e_ind,:] = tb_taste_decode_array
+                
+                taste_ind = np.argmax(tb_taste_decode_array)
+                if taste_ind < num_tastes-1: #Taste condition
+                    if taste_ind == l_o_taste_ind: #Correctly decoded?
+                        trial_taste_success_storage[l_o_ind,e_ind] = 1
+                    
+                    if need_pca == 1: #If it's not z-scored PCA to whiten
+                        try:
+                            tb_fr_pca = by_taste_pca_reducers[taste_ind].transform(tb_fr.T)
+                        except:
+                            tb_fr_pca = by_taste_pca_reducers[taste_ind].transform(tb_fr)
+                        list_tb_fr = list(tb_fr_pca)
+                    else:
+                        list_tb_fr = list(tb_fr.T)
+                    
+                    #Now decode epoch
+                    inputs = zip(list_tb_fr, itertools.repeat(num_cp),
+                                 itertools.repeat(by_taste_epoch_gmm[taste_ind]), itertools.repeat(by_taste_all_epoch_prob[taste_ind]))
+                    pool = Pool(4)
+                    tb_epoch_decode_prob = pool.map(
+                        dp.segment_taste_decode_dependent_parallelized, inputs)
+                    pool.close()
+                    tb_epoch_decode_array = np.squeeze(np.array(tb_epoch_decode_prob)).T
+                    trial_epoch_decode_storage[l_o_ind,e_ind,:] = tb_epoch_decode_array
+                    
+                    epoch_ind = np.argmax(tb_epoch_decode_array)
+                    if epoch_ind == e_ind:
+                        trial_epoch_success_storage[l_o_ind,e_ind] = 1
+                    
+                elif taste_ind == num_tastes-1: #None condition
+                    if l_o_taste_ind == num_tastes-1:
+                        trial_taste_success_storage[l_o_ind,e_ind] = 1
+                        trial_epoch_success_storage[l_o_ind,e_ind] = 1
+                    epoch_ind = -1
+                    tb_epoch_decode_array = np.ones(num_cp)/num_cp #Basically doesn't matter
+                    
+                #Plot individual trial decoding results
+                f_loo = plt.figure(figsize=(5, 5))
+                plt.suptitle(
+                    'Taste ' + dig_in_names[l_o_taste_ind] + ' Delivery ' + str(l_o_delivery_ind) + ' Epoch ' + str(e_ind) +\
+                        '\nDecoded Taste: ' + dig_in_names[taste_ind] + ' Decoded Epoch: ' + str(epoch_ind))
+                if len(np.shape(tb_epoch_decode_array)) > 1:
+                    for e_i_plot in range(num_cp):
+                        plt.plot(new_time_bins+deliv_cp[e_i], tb_epoch_decode_array[e_i_plot, :], \
+                                 label="Epoch " + str(e_i_plot), color=epoch_colors[e_i_plot])
+                        plt.fill_between(
+                            new_time_bins+deliv_cp[e_i], tb_epoch_decode_array[e_i_plot, :], \
+                                color=epoch_colors[e_i_plot], alpha=0.5, label='_')
+                    plt.xlabel('Time (ms)')
+                else:
+                    for e_i_plot in range(num_cp):
+                        plt.axhline(tb_epoch_decode_array[e_i_plot],
+                                 label="Epoch " + str(e_i_plot), color=epoch_colors[e_i_plot])
+                        plt.fill_between([0,1],[0,0],[tb_epoch_decode_array[e_i_plot],tb_epoch_decode_array[e_i_plot]],
+                                         color=epoch_colors[e_i_plot],alpha=0.5,label='_')
+                plt.ylabel('P(Epoch)')
+                plt.ylim([-0.1, 1.1])
+                plt.legend(loc='upper right')
+                plt.tight_layout()
+                f_loo.savefig(os.path.join(trial_decodes, 'decoding_results_taste_' +
+                              str(l_o_taste_ind) + '_delivery_' + str(l_o_delivery_ind) + '_epoch_' + str(e_i) + '.png'))
+                f_loo.savefig(os.path.join(trial_decodes, 'decoding_results_taste_' +
+                              str(l_o_taste_ind) + '_delivery_' + str(l_o_delivery_ind) + '_epoch_' + str(e_i) + '.svg'))
+                plt.close(f_loo)
+        
+        #Save results
+        np.save(os.path.join(decoder_save_dir,'trial_epoch_decode_storage.npy'),trial_epoch_decode_storage,allow_pickle=True)
+        np.save(os.path.join(decoder_save_dir,'trial_taste_decode_storage.npy'),trial_taste_decode_storage,allow_pickle=True)
+        np.savetxt(os.path.join(decoder_save_dir,
+                   'trial_taste_success_storage.csv'), trial_taste_success_storage, delimiter=',')
+        np.savetxt(os.path.join(decoder_save_dir,
+                   'trial_epoch_success_storage.csv'), trial_epoch_success_storage, delimiter=',')
+        
+        
+        #Print success
+        overall_taste_success = np.sum(trial_taste_success_storage)/(total_trials*num_cp)
+        by_epoch_taste_success = np.sum(trial_taste_success_storage,0)/(total_trials)
+        print("\nOverall success in taste decoding:")
+        print(overall_taste_success)
+        print("By-epoch success in taste decoding:")
+        print(by_epoch_taste_success)
+        
+        overall_epoch_success = np.sum(trial_epoch_success_storage)/(total_trials*num_cp)
+        by_epoch_epoch_success = np.sum(trial_epoch_success_storage,0)/(total_trials)
+        print("\nOverall success in epoch decoding:")
+        print(overall_epoch_success)
+        print("By-epoch success in epoch decoding:")
+        print(by_epoch_epoch_success)
+                

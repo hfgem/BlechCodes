@@ -177,6 +177,11 @@ dt.multistep_epoch_decoder(num_neur, start_dig_in_times, tastant_fr_dist,
                 pre_taste_dt, e_len_dt, e_skip_dt, dig_in_names,
                 max_hz, save_dir, epochs_to_analyze)
 
+dt.multistep_taste_decoder(num_neur, start_dig_in_times, tastant_fr_dist, 
+                all_trial_inds, tastant_spike_times, cp_raster_inds,
+                pre_taste_dt, e_len_dt, e_skip_dt, dig_in_names,
+                max_hz, save_dir, epochs_to_analyze)
+
 #%% Decoder pipeline support
 
 decode_dir = all_neur_dir + 'GMM_Decoding/'
