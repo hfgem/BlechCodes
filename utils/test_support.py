@@ -163,7 +163,7 @@ max_hz = max_hz_pop
 save_dir = main_decode_dir
 e_len_dt = taste_e_len_dt
 
-# Get trial indices for train/test sets
+# Get trial indices for train/test sets0.8
 num_tastes = len(tastant_spike_times)
 all_trial_inds = []
 for t_i in range(num_tastes):
@@ -172,15 +172,24 @@ for t_i in range(num_tastes):
 
 del t_i, taste_trials
 
-dt.multistep_epoch_decoder(num_neur, start_dig_in_times, tastant_fr_dist, 
+epochs_to_analyze = [1]
+
+# dt.multistep_epoch_decoder(num_neur, start_dig_in_times, tastant_fr_dist, 
+#                 all_trial_inds, tastant_spike_times, cp_raster_inds,
+#                 pre_taste_dt, e_len_dt, e_skip_dt, dig_in_names,
+#                 max_hz, save_dir, epochs_to_analyze)
+
+# dt.multistep_taste_decoder(num_neur, start_dig_in_times, tastant_fr_dist, 
+#                 all_trial_inds, tastant_spike_times, cp_raster_inds,
+#                 pre_taste_dt, e_len_dt, e_skip_dt, dig_in_names,
+#                 max_hz, save_dir, epochs_to_analyze)
+
+dt.taste_which_taste_2_decoder(num_neur, start_dig_in_times, tastant_fr_dist, 
                 all_trial_inds, tastant_spike_times, cp_raster_inds,
                 pre_taste_dt, e_len_dt, e_skip_dt, dig_in_names,
                 max_hz, save_dir, epochs_to_analyze)
 
-dt.multistep_taste_decoder(num_neur, start_dig_in_times, tastant_fr_dist, 
-                all_trial_inds, tastant_spike_times, cp_raster_inds,
-                pre_taste_dt, e_len_dt, e_skip_dt, dig_in_names,
-                max_hz, save_dir, epochs_to_analyze)
+
 
 #%% Decoder pipeline support
 
@@ -265,10 +274,19 @@ if os.path.isdir(decode_dir) == False:
     os.mkdir(decode_dir)
 
 #Normal Decode
-ddf.decode_deviations_epochs(tastant_fr_dist, segment_spike_times, dig_in_names, 
+
+# taste_select_epoch = taste_select_neur
+# save_dir = decode_dir
+# z_score = False
+ddf.decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times, dig_in_names, 
                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
-                  segment_dev_times, segment_dev_fr_vecs, taste_select_neur, bin_dt,
+                  segment_dev_times, segment_dev_fr_vecs, taste_select_neur, bin_dt, 
                   decode_dir, False, epochs_to_analyze, segments_to_analyze)
+
+# ddf.decode_deviations_epochs(tastant_fr_dist, segment_spike_times, dig_in_names, 
+#                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
+#                   segment_dev_times, segment_dev_fr_vecs, taste_select_neur, bin_dt,
+#                   decode_dir, False, epochs_to_analyze, segments_to_analyze)
 
 import functions.plot_dev_decoding_funcs as pddf
 pddf.plot_decoded(num_tastes, num_neur, segment_spike_times, tastant_spike_times,

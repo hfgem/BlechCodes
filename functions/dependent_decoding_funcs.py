@@ -769,3 +769,369 @@ def decode_deviations_epochs(tastant_fr_dist, segment_spike_times, dig_in_names,
             f3.savefig(os.path.join(seg_decode_save_dir,segment_names[s_i] + '_pie.svg'))
             plt.close(f3)
 
+def decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times, dig_in_names, 
+                  segment_times, segment_names, start_dig_in_times, taste_num_deliv,
+                  segment_dev_times, segment_dev_fr_vecs, taste_select_epoch, bin_dt, 
+                  save_dir, z_score = False, epochs_to_analyze=[], segments_to_analyze=[]):
+    """Decode taste from epoch-specific firing rates"""
+    print('\t\tRunning Is-Taste-Which-Taste GMM Decoder')
+    
+    decode_save_dir = os.path.join(save_dir,'Is_Taste_Which_Taste')
+    if not os.path.isdir(decode_save_dir):
+        os.mkdir(decode_save_dir)
+    
+    # Variables
+    num_tastes = len(start_dig_in_times)
+    num_neur = len(segment_spike_times[0])
+    num_cp = len(tastant_fr_dist[0][0])
+    num_segments = len(segment_spike_times)
+    #p_taste = taste_num_deliv/np.sum(taste_num_deliv)  # P(taste)
+    cmap = colormaps['gist_rainbow']
+    taste_colors = cmap(np.linspace(0, 1, num_tastes))
+    cmap = colormaps['seismic']
+    is_taste_colors = cmap(np.linspace(0, 1, 2))
+    dev_buffer = 50
+    
+    if len(epochs_to_analyze) == 0:
+        epochs_to_analyze = np.arange(num_cp)
+    if len(segments_to_analyze) == 0:
+        segments_to_analyze = np.arange(num_segments)
+        
+    #Train decoder
+    true_taste_train_data = [] #For PCA all combined true taste data
+    none_data = []
+    by_taste_train_data = [] #All tastes in separate sub-lists
+    for t_i in range(num_tastes):
+        num_deliveries = len(tastant_fr_dist[t_i])
+        train_taste_data = []
+        for e_i in epochs_to_analyze:
+            for d_i in range(num_deliveries):
+                if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
+                    train_taste_data.extend(
+                        list(tastant_fr_dist[t_i][d_i][e_i].T))
+                else:
+                    train_taste_data.extend(
+                        list(tastant_fr_dist[t_i][d_i][e_i]))
+        if t_i < num_tastes-1:
+            true_taste_train_data.extend(train_taste_data)
+        else:
+            none_data.extend(train_taste_data)
+            neur_max = np.expand_dims(np.max(np.array(train_taste_data),0),1)
+            none_data.extend(list((neur_max*np.random.rand(num_neur,100)).T)) #Fully randomized data
+            none_data.extend(list(((neur_max/10)*np.random.rand(num_neur,100)).T)) #Low frequency randomized data
+            for nd_i in range(10): #Single spike by neuron data
+                none_data.extend(list((np.eye(num_neur)).T))
+        by_taste_train_data.append(train_taste_data)
+    by_taste_counts = np.array([len(by_taste_train_data[t_i]) for t_i in range(num_tastes)])
+    by_taste_prob = by_taste_counts/np.sum(by_taste_counts)
+    by_taste_true_train_data = [by_taste_train_data[t_i] for t_i in range(num_tastes-1)]
+    by_taste_true_counts = np.array([len(by_taste_true_train_data[t_i]) for t_i in range(num_tastes-1)])
+    by_taste_true_prob = by_taste_true_counts/np.sum(by_taste_true_counts)
+        
+    none_v_true_data = []
+    none_v_true_data.append(true_taste_train_data)
+    none_v_true_data.append(none_data)
+    none_v_true_labels = ['Taste','No Taste']
+    none_v_true_counts = np.array([len(none_v_true_data[i]) for i in range(len(none_v_true_data))])
+    none_v_true_prob = none_v_true_counts/np.sum(none_v_true_counts)
+    
+    #Run PCA transform only on non-z-scored data
+    need_pca = 0
+    by_taste_pca_reducers = dict()
+    if np.min(np.array(true_taste_train_data)) >= 0:
+        need_pca = 1
+        #Taste-Based PCA
+        taste_pca = PCA()
+        taste_pca.fit(np.array(true_taste_train_data).T)
+        exp_var = taste_pca.explained_variance_ratio_
+        num_components = np.where(np.cumsum(exp_var) >= 0.9)[0][0]
+        if num_components == 0:
+            num_components = 3
+        pca_reduce_taste = PCA(num_components)
+        pca_reduce_taste.fit(np.array(true_taste_train_data))
+    
+    #Run GMM fits to distributions of taste/no-taste
+    none_v_taste_gmm = dict()
+    for t_i in range(2):
+        taste_train_data = np.array(none_v_true_data[t_i])
+        if need_pca == 1:
+            transformed_data = pca_reduce_taste.transform(taste_train_data)
+        else:
+            transformed_data = taste_train_data
+        #Fit GMM
+        gm = gmm(n_components=1, n_init=10).fit(
+            transformed_data)
+        none_v_taste_gmm[t_i] = gm
+        
+    #Run GMM fits to true taste epoch-combined data
+    just_taste_gmm = dict()
+    for t_i in range(len(by_taste_true_train_data)):
+        taste_train_data = np.array(by_taste_true_train_data[t_i])
+        if need_pca == 1:
+            transformed_data = pca_reduce_taste.transform(taste_train_data)
+        else:
+            transformed_data = taste_train_data
+        #Fit GMM
+        gm = gmm(n_components=1, n_init=10).fit(
+            transformed_data)
+        just_taste_gmm[t_i] = gm
+       
+    # If trial_start_frac > 0 use only trials after that threshold
+    #trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
+    taste_select_neur = np.where(taste_select_epoch[e_i, :] == 1)[0]
+
+    # Segment-by-segment use deviation rasters and times to zoom in and test
+    #	epoch-specific decoding of tastes. Add decoding of 50 ms on either
+    #	side of the deviation event as well for context decoding.
+    for seg_ind, s_i in enumerate(segments_to_analyze):
+        # Create plot save dir
+        seg_decode_save_dir = os.path.join(decode_save_dir,
+            'segment_' + str(s_i) + '/')
+        if not os.path.isdir(seg_decode_save_dir):
+            os.mkdir(seg_decode_save_dir)
+        
+        # Get segment variables
+        seg_start = segment_times[s_i]
+        seg_end = segment_times[s_i+1]
+        seg_len = segment_times[s_i+1] - segment_times[s_i]  # in dt = ms
+        # Binerize Segment Spike Times
+        segment_spike_times_s_i = segment_spike_times[s_i]
+        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in taste_select_neur:
+            n_i_spike_times = np.array(
+                segment_spike_times_s_i[n_i] - seg_start).astype('int')
+            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
+        
+        if z_score == True:
+            # Calculate mean and std of binned segment spikes for z-scoring
+            z_time_bins = np.arange(0,seg_len-bin_dt,bin_dt)
+            seg_fr = np.zeros((num_neur,len(z_time_bins))) #Hz
+            for bdt_i, bdt in enumerate(z_time_bins):
+                seg_fr[:,bdt_i] = np.sum(segment_spike_times_s_i_bin[:,bdt:bdt+bin_dt],1)/(bin_dt/1000)
+            mean_fr = np.nanmean(seg_fr,1)
+            std_fr = np.nanstd(seg_fr,1)
+        
+        # Grab neuron firing rates in sliding bins
+        try:
+            dev_decode_is_taste_array = np.load(
+                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
+                             '_deviations_is_taste.npy'))
+            pre_dev_decode_is_taste_array = np.load(
+                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
+                             '_pre_deviations_is_taste.npy'))
+            post_dev_decode_is_taste_array = np.load(
+                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
+                             '_post_deviations_is_taste.npy'))
+            dev_decode_array = np.load(
+                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
+                             '_deviations_which_taste.npy'))
+            pre_dev_decode_array = np.load(
+                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
+                             '_pre_deviations_which_taste.npy'))
+            post_dev_decode_array = np.load(
+                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
+                             '_post_deviations_which_taste.npy'))   
+                
+            print('\t\t\t\tSegment ' + str(s_i) + ' Previously Decoded')
+        except:
+            print('\t\t\t\tDecoding Segment ' + str(s_i) + ' Deviations')
+            
+            seg_dev_fr_mat = np.array(segment_dev_fr_vecs[seg_ind]).T
+            seg_dev_times = segment_dev_times[seg_ind]
+            _, num_dev = np.shape(seg_dev_times)
+            
+            #Pull pre-dev bin frs
+            pre_dev_fr_mat = []
+            for dev_i in range(num_dev):
+                pre_dev_end = seg_dev_times[0,dev_i]
+                pre_dev_start = np.max(pre_dev_end-dev_buffer,0)
+                pre_dev_len = pre_dev_end - pre_dev_start
+                pre_dev_bin = segment_spike_times_s_i_bin[:,pre_dev_start:pre_dev_end]
+                pre_dev_fr = np.sum(pre_dev_bin,1)/(pre_dev_len/1000)
+                if z_score == True:
+                    pre_dev_fr = (pre_dev_fr - mean_fr)/std_fr
+                pre_dev_fr_mat.append(list(pre_dev_fr))
+            pre_dev_fr_mat = np.array(pre_dev_fr_mat)
+            
+            #Pull post-dev bin frs
+            post_dev_fr_mat = []
+            for dev_i in range(num_dev):
+                post_dev_start = seg_dev_times[1,dev_i]
+                post_dev_end = np.min([pre_dev_end+dev_buffer,seg_len])
+                post_dev_len = post_dev_end - post_dev_start
+                post_dev_bin = segment_spike_times_s_i_bin[:,post_dev_start:post_dev_end]
+                post_dev_fr = np.sum(post_dev_bin,1)/(post_dev_len/1000)
+                if z_score == True:
+                    post_dev_fr = (post_dev_fr - mean_fr)/std_fr
+                post_dev_fr_mat.append(list(post_dev_fr))
+            post_dev_fr_mat = np.array(post_dev_fr_mat)
+            
+            #Converting to list for parallel processing
+            if need_pca == 1:    
+                dev_fr_pca = pca_reduce_taste.transform(seg_dev_fr_mat.T)
+                list_dev_fr = list(dev_fr_pca)
+                pre_dev_fr_pca = pca_reduce_taste.transform(pre_dev_fr_mat)
+                list_pre_dev_fr = list(pre_dev_fr_pca)
+                post_dev_fr_pca = pca_reduce_taste.transform(post_dev_fr_mat)
+                list_post_dev_fr = list(post_dev_fr_pca)
+            else:
+                list_dev_fr = list(seg_dev_fr_mat.T)
+                list_pre_dev_fr = list(pre_dev_fr_mat)
+                list_post_dev_fr = list(post_dev_fr_mat)
+            del seg_dev_fr_mat
+            
+            # Pass inputs to parallel computation on probabilities
+            tic = time.time()
+            #Deviation Bins
+            inputs = zip(list_dev_fr, itertools.repeat(len(none_v_taste_gmm)),
+                          itertools.repeat(none_v_taste_gmm), itertools.repeat(none_v_true_prob))
+            pool = Pool(4)
+            dev_decode_is_taste_prob = pool.map(
+                dp.segment_taste_decode_dependent_parallelized, inputs)
+            pool.close()
+            dev_decode_is_taste_array = np.squeeze(np.array(dev_decode_is_taste_prob)).T #2xnum_dev
+            #Pre-Deviation Bins
+            inputs = zip(list_pre_dev_fr, itertools.repeat(len(none_v_taste_gmm)),
+                          itertools.repeat(none_v_taste_gmm), itertools.repeat(none_v_true_prob))
+            pool = Pool(4)
+            pre_dev_decode_is_taste_prob = pool.map(
+                dp.segment_taste_decode_dependent_parallelized, inputs)
+            pool.close()
+            pre_dev_decode_is_taste_array = np.squeeze(np.array(pre_dev_decode_is_taste_prob)).T #2xnum_dev
+            #Post-Deviation Bins
+            inputs = zip(list_post_dev_fr, itertools.repeat(len(none_v_taste_gmm)),
+                          itertools.repeat(none_v_taste_gmm), itertools.repeat(none_v_true_prob))
+            pool = Pool(4)
+            post_dev_decode_is_taste_prob = pool.map(
+                dp.segment_taste_decode_dependent_parallelized, inputs)
+            pool.close()
+            post_dev_decode_is_taste_array = np.squeeze(np.array(post_dev_decode_is_taste_prob)).T #2xnum_dev
+            
+            # Save decoding probabilities
+            np.save(os.path.join(decode_save_dir,'segment_' +
+                    str(s_i) + '_deviations_is_taste.npy'), dev_decode_is_taste_array)
+            np.save(os.path.join(decode_save_dir,'segment_' +
+                    str(s_i) + '_pre_deviations_is_taste.npy'), pre_dev_decode_is_taste_array)
+            np.save(os.path.join(decode_save_dir,'segment_' +
+                    str(s_i) + '_post_deviations_is_taste.npy'), post_dev_decode_is_taste_array)
+            
+            #Now determine which taste
+            #Deviation Bins
+            inputs = zip(list_dev_fr, itertools.repeat(len(just_taste_gmm)),
+                          itertools.repeat(just_taste_gmm), itertools.repeat(by_taste_true_prob))
+            pool = Pool(4)
+            dev_decode_prob = pool.map(
+                dp.segment_taste_decode_dependent_parallelized, inputs)
+            pool.close()
+            dev_decode_array = np.squeeze(np.array(dev_decode_prob)).T #2xnum_dev
+            #Pre-Deviation Bins
+            inputs = zip(list_pre_dev_fr, itertools.repeat(len(just_taste_gmm)),
+                          itertools.repeat(just_taste_gmm), itertools.repeat(by_taste_true_prob))
+            pool = Pool(4)
+            pre_dev_decode_prob = pool.map(
+                dp.segment_taste_decode_dependent_parallelized, inputs)
+            pool.close()
+            pre_dev_decode_array = np.squeeze(np.array(pre_dev_decode_prob)).T #2xnum_dev
+            #Post-Deviation Bins
+            inputs = zip(list_post_dev_fr, itertools.repeat(len(just_taste_gmm)),
+                          itertools.repeat(just_taste_gmm), itertools.repeat(by_taste_true_prob))
+            pool = Pool(4)
+            post_dev_decode_prob = pool.map(
+                dp.segment_taste_decode_dependent_parallelized, inputs)
+            pool.close()
+            post_dev_decode_array = np.squeeze(np.array(post_dev_decode_prob)).T #2xnum_dev
+            
+            # Save decoding probabilities
+            np.save(os.path.join(decode_save_dir,'segment_' +
+                    str(s_i) + '_deviations_which_taste.npy'), dev_decode_array)
+            np.save(os.path.join(decode_save_dir,'segment_' +
+                    str(s_i) + '_pre_deviations_which_taste.npy'), pre_dev_decode_array)
+            np.save(os.path.join(decode_save_dir,'segment_' +
+                    str(s_i) + '_post_deviations_which_taste.npy'), post_dev_decode_array)
+            
+            toc = time.time()
+            print('\t\t\t\t\tTime to decode = ' +
+                  str(np.round((toc-tic)/60, 2)) + ' (min)')
+        
+        #Create plots
+        _, num_dev = np.shape(dev_decode_array)
+        dev_decode_is_taste_ind = np.argmax(dev_decode_is_taste_array, 0)
+        dev_decode_taste_ind = np.argmax(dev_decode_array, 0)
+        dev_decode_is_taste_bin = np.zeros((2,num_dev)) #First row is taste, second row not taste
+        for t_i in range(2):
+            dev_decode_is_taste_bin[t_i,np.where(dev_decode_is_taste_ind == t_i)[0]] = 1
+        dev_decode_bin = np.zeros((num_tastes-1,num_dev))
+        for t_i in range(num_tastes-1):
+            is_taste_inds = np.where(dev_decode_is_taste_ind == 0)[0]
+            taste_inds = np.where(dev_decode_taste_ind == t_i)[0]
+            true_taste_inds = np.intersect1d(is_taste_inds, taste_inds)
+            dev_decode_bin[t_i,true_taste_inds] = 1
+        dev_decode_array_prob_fixed = dev_decode_array*dev_decode_bin
+        
+        # Line plot
+        f1, ax1 = plt.subplots(nrows = 2, ncols = 1, figsize = (5,5))
+        for t_i in range(2):
+            ax1[0].plot(np.arange(num_dev), dev_decode_is_taste_array[t_i,:], \
+                         color=is_taste_colors[t_i,:], label=none_v_true_labels[t_i], \
+                            alpha = 0.3)
+            ax1[0].fill_between(np.arange(num_dev), dev_decode_is_taste_array[t_i, :], \
+                             alpha=0.2, color=is_taste_colors[t_i,:], label='_')
+        for t_i in range(num_tastes-1):
+            ax1[1].plot(np.arange(num_dev), dev_decode_array_prob_fixed[t_i,:], \
+                         color=taste_colors[t_i,:], label=dig_in_names[t_i], \
+                            alpha = 0.3)
+            ax1[1].fill_between(np.arange(num_dev), dev_decode_array_prob_fixed[t_i, :], \
+                             alpha=0.2, color=taste_colors[t_i,:], label='_')
+        ax1[0].legend(loc='right')
+        ax1[0].set_title('Is Taste')
+        ax1[0].set_ylabel('Decoding Fraction')
+        ax1[1].legend(loc='right')
+        ax1[1].set_title('Which Taste')
+        ax1[1].set_ylabel('Decoding Fraction')
+        ax1[1].set_xlabel('Deviation Index')
+        plt.suptitle((' ').join(segment_names[s_i].split('-')))
+        plt.tight_layout()
+        f1.savefig(os.path.join(seg_decode_save_dir, segment_names[s_i] + '.png'))
+        f1.savefig(os.path.join(seg_decode_save_dir, segment_names[s_i] + '.svg'))
+        plt.close(f1)
+        # Imshow
+        f2, ax2 = plt.subplots(nrows = 2, ncols = 1, figsize = (5,5))
+        ax2[0].imshow(dev_decode_is_taste_array,
+                   aspect='auto', interpolation='none')
+        x_ticks = np.ceil(np.linspace(0, num_dev-1, 10)).astype('int')
+        x_tick_labels = np.round(np.arange(num_dev)[x_ticks], 2)
+        ax2[0].set_xticks(x_ticks, x_tick_labels)
+        y_ticks = np.arange(len(none_v_true_labels))
+        ax2[0].set_yticks(y_ticks, none_v_true_labels)
+        ax2[0].set_ylabel('Decoding Fraction')
+        ax2[0].set_title('Is Taste')
+        ax2[1].imshow(dev_decode_array_prob_fixed,
+                   aspect='auto', interpolation='none')
+        x_ticks = np.ceil(np.linspace(0, num_dev-1, 10)).astype('int')
+        x_tick_labels = np.round(np.arange(num_dev)[x_ticks], 2)
+        ax2[1].set_xticks(x_ticks, x_tick_labels)
+        y_ticks = np.arange(len(dig_in_names[:-1]))
+        ax2[1].set_yticks(y_ticks, dig_in_names[:-1])
+        ax2[1].set_ylabel('Decoding Fraction')
+        ax2[1].set_xlabel('Deviation Index')
+        ax2[1].set_title('Which Taste')
+        plt.suptitle((' ').join(segment_names[s_i].split('-')))
+        plt.tight_layout()
+        f2.savefig(os.path.join(seg_decode_save_dir,segment_names[s_i] + '_im.png'))
+        f2.savefig(os.path.join(seg_decode_save_dir,segment_names[s_i] + '_im.svg'))
+        plt.close(f2)
+        # Fraction of occurrences
+        f3, ax3 = plt.subplots(nrows = 2, ncols = 1, figsize = (5,5))
+        ax3[0].pie(np.sum(dev_decode_is_taste_bin, 1)/num_dev,
+                labels=none_v_true_labels, autopct='%1.1f%%', pctdistance=3,
+                colors=is_taste_colors)
+        ax3[0].set_title('Is Taste')
+        ax3[1].pie(np.sum(dev_decode_bin, 1)/num_dev,
+                labels=dig_in_names[:-1], autopct='%1.1f%%', pctdistance=3,
+                colors=taste_colors)
+        ax3[1].set_title('Which Taste')
+        plt.suptitle((' ').join(segment_names[s_i].split('-')))
+        plt.tight_layout()
+        f3.savefig(os.path.join(seg_decode_save_dir,segment_names[s_i] + '_pie.png'))
+        f3.savefig(os.path.join(seg_decode_save_dir,segment_names[s_i] + '_pie.svg'))
+        plt.close(f3)
