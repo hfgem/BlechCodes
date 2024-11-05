@@ -771,7 +771,7 @@ def decode_deviations_epochs(tastant_fr_dist, segment_spike_times, dig_in_names,
 
 def decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times, dig_in_names, 
                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
-                  segment_dev_times, segment_dev_fr_vecs, taste_select_epoch, bin_dt, 
+                  segment_dev_times, segment_dev_fr_vecs, bin_dt, 
                   save_dir, z_score = False, epochs_to_analyze=[], segments_to_analyze=[]):
     """Decode taste from epoch-specific firing rates"""
     print('\t\tRunning Is-Taste-Which-Taste GMM Decoder')
@@ -878,8 +878,7 @@ def decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times,
        
     # If trial_start_frac > 0 use only trials after that threshold
     #trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
-    taste_select_neur = np.where(taste_select_epoch[e_i, :] == 1)[0]
-
+    
     # Segment-by-segment use deviation rasters and times to zoom in and test
     #	epoch-specific decoding of tastes. Add decoding of 50 ms on either
     #	side of the deviation event as well for context decoding.
@@ -897,7 +896,7 @@ def decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times,
         # Binerize Segment Spike Times
         segment_spike_times_s_i = segment_spike_times[s_i]
         segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
-        for n_i in taste_select_neur:
+        for n_i in range(num_neur):
             n_i_spike_times = np.array(
                 segment_spike_times_s_i[n_i] - seg_start).astype('int')
             segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1

@@ -22,6 +22,7 @@ os.chdir(blech_codes_path)
 
 import functions.decoding_funcs as df
 import functions.dependent_decoding_funcs as ddf
+import functions.plot_dev_decoding_funcs as pddf
 import functions.dev_funcs as dev_f
 import functions.hdf5_handling as hf5
 
@@ -163,7 +164,7 @@ class run_deviation_dependent_bayes():
             os.mkdir(decode_dir)
         self.decode_dir = decode_dir
         
-        ddf.decode_deviations_epochs(self.tastant_fr_dist_pop, self.segment_spike_times,
+        ddf.decode_deviations_is_taste_which_taste(self.tastant_fr_dist_pop, self.segment_spike_times,
                                      self.dig_in_names, self.segment_times, 
                                      self.segment_names, self.start_dig_in_times, 
                                      self.taste_num_deliv, self.segment_dev_times,
@@ -173,23 +174,23 @@ class run_deviation_dependent_bayes():
 
         self.plot_decoded_data()
 
-    def decode_taste_selective_neurons(self,):
-        print("\tDecoding taste selective neurons")
-        decode_dir = self.bayes_dir + 'Taste_Selective/'
-        if os.path.isdir(decode_dir) == False:
-            os.mkdir(decode_dir)
-        self.decode_dir = decode_dir
+    # def decode_taste_selective_neurons(self,):
+    #     print("\tDecoding taste selective neurons")
+    #     decode_dir = self.bayes_dir + 'Taste_Selective/'
+    #     if os.path.isdir(decode_dir) == False:
+    #         os.mkdir(decode_dir)
+    #     self.decode_dir = decode_dir
 
-        taste_select_neur = self.discrim_neur
-        self.taste_select_neur = taste_select_neur
+    #     taste_select_neur = self.discrim_neur
+    #     self.taste_select_neur = taste_select_neur
 
-        ddf.decode_deviations_epochs(self.tastant_fr_dist_pop, self.segment_spike_times,
-                                     self.dig_in_names, self.segment_times, 
-                                     self.segment_names, self.start_dig_in_times, 
-                                     self.taste_num_deliv, self.segment_dev_times,
-                                     self.segment_dev_fr_vecs, self.taste_select_neur, 
-                                     self.bin_dt, self.decode_dir, False, 
-                                     self.epochs_to_analyze, self.segments_to_analyze)
+    #     ddf.decode_deviations_is_taste_which_taste(self.tastant_fr_dist_pop, self.segment_spike_times,
+    #                                  self.dig_in_names, self.segment_times, 
+    #                                  self.segment_names, self.start_dig_in_times, 
+    #                                  self.taste_num_deliv, self.segment_dev_times,
+    #                                  self.segment_dev_fr_vecs, self.taste_select_neur, 
+    #                                  self.bin_dt, self.decode_dir, False, 
+    #                                  self.epochs_to_analyze, self.segments_to_analyze)
 
     def decode_all_neurons_zscore(self,):
         print("\tDecoding all neurons")
@@ -206,12 +207,12 @@ class run_deviation_dependent_bayes():
             os.mkdir(decode_dir)
         self.decode_dir = decode_dir
         
-        ddf.decode_deviations_epochs(self.tastant_fr_dist_z_pop, self.segment_spike_times,
+        ddf.decode_deviations_is_taste_which_taste(self.tastant_fr_dist_z_pop, self.segment_spike_times,
                                      self.dig_in_names, self.segment_times, 
                                      self.segment_names, self.start_dig_in_times, 
                                      self.taste_num_deliv, self.segment_dev_times,
-                                     self.segment_dev_fr_vecs, self.taste_select_neur, 
-                                     self.bin_dt, self.decode_dir, False, 
+                                     self.segment_dev_fr_vecs_zscore, self.taste_select_neur, 
+                                     self.bin_dt, self.decode_dir, True, 
                                      self.epochs_to_analyze, self.segments_to_analyze)
 
         self.plot_decoded_data()
@@ -220,3 +221,14 @@ class run_deviation_dependent_bayes():
     def plot_decoded_data(self,):
         print("\t\tPlotting Decoded Results")
         
+        pddf.plot_is_taste_which_taste_decoded(self.num_tastes, self.num_neur, 
+                                               self.segment_spike_times, self.tastant_spike_times,
+                                               self.start_dig_in_times, self.post_taste_dt, 
+                                               self.pre_taste_dt, self.pop_taste_cp_raster_inds, 
+                                               self.bin_dt, self.dig_in_names, self.segment_times,
+                                               self.segment_names, self.decode_dir, self.max_hz_pop,
+                                               self.segment_dev_times, self.segment_dev_fr_vecs, 
+                                               self.segment_dev_fr_vecs_zscore, self.neuron_count_thresh, 
+                                               self.seg_e_len_dt, self.trial_start_frac,
+                                               self.epochs_to_analyze, self.segments_to_analyze, 
+                                               self.decode_prob_cutoff)

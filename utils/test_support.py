@@ -267,7 +267,6 @@ all_neur_dir = bayes_dir + 'All_Neurons/'
 if os.path.isdir(all_neur_dir) == False:
     os.mkdir(all_neur_dir)
     
-taste_select_neur = np.ones(np.shape(discrim_neur))
 
 decode_dir = all_neur_dir + 'GMM_Decoding/'
 if os.path.isdir(decode_dir) == False:
@@ -280,7 +279,7 @@ if os.path.isdir(decode_dir) == False:
 # z_score = False
 ddf.decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times, dig_in_names, 
                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
-                  segment_dev_times, segment_dev_fr_vecs, taste_select_neur, bin_dt, 
+                  segment_dev_times, segment_dev_fr_vecs, bin_dt, 
                   decode_dir, False, epochs_to_analyze, segments_to_analyze)
 
 # ddf.decode_deviations_epochs(tastant_fr_dist, segment_spike_times, dig_in_names, 
@@ -289,40 +288,65 @@ ddf.decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times,
 #                   decode_dir, False, epochs_to_analyze, segments_to_analyze)
 
 import functions.plot_dev_decoding_funcs as pddf
-pddf.plot_decoded(num_tastes, num_neur, segment_spike_times, tastant_spike_times,
+# cp_raster_inds = pop_taste_cp_raster_inds
+# z_bin_dt = bin_dt
+# taste_select_epoch = taste_select_neur
+# save_dir = decode_dir
+# max_hz = max_hz_pop
+# e_len_dt = seg_e_len_dt
+
+pddf.plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times, tastant_spike_times,
                  start_dig_in_times, post_taste_dt, pre_taste_dt,
                  pop_taste_cp_raster_inds, bin_dt, dig_in_names, segment_times,
-                 segment_names, taste_select_neur, decode_dir, max_hz_pop,
+                 segment_names, decode_dir, max_hz_pop,
                  segment_dev_times, segment_dev_fr_vecs, segment_dev_fr_vecs_zscore,
                  neuron_count_thresh, seg_e_len_dt, trial_start_frac,
                  epochs_to_analyze, segments_to_analyze, decode_prob_cutoff)
+# pddf.plot_decoded(num_tastes, num_neur, segment_spike_times, tastant_spike_times,
+#                  start_dig_in_times, post_taste_dt, pre_taste_dt,
+#                  pop_taste_cp_raster_inds, bin_dt, dig_in_names, segment_times,
+#                  segment_names, taste_select_neur, decode_dir, max_hz_pop,
+#                  segment_dev_times, segment_dev_fr_vecs, segment_dev_fr_vecs_zscore,
+#                  neuron_count_thresh, seg_e_len_dt, trial_start_frac,
+#                  epochs_to_analyze, segments_to_analyze, decode_prob_cutoff)
 
 
 print("\tDecoding all neurons z-scored")
 all_neur_dir = bayes_dir + 'All_Neurons_Z_Scored/'
 if os.path.isdir(all_neur_dir) == False:
     os.mkdir(all_neur_dir)
-    
-taste_select_neur = np.ones(np.shape(discrim_neur))
+
 
 decode_dir = all_neur_dir + 'GMM_Decoding/'
 if os.path.isdir(decode_dir) == False:
     os.mkdir(decode_dir)
 
 #Z-Scored Decode
-ddf.decode_deviations_epochs(tastant_fr_dist_z_pop, segment_spike_times, dig_in_names, 
+# ddf.decode_deviations_epochs(tastant_fr_dist_z_pop, segment_spike_times, dig_in_names, 
+#                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
+#                   segment_dev_times, segment_dev_fr_vecs_zscore, taste_select_neur, 
+#                   bin_dt, decode_dir, True, epochs_to_analyze, segments_to_analyze)
+ddf.decode_deviations_is_taste_which_taste(tastant_fr_dist_z_pop, segment_spike_times, dig_in_names, 
                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
-                  segment_dev_times, segment_dev_fr_vecs_zscore, taste_select_neur, 
-                  bin_dt, decode_dir, True, epochs_to_analyze, segments_to_analyze)
+                  segment_dev_times, segment_dev_fr_vecs_zscore, bin_dt, 
+                  decode_dir, True, epochs_to_analyze, segments_to_analyze)
+
 
 import functions.plot_dev_decoding_funcs as pddf
-pddf.plot_decoded(num_tastes, num_neur, segment_spike_times, tastant_spike_times,
+pddf.plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times, tastant_spike_times,
                  start_dig_in_times, post_taste_dt, pre_taste_dt,
                  pop_taste_cp_raster_inds, bin_dt, dig_in_names, segment_times,
-                 segment_names, taste_select_neur, decode_dir, max_hz_pop,
+                 segment_names, decode_dir, max_hz_pop,
                  segment_dev_times, segment_dev_fr_vecs, segment_dev_fr_vecs_zscore,
                  neuron_count_thresh, seg_e_len_dt, trial_start_frac,
                  epochs_to_analyze, segments_to_analyze, decode_prob_cutoff)
+# pddf.plot_decoded(num_tastes, num_neur, segment_spike_times, tastant_spike_times,
+#                  start_dig_in_times, post_taste_dt, pre_taste_dt,
+#                  pop_taste_cp_raster_inds, bin_dt, dig_in_names, segment_times,
+#                  segment_names, taste_select_neur, decode_dir, max_hz_pop,
+#                  segment_dev_times, segment_dev_fr_vecs, segment_dev_fr_vecs_zscore,
+#                  neuron_count_thresh, seg_e_len_dt, trial_start_frac,
+#                  epochs_to_analyze, segments_to_analyze, decode_prob_cutoff)
 
 # cp_raster_inds = pop_taste_cp_raster_inds
 # z_bin_dt = bin_dt
