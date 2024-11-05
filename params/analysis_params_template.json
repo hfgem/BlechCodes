@@ -35,12 +35,14 @@
         "use_full": 0,
         "skip_time": 0.05,
         "e_skip_time": 0.01,
-        "e_len_time": 0.05,
+        "seg_e_len_time": 0.05,
+        "taste_e_len_time": 2,
+        "fr_bins": [2],
         "neuron_count_thresh": 0.333,
         "max_decode": 50,
         "seg_stat_bin": 60000,
         "trial_start_frac": 0,
         "decode_prob_cutoff": 0.8,
-        "bin_time": 0.1
+        "z_score_bin_time": 0.1
     }
 }

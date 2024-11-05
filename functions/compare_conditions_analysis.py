@@ -72,20 +72,20 @@ class run_compare_conditions_analysis():
         self.find_corr_groupings()
         self.plot_corr_results()
         #Segment comparisons
-        #self.find_seg_groupings()
-        #self.plot_seg_results()
+        self.find_seg_groupings()
+        self.plot_seg_results()
         #Changepoint comparisons
-        #self.find_cp_groupings()
-        #self.plot_cp_results()
+        self.find_cp_groupings()
+        self.plot_cp_results()
         #Pop Rate x Taste Corr comparisons
-        #self.find_rate_corr_groupings()
-        #self.plot_rate_corr_results()
+        self.find_rate_corr_groupings()
+        self.plot_rate_corr_results()
         #Deviation Statistic comparisons
-        #self.find_dev_stats_groupings()
-        #self.plot_dev_stat_results()
+        self.find_dev_stats_groupings()
+        self.plot_dev_stat_results()
         #Deviation True x Null comparisons
-        #self.find_dev_null_groupings()
-        #self.plot_dev_null_results()
+        self.find_dev_null_groupings()
+        self.plot_dev_null_results()
 
     def import_corr(self,):
         """Import previously saved correlation data"""

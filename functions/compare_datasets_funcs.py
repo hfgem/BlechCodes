@@ -679,7 +679,7 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                     #    [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
                     #ax_mean_diff[1, i_3].set_ylim(
                     #    [min_mean_diff - np.abs(min_mean_diff)/5, sig_height + sig_height/5])
-                    #ax_mean_diff[1, i_3].legend()
+                    ax_mean_diff[1, i_3].legend()
                     
                     # Add best significance data
                     best_step = max_best_mean_diff/10
@@ -724,7 +724,7 @@ def cross_segment_diffs(corr_data, save_dir, unique_given_names, unique_corr_nam
                     #    [min_best_mean_diff - np.abs(min_best_mean_diff)/5, best_sig_height + best_sig_height/5])
                     #ax_best_mean_diff[1, i_3].set_ylim(
                     #    [min_best_mean_diff - np.abs(min_best_mean_diff)/5, best_sig_height + best_sig_height/5])
-                    #ax_best_mean_diff[1, i_3].legend()
+                    ax_best_mean_diff[1, i_3].legend()
                 f_pop_vec_plot_name = combo_1.replace(
                     ' ', '_') + '_' + combo_2.replace(' ', '_')
                 f_mean_diff.suptitle('Mean Correlation Difference: ' +
@@ -1549,7 +1549,8 @@ def combined_corr_by_segment_dist(corr_data, save_dir, unique_given_names, uniqu
     warnings.filterwarnings('ignore')
     
     colors = ['green','royalblue','blueviolet','teal','deeppink', \
-              'springgreen','turquoise', 'midnightblue']
+              'springgreen','turquoise', 'midnightblue', 'lightskyblue', \
+              'palevioletred', 'darkslateblue']
     
     # Create further save dirs
     corr_dist_save = os.path.join(save_dir, 'Corr_Combined_Dist')
@@ -1787,7 +1788,8 @@ def combined_corr_by_taste_dist(corr_data, save_dir, unique_given_names, unique_
     warnings.filterwarnings('ignore')
     
     colors = ['green','royalblue','blueviolet','teal','deeppink', \
-              'springgreen','turquoise', 'midnightblue']
+              'springgreen','turquoise', 'midnightblue', 'lightskyblue', \
+              'palevioletred', 'darkslateblue']
     
     # Create further save dirs
     corr_dist_save = os.path.join(save_dir, 'Corr_Combined_Dist')
@@ -2428,7 +2430,7 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
                     for name in unique_given_names:
                         try:
                             corr_array = rate_corr_data[name]['rate_corr_data'][corr_type][seg_name][taste_name]
-                            seg_epoch_means.append(list(np.nanmean(corr_array,0)))
+                            seg_epoch_means.append(list(np.nanmean(corr_array,0))) #Length = #epochs
                             seg_means.append(np.nanmean(corr_array))
                         except:
                             #print(name + ' does not contain ' + corr_type + ' segment ' + seg_name + ' taste ' + taste_name + ' data.')
@@ -2447,7 +2449,7 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
                                  sharex=True,sharey=True)
         for s_i, s_name in enumerate(unique_segment_names):
             for t_i, t_name in enumerate(unique_taste_names):
-                corr_array = mean_corr_dict[corr_type][t_name][s_name]['by_epoch']
+                corr_array = mean_corr_dict[corr_type][t_name][s_name]['by_epoch'] #num animals x num epochs
                 if len(corr_array) > 0:
                     corr_max = np.nanmax(corr_array)
                     corr_min = np.nanmin(corr_array)
@@ -2455,11 +2457,11 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
                     ax[s_i,t_i].boxplot(corr_array)
                     x_vals = np.arange(np.shape(corr_array)[1])+1
                     for d_i in range(np.shape(corr_array)[0]):
-                        animal_x_jitter = 0.1*np.random.randn(np.shape(corr_array)[1])
+                        animal_x_jitter = 0.1*np.random.randn(len(x_vals))
                         ax[s_i,t_i].scatter(x_vals + animal_x_jitter, corr_array[d_i,:], alpha=0.3, color='g')
                     ax[s_i,t_i].plot(x_vals,np.nanmean(corr_array,0),\
                                      label='Mean',linestyle='dashed',alpha=0.5,color='k')
-                    ax[s_i,t_i].set_xticklabels(np.array(['Presence','Identity','Palatability']))
+                    ax[s_i,t_i].set_xticks(x_vals,np.array(['Presence','Identity','Palatability']))
                     if s_i == 0:
                         ax[s_i,t_i].set_title(t_name)
                     if t_i == 0:
@@ -2659,7 +2661,8 @@ def cross_dataset_dev_stats_plots(dev_stats_data, unique_given_names,
         - Plots with statistical results
     """
     colors = ['green','royalblue','blueviolet','teal','deeppink', \
-              'springgreen','turquoise', 'midnightblue']
+              'springgreen','turquoise', 'midnightblue', 'lightskyblue', \
+              'palevioletred', 'darkslateblue']
     for dev_stat in unique_dev_stats_names:
         max_val = 0
         max_mean = 0
@@ -2774,7 +2777,8 @@ def cross_dataset_dev_null_plots(dev_null_data, unique_given_names,
         - Plots with statistical results
     """
     colors = ['green','royalblue','blueviolet','teal','deeppink', \
-              'springgreen','turquoise', 'midnightblue']
+              'springgreen','turquoise', 'midnightblue', 'lightskyblue', \
+              'palevioletred', 'darkslateblue']
     for dev_null_stat in unique_dev_null_names:
         max_val = 0
         f, ax = plt.subplots(ncols=len(unique_segment_names),figsize=(4*len(unique_segment_names),4))
@@ -2899,7 +2903,8 @@ def cross_dataset_cp_plots(cp_data, unique_given_names, unique_taste_names,
         - Plots with statistical results
     """
     colors = ['green','royalblue','blueviolet','teal','deeppink', \
-              'springgreen','turquoise', 'midnightblue']
+              'springgreen','turquoise', 'midnightblue', 'lightskyblue', \
+              'palevioletred', 'darkslateblue']
     
     f_cp_dist, ax_cp_dist = plt.subplots(nrows = max_cp_counts, \
                                          ncols = len(unique_taste_names), \
