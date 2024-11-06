@@ -65,8 +65,10 @@ def split_euc_diff(num_neur, segment_dev_rasters,segment_zscore_means,segment_zs
             epoch_zscore_vec_collection = []
             for d_i in range(num_taste_deliv[t_i]):
                 try:
-                    epoch_vec_collection.append(tastant_fr_dist_pop[t_i][d_i][e_i])
-                    epoch_zscore_vec_collection.append(tastant_fr_dist_z_pop[t_i][d_i][e_i])
+                    if len(tastant_fr_dist_pop[t_i][d_i][e_i]) > 0:
+                        epoch_vec_collection.append(tastant_fr_dist_pop[t_i][d_i][e_i])
+                    if len(tastant_fr_dist_z_pop[t_i][d_i][e_i]) > 0:
+                        epoch_zscore_vec_collection.append(tastant_fr_dist_z_pop[t_i][d_i][e_i])
                 except:
                     epoch_vec_collection.extend([])
             epoch_vec_collection = np.squeeze(np.array(epoch_vec_collection)).T #num neur x num trials
@@ -284,8 +286,11 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
                     dev_i_z_dists = []
                     for deliv_i in range(num_taste_deliv[t_i]):
                         #Calculate euclidean distances
-                        dev_i_dists.extend([np.sqrt(np.sum(np.square(dev_mats_array[dev_i,:,:].squeeze()-taste_deliv_mat_array[deliv_i,:,:].squeeze())))])
-                        dev_i_z_dists.extend([np.sqrt(np.sum(np.square(dev_mats_z_array[dev_i,:,:].squeeze()-taste_deliv_mat_z_array[deliv_i,:,:].squeeze())))])
+                        try:
+                            dev_i_dists.extend([np.sqrt(np.sum(np.square(dev_mats_array[dev_i,:,:].squeeze()-taste_deliv_mat_array[deliv_i,:,:].squeeze())))])
+                            dev_i_z_dists.extend([np.sqrt(np.sum(np.square(dev_mats_z_array[dev_i,:,:].squeeze()-taste_deliv_mat_z_array[deliv_i,:,:].squeeze())))])
+                        except: #Trial missing condition
+                            dev_i_dists.extend([])
                         
                     all_dist_vals.append(dev_i_dists)
                     all_dist_vals_z.append(dev_i_z_dists)

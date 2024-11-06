@@ -20,8 +20,8 @@ blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
 import functions.decoding_funcs as df
+import functions.dev_sequence_funcs as dsf
 import functions.dependent_decoding_funcs as ddf
-import functions.plot_dev_decoding_funcs as pddf
 import functions.dev_funcs as dev_f
 import functions.hdf5_handling as hf5
 
@@ -124,3 +124,14 @@ class run_deviation_sequence_analysis():
     def analyze_sequences(self,):
         print("Analyzing deviation sequences")
         
+
+        dsf.split_euc_diff(self.num_neur, self.segment_dev_rasters,
+                           self.segment_zscore_means,self.segment_zscore_stds,
+                           self.tastant_fr_dist_pop,self.tastant_fr_dist_z_pop,
+                           self.dig_in_names,self.segment_names,
+                           self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)
+        dsf.split_match_calc(self.num_neur, self.segment_dev_rasters,
+                           self.segment_zscore_means,self.segment_zscore_stds,
+                           self.tastant_fr_dist_pop,self.tastant_fr_dist_z_pop,
+                           self.dig_in_names,self.segment_names,
+                           self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)
