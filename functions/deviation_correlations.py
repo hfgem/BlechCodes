@@ -81,7 +81,8 @@ class run_deviation_correlations():
         segment_times_reshaped = np.array(
             [self.segment_times_reshaped[i] for i in self.segments_to_analyze])
         #The following rasters, times, vecs, and z-scored vecs are all only for the indices in segments_to_analyze
-        segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments,
+        segment_dev_rasters, segment_dev_times, segment_dev_vec, \
+            segment_dev_vec_zscore, _, _ = df.create_dev_rasters(num_segments,
                                                                                                                 segment_spike_times_reshaped,
                                                                                                                 segment_times_reshaped,
                                                                                                                 segment_deviations, self.z_bin)

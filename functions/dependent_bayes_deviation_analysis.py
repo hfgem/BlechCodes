@@ -121,7 +121,7 @@ class run_deviation_dependent_bayes():
 
         print("\tNow pulling true deviation rasters")
         segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
-            segment_dev_fr_vecs_zscore = dev_f.create_dev_rasters(num_seg_to_analyze, 
+            segment_dev_fr_vecs_zscore, _, _ = dev_f.create_dev_rasters(num_seg_to_analyze, 
                                                                 segment_spike_times_to_analyze,
                                                                 np.array(segment_times_to_analyze_reshaped),
                                                                 segment_deviations, self.pre_taste)

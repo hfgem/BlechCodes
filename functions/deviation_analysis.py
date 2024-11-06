@@ -112,7 +112,8 @@ class run_find_deviations():
         # _____Pull rasters of deviations and plot_____
         # Calculate segment deviation spikes
         print("\tNow pulling true deviation rasters")
-        segment_dev_rasters, segment_dev_times, segment_dev_vec, segment_dev_vec_zscore = df.create_dev_rasters(num_segments,
+        segment_dev_rasters, segment_dev_times, segment_dev_vec, \
+            segment_dev_vec_zscore, _, _ = df.create_dev_rasters(num_segments,
                                                                                                                 segment_spike_times,
                                                                                                                 segment_times_reshaped,
                                                                                                                 segment_deviations, z_bin)

@@ -241,7 +241,7 @@ class run_deviation_null_analysis():
         seg_times_reshaped = np.array(self.segment_times_reshaped)[
             self.segments_to_analyze, :]
         z_bin = self.metadata['params_dict']['z_bin']
-        segment_dev_rasters, segment_dev_times, _, _ = df.create_dev_rasters(num_seg,
+        segment_dev_rasters, segment_dev_times, _, _, _, _ = df.create_dev_rasters(num_seg,
                                                                              seg_spike_times,
                                                                              seg_times_reshaped,
                                                                              self.segment_deviations, z_bin)
