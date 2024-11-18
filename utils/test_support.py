@@ -16,12 +16,15 @@ import tqdm
 import numpy as np
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-2]) + '/'
-os.chdir(blech_codes_path)
-import functions.analysis_funcs as af
-import functions.hdf5_handling as hf5
-import functions.dependent_decoding_funcs as ddf
-from utils.replay_utils import import_metadata, state_tracker
-from utils.data_utils import import_data
+functions_path = os.path.join(blech_codes_path,'functions')
+os.chdir(functions_path)
+import analysis_funcs as af
+import hdf5_handling as hf5
+import dependent_decoding_funcs as ddf
+utils_path = os.path.join(blech_codes_path,'utils')
+os.chdir(utils_path)
+from replay_utils import import_metadata, state_tracker
+from data_utils import import_data
 
 # Grab current directory and data directory / metadata
 script_path = os.path.realpath(__file__)
@@ -161,9 +164,11 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
 
 import functions.dev_sequence_funcs as dsf
 
+num_null = 100
+
 # dsf.split_euc_diff(num_neur, segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
 #                    tastant_fr_dist_pop,tastant_fr_dist_z_pop,dig_in_names,segment_names,
 #                    seq_dir,segments_to_analyze, epochs_to_analyze)
 dsf.split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
                    tastant_fr_dist_pop,tastant_fr_dist_z_pop,dig_in_names,segment_names,
-                   seq_dir,segments_to_analyze, epochs_to_analyze)
+                   num_null, seq_dir, segments_to_analyze, epochs_to_analyze)

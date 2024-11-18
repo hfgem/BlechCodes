@@ -459,7 +459,12 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
                         z_decode_dir, epochs_to_analyze)
         
         #Decode null distribution
-        
+        decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
+                        dig_in_names, null_dev_dict, segment_names, s_i,
+                        null_decode_dir, non_z_decode_dir, epochs_to_analyze)
+        decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
+                        dig_in_names, null_dev_z_dict, segment_names, s_i,
+                        null_z_decode_dir, z_decode_dir, epochs_to_analyze)
             
         
         
@@ -1414,9 +1419,9 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
     
 def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist, 
                 dig_in_names, null_dev_dict, segment_names, s_i,
-                null_decode_dir, decode_dir, epochs_to_analyze=[]):
+                null_decode_dir, true_decode_dir, epochs_to_analyze=[]):
     """Decode taste from epoch-specific firing rates"""
-    print('\t\tRunning Is-Taste-Which-Taste GMM Decoder')
+    print('\t\tRunning Null Is-Taste-Which-Taste GMM Decoder')
     
     # Variables
     num_tastes = len(dig_in_names)
@@ -1437,6 +1442,9 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
     epoch_splits.extend([(e_i,e_i) for e_i in epochs_to_analyze])
     epoch_split_inds = np.arange(len(epoch_splits))
     epoch_split_names = [str(ep) for ep in epoch_splits]
+    epoch_split_plot_square = np.ceil(np.sqrt(len(epoch_splits))).astype('int')
+    epoch_split_plot_square_reference = np.reshape(np.arange(epoch_split_plot_square**2),\
+                                                   (epoch_split_plot_square,epoch_split_plot_square))
         
     #Collect data to train decoders
     true_taste_train_data = [] #For PCA all combined true taste data
@@ -1544,19 +1552,8 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
             gm = gmm(n_components=1, n_init=10).fit(
                 transformed_data)
             taste_epoch_gmm[t_i][e_ind] = gm
-            
-       
-    # If trial_start_frac > 0 use only trials after that threshold
-    #trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
     
-    # Segment-by-segment use deviation rasters and times to zoom in and test
-    #	epoch-specific decoding of tastes. Add decoding of 50 ms on either
-    #	side of the deviation event as well for context decoding.
-    
-    # Grab neuron firing rates in sliding bins
     try:
-        print("Insert null imports here")
-        
         null_is_taste_counts = np.load(os.path.join(null_decode_dir,segment_names[s_i] + '_null_is_taste_counts.npy'))
         null_which_taste_counts = np.load(os.path.join(null_decode_dir,segment_names[s_i] + '_null_which_taste_counts.npy'))
         null_epoch_pair_counts = np.load(os.path.join(null_decode_dir,segment_names[s_i] + '_null_epoch_pair_counts.npy'))
@@ -1685,24 +1682,31 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
     
     #Is-Taste Summaries
     frac_all_taste = null_is_taste_counts/num_dev
-    true_frac_taste = np.load(os.path.join(decode_dir,segment_names[s_i]+'_frac_taste.npy'))
+    true_frac_taste = np.load(os.path.join(true_decode_dir,segment_names[s_i]+'_frac_taste.npy'))
     true_taste_frac_val = len(np.where(true_frac_taste == 1)[0])/num_dev
+    percentile_95 = np.percentile(frac_all_taste,95)
+    percentile_5 = np.percentile(frac_all_taste,5)
     f_frac_all_taste = plt.figure(figsize=(5,5))
     plt.hist(frac_all_taste, label='Null Distribution')
     plt.axvline(true_taste_frac_val,label='True Data',color='r')
-    plt.title('Fraction of deviation events with \nall splits decoded as taste')
+    if true_taste_frac_val > percentile_95:
+        plt.title('Fraction of deviation events with \nall splits decoded as taste\n*0.95')
+    elif true_taste_frac_val < percentile_5:
+        plt.title('Fraction of deviation events with \nall splits decoded as taste\n*0.05')
+    else:
+        plt.title('Fraction of deviation events with \nall splits decoded as taste')
     plt.xlabel('Fraction')
     plt.ylabel('Number of Null Distributions')
     plt.legend(loc='upper left')
     plt.tight_layout()
-    f_frac_all_taste.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_frac_all_taste.savefig(os.path.join(true_decode_dir,segment_names[s_i]
                          + '_frac_dev_all_taste_v_null.png'))
-    f_frac_all_taste.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_frac_all_taste.savefig(os.path.join(true_decode_dir,segment_names[s_i]
                          + '_frac_dev_all_taste_v_null.svg'))
     plt.close(f_frac_all_taste)
     
     #Which Taste Summaries
-    which_taste_true_argmax = np.load(os.path.join(decode_dir,segment_names[s_i]+'_which_taste_argmax.npy'))
+    which_taste_true_argmax = np.load(os.path.join(true_decode_dir,segment_names[s_i]+'_which_taste_argmax.npy'))
     same_taste_bool_true = np.zeros(len(which_taste_true_argmax))
     for tc_i in range(len(which_taste_true_argmax)):
         taste_0 = which_taste_true_argmax[tc_i,0]
@@ -1720,27 +1724,48 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
                                                  sharex = 'col', sharey = 'row',
                                                  figsize=(5,5))
     for t_i in range(num_tastes-1):
-        ax_which_taste[0,t_i].hist(null_taste_fractions[:,t_i],label='Null Distribution')
-        ax_which_taste[0,t_i].axvline(true_taste_fractions[t_i],label='True Data',color='r')
-        ax_which_taste[0,t_i].set_title(dig_in_names[t_i])
+        null_vals = null_taste_fractions[:,t_i]
+        ax_which_taste[0,t_i].hist(null_vals,label='Null Distribution')
+        true_val = true_taste_fractions[t_i]
+        ax_which_taste[0,t_i].axvline(true_val,label='True Data',color='r')
+        
+        percentile_95 = np.percentile(null_vals,95)
+        percentile_5 = np.percentile(null_vals,5)
+        if true_val > percentile_95:
+            ax_which_taste[0,t_i].set_title(dig_in_names[t_i] + ' *.95')
+        elif true_val < percentile_5:
+            ax_which_taste[0,t_i].set_title(dig_in_names[t_i] + ' *.05')
+        else:
+            ax_which_taste[0,t_i].set_title(dig_in_names[t_i])
+        
+        ax_which_taste[0,t_i].set_xlabel('Fraction of All\nDeviation Events')
         plt.tight_layout()
-        ax_which_taste[1,t_i].set_xlabel('Fraction of All\nDeviation Events')
-        ax_which_taste[1,t_i].hist(null_taste_only_taste_fractions[:,t_i],label='Null Distribution')
-        ax_which_taste[1,t_i].axvline(true_taste_only_taste_fractions[t_i],label='True Data',color='r')
+        null_vals = null_taste_only_taste_fractions[:,t_i]
+        ax_which_taste[1,t_i].hist(null_vals,label='Null Distribution')
+        true_val = true_taste_only_taste_fractions[t_i]
+        ax_which_taste[1,t_i].axvline(true_val,label='True Data',color='r')
         ax_which_taste[1,t_i].set_xlabel('Fraction of Taste Only\nDeviation Events')
+        percentile_95 = np.percentile(null_vals,95)
+        percentile_5 = np.percentile(null_vals,5)
+        if true_val > percentile_95:
+            ax_which_taste[1,t_i].set_title(dig_in_names[t_i] + ' *.95')
+        elif true_val < percentile_5:
+            ax_which_taste[1,t_i].set_title(dig_in_names[t_i] + ' *.05')
+        else:
+            ax_which_taste[1,t_i].set_title(dig_in_names[t_i])
         plt.tight_layout()
         if t_i == 0:
             ax_which_taste[0,t_i].legend(loc='upper right')
             ax_which_taste[0,t_i].set_ylabel('# Null Distributions')
             ax_which_taste[1,t_i].set_ylabel('# Null Distributions')
-    f_which_taste.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_which_taste.savefig(os.path.join(true_decode_dir,segment_names[s_i]
                          + '_frac_dev_same_taste_v_null.png'))
-    f_which_taste.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_which_taste.savefig(os.path.join(true_decode_dir,segment_names[s_i]
                          + '_frac_dev_same_taste_v_null.svg'))
     plt.close(f_which_taste)
     
     #Epoch Order Summaries
-    same_taste_dev_decode_epoch_array = np.load(os.path.join(decode_dir,segment_names[s_i]+'_same_taste_dev_decode_epoch_array.npy'))
+    same_taste_dev_decode_epoch_array = np.load(os.path.join(true_decode_dir,segment_names[s_i]+'_same_taste_dev_decode_epoch_array.npy'))
     for t_i in range(num_tastes-1):
         #True Data Epoch Order Counts
         same_taste_which_taste_inds = np.where(true_taste_inds == t_i)[0]
@@ -1763,4 +1788,40 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
                 null_epoch_order_dict[ep_i].extend([null_epoch_pair_counts[null_i][t_i][ep_i]])
                 
         #Plot against each other
-        f_epoch_order, ax_epoch_order = plt.subplots()
+        f_epoch_order, ax_epoch_order = plt.subplots(nrows = epoch_split_plot_square, \
+                                                     ncols = epoch_split_plot_square, \
+                                                         figsize = (8,8))
+        for ep_i, ep_name in enumerate(epoch_split_names):
+            #Axis location
+            ep_r, ep_c = np.where(epoch_split_plot_square_reference == ep_i)
+            ep_r = ep_r[0]
+            ep_c = ep_c[0]
+            #Plot hist vs vertline
+            null_vals = null_epoch_order_dict[ep_i]
+            ax_epoch_order[ep_r,ep_c].hist(null_vals,\
+                                           label='Null Distribution')
+            true_val = epoch_order_dict[ep_i]
+            ax_epoch_order[ep_r,ep_c].axvline(true_val,\
+                                              label='Null Distribution',\
+                                                  color='r')
+            percentile_95 = np.percentile(null_vals,95)
+            percentile_5 = np.percentile(null_vals,5)
+            if true_val > percentile_95:
+                ax_epoch_order[ep_r,ep_c].set_title(ep_name + ' *.95')
+            elif true_val < percentile_5:
+                ax_epoch_order[ep_r,ep_c].set_title(ep_name + ' *.05')
+            else:
+                ax_epoch_order[ep_r,ep_c].set_title(ep_name)
+            if ep_c == 0:
+                ax_epoch_order[ep_r,ep_c].set_ylabel('# Null Distributions')
+            if ep_r == epoch_split_plot_square-1:
+                ax_epoch_order[ep_r,ep_c].set_xlabel('# Occurrences')
+            if (ep_r == 0)*(ep_c == 0):
+                ax_epoch_order[ep_r,ep_c].legend(loc='upper left')
+        plt.suptitle(taste_name + '\nEpoch Pair Data Comp')
+        plt.tight_layout()
+        f_epoch_order.savefig(os.path.join(true_decode_dir,segment_names[s_i]
+                             + '_' + taste_name + '_frac_dev_epoch_order_v_null.png'))
+        f_epoch_order.savefig(os.path.join(true_decode_dir,segment_names[s_i]
+                             + '_' + taste_name + '_frac_dev_epoch_order_v_null.svg'))
+        plt.close(f_epoch_order)
