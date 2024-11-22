@@ -64,12 +64,29 @@ class run_deviation_sequence_analysis():
         self.end_dig_in_times = self.data_dict['end_dig_in_times']
         self.dig_in_names = self.data_dict['dig_in_names']
         self.num_tastes = len(self.dig_in_names)
-        self.min_dev_size = self.metadata['params_dict']['min_dev_size']
+        self.fr_bins = self.metadata['params_dict']['fr_bins']
+        #Bayes Params/Variables
+        self.skip_time = self.metadata['params_dict']['bayes_params']['skip_time']
+        self.skip_dt = np.ceil(self.skip_time*1000).astype('int')
+        self.e_skip_time = self.metadata['params_dict']['bayes_params']['e_skip_time']
+        self.e_skip_dt = np.ceil(self.e_skip_time*1000).astype('int')
+        self.taste_e_len_time = self.metadata['params_dict']['bayes_params']['taste_e_len_time']
+        self.taste_e_len_dt = np.ceil(self.taste_e_len_time*1000).astype('int') 
+        self.seg_e_len_time = self.metadata['params_dict']['bayes_params']['seg_e_len_time']
+        self.seg_e_len_dt = np.ceil(self.seg_e_len_time*1000).astype('int') 
+        self.bayes_fr_bins = self.metadata['params_dict']['bayes_params']['fr_bins']
+        self.neuron_count_thresh = self.metadata['params_dict']['bayes_params']['neuron_count_thresh']
+        self.max_decode = self.metadata['params_dict']['bayes_params']['max_decode']
+        self.seg_stat_bin = self.metadata['params_dict']['bayes_params']['seg_stat_bin']
+        self.trial_start_frac = self.metadata['params_dict']['bayes_params']['trial_start_frac']
+        self.decode_prob_cutoff = self.metadata['params_dict']['bayes_params']['decode_prob_cutoff']
+        self.bin_time = self.metadata['params_dict']['bayes_params']['z_score_bin_time']
+        self.bin_dt = np.ceil(self.bin_time*1000).astype('int')
+        self.num_null = 100 #self.metadata['params_dict']['num_null']
         # Import changepoint data
-        pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
+        self.pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
             self.hdf5_dir, 'changepoint_data', 'pop_taste_cp_raster_inds')
-        self.pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
-        num_pt_cp = self.num_cp + 2
+        self.num_pt_cp = self.num_cp + 2
         
     def import_deviations(self,):
         print("\tNow importing calculated deviations")
@@ -92,7 +109,7 @@ class run_deviation_sequence_analysis():
 
         print("\tNow pulling true deviation rasters")
         segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
-            segment_dev_fr_vecs_zscore, zscore_means, zscore_stds \
+            segment_dev_fr_vecs_zscore, segment_zscore_means, segment_zscore_stds \
                 = dev_f.create_dev_rasters(num_seg_to_analyze,
                             segment_spike_times_to_analyze, 
                             np.array(segment_times_to_analyze_reshaped),
@@ -102,6 +119,8 @@ class run_deviation_sequence_analysis():
         self.segment_dev_times = segment_dev_times
         self.segment_dev_fr_vecs = segment_dev_fr_vecs
         self.segment_dev_fr_vecs_zscore = segment_dev_fr_vecs_zscore
+        self.segment_zscore_means = segment_zscore_means
+        self.segment_zscore_stds = segment_zscore_stds
         
     def pull_fr_dist(self,):
         print("\tPulling FR Distributions")
@@ -125,13 +144,13 @@ class run_deviation_sequence_analysis():
         print("Analyzing deviation sequences")
         
 
-        dsf.split_euc_diff(self.num_neur, self.segment_dev_rasters,
-                           self.segment_zscore_means,self.segment_zscore_stds,
-                           self.tastant_fr_dist_pop,self.tastant_fr_dist_z_pop,
-                           self.dig_in_names,self.segment_names,
-                           self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)
+        # dsf.split_euc_diff(self.num_neur, self.segment_dev_rasters,
+        #                    self.segment_zscore_means,self.segment_zscore_stds,
+        #                    self.tastant_fr_dist_pop,self.tastant_fr_dist_z_pop,
+        #                    self.dig_in_names,self.segment_names,
+        #                    self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)
         dsf.split_match_calc(self.num_neur, self.segment_dev_rasters,
                            self.segment_zscore_means,self.segment_zscore_stds,
                            self.tastant_fr_dist_pop,self.tastant_fr_dist_z_pop,
-                           self.dig_in_names,self.segment_names,
+                           self.dig_in_names,self.segment_names,self.num_null,
                            self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)

@@ -16,15 +16,15 @@ import tqdm
 import numpy as np
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-2]) + '/'
-functions_path = os.path.join(blech_codes_path,'functions')
-os.chdir(functions_path)
-import analysis_funcs as af
-import hdf5_handling as hf5
-import dependent_decoding_funcs as ddf
-utils_path = os.path.join(blech_codes_path,'utils')
-os.chdir(utils_path)
-from replay_utils import import_metadata, state_tracker
-from data_utils import import_data
+#functions_path = os.path.join(blech_codes_path,'functions')
+os.chdir(blech_codes_path)
+import functions.analysis_funcs as af
+import functions.hdf5_handling as hf5
+import functions.dependent_decoding_funcs as ddf
+#utils_path = os.path.join(blech_codes_path,'utils')
+#os.chdir(utils_path)
+from utils.replay_utils import import_metadata, state_tracker
+from utils.data_utils import import_data
 
 # Grab current directory and data directory / metadata
 script_path = os.path.realpath(__file__)

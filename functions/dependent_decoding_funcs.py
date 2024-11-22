@@ -292,12 +292,15 @@ def decode_epochs(tastant_fr_dist, segment_spike_times, post_taste_dt,
             train_taste_data = []
             taste_num_deliv = len(tastant_fr_dist[t_i])
             for d_i in range(taste_num_deliv):
-                if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
-                    train_taste_data.extend(
-                        list(tastant_fr_dist[t_i][d_i][e_i].T))
-                else:
-                    train_taste_data.extend(
-                        list(tastant_fr_dist[t_i][d_i][e_i]))
+                try:
+                    if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
+                        train_taste_data.extend(
+                            list(tastant_fr_dist[t_i][d_i][e_i].T))
+                    else:
+                        train_taste_data.extend(
+                            list(tastant_fr_dist[t_i][d_i][e_i]))
+                except:
+                    train_taste_data.extend([])
             if t_i < num_tastes-1:
                 true_taste_train_data.extend(train_taste_data)
             else: #None condition - augment with randomized data in neuron firing range + single spike examples
@@ -551,12 +554,15 @@ def decode_deviations_epochs(tastant_fr_dist, segment_spike_times, dig_in_names,
             train_taste_data = []
             taste_num_deliv = len(tastant_fr_dist[t_i])
             for d_i in range(taste_num_deliv):
-                if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
-                    train_taste_data.extend(
-                        list(tastant_fr_dist[t_i][d_i][e_i].T))
-                else:
-                    train_taste_data.extend(
-                        list(tastant_fr_dist[t_i][d_i][e_i]))
+                try:
+                    if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
+                        train_taste_data.extend(
+                            list(tastant_fr_dist[t_i][d_i][e_i].T))
+                    else:
+                        train_taste_data.extend(
+                            list(tastant_fr_dist[t_i][d_i][e_i]))
+                except:
+                    train_taste_data.extend([])
             if t_i < num_tastes-1:
                 true_taste_train_data.extend(train_taste_data)
             else: #None condition - augment with randomized data in neuron firing range + single spike examples
@@ -806,12 +812,15 @@ def decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times,
         train_taste_data = []
         for e_i in epochs_to_analyze:
             for d_i in range(num_deliveries):
-                if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
-                    train_taste_data.extend(
-                        list(tastant_fr_dist[t_i][d_i][e_i].T))
-                else:
-                    train_taste_data.extend(
-                        list(tastant_fr_dist[t_i][d_i][e_i]))
+                try:
+                    if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
+                        train_taste_data.extend(
+                            list(tastant_fr_dist[t_i][d_i][e_i].T))
+                    else:
+                        train_taste_data.extend(
+                            list(tastant_fr_dist[t_i][d_i][e_i]))
+                except:
+                    train_taste_data.extend([])
         if t_i < num_tastes-1:
             true_taste_train_data.extend(train_taste_data)
         else:
