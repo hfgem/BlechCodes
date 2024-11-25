@@ -255,7 +255,7 @@ class run_deviation_null_analysis():
         for null_i in tqdm.tqdm(range(self.num_null)):
             null_segment_deviations = self.all_null_deviations[null_i]
             null_segment_spike_times = self.all_null_segment_spike_times[null_i]
-            null_segment_dev_rasters_i, null_segment_dev_times_i, _, _ = df.create_dev_rasters(num_seg,
+            null_segment_dev_rasters_i, null_segment_dev_times_i, _, _, _, _ = df.create_dev_rasters(num_seg,
                                                                                                null_segment_spike_times,
                                                                                                seg_times_reshaped,
                                                                                                null_segment_deviations, z_bin)
