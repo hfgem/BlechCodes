@@ -53,12 +53,18 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
     z_decode_dir = os.path.join(decode_dir,'zscore_firing_rates')
     if not os.path.isdir(z_decode_dir):
         os.mkdir(z_decode_dir)
-    null_decode_dir = os.path.join(non_z_decode_dir,'null_decodes')
+    null_decode_dir = os.path.join(non_z_decode_dir,'null_decodes_win_neur')
     if not os.path.isdir(null_decode_dir):
         os.mkdir(null_decode_dir)
-    null_z_decode_dir = os.path.join(z_decode_dir,'null_decodes')
+    null_z_decode_dir = os.path.join(z_decode_dir,'null_decodes_win_neur')
     if not os.path.isdir(null_z_decode_dir):
         os.mkdir(null_z_decode_dir)
+    null_decode_dir_2 = os.path.join(non_z_decode_dir,'null_decodes_across_neur')
+    if not os.path.isdir(null_decode_dir_2):
+        os.mkdir(null_decode_dir_2)
+    null_z_decode_dir_2 = os.path.join(z_decode_dir,'null_decodes_across_neur')
+    if not os.path.isdir(null_z_decode_dir_2):
+        os.mkdir(null_z_decode_dir_2)
     
     # Variables
     num_tastes = len(dig_in_names)
@@ -125,9 +131,13 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
         dev_mats_z = []
         null_dev_dict = dict()
         null_dev_z_dict = dict()
+        null_dev_dict_2 = dict()
+        null_dev_z_dict_2 = dict()
         for null_i in range(num_null):
             null_dev_dict[null_i] = []
             null_dev_z_dict[null_i] = []
+            null_dev_dict_2[null_i] = []
+            null_dev_z_dict_2[null_i] = []
         for dev_i in range(num_dev):
             #Pull raster firing rate vectors
             dev_rast = seg_dev_rast[dev_i]
@@ -148,6 +158,7 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
             dev_mats_z.append(dev_mat_z)
             #Create null versions of the event
             for null_i in range(num_null):
+                #Shuffle within-neuron spike times
                 shuffle_rast = np.zeros(np.shape(dev_rast))
                 for neur_i in range(num_neur):
                     new_spike_ind = random.sample(list(np.arange(num_dt)),num_spikes_per_neur[neur_i])
@@ -164,137 +175,32 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
                 shuffle_dev_mat_z = np.concatenate((first_half_fr_vec_z,second_half_fr_vec_z),1)
                 null_dev_dict[null_i].append(shuffle_dev_mat)
                 null_dev_z_dict[null_i].append(shuffle_dev_mat_z)
+                #Shuffle across-neuron spike times
+                shuffle_rast_2 = np.zeros(np.shape(dev_rast))
+                new_neuron_order = random.sample(list(np.arange(num_neur)),num_neur)
+                for nn_ind, nn in enumerate(new_neuron_order):
+                    shuffle_rast_2[nn_ind,:] = shuffle_rast[nn,:]
+                first_half_shuffle_rast_2 = shuffle_rast_2[:,:half_dt]
+                second_half_shuffle_rast_2 = shuffle_rast_2[:,-half_dt:]
+                #Create fr vecs
+                first_half_fr_vec_2 = np.expand_dims(np.sum(first_half_shuffle_rast_2,1)/(half_dt/1000),1) #In Hz
+                second_half_fr_vec_2 = np.expand_dims(np.sum(second_half_shuffle_rast_2,1)/(half_dt/1000),1) #In Hz
+                shuffle_dev_mat_2 = np.concatenate((first_half_fr_vec_2,second_half_fr_vec_2),1)
+                #Create z-scored fr vecs
+                first_half_fr_vec_z_2 = (first_half_fr_vec_2 - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
+                second_half_fr_vec_z_2 = (second_half_fr_vec_2 - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
+                shuffle_dev_mat_z_2 = np.concatenate((first_half_fr_vec_z_2,second_half_fr_vec_z_2),1)
+                null_dev_dict_2[null_i].append(shuffle_dev_mat_2)
+                null_dev_z_dict_2[null_i].append(shuffle_dev_mat_z_2)      
             
         dev_mats_array = np.array(dev_mats) #num dev x num neur x 2
         dev_mats_z_array = np.array(dev_mats_z) #num dev x num neur x 2
         for null_i in range(num_null):
             null_dev_dict[null_i] = np.array(null_dev_dict[null_i]) #num dev x num neur x 2
             null_dev_z_dict[null_i] = np.array(null_dev_z_dict[null_i]) #num dev x num neur x 2
+            null_dev_dict_2[null_i] = np.array(null_dev_dict_2[null_i]) #num dev x num neur x 2
+            null_dev_z_dict_2[null_i] = np.array(null_dev_z_dict_2[null_i]) #num dev x num neur x 2
             
-        #For each taste and epoch pair, calculate the distribution of correlations
-        #for the deviation event matrices to the taste response matrices
-        # all_taste_dist_vals = [] #num tastes x num epoch pairs x num dev x num deliv
-        # all_taste_dist_vals_z = [] #num tastes x num epoch pairs x num dev x num deliv
-        # all_taste_avg_dist_vals = [] #num tastes x num epoch pairs x num dev
-        # all_taste_avg_dist_vals_z = [] #num tastes x num epoch pairs x num dev
-        # all_taste_avg_corr_vals = [] #num tastes x num epoch pairs x num dev x (2x2)
-        # all_taste_avg_corr_vals_z = [] #num tastes x num epoch pairs x num dev x (2x2)
-        # all_taste_avg_corr_sigs = [] #num tastes x num epoch pairs x num dev x (2x2)
-        # all_taste_avg_corr_sigs_z = [] #num tastes x num epoch pairs x num dev x (2x2)
-        # for t_i in range(num_tastes):
-        #     taste_dist_vals = [] #num epoch pairs x num dev x num deliv
-        #     taste_dist_vals_z = [] #num epoch pairs x num dev x num deliv
-        #     taste_avg_dist_vals = [] #num epoch pairs x num dev
-        #     taste_avg_dist_vals_z = [] #num epoch pairs x num dev
-        #     taste_avg_corr_vals = [] #num epoch pairs x num dev x (2x2)
-        #     taste_avg_corr_vals_z = [] #num epoch pairs x num dev x (2x2)
-        #     taste_avg_corr_sigs = [] #num epoch pairs x num dev x (2x2)
-        #     taste_avg_corr_sigs_z = [] #num epoch pairs x num dev x (2x2)
-        #     for e_p_ind, e_pair in enumerate(epoch_splits):
-        #         e_pair_name = 'Epoch ' + str(e_pair[0]) + ', Epoch ' + str(e_pair[1])
-                
-        #         taste_deliv_mat_array = np.array(all_taste_fr_mats[t_i][e_p_ind]) #num deliv x num neur x 2
-        #         taste_deliv_mat_z_array = np.array(all_taste_fr_mats_zscore[t_i][e_p_ind]) #num deliv x num neur x 2
-                
-        #         all_dist_vals = [] #size num dev x num deliv
-        #         all_dist_vals_z = [] #size num dev x num deliv
-        #         avg_dist_vals = [] #size num dev
-        #         avg_dist_vals_z = [] #size num dev
-        #         avg_corr_vals = [] #size num dev x (2x2)
-        #         avg_corr_vals_z = [] #size num dev x (2x2)
-        #         avg_corr_sigs = [] #size num dev x (2x2)
-        #         avg_corr_sigs_z = [] #size num dev x (2x2)
-        #         for dev_i in range(num_dev):
-        #             dev_mat = dev_mats_array[dev_i,:,:].squeeze()
-        #             dev_mat_z = dev_mats_z_array[dev_i,:,:].squeeze()
-                    
-        #             dev_i_dists = [] #size num deliv
-        #             dev_i_z_dists = [] #size num deliv
-        #             for deliv_i in range(num_taste_deliv[t_i]):
-        #                 try:
-        #                     taste_mat = taste_deliv_mat_array[deliv_i,:,:].squeeze()
-        #                     taste_mat_z = taste_deliv_mat_z_array[deliv_i,:,:].squeeze()
-        #                     #Calculate euclidean distances
-        #                     dev_i_dists.extend([np.sqrt(np.sum(np.square(dev_mat-taste_mat)))])
-        #                     dev_i_z_dists.extend([np.sqrt(np.sum(np.square(dev_mat_z-taste_mat_z)))])
-        #                 except: #Trial missing condition
-        #                     dev_i_dists.extend([])
-        #             all_dist_vals.append(dev_i_dists)
-        #             all_dist_vals_z.append(dev_i_z_dists)
-        #             #Calculate average taste templates
-        #             taste_avg_mat = np.nanmean(taste_deliv_mat_array,0).squeeze()
-        #             taste_z_avg_mat = np.nanmean(taste_deliv_mat_z_array,0).squeeze()
-        #             #Now the average correlation to that taste's template
-        #             dev_i_avg_dist = np.sqrt(np.sum(np.square(dev_mat-taste_avg_mat)))
-        #             dev_i_avg_z_dist =np.sqrt(np.sum(np.square(dev_mat_z-taste_z_avg_mat)))
-        #             avg_dist_vals.extend([dev_i_avg_dist])
-        #             avg_dist_vals_z.extend([dev_i_avg_z_dist])
-        #             #Calculate pairwise correlations to taste's template
-        #             dev_i_corrs = np.zeros((2,2))
-        #             dev_i_z_corrs = np.zeros((2,2))
-        #             dev_i_sigs = np.zeros((2,2))
-        #             dev_i_z_sigs = np.zeros((2,2))
-        #             for dev_half in range(2):
-        #                 for deliv_half in range(2):
-        #                     corr_results = stats.pearsonr(dev_mat[:,dev_half],taste_avg_mat[:,deliv_half])
-        #                     dev_i_corrs[dev_half,deliv_half] = corr_results[0]
-        #                     dev_i_sigs[dev_half,deliv_half] = corr_results[1]
-        #                     corr_results_z = stats.pearsonr(dev_mat_z[:,dev_half],taste_z_avg_mat[:,deliv_half])
-        #                     dev_i_z_corrs[dev_half,deliv_half] = corr_results_z[0]
-        #                     dev_i_z_sigs[dev_half,deliv_half] = corr_results_z[1]
-        #             avg_corr_vals.append(dev_i_corrs)
-        #             avg_corr_vals_z.append(dev_i_z_corrs)
-        #             avg_corr_sigs.append(dev_i_sigs)
-        #             avg_corr_sigs_z.append(dev_i_z_sigs)
-                
-        #         taste_dist_vals.append(all_dist_vals)
-        #         taste_dist_vals_z.append(all_dist_vals_z)
-        #         taste_avg_dist_vals.append(avg_dist_vals)
-        #         taste_avg_dist_vals_z.append(avg_dist_vals_z)
-        #         taste_avg_corr_vals.append(avg_corr_vals)
-        #         taste_avg_corr_vals_z.append(avg_corr_vals_z)
-        #         taste_avg_corr_sigs.append(avg_corr_sigs)
-        #         taste_avg_corr_sigs_z.append(avg_corr_sigs_z)
-            
-        #     all_taste_dist_vals.append(taste_dist_vals)
-        #     all_taste_dist_vals_z.append(taste_dist_vals_z)
-        #     all_taste_avg_dist_vals.append(taste_avg_dist_vals)
-        #     all_taste_avg_dist_vals_z.append(taste_avg_dist_vals_z)
-        #     all_taste_avg_corr_vals.append(taste_avg_corr_vals)
-        #     all_taste_avg_corr_vals_z.append(taste_avg_corr_vals_z)
-        #     all_taste_avg_corr_sigs.append(taste_avg_corr_sigs)
-        #     all_taste_avg_corr_sigs_z.append(taste_avg_corr_sigs_z)
-            
-        #Calculate significance of distance distributions
-        
-        # sig_test_dist_distributions(num_tastes, taste_pairs, taste_pair_names, \
-        #                             epoch_splits, epoch_pair_pairs, epoch_pair_pair_names, \
-        #                             dig_in_names, taste_colors, epoch_colors, segment_names, s_i, \
-        #                             all_taste_avg_dist_vals, all_taste_avg_dist_vals_z, dist_dir)
-            
-        # #Plot the distance distributions and significantly close distances
-        
-        # plot_dist_distributions(num_tastes, epoch_splits, dig_in_names, taste_colors, \
-        #                             epoch_colors, segment_names, s_i, all_taste_avg_dist_vals, \
-        #                             all_taste_avg_dist_vals_z, dist_dir)
-        
-        # plot_sig_dist_cutoff_results(epoch_splits, all_taste_avg_dist_vals, \
-        #                                 all_taste_avg_dist_vals_z, num_tastes, \
-        #                                 dig_in_names, taste_colors, s_i, segment_names, \
-        #                                 dist_dir)
-            
-        # #Look at correlation results
-        # #Calculate significance of correlation distributions
-        
-        
-        # #   How many of the p-values from the correlation are significant?
-        
-        
-        # #   Is the on-diagonal correlation strength stronger than off-diagonal?
-        # plot_corr_distributions(num_tastes, epoch_splits, dig_in_names, taste_colors, \
-        #                             epoch_colors, segment_names, s_i, all_taste_avg_corr_vals, \
-        #                             all_taste_avg_corr_vals_z, corr_dir)
-        
         #Decode each deviation event split
         
         decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
@@ -311,7 +217,12 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
         decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
                         dig_in_names, null_dev_z_dict, segment_names, s_i,
                         null_z_decode_dir, z_decode_dir, epochs_to_analyze)
-            
+        decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
+                        dig_in_names, null_dev_dict_2, segment_names, s_i,
+                        null_decode_dir_2, non_z_decode_dir, epochs_to_analyze)
+        decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
+                        dig_in_names, null_dev_z_dict_2, segment_names, s_i,
+                        null_z_decode_dir_2, z_decode_dir, epochs_to_analyze)
         
                      
 def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist, 
@@ -1019,9 +930,9 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
     plt.ylabel('Number of Null Distributions')
     plt.legend(loc='upper left')
     plt.tight_layout()
-    f_frac_all_taste.savefig(os.path.join(true_decode_dir,segment_names[s_i]
+    f_frac_all_taste.savefig(os.path.join(null_decode_dir,segment_names[s_i]
                          + '_frac_dev_all_taste_v_null.png'))
-    f_frac_all_taste.savefig(os.path.join(true_decode_dir,segment_names[s_i]
+    f_frac_all_taste.savefig(os.path.join(null_decode_dir,segment_names[s_i]
                          + '_frac_dev_all_taste_v_null.svg'))
     plt.close(f_frac_all_taste)
     
@@ -1078,9 +989,9 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
             ax_which_taste[0,t_i].legend(loc='upper right')
             ax_which_taste[0,t_i].set_ylabel('# Null Distributions')
             ax_which_taste[1,t_i].set_ylabel('# Null Distributions')
-    f_which_taste.savefig(os.path.join(true_decode_dir,segment_names[s_i]
+    f_which_taste.savefig(os.path.join(null_decode_dir,segment_names[s_i]
                          + '_frac_dev_same_taste_v_null.png'))
-    f_which_taste.savefig(os.path.join(true_decode_dir,segment_names[s_i]
+    f_which_taste.savefig(os.path.join(null_decode_dir,segment_names[s_i]
                          + '_frac_dev_same_taste_v_null.svg'))
     plt.close(f_which_taste)
     
@@ -1140,8 +1051,8 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
                 ax_epoch_order[ep_r,ep_c].legend(loc='upper left')
         plt.suptitle(taste_name + '\nEpoch Pair Data Comp')
         plt.tight_layout()
-        f_epoch_order.savefig(os.path.join(true_decode_dir,segment_names[s_i]
+        f_epoch_order.savefig(os.path.join(null_decode_dir,segment_names[s_i]
                              + '_' + taste_name + '_frac_dev_epoch_order_v_null.png'))
-        f_epoch_order.savefig(os.path.join(true_decode_dir,segment_names[s_i]
+        f_epoch_order.savefig(os.path.join(null_decode_dir,segment_names[s_i]
                              + '_' + taste_name + '_frac_dev_epoch_order_v_null.svg'))
         plt.close(f_epoch_order)
