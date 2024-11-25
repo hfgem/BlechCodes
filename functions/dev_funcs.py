@@ -87,7 +87,9 @@ def create_dev_rasters(num_iterations, spike_times,
     dev_times = []
     dev_fr_vecs = []
     dev_fr_vecs_zscore = []  # Includes pre-interval for z-scoring
-    for ind in range(num_iterations):
+    zscore_means = []
+    zscore_stds = []
+    for ind in range(num_iterations): #num_iterations = num segments to analyze
         seg_spikes = spike_times[ind]
         num_neur = len(seg_spikes)
         num_dt = int(start_end_times[ind][1] - start_end_times[ind][0] + 1)
@@ -104,6 +106,8 @@ def create_dev_rasters(num_iterations, spike_times,
                     spikes_bin[:, tb_i:tb_i+z_bin_dt], 1)/z_bin
             mean_fr = np.nanmean(seg_fr, 1)
             std_fr = np.nanstd(seg_fr, 1)
+            zscore_means.append(mean_fr)
+            zscore_stds.append(std_fr)
         # Now pull rasters and vectors
         seg_rast = []
         seg_vecs = []
@@ -138,7 +142,7 @@ def create_dev_rasters(num_iterations, spike_times,
         dev_fr_vecs.append(seg_vecs)
         dev_fr_vecs_zscore.append(seg_vecs_zscore)
 
-    return dev_rasters, dev_times, dev_fr_vecs, dev_fr_vecs_zscore
+    return dev_rasters, dev_times, dev_fr_vecs, dev_fr_vecs_zscore, zscore_means, zscore_stds
 
 
 def calculate_dev_stats(rasters, times, iteration_names, save_dir, iterations_to_analyze=[]):

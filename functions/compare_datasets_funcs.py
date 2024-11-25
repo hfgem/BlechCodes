@@ -2504,7 +2504,7 @@ def cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names,
             seg_max_corr = 0
             seg_min_corr = 1
             for t_i, t_name in enumerate(unique_taste_names):
-                corr_vec = mean_corr_dict[corr_type][taste_name][s_name]['all']
+                corr_vec = mean_corr_dict[corr_type][t_name][s_name]['all']
                 if len(corr_array) > 1:
                     corr_max = np.nanmax(corr_vec)
                     corr_min = np.nanmin(corr_vec)

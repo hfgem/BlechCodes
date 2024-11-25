@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Apr 17 17:55:12 2024
+Created on Tue Nov  5 16:06:35 2024
 
 @author: Hannah Germaine
 
-In this step of the analysis pipeline, a Bayesian decoder is trained on taste
-responses and then run on the deviation events calculated earlier in the 
-pipeline.
+In this step of the analysis pipeline, deviation events are split in half
+and tested for sequential changes in firing rate and taste sequence similarity.
 """
 
 import os
@@ -21,28 +20,28 @@ blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
 import functions.decoding_funcs as df
+import functions.dev_sequence_funcs as dsf
 import functions.dependent_decoding_funcs as ddf
-import functions.plot_dev_decoding_funcs as pddf
 import functions.dev_funcs as dev_f
 import functions.hdf5_handling as hf5
 
-class run_deviation_dependent_bayes():
-
+class run_deviation_sequence_analysis():
+    
     def __init__(self, args):
         self.metadata = args[0]
         self.data_dict = args[1]
         self.gather_variables()
         self.import_deviations()
         self.pull_fr_dist()
-        self.decode_all_neurons()
-
+        self.analyze_sequences()
+        
     def gather_variables(self,):
         # Directories
         self.hdf5_dir = self.metadata['hdf5_dir']
-        self.bayes_dir = self.metadata['dir_name'] + \
-            'Deviation_Dependent_Decoding/'
-        if os.path.isdir(self.bayes_dir) == False:
-            os.mkdir(self.bayes_dir)
+        self.seq_dir = self.metadata['dir_name'] + \
+            'Deviation_Sequence_Analysis/'
+        if os.path.isdir(self.seq_dir) == False:
+            os.mkdir(self.seq_dir)
         self.dev_dir = self.metadata['dir_name'] + 'Deviations/'
         # General Params/Variables
         self.num_neur = self.data_dict['num_neur']
@@ -65,12 +64,14 @@ class run_deviation_dependent_bayes():
         self.end_dig_in_times = self.data_dict['end_dig_in_times']
         self.dig_in_names = self.data_dict['dig_in_names']
         self.num_tastes = len(self.dig_in_names)
-        self.min_dev_size = self.metadata['params_dict']['min_dev_size']
-        # Decoding Params/Variables
+        self.fr_bins = self.metadata['params_dict']['fr_bins']
+        #Bayes Params/Variables
+        self.skip_time = self.metadata['params_dict']['bayes_params']['skip_time']
+        self.skip_dt = np.ceil(self.skip_time*1000).astype('int')
         self.e_skip_time = self.metadata['params_dict']['bayes_params']['e_skip_time']
         self.e_skip_dt = np.ceil(self.e_skip_time*1000).astype('int')
         self.taste_e_len_time = self.metadata['params_dict']['bayes_params']['taste_e_len_time']
-        self.taste_e_len_dt = np.ceil(self.taste_e_len_time*1000).astype('int')
+        self.taste_e_len_dt = np.ceil(self.taste_e_len_time*1000).astype('int') 
         self.seg_e_len_time = self.metadata['params_dict']['bayes_params']['seg_e_len_time']
         self.seg_e_len_dt = np.ceil(self.seg_e_len_time*1000).astype('int') 
         self.bayes_fr_bins = self.metadata['params_dict']['bayes_params']['fr_bins']
@@ -81,25 +82,12 @@ class run_deviation_dependent_bayes():
         self.decode_prob_cutoff = self.metadata['params_dict']['bayes_params']['decode_prob_cutoff']
         self.bin_time = self.metadata['params_dict']['bayes_params']['z_score_bin_time']
         self.bin_dt = np.ceil(self.bin_time*1000).astype('int')
+        self.num_null = 100 #self.metadata['params_dict']['num_null']
         # Import changepoint data
-        pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
+        self.pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
             self.hdf5_dir, 'changepoint_data', 'pop_taste_cp_raster_inds')
-        self.pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
-        num_pt_cp = self.num_cp + 2
-        # Import taste selectivity data
-        try:
-            select_neur = hf5.pull_data_from_hdf5(
-                self.hdf5_dir, 'taste_selectivity', 'taste_select_neur_epoch_bin')[0]
-            self.select_neur = select_neur
-        except:
-            print("\tNo taste selectivity data found. Skipping.")
-        # Import discriminability data
-        peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(
-            self.hdf5_dir, 'taste_discriminability', 'peak_epochs'))
-        discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
-            self.hdf5_dir, 'taste_discriminability', 'discrim_neur'))
-        self.discrim_neur = discrim_neur
-
+        self.num_pt_cp = self.num_cp + 2
+        
     def import_deviations(self,):
         print("\tNow importing calculated deviations")
         
@@ -121,16 +109,19 @@ class run_deviation_dependent_bayes():
 
         print("\tNow pulling true deviation rasters")
         segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
-            segment_dev_fr_vecs_zscore, _, _ = dev_f.create_dev_rasters(num_seg_to_analyze, 
-                                                                segment_spike_times_to_analyze,
-                                                                np.array(segment_times_to_analyze_reshaped),
-                                                                segment_deviations, self.pre_taste)
+            segment_dev_fr_vecs_zscore, segment_zscore_means, segment_zscore_stds \
+                = dev_f.create_dev_rasters(num_seg_to_analyze,
+                            segment_spike_times_to_analyze, 
+                            np.array(segment_times_to_analyze_reshaped),
+                            segment_deviations, self.pre_taste)
 
         self.segment_dev_rasters = segment_dev_rasters
         self.segment_dev_times = segment_dev_times
         self.segment_dev_fr_vecs = segment_dev_fr_vecs
         self.segment_dev_fr_vecs_zscore = segment_dev_fr_vecs_zscore
-
+        self.segment_zscore_means = segment_zscore_means
+        self.segment_zscore_stds = segment_zscore_stds
+        
     def pull_fr_dist(self,):
         print("\tPulling FR Distributions")
         tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur, self.tastant_spike_times,
@@ -148,69 +139,18 @@ class run_deviation_dependent_bayes():
         self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
         self.max_hz_z_pop = max_hz_z_pop
         self.min_hz_z_pop = min_hz_z_pop
+        
+    def analyze_sequences(self,):
+        print("Analyzing deviation sequences")
+        
 
-    def decode_all_neurons(self,):
-        print("\tDecoding all neurons")
-        all_neur_dir = self.bayes_dir + 'All_Neurons/'
-        if os.path.isdir(all_neur_dir) == False:
-            os.mkdir(all_neur_dir)
-            
-        taste_select_neur = np.ones(np.shape(self.discrim_neur))
-        self.taste_select_neur = taste_select_neur
-        
-        
-        decode_dir = all_neur_dir + 'GMM_Decoding/'
-        if os.path.isdir(decode_dir) == False:
-            os.mkdir(decode_dir)
-        self.decode_dir = decode_dir
-        
-        ddf.decode_deviations_is_taste_which_taste(self.tastant_fr_dist_pop, self.segment_spike_times,
-                                     self.dig_in_names, self.segment_times, 
-                                     self.segment_names, self.start_dig_in_times, 
-                                     self.taste_num_deliv, self.segment_dev_times,
-                                     self.segment_dev_fr_vecs, self.bin_dt, 
-                                     self.decode_dir, False, 
-                                     self.epochs_to_analyze, self.segments_to_analyze)
-
-        self.plot_decoded_data()
-
-    def decode_all_neurons_zscore(self,):
-        print("\tDecoding all neurons")
-        all_neur_z_dir = self.bayes_dir + 'All_Neurons_Z_Scored/'
-        if os.path.isdir(all_neur_z_dir) == False:
-            os.mkdir(all_neur_z_dir)
-            
-        taste_select_neur = np.ones(np.shape(self.discrim_neur))
-        self.taste_select_neur = taste_select_neur
-        
-        
-        decode_dir = all_neur_z_dir + 'GMM_Decoding/'
-        if os.path.isdir(decode_dir) == False:
-            os.mkdir(decode_dir)
-        self.decode_dir = decode_dir
-        
-        ddf.decode_deviations_is_taste_which_taste(self.tastant_fr_dist_z_pop, self.segment_spike_times,
-                                     self.dig_in_names, self.segment_times, 
-                                     self.segment_names, self.start_dig_in_times, 
-                                     self.taste_num_deliv, self.segment_dev_times,
-                                     self.segment_dev_fr_vecs_zscore, self.bin_dt, 
-                                     self.decode_dir, True, 
-                                     self.epochs_to_analyze, self.segments_to_analyze)
-
-        self.plot_decoded_data()
-
-
-    def plot_decoded_data(self,):
-        print("\t\tPlotting Decoded Results")
-        
-        pddf.plot_is_taste_which_taste_decoded(self.num_tastes, self.num_neur, 
-                                               self.segment_spike_times, self.tastant_spike_times,
-                                               self.start_dig_in_times, self.post_taste_dt, 
-                                               self.pre_taste_dt, self.pop_taste_cp_raster_inds, 
-                                               self.bin_dt, self.dig_in_names, self.segment_times,
-                                               self.segment_names, self.decode_dir, self.max_hz_pop,
-                                               self.segment_dev_times, self.segment_dev_fr_vecs, 
-                                               self.segment_dev_fr_vecs_zscore, self.neuron_count_thresh, 
-                                               self.seg_e_len_dt, self.trial_start_frac,
-                                               self.epochs_to_analyze, self.segments_to_analyze, 
-                                               self.decode_prob_cutoff)
+        # dsf.split_euc_diff(self.num_neur, self.segment_dev_rasters,
+        #                    self.segment_zscore_means,self.segment_zscore_stds,
+        #                    self.tastant_fr_dist_pop,self.tastant_fr_dist_z_pop,
+        #                    self.dig_in_names,self.segment_names,
+        #                    self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)
+        dsf.split_match_calc(self.num_neur, self.segment_dev_rasters,
+                           self.segment_zscore_means,self.segment_zscore_stds,
+                           self.tastant_fr_dist_pop,self.tastant_fr_dist_z_pop,
+                           self.dig_in_names,self.segment_names,self.num_null,
+                           self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)
