@@ -19,12 +19,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import functions.decode_parallel as dp
 from scipy import stats
+from scipy.stats import f
 from matplotlib import colormaps
 from multiprocess import Pool
 from sklearn.decomposition import PCA
 from sklearn.mixture import GaussianMixture as gmm
 
-def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
+def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
                    tastant_fr_dist_pop,tastant_fr_dist_z_pop,dig_in_names,segment_names,
                    num_null, save_dir, segments_to_analyze, epochs_to_analyze = []):
     """
@@ -68,15 +69,12 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
     
     # Variables
     num_tastes = len(dig_in_names)
-    num_segments = len(segment_dev_rasters)
     num_taste_deliv = [len(tastant_fr_dist_pop[t_i]) for t_i in range(num_tastes)]
     max_num_cp = 0
     for t_i in range(num_tastes):
         for d_i in range(num_taste_deliv[t_i]):
             if len(tastant_fr_dist_pop[t_i][d_i]) > max_num_cp:
                 max_num_cp = len(tastant_fr_dist_pop[t_i][d_i])
-    cmap = colormaps['jet']
-    taste_colors = cmap(np.linspace(0, 1, num_tastes)) #+1 for the deviation distribution color
     
     if len(epochs_to_analyze) == 0:
         epochs_to_analyze = np.arange(max_num_cp)
@@ -85,41 +83,7 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
     taste_pair_names = []
     for tp_i, tp in enumerate(taste_pairs):
         taste_pair_names.append(dig_in_names[tp[0]] + ' v. ' + dig_in_names[tp[1]])
-    epoch_splits = list(itertools.combinations(epochs_to_analyze, 2))
-    epoch_pair_pairs = list(itertools.combinations(np.arange(len(epoch_splits)), 2))
-    epoch_pair_pair_names = []
-    for epp_i, epp_pair_i in enumerate(epoch_pair_pairs):
-        epoch_pair_1 = epoch_splits[epp_pair_i[0]]
-        epoch_pair_2 = epoch_splits[epp_pair_i[1]]
-        epoch_pair_pair_names.append(str(epoch_pair_1) + ' v. ' + str(epoch_pair_2))
-        
-    cmap = colormaps['cividis']
-    epoch_colors = cmap(np.linspace(0, 1, len(epoch_splits)))
     
-    #Collect the firing rate pair matrices for the taste deliveries
-    all_taste_fr_mats = [] #num tastes x num epoch pairs x num deliv x (num neur x 2)
-    all_taste_fr_mats_zscore = [] #num tastes x num epoch pairs x num deliv x (num neur x 2)
-    for t_i in range(num_tastes):
-        t_pair_mats = []
-        t_pair_z_mats = []
-        for e_p_ind, e_pair in enumerate(epoch_splits):
-            e_pair_mats = []
-            e_pair_z_mats = []
-            for d_i in range(num_taste_deliv[t_i]):
-                try:
-                    e_1_vec = tastant_fr_dist_pop[t_i][d_i][e_pair[0]]
-                    e_2_vec = tastant_fr_dist_pop[t_i][d_i][e_pair[1]]
-                    e_pair_mats.append(np.concatenate((e_1_vec,e_2_vec),1))
-                    e_1_vec_z = tastant_fr_dist_z_pop[t_i][d_i][e_pair[0]].T
-                    e_2_vec_z = tastant_fr_dist_z_pop[t_i][d_i][e_pair[1]].T
-                    e_pair_z_mats.append(np.concatenate((e_1_vec_z,e_2_vec_z),1))
-                except:
-                    e_pair_mats.extend([])
-            t_pair_mats.append(e_pair_mats)
-            t_pair_z_mats.append(e_pair_z_mats)
-        all_taste_fr_mats.append(t_pair_mats)
-        all_taste_fr_mats_zscore.append(t_pair_z_mats)
-        
     #Now go through segments and their deviation events and compare
     for seg_ind, s_i in enumerate(segments_to_analyze):
         seg_dev_rast = segment_dev_rasters[seg_ind]
@@ -139,7 +103,7 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
             null_dev_dict_2[null_i] = []
             null_dev_z_dict_2[null_i] = []
         for dev_i in range(num_dev):
-            #Pull raster firing rate vectors
+            #Pull raster for firing rate vectors
             dev_rast = seg_dev_rast[dev_i]
             num_spikes_per_neur = np.sum(dev_rast,1).astype('int')
             _, num_dt = np.shape(dev_rast)
@@ -203,23 +167,27 @@ def split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_
             
         #Decode each deviation event split
         
-        decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
-                        dig_in_names, dev_mats_array, segment_names, s_i,
-                        non_z_decode_dir, epochs_to_analyze)
+        # decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
+        #                 dig_in_names, dev_mats_array, segment_names, s_i,
+        #                 non_z_decode_dir, epochs_to_analyze)
         decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
                         dig_in_names, dev_mats_z_array, segment_names, s_i,
                         z_decode_dir, epochs_to_analyze)
         
+        #Run decoded splits significance tests
+        decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names, 
+                                             s_i, z_decode_dir, epochs_to_analyze)
+        
         #Decode null distribution
-        decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
-                        dig_in_names, null_dev_dict, segment_names, s_i,
-                        null_decode_dir, non_z_decode_dir, epochs_to_analyze)
+        # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
+        #                 dig_in_names, null_dev_dict, segment_names, s_i,
+        #                 null_decode_dir, non_z_decode_dir, epochs_to_analyze)
         decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
                         dig_in_names, null_dev_z_dict, segment_names, s_i,
                         null_z_decode_dir, z_decode_dir, epochs_to_analyze)
-        decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
-                        dig_in_names, null_dev_dict_2, segment_names, s_i,
-                        null_decode_dir_2, non_z_decode_dir, epochs_to_analyze)
+        # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
+        #                 dig_in_names, null_dev_dict_2, segment_names, s_i,
+        #                 null_decode_dir_2, non_z_decode_dir, epochs_to_analyze)
         decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
                         dig_in_names, null_dev_z_dict_2, segment_names, s_i,
                         null_z_decode_dir_2, z_decode_dir, epochs_to_analyze)
@@ -448,8 +416,8 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
                 same_taste_bool.append(all([dev_which_taste_argmax_array[i,j] == same_taste_test_ind[i] for j in range(num_splits)]))
             same_taste_ind = np.where(same_taste_bool)[0]
             
-            if np.sum(np.array(same_taste_bool).astype('int')) > 0: #There are events that have the same taste decoded in all splits
-                taste_decode.extend([same_taste_ind[same_taste_bool]])    
+            if len(same_taste_ind) > 0: #There are events that have the same taste decoded in all splits
+                taste_decode.extend([same_taste_ind])    
                 dev_same_taste_inds = dev_is_taste_inds[same_taste_ind]
                 dev_same_taste_list = []
                 num_gmm = []
@@ -956,34 +924,44 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
                                                  figsize=(5,5))
     for t_i in range(num_tastes-1):
         null_vals = null_taste_fractions[:,t_i]
-        ax_which_taste[0,t_i].hist(null_vals,label='Null Distribution')
+        null_vals_no_nan = null_vals[~np.isnan(null_vals)]
         true_val = true_taste_fractions[t_i]
-        ax_which_taste[0,t_i].axvline(true_val,label='True Data',color='r')
-        
-        percentile_95 = np.percentile(null_vals,95)
-        percentile_5 = np.percentile(null_vals,5)
-        if true_val > percentile_95:
-            ax_which_taste[0,t_i].set_title(dig_in_names[t_i] + ' *.95')
-        elif true_val < percentile_5:
-            ax_which_taste[0,t_i].set_title(dig_in_names[t_i] + ' *.05')
+        if len(null_vals_no_nan) > 0:
+            ax_which_taste[0,t_i].hist(null_vals_no_nan,label='Null Distribution')
+            ax_which_taste[0,t_i].axvline(true_val,label='True Data',color='r')
+            percentile_95 = np.percentile(null_vals,95)
+            percentile_5 = np.percentile(null_vals,5)
+            if true_val > percentile_95:
+                ax_which_taste[0,t_i].set_title(dig_in_names[t_i] + ' *.95')
+            elif true_val < percentile_5:
+                ax_which_taste[0,t_i].set_title(dig_in_names[t_i] + ' *.05')
+            else:
+                ax_which_taste[0,t_i].set_title(dig_in_names[t_i])
+            
+            ax_which_taste[0,t_i].set_xlabel('Fraction of All\nDeviation Events')
         else:
-            ax_which_taste[0,t_i].set_title(dig_in_names[t_i])
-        
-        ax_which_taste[0,t_i].set_xlabel('Fraction of All\nDeviation Events')
+            ax_which_taste[0,t_i].axvline(true_val,label='True Data',color='r')
+            ax_which_taste[0,t_i].set_title(dig_in_names[t_i] + ' *.95')
         plt.tight_layout()
         null_vals = null_taste_only_taste_fractions[:,t_i]
-        ax_which_taste[1,t_i].hist(null_vals,label='Null Distribution')
+        null_vals_no_nan = null_vals[~np.isnan(null_vals)]
         true_val = true_taste_only_taste_fractions[t_i]
-        ax_which_taste[1,t_i].axvline(true_val,label='True Data',color='r')
-        ax_which_taste[1,t_i].set_xlabel('Fraction of Taste Only\nDeviation Events')
-        percentile_95 = np.percentile(null_vals,95)
-        percentile_5 = np.percentile(null_vals,5)
-        if true_val > percentile_95:
-            ax_which_taste[1,t_i].set_title(dig_in_names[t_i] + ' *.95')
-        elif true_val < percentile_5:
-            ax_which_taste[1,t_i].set_title(dig_in_names[t_i] + ' *.05')
+        if len(null_vals_no_nan) > 0:
+            ax_which_taste[1,t_i].hist(null_vals_no_nan,label='Null Distribution')
+            ax_which_taste[1,t_i].axvline(true_val,label='True Data',color='r')
+            ax_which_taste[1,t_i].set_xlabel('Fraction of Taste Only\nDeviation Events')
+            percentile_95 = np.percentile(null_vals_no_nan,95)
+            percentile_5 = np.percentile(null_vals_no_nan,5)
+            if true_val > percentile_95:
+                ax_which_taste[1,t_i].set_title(dig_in_names[t_i] + ' *.95')
+            elif true_val < percentile_5:
+                ax_which_taste[1,t_i].set_title(dig_in_names[t_i] + ' *.05')
+            else:
+                ax_which_taste[1,t_i].set_title(dig_in_names[t_i])
         else:
-            ax_which_taste[1,t_i].set_title(dig_in_names[t_i])
+            ax_which_taste[1,t_i].axvline(true_val,label='True Data',color='r')
+            ax_which_taste[1,t_i].set_xlabel('Fraction of Taste Only\nDeviation Events')
+            ax_which_taste[1,t_i].set_title(dig_in_names[t_i] + ' *.95')
         plt.tight_layout()
         if t_i == 0:
             ax_which_taste[0,t_i].legend(loc='upper right')
@@ -1056,3 +1034,176 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
         f_epoch_order.savefig(os.path.join(null_decode_dir,segment_names[s_i]
                              + '_' + taste_name + '_frac_dev_epoch_order_v_null.svg'))
         plt.close(f_epoch_order)
+        
+def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names, 
+                                     s_i, splits_decode_dir, epochs_to_analyze=[]):
+    """Decode taste from epoch-specific firing rates"""
+    print('\t\tRunning Decode Split Significance Tests')
+    
+    # Variables
+    num_tastes = len(dig_in_names)
+    num_dev, num_neur, num_splits = np.shape(dev_mats_array)
+    split_pairs = list(itertools.combinations(np.arange(num_splits), 2))    
+    sqrt_neur = np.ceil(np.sqrt(num_neur)).astype('int')
+    neur_inds = np.reshape(np.concatenate((np.arange(num_neur),-1*np.ones(sqrt_neur**2 - num_neur))).squeeze(),
+                           (sqrt_neur,sqrt_neur))
+    
+    #Significance test fr distribution differences against each other
+    #for two halves
+    sig_storage = np.zeros((len(split_pairs),3,3)) #Rows: Hotelling's T-Squared, F-statistic, p-val x Cols: is-taste, same-taste, which-taste
+    
+    dev_fr_list = []
+    for dev_i in range(num_dev):
+        #Converting to list for parallel processing
+        dev_fr_mat = np.squeeze(dev_mats_array[dev_i,:,:]) #Shape num_neur x 2
+        dev_fr_list.extend(list(dev_fr_mat.T))
+    
+    dev_decode_is_taste_array = np.load(
+        os.path.join(splits_decode_dir,segment_names[s_i] + \
+                     '_deviations_is_taste.npy'))
+    dev_is_taste_argmax = []
+    for dev_i in range(num_dev):
+        is_taste_argmax = np.argmax(dev_decode_is_taste_array[dev_i,:,:].squeeze(),0)
+        dev_is_taste_argmax.append(is_taste_argmax)
+    dev_is_taste_argmax_sum = np.sum(np.array(dev_is_taste_argmax),1)
+    dev_is_taste_inds = np.where(dev_is_taste_argmax_sum == 0)[0]
+    if len(dev_is_taste_inds) > 0: #at least some devs decoded as fully taste
+        dev_is_taste_splits = [dev_mats_array[dev_is_taste_inds,:,sp_i].squeeze() for sp_i in range(num_splits)]
+        for sp_ind, sp in enumerate(split_pairs):
+            vals_1 = dev_is_taste_splits[sp[0]]
+            vals_2 = dev_is_taste_splits[sp[1]]
+            # Perform the Hotelling's t-squared test
+            try:
+                T2, F_hot, p_value = hotelling_t2(vals_1, vals_2)
+                sig_storage[sp_ind,0,:] = [T2, F_hot, p_value]
+                title = "Hotelling's T-squared: " + str(np.round(T2,2)) + \
+                    "\nF-statistic: " + str(np.round(F_hot,3)) + \
+                        "\np-value: " + str(np.round(p_value,4))
+            except:
+                title = "Not enough samples for hotelling's t"
+            
+            f_plot, ax = plt.subplots(nrows = sqrt_neur, ncols = sqrt_neur,
+                                 figsize = (8,8))
+            for n_i in range(num_neur):
+                ax_ind = np.where(neur_inds == n_i)
+                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                ax[ax_ind[0][0],ax_ind[1][0]].set_title('Neuron ' + str(n_i))
+                ax[ax_ind[0][0],ax_ind[1][0]].set_xlabel('Firing Rate (Hz)')
+            ax[0,0].legend()
+            plt.suptitle(title)
+            plt.tight_layout()
+            f_plot.savefig(os.path.join(splits_decode_dir,segment_names[s_i] + \
+                         '_' + str(sp[0]) + '_vs_' + str(sp[1]) + \
+                             '_deviations_is_taste_split_sig.png'))
+            f_plot.savefig(os.path.join(splits_decode_dir,segment_names[s_i] + \
+                         '_' + str(sp[0]) + '_vs_' + str(sp[1]) + \
+                             '_deviations_is_taste_split_sig.svg'))
+            plt.close(f_plot)
+            
+        #Now look at sig for those that are the same taste
+        dev_decode_array = np.load(
+        os.path.join(splits_decode_dir,segment_names[s_i] + \
+                     '_deviations_which_taste.npy'))
+        dev_which_taste_argmax = []
+        for dev_i in dev_is_taste_inds:
+            which_taste_argmax = np.argmax(dev_decode_array[dev_i,:,:],0)
+            dev_which_taste_argmax.append(which_taste_argmax)
+        dev_which_taste_argmax_array = np.array(dev_which_taste_argmax)
+        same_taste_test_ind = dev_which_taste_argmax_array[:,0]
+        same_taste_bool = [] #True or false for each event whether same across splits
+        for i in range(len(same_taste_test_ind)):
+            same_taste_bool.append(all([dev_which_taste_argmax_array[i,j] == same_taste_test_ind[i] for j in range(num_splits)]))
+        same_taste_ind = np.where(same_taste_bool)[0]
+        if len(same_taste_ind) > 0: #There are events that have the same taste decoded in all splits
+            dev_same_taste_inds = dev_is_taste_inds[same_taste_ind]
+            dev_same_taste_splits = [dev_mats_array[dev_same_taste_inds,:,sp_i].squeeze() for sp_i in range(num_splits)]
+            for sp_ind, sp in enumerate(split_pairs):
+                vals_1 = dev_same_taste_splits[sp[0]]
+                vals_2 = dev_same_taste_splits[sp[1]]
+                # Perform the Hotelling's t-squared test
+                try:
+                    T2, F_hot, p_value = hotelling_t2(vals_1, vals_2)
+                    sig_storage[sp_ind,1,:] = [T2, F_hot, p_value]
+                    title = "Hotelling's T-squared: " + str(np.round(T2,2)) + \
+                        "\nF-statistic: " + str(np.round(F_hot,3)) + \
+                            "\np-value: " + str(np.round(p_value,4))
+                except:
+                    title = "Not enough samples for hotelling's t"
+                
+                f_plot, ax = plt.subplots(nrows = sqrt_neur, ncols = sqrt_neur,
+                                     figsize = (8,8))
+                for n_i in range(num_neur):
+                    ax_ind = np.where(neur_inds == n_i)
+                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                    ax[ax_ind[0][0],ax_ind[1][0]].set_title('Neuron ' + str(n_i))
+                    ax[ax_ind[0][0],ax_ind[1][0]].set_xlabel('Firing Rate (Hz)')
+                ax[0,0].legend()
+                plt.suptitle(title)
+                plt.tight_layout()
+                f_plot.savefig(os.path.join(splits_decode_dir,segment_names[s_i] + \
+                             '_' + str(sp[0]) + '_vs_' + str(sp[1]) + \
+                                 '_deviations_same_taste_split_sig.png'))
+                f_plot.savefig(os.path.join(splits_decode_dir,segment_names[s_i] + \
+                             '_' + str(sp[0]) + '_vs_' + str(sp[1]) + \
+                                 '_deviations_same_taste_split_sig.svg'))
+                plt.close(f_plot)
+                
+            #Now split it up by which taste the splits are decoded as
+            for t_i in range(num_tastes-1):
+                dev_which_taste_inds = dev_is_taste_inds[np.where(same_taste_test_ind[same_taste_ind] == t_i)[0]]
+                dev_which_taste_splits = [dev_mats_array[dev_which_taste_inds,:,sp_i].squeeze() for sp_i in range(num_splits)]
+                for sp_ind, sp in enumerate(split_pairs):
+                    vals_1 = dev_which_taste_splits[sp[0]]
+                    vals_2 = dev_which_taste_splits[sp[1]]
+                    # Perform the Hotelling's t-squared test
+                    try:
+                        T2, F_hot, p_value = hotelling_t2(vals_1, vals_2)
+                        sig_storage[sp_ind,1,:] = [T2, F_hot, p_value]
+                        title = "Hotelling's T-squared: " + str(np.round(T2,2)) + \
+                            "\nF-statistic: " + str(np.round(F_hot,3)) + \
+                                "\np-value: " + str(np.round(p_value,4))
+                    except:
+                        title = "Not enough samples for hotelling's t"
+                    
+                    f_plot, ax = plt.subplots(nrows = sqrt_neur, ncols = sqrt_neur,
+                                         figsize = (8,8))
+                    for n_i in range(num_neur):
+                        ax_ind = np.where(neur_inds == n_i)
+                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                        ax[ax_ind[0][0],ax_ind[1][0]].set_title('Neuron ' + str(n_i))
+                        ax[ax_ind[0][0],ax_ind[1][0]].set_xlabel('Firing Rate (Hz)')
+                    ax[0,0].legend()
+                    plt.suptitle(title)
+                    plt.tight_layout()
+                    f_plot.savefig(os.path.join(splits_decode_dir,segment_names[s_i] + \
+                                 '_' + str(sp[0]) + '_vs_' + str(sp[1]) + \
+                                     '_' + dig_in_names[t_i] + \
+                                         '_deviations_which_taste_split_sig.png'))
+                    f_plot.savefig(os.path.join(splits_decode_dir,segment_names[s_i] + \
+                                 '_' + str(sp[0]) + '_vs_' + str(sp[1]) + \
+                                     '_' + dig_in_names[t_i] + \
+                                         '_deviations_which_taste_split_sig.svg'))
+                    plt.close(f_plot)
+
+def hotelling_t2(X, Y):
+    """
+    Perform Hotelling's T-squared test on two samples.
+    """
+    n1, p = X.shape
+    n2, _ = Y.shape
+
+    X_bar = np.mean(X, axis=0)
+    Y_bar = np.mean(Y, axis=0)
+
+    S_pooled = ((n1 - 1) * np.cov(X.T) + (n2 - 1) * np.cov(Y.T)) / (n1 + n2 - 2)
+
+    T2 = ((n1 * n2) / (n1 + n2)) * (X_bar - Y_bar) @ np.linalg.inv(S_pooled) @ (X_bar - Y_bar).T
+
+    F = ((n1 + n2 - p - 1) / (p * (n1 + n2 - 2))) * T2
+
+    p_value = 1 - f.cdf(F, p, n1 + n2 - p - 1)
+
+    return T2, F, p_value

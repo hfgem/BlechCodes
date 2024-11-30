@@ -167,7 +167,7 @@ class run_deviation_correlations():
         self.current_corr_dir = self.corr_dir + 'all_neur_zscore/'
         if os.path.isdir(self.current_corr_dir) == False:
             os.mkdir(self.current_corr_dir)
-        self.neuron_keep_indices = np.ones(np.shape(self.discrim_neur))
+        self.neuron_keep_indices = []
         # Calculate correlations
         df.calculate_vec_correlations_zscore(self.num_neur, self.z_bin, self.segment_dev_vec_zscore, self.tastant_spike_times,
                                              self.segment_times, self.segment_spike_times, self.start_dig_in_times, self.end_dig_in_times,

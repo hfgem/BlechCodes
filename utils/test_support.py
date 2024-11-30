@@ -65,7 +65,7 @@ tastant_spike_times = af.calc_tastant_spike_times(data_dict['segment_times'],dat
 data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
-#%%
+
 
 import functions.decoder_tuning as dt
 import functions.decoding_funcs as df
@@ -160,7 +160,7 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
                                                                                            post_taste_dt, bin_dt, trial_start_frac)
 
 
-#%%
+
 
 import functions.dev_sequence_funcs as dsf
 
