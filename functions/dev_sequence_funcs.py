@@ -26,8 +26,9 @@ from sklearn.decomposition import PCA
 from sklearn.mixture import GaussianMixture as gmm
 
 def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
-                   tastant_fr_dist_pop,tastant_fr_dist_z_pop,dig_in_names,segment_names,
-                   num_null, save_dir, segments_to_analyze, epochs_to_analyze = []):
+                   tastant_raster_dict,tastant_fr_dist_pop,tastant_fr_dist_z_pop,
+                   dig_in_names,segment_names,num_null,save_dir,
+                   segments_to_analyze,epochs_to_analyze = []):
     """
     This function is dedicated to an analysis of whether, when a deviation event
     is split in half down the middle, the pair of sides looks similar to adjacent
@@ -38,36 +39,48 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
     of these correlations into a plot.
     """
     
-    # Save Dirs
-    dist_dir = os.path.join(save_dir, 'dist_tests')
-    if not os.path.isdir(dist_dir):
-        os.mkdir(dist_dir)
-    corr_dir = os.path.join(save_dir, 'corr_tests')
-    if not os.path.isdir(corr_dir):
-        os.mkdir(corr_dir)
-    decode_dir = os.path.join(save_dir,'decode_splits')
-    if not os.path.isdir(decode_dir):
-        os.mkdir(decode_dir)
-    non_z_decode_dir = os.path.join(decode_dir,'firing_rates')
-    if not os.path.isdir(non_z_decode_dir):
-        os.mkdir(non_z_decode_dir)
-    z_decode_dir = os.path.join(decode_dir,'zscore_firing_rates')
+    #Split Dirs
+    # dist_dir = os.path.join(save_dir, 'dist_tests')
+    # if not os.path.isdir(dist_dir):
+    #     os.mkdir(dist_dir)
+    # corr_dir = os.path.join(save_dir, 'corr_tests')
+    # if not os.path.isdir(corr_dir):
+    #     os.mkdir(corr_dir)
+    decode_split_dir = os.path.join(save_dir,'decode_splits')
+    if not os.path.isdir(decode_split_dir):
+        os.mkdir(decode_split_dir)
+    non_z_decode_split_dir = os.path.join(decode_split_dir,'firing_rates')
+    if not os.path.isdir(non_z_decode_split_dir):
+        os.mkdir(non_z_decode_split_dir)
+    z_decode_dir = os.path.join(decode_split_dir,'zscore_firing_rates')
     if not os.path.isdir(z_decode_dir):
         os.mkdir(z_decode_dir)
-    null_decode_dir = os.path.join(non_z_decode_dir,'null_decodes_win_neur')
+    null_decode_dir = os.path.join(non_z_decode_split_dir,'null_decodes_win_neur')
     if not os.path.isdir(null_decode_dir):
         os.mkdir(null_decode_dir)
     null_z_decode_dir = os.path.join(z_decode_dir,'null_decodes_win_neur')
     if not os.path.isdir(null_z_decode_dir):
         os.mkdir(null_z_decode_dir)
-    null_decode_dir_2 = os.path.join(non_z_decode_dir,'null_decodes_across_neur')
+    null_decode_dir_2 = os.path.join(non_z_decode_split_dir,'null_decodes_across_neur')
     if not os.path.isdir(null_decode_dir_2):
         os.mkdir(null_decode_dir_2)
     null_z_decode_dir_2 = os.path.join(z_decode_dir,'null_decodes_across_neur')
     if not os.path.isdir(null_z_decode_dir_2):
         os.mkdir(null_z_decode_dir_2)
+        
+    # Sequence Dirs
+    sequence_dir = os.path.join(save_dir,'sequence_tests')
+    if not os.path.isdir(sequence_dir):
+        os.mkdir(sequence_dir)
+    null_sequence_dir = os.path.join(sequence_dir,'null_sequences_win_neur')
+    if not os.path.isdir(null_sequence_dir):
+        os.mkdir(null_sequence_dir)
+    null_sequence_dir_2 = os.path.join(sequence_dir,'null_sequences_across_neur')
+    if not os.path.isdir(null_sequence_dir_2):
+        os.mkdir(null_sequence_dir_2)        
     
     # Variables
+    bin_dt = 10 #Sequence binning size
     num_tastes = len(dig_in_names)
     num_taste_deliv = [len(tastant_fr_dist_pop[t_i]) for t_i in range(num_tastes)]
     max_num_cp = 0
@@ -83,6 +96,9 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
     taste_pair_names = []
     for tp_i, tp in enumerate(taste_pairs):
         taste_pair_names.append(dig_in_names[tp[0]] + ' v. ' + dig_in_names[tp[1]])
+        
+    #Calculate rank order sequences for taste responses by epoch
+    taste_seqs_dict, avg_taste_seqs_dict = calc_tastant_seq(tastant_raster_dict, bin_dt)
     
     #Now go through segments and their deviation events and compare
     for seg_ind, s_i in enumerate(segments_to_analyze):
@@ -91,108 +107,266 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
         seg_z_std = segment_zscore_stds[seg_ind]
         num_dev = len(seg_dev_rast)
         
-        dev_mats = []
-        dev_mats_z = []
-        null_dev_dict = dict()
-        null_dev_z_dict = dict()
-        null_dev_dict_2 = dict()
-        null_dev_z_dict_2 = dict()
+        #Split in half calcs
+        create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, 
+                                seg_z_std, num_neur, dig_in_names, segment_names, 
+                                s_i, epochs_to_analyze, tastant_fr_dist_pop, 
+                                tastant_fr_dist_z_pop, z_decode_dir, 
+                                null_z_decode_dir, null_z_decode_dir_2)
+        
+        #Sequence calcs
+        create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, 
+                                seg_z_std, num_neur, dig_in_names, segment_names, 
+                                s_i, bin_dt, epochs_to_analyze, tastant_raster_dict,
+                                taste_seqs_dict, avg_taste_seqs_dict, sequence_dir, 
+                                null_sequence_dir, null_sequence_dir_2)
+        
+def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_std, 
+                            num_neur, dig_in_names, segment_names, s_i, 
+                            epochs_to_analyze, tastant_fr_dist_pop, tastant_fr_dist_z_pop,
+                            z_decode_dir, null_z_decode_dir, null_z_decode_dir_2):
+    dev_mats = []
+    dev_mats_z = []
+    null_dev_dict = dict()
+    null_dev_z_dict = dict()
+    null_dev_dict_2 = dict()
+    null_dev_z_dict_2 = dict()
+    for null_i in range(num_null):
+        null_dev_dict[null_i] = []
+        null_dev_z_dict[null_i] = []
+        null_dev_dict_2[null_i] = []
+        null_dev_z_dict_2[null_i] = []
+    for dev_i in range(num_dev):
+        #Pull raster for firing rate vectors
+        dev_rast = seg_dev_rast[dev_i]
+        num_spikes_per_neur = np.sum(dev_rast,1).astype('int')
+        _, num_dt = np.shape(dev_rast)
+        half_dt = np.ceil(num_dt/2).astype('int')
+        first_half_rast = dev_rast[:,:half_dt]
+        second_half_rast = dev_rast[:,-half_dt:]
+        #Create fr vecs
+        first_half_fr_vec = np.expand_dims(np.sum(first_half_rast,1)/(half_dt/1000),1) #In Hz
+        second_half_fr_vec = np.expand_dims(np.sum(second_half_rast,1)/(half_dt/1000),1) #In Hz
+        dev_mat = np.concatenate((first_half_fr_vec,second_half_fr_vec),1)
+        dev_mats.append(dev_mat)
+        #Create z-scored fr vecs
+        first_half_fr_vec_z = (first_half_fr_vec - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
+        second_half_fr_vec_z = (second_half_fr_vec - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
+        dev_mat_z = np.concatenate((first_half_fr_vec_z,second_half_fr_vec_z),1)
+        dev_mats_z.append(dev_mat_z)
+        #Create null versions of the event
         for null_i in range(num_null):
-            null_dev_dict[null_i] = []
-            null_dev_z_dict[null_i] = []
-            null_dev_dict_2[null_i] = []
-            null_dev_z_dict_2[null_i] = []
-        for dev_i in range(num_dev):
-            #Pull raster for firing rate vectors
-            dev_rast = seg_dev_rast[dev_i]
-            num_spikes_per_neur = np.sum(dev_rast,1).astype('int')
-            _, num_dt = np.shape(dev_rast)
-            half_dt = np.ceil(num_dt/2).astype('int')
-            first_half_rast = dev_rast[:,:half_dt]
-            second_half_rast = dev_rast[:,-half_dt:]
+            #Shuffle within-neuron spike times
+            shuffle_rast = np.zeros(np.shape(dev_rast))
+            for neur_i in range(num_neur):
+                new_spike_ind = random.sample(list(np.arange(num_dt)),num_spikes_per_neur[neur_i])
+                shuffle_rast[neur_i,new_spike_ind] = 1
+            first_half_shuffle_rast = shuffle_rast[:,:half_dt]
+            second_half_shuffle_rast = shuffle_rast[:,-half_dt:]
             #Create fr vecs
-            first_half_fr_vec = np.expand_dims(np.sum(first_half_rast,1)/(half_dt/1000),1) #In Hz
-            second_half_fr_vec = np.expand_dims(np.sum(second_half_rast,1)/(half_dt/1000),1) #In Hz
-            dev_mat = np.concatenate((first_half_fr_vec,second_half_fr_vec),1)
-            dev_mats.append(dev_mat)
+            first_half_fr_vec = np.expand_dims(np.sum(first_half_shuffle_rast,1)/(half_dt/1000),1) #In Hz
+            second_half_fr_vec = np.expand_dims(np.sum(second_half_shuffle_rast,1)/(half_dt/1000),1) #In Hz
+            shuffle_dev_mat = np.concatenate((first_half_fr_vec,second_half_fr_vec),1)
             #Create z-scored fr vecs
             first_half_fr_vec_z = (first_half_fr_vec - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
             second_half_fr_vec_z = (second_half_fr_vec - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
-            dev_mat_z = np.concatenate((first_half_fr_vec_z,second_half_fr_vec_z),1)
-            dev_mats_z.append(dev_mat_z)
-            #Create null versions of the event
-            for null_i in range(num_null):
-                #Shuffle within-neuron spike times
-                shuffle_rast = np.zeros(np.shape(dev_rast))
-                for neur_i in range(num_neur):
-                    new_spike_ind = random.sample(list(np.arange(num_dt)),num_spikes_per_neur[neur_i])
-                    shuffle_rast[neur_i,new_spike_ind] = 1
-                first_half_shuffle_rast = shuffle_rast[:,:half_dt]
-                second_half_shuffle_rast = shuffle_rast[:,-half_dt:]
-                #Create fr vecs
-                first_half_fr_vec = np.expand_dims(np.sum(first_half_shuffle_rast,1)/(half_dt/1000),1) #In Hz
-                second_half_fr_vec = np.expand_dims(np.sum(second_half_shuffle_rast,1)/(half_dt/1000),1) #In Hz
-                shuffle_dev_mat = np.concatenate((first_half_fr_vec,second_half_fr_vec),1)
-                #Create z-scored fr vecs
-                first_half_fr_vec_z = (first_half_fr_vec - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
-                second_half_fr_vec_z = (second_half_fr_vec - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
-                shuffle_dev_mat_z = np.concatenate((first_half_fr_vec_z,second_half_fr_vec_z),1)
-                null_dev_dict[null_i].append(shuffle_dev_mat)
-                null_dev_z_dict[null_i].append(shuffle_dev_mat_z)
-                #Shuffle across-neuron spike times
-                shuffle_rast_2 = np.zeros(np.shape(dev_rast))
-                new_neuron_order = random.sample(list(np.arange(num_neur)),num_neur)
-                for nn_ind, nn in enumerate(new_neuron_order):
-                    shuffle_rast_2[nn_ind,:] = shuffle_rast[nn,:]
-                first_half_shuffle_rast_2 = shuffle_rast_2[:,:half_dt]
-                second_half_shuffle_rast_2 = shuffle_rast_2[:,-half_dt:]
-                #Create fr vecs
-                first_half_fr_vec_2 = np.expand_dims(np.sum(first_half_shuffle_rast_2,1)/(half_dt/1000),1) #In Hz
-                second_half_fr_vec_2 = np.expand_dims(np.sum(second_half_shuffle_rast_2,1)/(half_dt/1000),1) #In Hz
-                shuffle_dev_mat_2 = np.concatenate((first_half_fr_vec_2,second_half_fr_vec_2),1)
-                #Create z-scored fr vecs
-                first_half_fr_vec_z_2 = (first_half_fr_vec_2 - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
-                second_half_fr_vec_z_2 = (second_half_fr_vec_2 - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
-                shuffle_dev_mat_z_2 = np.concatenate((first_half_fr_vec_z_2,second_half_fr_vec_z_2),1)
-                null_dev_dict_2[null_i].append(shuffle_dev_mat_2)
-                null_dev_z_dict_2[null_i].append(shuffle_dev_mat_z_2)      
-            
-        dev_mats_array = np.array(dev_mats) #num dev x num neur x 2
-        dev_mats_z_array = np.array(dev_mats_z) #num dev x num neur x 2
-        for null_i in range(num_null):
-            null_dev_dict[null_i] = np.array(null_dev_dict[null_i]) #num dev x num neur x 2
-            null_dev_z_dict[null_i] = np.array(null_dev_z_dict[null_i]) #num dev x num neur x 2
-            null_dev_dict_2[null_i] = np.array(null_dev_dict_2[null_i]) #num dev x num neur x 2
-            null_dev_z_dict_2[null_i] = np.array(null_dev_z_dict_2[null_i]) #num dev x num neur x 2
-            
-        #Decode each deviation event split
+            shuffle_dev_mat_z = np.concatenate((first_half_fr_vec_z,second_half_fr_vec_z),1)
+            null_dev_dict[null_i].append(shuffle_dev_mat)
+            null_dev_z_dict[null_i].append(shuffle_dev_mat_z)
+            #Shuffle across-neuron spike times
+            shuffle_rast_2 = np.zeros(np.shape(dev_rast))
+            new_neuron_order = random.sample(list(np.arange(num_neur)),num_neur)
+            for nn_ind, nn in enumerate(new_neuron_order):
+                shuffle_rast_2[nn_ind,:] = shuffle_rast[nn,:]
+            first_half_shuffle_rast_2 = shuffle_rast_2[:,:half_dt]
+            second_half_shuffle_rast_2 = shuffle_rast_2[:,-half_dt:]
+            #Create fr vecs
+            first_half_fr_vec_2 = np.expand_dims(np.sum(first_half_shuffle_rast_2,1)/(half_dt/1000),1) #In Hz
+            second_half_fr_vec_2 = np.expand_dims(np.sum(second_half_shuffle_rast_2,1)/(half_dt/1000),1) #In Hz
+            shuffle_dev_mat_2 = np.concatenate((first_half_fr_vec_2,second_half_fr_vec_2),1)
+            #Create z-scored fr vecs
+            first_half_fr_vec_z_2 = (first_half_fr_vec_2 - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
+            second_half_fr_vec_z_2 = (second_half_fr_vec_2 - np.expand_dims(seg_z_mean,1))/np.expand_dims(seg_z_std,1)
+            shuffle_dev_mat_z_2 = np.concatenate((first_half_fr_vec_z_2,second_half_fr_vec_z_2),1)
+            null_dev_dict_2[null_i].append(shuffle_dev_mat_2)
+            null_dev_z_dict_2[null_i].append(shuffle_dev_mat_z_2)      
         
-        # decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
-        #                 dig_in_names, dev_mats_array, segment_names, s_i,
-        #                 non_z_decode_dir, epochs_to_analyze)
-        decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
-                        dig_in_names, dev_mats_z_array, segment_names, s_i,
-                        z_decode_dir, epochs_to_analyze)
+    dev_mats_array = np.array(dev_mats) #num dev x num neur x 2
+    dev_mats_z_array = np.array(dev_mats_z) #num dev x num neur x 2
+    for null_i in range(num_null):
+        null_dev_dict[null_i] = np.array(null_dev_dict[null_i]) #num dev x num neur x 2
+        null_dev_z_dict[null_i] = np.array(null_dev_z_dict[null_i]) #num dev x num neur x 2
+        null_dev_dict_2[null_i] = np.array(null_dev_dict_2[null_i]) #num dev x num neur x 2
+        null_dev_z_dict_2[null_i] = np.array(null_dev_z_dict_2[null_i]) #num dev x num neur x 2
         
-        #Run decoded splits significance tests
-        decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names, 
-                                             s_i, z_decode_dir, epochs_to_analyze)
-        
-        #Decode null distribution
-        # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
-        #                 dig_in_names, null_dev_dict, segment_names, s_i,
-        #                 null_decode_dir, non_z_decode_dir, epochs_to_analyze)
-        decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
-                        dig_in_names, null_dev_z_dict, segment_names, s_i,
-                        null_z_decode_dir, z_decode_dir, epochs_to_analyze)
-        # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
-        #                 dig_in_names, null_dev_dict_2, segment_names, s_i,
-        #                 null_decode_dir_2, non_z_decode_dir, epochs_to_analyze)
-        decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
-                        dig_in_names, null_dev_z_dict_2, segment_names, s_i,
-                        null_z_decode_dir_2, z_decode_dir, epochs_to_analyze)
-        
+    #Decode each deviation event split
+    
+    # decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
+    #                 dig_in_names, dev_mats_array, segment_names, s_i,
+    #                 non_z_decode_dir, epochs_to_analyze)
+    decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
+                    dig_in_names, dev_mats_z_array, segment_names, s_i,
+                    z_decode_dir, epochs_to_analyze)
+    
+    #Run decoded splits significance tests
+    decode_splits_significance_tests(dig_in_names, dev_mats_z_array, segment_names, 
+                                         s_i, z_decode_dir, epochs_to_analyze)
+    
+    #Decode null distribution
+    # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
+    #                 dig_in_names, null_dev_dict, segment_names, s_i,
+    #                 null_decode_dir, non_z_decode_dir, epochs_to_analyze)
+    decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
+                    dig_in_names, null_dev_z_dict, segment_names, s_i,
+                    null_z_decode_dir, z_decode_dir, epochs_to_analyze)
+    # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
+    #                 dig_in_names, null_dev_dict_2, segment_names, s_i,
+    #                 null_decode_dir_2, non_z_decode_dir, epochs_to_analyze)
+    decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
+                    dig_in_names, null_dev_z_dict_2, segment_names, s_i,
+                    null_z_decode_dir_2, z_decode_dir, epochs_to_analyze)
                      
+def calc_tastant_seq(tastant_raster_dict, bin_dt):
+    """This function is dedicated to calculating the rank sequences in tastant
+    delivery responses"""
+    #Gather variables
+    num_tastes = len(tastant_raster_dict)
+    num_deliv_per_taste = np.zeros(num_tastes).astype('int')
+    max_num_cp = 0
+    for t_i in range(num_tastes):
+        num_deliv_per_taste[t_i] = len(tastant_raster_dict[t_i])
+        for d_i in range(num_deliv_per_taste[t_i]):
+            if len(tastant_raster_dict[t_i][d_i]) > max_num_cp:
+                max_num_cp = len(tastant_raster_dict[t_i][d_i])
+    
+    #Organize taste responses into rank sequences based on maximal firing 
+    #location of each neuron within an epoch of response
+    taste_seqs_dict = dict()
+    avg_taste_seqs_dict = dict()
+    for t_i in range(num_tastes):
+        taste_seqs_dict[t_i] = dict()
+        avg_taste_seqs_dict[t_i] = []
+        for cp_i in range(max_num_cp):
+            taste_seqs_dict[t_i][cp_i] = []
+            for d_i in range(num_deliv_per_taste[t_i].astype('int')):
+                try:
+                    taste_rast = tastant_raster_dict[t_i][d_i][cp_i]
+                    num_spikes_per_neur = np.sum(taste_rast,1).astype('int')
+                    num_neur, num_dt = np.shape(taste_rast)
+                    bin_starts = np.arange(num_dt-bin_dt)
+                    taste_bin_counts = np.zeros((num_neur,len(bin_starts)))
+                    for bs in bin_starts:
+                        taste_bin_counts[:,bs] = np.sum(taste_rast[:,bs:bs+bin_dt],1)
+                    max_counts = np.max(taste_bin_counts,1)
+                    max_ind = calc_max_ind(num_neur, taste_bin_counts, max_counts)
+                    neur_ord = np.argsort(max_ind, kind='stable')
+                    taste_seqs_dict[t_i][cp_i].append(neur_ord)
+                except:
+                    print("Missing data: taste " + str(t_i) + " epoch " + str(cp_i) + " delivery " + str(d_i))
+            deliv_seq_array = np.array(taste_seqs_dict[t_i][cp_i])
+            mean_rank = np.mean(deliv_seq_array,0)
+            avg_taste_seqs_dict[t_i].append(np.argsort(mean_rank))
+    
+    return taste_seqs_dict, avg_taste_seqs_dict
+
+def create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, 
+                        seg_z_std, num_neur, dig_in_names, segment_names, 
+                        s_i, bin_dt, epochs_to_analyze, tastant_raster_dict, 
+                        taste_seqs_dict, avg_taste_seqs_dict, sequence_dir, 
+                        null_sequence_dir, null_sequence_dir_2):
+    tic = time.time()
+    dev_seqs = []
+    null_dev_dict = dict()
+    null_dev_dict_2 = dict()
+    for null_i in range(num_null):
+        null_dev_dict[null_i] = []
+        null_dev_dict_2[null_i] = []
+        
+    #Calculate deviation sequences
+    for dev_i in range(num_dev):
+        #Pull raster and count up firing within bins
+        dev_rast = seg_dev_rast[dev_i]
+        num_spikes_per_neur = np.sum(dev_rast,1).astype('int')
+        _, num_dt = np.shape(dev_rast)
+        bin_starts = np.arange(num_dt-bin_dt)
+        dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
+        for bs in bin_starts:
+            dev_bin_counts[:,bs] = np.sum(dev_rast[:,bs:bs+bin_dt],1)
+        max_counts = np.max(dev_bin_counts,1)
+        #Neuron Ordering: note that if multiple neurons fire the same number 
+        #of times, it will order them by index 
+        max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
+        neur_ord = np.argsort(max_ind, kind='stable')
+        dev_seqs.append(neur_ord)
+        
+        #Create null versions of the event
+        for null_i in range(num_null):
+            #Shuffle within-neuron spike times
+            shuffle_rast = np.zeros(np.shape(dev_rast))
+            for neur_i in range(num_neur):
+                new_spike_ind = random.sample(list(np.arange(num_dt)),num_spikes_per_neur[neur_i])
+                shuffle_rast[neur_i,new_spike_ind] = 1
+            dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
+            for bs in bin_starts:
+                dev_bin_counts[:,bs] = np.sum(shuffle_rast[:,bs:bs+bin_dt],1)
+            max_counts = np.max(dev_bin_counts,1)
+            max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
+            neur_ord = np.argsort(max_ind, kind='stable')
+            null_dev_dict[null_i].append(neur_ord)
+            #Shuffle across-neuron spike times
+            shuffle_rast_2 = np.zeros(np.shape(dev_rast))
+            new_neuron_order = random.sample(list(np.arange(num_neur)),num_neur)
+            for nn_ind, nn in enumerate(new_neuron_order):
+                shuffle_rast_2[nn_ind,:] = shuffle_rast[nn,:]
+            dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
+            for bs in bin_starts:
+                dev_bin_counts[:,bs] = np.sum(shuffle_rast[:,bs:bs+bin_dt],1)
+            max_counts = np.max(dev_bin_counts,1)
+            max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
+            neur_ord = np.argsort(max_ind, kind='stable')
+            null_dev_dict_2[null_i].append(neur_ord)
+            
+    dev_seqs_array = np.array(dev_seqs) #num dev x num neur
+    for null_i in range(num_null):
+        null_dev_dict[null_i] = np.array(null_dev_dict[null_i]) #num dev x num neur x 2
+        null_dev_dict_2[null_i] = np.array(null_dev_dict_2[null_i]) #num dev x num neur x 2
+    toc = time.time()
+    print('\t\t\t\t\tTime to calculate sequences for ' + segment_names[s_i] + \
+          ' = ' + str(np.round((toc-tic)/60, 2)) + ' (min)')
+    
+    #Run rank order correlations for null data and true data and pull out 
+    #significant events
+    dev_rank_order_tests(dev_seqs_array, null_dev_dict, avg_taste_seqs_dict, 
+                             dig_in_names, segment_names[s_i], sequence_dir, null_sequence_dir)
+    
+    dev_rank_order_tests(dev_seqs_array, null_dev_dict_2, avg_taste_seqs_dict, 
+                             dig_in_names, segment_names[s_i], sequence_dir, null_sequence_dir_2)
+    
+def calc_max_ind(num_neur, dev_bin_counts, max_counts):
+    """This function calculates the index for each neuron where its maximal
+    firing occurs within a deviation event"""
+    max_ind = np.zeros(num_neur)
+    for n_i in range(num_neur):
+        max_locs = np.where(dev_bin_counts[n_i,:] == max_counts[n_i])[0]
+        if len(max_locs) > 1:
+            diff_max_locs = np.diff(max_locs)
+            mult_max_locs = np.where(diff_max_locs > 1)[0] + 1
+            if len(mult_max_locs) > 0:
+                mult_max_locs = np.concatenate((np.zeros(1),mult_max_locs,(len(max_locs)-1)*np.ones(1))).astype('int')
+                #Multiple peak firing locations
+                mean_parts = []
+                for part_i in range(len(mult_max_locs)-1):
+                    ind_1 = mult_max_locs[part_i]
+                    ind_2 = mult_max_locs[part_i+1]
+                    mean_parts.extend([np.ceil(max_locs[ind_1] + (max_locs[ind_2] - max_locs[ind_1])/2).astype('int')])
+                max_ind[n_i] = np.nanmean(mean_parts).astype('int')
+            else:
+                mean_max_loc = np.ceil(max_locs[0] + (max_locs[-1] - max_locs[0])/2).astype('int')
+                max_ind[n_i] = mean_max_loc #Split the difference
+        else:
+            max_ind[n_i] = max_locs
+    return max_ind
+
 def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist, 
                 dig_in_names, dev_mats_array, segment_names, s_i,
                 decode_dir, epochs_to_analyze=[]):
@@ -1038,7 +1212,7 @@ def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dis
 def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names, 
                                      s_i, splits_decode_dir, epochs_to_analyze=[]):
     """Decode taste from epoch-specific firing rates"""
-    print('\t\tRunning Decode Split Significance Tests')
+    print('\t\tRunning ' + segment_names[s_i] + ' Decode Split Significance Tests')
     
     # Variables
     num_tastes = len(dig_in_names)
@@ -1050,13 +1224,7 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
     
     #Significance test fr distribution differences against each other
     #for two halves
-    sig_storage = np.zeros((len(split_pairs),3,3)) #Rows: Hotelling's T-Squared, F-statistic, p-val x Cols: is-taste, same-taste, which-taste
-    
-    dev_fr_list = []
-    for dev_i in range(num_dev):
-        #Converting to list for parallel processing
-        dev_fr_mat = np.squeeze(dev_mats_array[dev_i,:,:]) #Shape num_neur x 2
-        dev_fr_list.extend(list(dev_fr_mat.T))
+    sig_storage = np.zeros((len(split_pairs),3,2 + num_tastes-1)) #Rows: Hotelling's T-Squared, F-statistic, p-val x Cols: is-taste, same-taste, which-taste
     
     dev_decode_is_taste_array = np.load(
         os.path.join(splits_decode_dir,segment_names[s_i] + \
@@ -1072,22 +1240,33 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
         for sp_ind, sp in enumerate(split_pairs):
             vals_1 = dev_is_taste_splits[sp[0]]
             vals_2 = dev_is_taste_splits[sp[1]]
+            # Z-score the data to fall on either side of 0
+            all_vals = np.concatenate((vals_1,vals_2),axis=0) #(number of splits x 2) x num_neur
+            neur_mean = np.nanmean(all_vals,0)
+            neur_std = np.nanstd(all_vals,0)
+            vals_1_z = (vals_1 - np.ones(np.shape(vals_1))*neur_mean)/(np.ones(np.shape(vals_1))*neur_std)
+            vals_2_z = (vals_2 - np.ones(np.shape(vals_2))*neur_mean)/(np.ones(np.shape(vals_2))*neur_std)
+            nan_inds = np.where(neur_std == 0)[0]
+            non_nan_inds = np.setdiff1d(np.arange(num_neur),nan_inds)
+            vals_1_z = vals_1_z[:,non_nan_inds]
+            vals_2_z = vals_2_z[:,non_nan_inds]
             # Perform the Hotelling's t-squared test
             try:
-                T2, F_hot, p_value = hotelling_t2(vals_1, vals_2)
-                sig_storage[sp_ind,0,:] = [T2, F_hot, p_value]
+                T2, F_hot, p_value = hotelling_t2(vals_1_z, vals_2_z)
+                sig_storage[sp_ind,:,0] = [T2, F_hot, p_value]
                 title = "Hotelling's T-squared: " + str(np.round(T2,2)) + \
                     "\nF-statistic: " + str(np.round(F_hot,3)) + \
                         "\np-value: " + str(np.round(p_value,4))
             except:
+                sig_storage[sp_ind,:,0] = [np.nan, np.nan, np.nan]
                 title = "Not enough samples for hotelling's t"
             
             f_plot, ax = plt.subplots(nrows = sqrt_neur, ncols = sqrt_neur,
                                  figsize = (8,8))
-            for n_i in range(num_neur):
+            for n_i in range(len(non_nan_inds)):
                 ax_ind = np.where(neur_inds == n_i)
-                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
-                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
                 ax[ax_ind[0][0],ax_ind[1][0]].set_title('Neuron ' + str(n_i))
                 ax[ax_ind[0][0],ax_ind[1][0]].set_xlabel('Firing Rate (Hz)')
             ax[0,0].legend()
@@ -1121,22 +1300,33 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
             for sp_ind, sp in enumerate(split_pairs):
                 vals_1 = dev_same_taste_splits[sp[0]]
                 vals_2 = dev_same_taste_splits[sp[1]]
+                # Z-score the data to fall on either side of 0
+                all_vals = np.concatenate((vals_1,vals_2),axis=0) #(number of splits x 2) x num_neur
+                neur_mean = np.nanmean(all_vals,0)
+                neur_std = np.nanstd(all_vals,0)
+                vals_1_z = (vals_1 - np.ones(np.shape(vals_1))*neur_mean)/(np.ones(np.shape(vals_1))*neur_std)
+                vals_2_z = (vals_2 - np.ones(np.shape(vals_2))*neur_mean)/(np.ones(np.shape(vals_2))*neur_std)
+                nan_inds = np.where(neur_std == 0)[0]
+                non_nan_inds = np.setdiff1d(np.arange(num_neur),nan_inds)
+                vals_1_z = vals_1_z[:,non_nan_inds]
+                vals_2_z = vals_2_z[:,non_nan_inds]
                 # Perform the Hotelling's t-squared test
                 try:
-                    T2, F_hot, p_value = hotelling_t2(vals_1, vals_2)
-                    sig_storage[sp_ind,1,:] = [T2, F_hot, p_value]
+                    T2, F_hot, p_value = hotelling_t2(vals_1_z, vals_2_z)
+                    sig_storage[sp_ind,:,1] = [T2, F_hot, p_value]
                     title = "Hotelling's T-squared: " + str(np.round(T2,2)) + \
                         "\nF-statistic: " + str(np.round(F_hot,3)) + \
                             "\np-value: " + str(np.round(p_value,4))
                 except:
+                    sig_storage[sp_ind,:,1] = [np.nan, np.nan, np.nan]
                     title = "Not enough samples for hotelling's t"
                 
                 f_plot, ax = plt.subplots(nrows = sqrt_neur, ncols = sqrt_neur,
                                      figsize = (8,8))
-                for n_i in range(num_neur):
+                for n_i in range(len(non_nan_inds)):
                     ax_ind = np.where(neur_inds == n_i)
-                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
-                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
                     ax[ax_ind[0][0],ax_ind[1][0]].set_title('Neuron ' + str(n_i))
                     ax[ax_ind[0][0],ax_ind[1][0]].set_xlabel('Firing Rate (Hz)')
                 ax[0,0].legend()
@@ -1157,22 +1347,33 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
                 for sp_ind, sp in enumerate(split_pairs):
                     vals_1 = dev_which_taste_splits[sp[0]]
                     vals_2 = dev_which_taste_splits[sp[1]]
+                    # Z-score the data to fall on either side of 0
+                    all_vals = np.concatenate((vals_1,vals_2),axis=0) #(number of splits x 2) x num_neur
+                    neur_mean = np.nanmean(all_vals,0)
+                    neur_std = np.nanstd(all_vals,0)
+                    vals_1_z = (vals_1 - np.ones(np.shape(vals_1))*neur_mean)/(np.ones(np.shape(vals_1))*neur_std)
+                    vals_2_z = (vals_2 - np.ones(np.shape(vals_2))*neur_mean)/(np.ones(np.shape(vals_2))*neur_std)
+                    nan_inds = np.where(neur_std == 0)[0]
+                    non_nan_inds = np.setdiff1d(np.arange(num_neur),nan_inds)
+                    vals_1_z = vals_1_z[:,non_nan_inds]
+                    vals_2_z = vals_2_z[:,non_nan_inds]
                     # Perform the Hotelling's t-squared test
                     try:
-                        T2, F_hot, p_value = hotelling_t2(vals_1, vals_2)
-                        sig_storage[sp_ind,1,:] = [T2, F_hot, p_value]
+                        T2, F_hot, p_value = hotelling_t2(vals_1_z, vals_2_z)
+                        sig_storage[sp_ind,:,2+t_i] = [T2, F_hot, p_value]
                         title = "Hotelling's T-squared: " + str(np.round(T2,2)) + \
                             "\nF-statistic: " + str(np.round(F_hot,3)) + \
                                 "\np-value: " + str(np.round(p_value,4))
                     except:
+                        sig_storage[sp_ind,:,2+t_i] = [np.nan, np.nan, np.nan]
                         title = "Not enough samples for hotelling's t"
                     
                     f_plot, ax = plt.subplots(nrows = sqrt_neur, ncols = sqrt_neur,
                                          figsize = (8,8))
-                    for n_i in range(num_neur):
+                    for n_i in range(len(non_nan_inds)):
                         ax_ind = np.where(neur_inds == n_i)
-                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
-                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
                         ax[ax_ind[0][0],ax_ind[1][0]].set_title('Neuron ' + str(n_i))
                         ax[ax_ind[0][0],ax_ind[1][0]].set_xlabel('Firing Rate (Hz)')
                     ax[0,0].legend()
@@ -1187,7 +1388,38 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
                                      '_' + dig_in_names[t_i] + \
                                          '_deviations_which_taste_split_sig.svg'))
                     plt.close(f_plot)
-
+    
+    for sp_ind, sp in enumerate(split_pairs):
+        sig_csv_file = os.path.join(splits_decode_dir,'split_sig_hotellings_' + str(sp[0]) + '_x_' + str(sp[1]) + '.csv')
+        if os.path.isfile(sig_csv_file):
+            with open(sig_csv_file, 'a') as f:
+                write = csv.writer(f, delimiter=',')
+                hot_t_list = [segment_names[s_i], 'Hotellings T']
+                hot_t_list.extend([sig_storage[sp_ind,0,i] for i in range(2+num_tastes-1)])
+                write.writerow(hot_t_list)
+                f_stat_list = [segment_names[s_i], 'F-Stat']
+                f_stat_list.extend([sig_storage[sp_ind,1,i] for i in range(2+num_tastes-1)])
+                write.writerow(f_stat_list)
+                p_val_list = [segment_names[s_i], 'p-val']
+                p_val_list.extend([sig_storage[sp_ind,2,i] for i in range(2+num_tastes-1)])
+                write.writerow(p_val_list)
+        else:
+            with open(sig_csv_file, 'w') as f:
+                write = csv.writer(f, delimiter=',')
+                title_list = ['Seg Name', 'Stat Name', 'Is-Taste', 'Same-Taste']
+                for t_i in range(num_tastes-1):
+                    title_list.extend([dig_in_names[t_i]])
+                write.writerow(title_list)
+                hot_t_list = [segment_names[s_i], 'Hotellings T']
+                hot_t_list.extend([sig_storage[sp_ind,0,i] for i in range(2+num_tastes-1)])
+                write.writerow(hot_t_list)
+                f_stat_list = [segment_names[s_i], 'F-Stat']
+                f_stat_list.extend([sig_storage[sp_ind,1,i] for i in range(2+num_tastes-1)])
+                write.writerow(f_stat_list)
+                p_val_list = [segment_names[s_i], 'p-val']
+                p_val_list.extend([sig_storage[sp_ind,2,i] for i in range(2+num_tastes-1)])
+                write.writerow(p_val_list)
+                
 def hotelling_t2(X, Y):
     """
     Perform Hotelling's T-squared test on two samples.
@@ -1207,3 +1439,175 @@ def hotelling_t2(X, Y):
     p_value = 1 - f.cdf(F, p, n1 + n2 - p - 1)
 
     return T2, F, p_value
+
+def dev_rank_order_tests(dev_seqs_array, null_dev_dict, avg_taste_seqs_dict, 
+                         dig_in_names, seg_name, sequence_dir, null_sequence_dir):
+    """This function tests whether neurons tend to have a particular 
+    rank order of firing within a deviation event"""
+    
+    #Gather variables
+    num_tastes = len(avg_taste_seqs_dict)
+    max_num_cp = 0
+    for t_i in range(num_tastes):
+        if len(avg_taste_seqs_dict[t_i]) > max_num_cp:
+            max_num_cp = len(avg_taste_seqs_dict[t_i])
+    num_dev, num_neur = np.shape(dev_seqs_array)
+    num_null = len(null_dev_dict)
+    
+    #Run through and calculate Spearman's correlation distributions
+    spearmans_dict = dict()
+    for t_i in range(num_tastes):
+        spearmans_dict[t_i] = dict()
+        for cp_i in range(max_num_cp):
+            spearmans_dict[t_i][cp_i] = dict()
+            #Calculate deviation correlations
+            true_corrs = np.zeros(num_dev)
+            for dev_i in range(num_dev):
+                res = stats.spearmanr(dev_seqs_array[dev_i,:], avg_taste_seqs_dict[t_i][cp_i], axis=0, nan_policy='omit', alternative='two-sided')
+                true_corrs[dev_i] = res[0]
+            spearmans_dict[t_i][cp_i]['true'] = true_corrs
+            #Calculate null correlations
+            null_corrs = np.zeros((num_null, num_dev))
+            for null_i in range(num_null):
+                null_devs = null_dev_dict[null_i]
+                for dev_i in range(num_dev):
+                    res = stats.spearmanr(null_devs[dev_i,:], avg_taste_seqs_dict[t_i][cp_i], axis=0, nan_policy='omit', alternative='two-sided')
+                    null_corrs[null_i,dev_i] = res[0]
+            spearmans_dict[t_i][cp_i]['null'] = null_corrs
+            #Since these are rank order corrs we'll absolute value them and calculate the 95th percentile for null
+            percentile_95 = np.percentile(null_corrs.flatten(),95)
+            spearmans_dict[t_i][cp_i]['percentile_95'] = percentile_95
+            sig_true_corrs = np.where(np.abs(true_corrs) > percentile_95)[0]
+            spearmans_dict[t_i][cp_i]['sig_true_inds'] = sig_true_corrs
+    
+    #Now create plots of distributions and statistics
+    
+    #Indiv Distributions True vs Null
+    f_dist_pdf, ax_dist_pdf = plt.subplots(nrows = num_tastes, ncols = max_num_cp, figsize = (8,8),
+                                   sharex = True, sharey = True)
+    f_dist_cdf, ax_dist_cdf = plt.subplots(nrows = num_tastes, ncols = max_num_cp, figsize = (8,8),
+                                   sharex = True, sharey = True)
+    for t_i in range(num_tastes):
+        for cp_i in range(max_num_cp):
+            ax_dist_pdf[t_i,cp_i].hist(np.abs(spearmans_dict[t_i][cp_i]['null'].flatten()),
+                                       bins = 50, density=True,
+                                       histtype='step',label='Null')
+            ax_dist_cdf[t_i,cp_i].hist(np.abs(spearmans_dict[t_i][cp_i]['null'].flatten()),
+                                       bins = 100, density=True, cumulative=True,
+                                       histtype='step',label='Null')
+            ax_dist_pdf[t_i,cp_i].hist(np.abs(spearmans_dict[t_i][cp_i]['true']),
+                                       bins = 50, density=True,
+                                       histtype='step',label='True')
+            ax_dist_cdf[t_i,cp_i].hist(np.abs(spearmans_dict[t_i][cp_i]['true']),
+                                       bins = 100, density=True, cumulative=True,
+                                       histtype='step',label='True')
+            ax_dist_pdf[t_i,cp_i].axvline(spearmans_dict[t_i][cp_i]['percentile_95'],
+                                          color='r',label='Null 95th Percentile')
+            ax_dist_cdf[t_i,cp_i].axvline(spearmans_dict[t_i][cp_i]['percentile_95'],
+                                          color='r',label='Null 95th Percentile')
+            num_sig = len(spearmans_dict[t_i][cp_i]['sig_true_inds'])
+            title = str(np.round(100*num_sig/num_dev,2)) + ' Percent Significant'
+            if t_i == 0:
+                ax_dist_pdf[t_i,cp_i].set_title('Epoch ' + str(cp_i) + '\n' + title)
+                ax_dist_cdf[t_i,cp_i].set_title('Epoch ' + str(cp_i) + '\n' + title)
+            else:
+                ax_dist_pdf[t_i,cp_i].set_title(title)
+                ax_dist_cdf[t_i,cp_i].set_title(title)
+            if cp_i == 0:
+                ax_dist_pdf[t_i,cp_i].set_ylabel(dig_in_names[t_i] + '\nDensity')
+                ax_dist_cdf[t_i,cp_i].set_ylabel(dig_in_names[t_i] + '\nCumulative Density')
+            if t_i == num_tastes-1:
+                ax_dist_pdf[t_i,cp_i].set_xlabel('Spearman Correlation')
+                ax_dist_cdf[t_i,cp_i].set_xlabel('Spearman Correlation')
+            if (t_i == 0)*(cp_i == 0):
+                ax_dist_pdf[t_i,cp_i].legend(loc = 'upper left')
+                ax_dist_cdf[t_i,cp_i].legend(loc = 'upper left')
+    f_dist_pdf.suptitle(seg_name + ' Probability Density Distributions')
+    plt.tight_layout()
+    f_dist_pdf.savefig(os.path.join(null_sequence_dir,seg_name+'_taste_epoch_spearman_pdfs.png'))
+    f_dist_pdf.savefig(os.path.join(null_sequence_dir,seg_name+'_taste_epoch_spearman_pdfs.svg'))
+    plt.close(f_dist_pdf)
+    f_dist_cdf.suptitle(seg_name + ' Cumulative Probability Density Distributions')
+    plt.tight_layout()
+    f_dist_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_taste_epoch_spearman_cdfs.png'))
+    f_dist_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_taste_epoch_spearman_cdfs.svg'))
+    plt.close(f_dist_cdf)
+    
+    #Taste-v-taste 
+    taste_pairs = list(itertools.combinations(np.arange(num_tastes),2))
+    taste_pair_names = []
+    for tp_i, tp in enumerate(taste_pairs):
+        taste_pair_names.append(dig_in_names[tp[0]] + ' v. ' + dig_in_names[tp[1]])
+    f_taste_cdf, ax_taste_cdf = plt.subplots(ncols=max_num_cp, figsize=(8,5))
+    for cp_i in range(max_num_cp):
+        ks_datasets = []
+        for t_i in range(num_tastes):
+            taste_data = np.abs(spearmans_dict[t_i][cp_i]['true'].flatten())
+            ks_datasets.append(taste_data[~np.isnan(taste_data)])
+            ax_taste_cdf[cp_i].hist(taste_data, bins = 50, density=True, cumulative=True,
+                                       histtype='step',label=dig_in_names[t_i])
+        if cp_i == 0:
+            ax_taste_cdf[cp_i].legend(loc='upper left')
+        ax_taste_cdf[cp_i].set_title('Epoch ' + str(cp_i))
+        #Significance tests
+        ks_sig = np.zeros(len(taste_pairs))
+        ks_dir = np.zeros(len(taste_pairs))
+        for p_i, p_vals in enumerate(taste_pairs):
+            ks_res = stats.ks_2samp(ks_datasets[p_vals[0]], ks_datasets[p_vals[1]], \
+                           alternative='two-sided')
+            if ks_res.pvalue <= 0.05:
+                ks_sig[p_i] = 1
+                ks_dir[p_i] = ks_res.statistic_sign
+        sig_text = 'Significant Pairs:'
+        if np.sum(ks_sig) > 0:
+            sig_inds = np.where(ks_sig > 0)[0]
+            for sig_i in sig_inds:
+                if ks_dir[sig_i] == 1:
+                    sig_text += '\n' + taste_pair_names[sig_i] + ' < '
+                if ks_dir[sig_i] == -1:
+                    sig_text += '\n' + taste_pair_names[sig_i] + ' > '
+        ax_taste_cdf[cp_i].text(0,0.2,sig_text)
+    f_taste_cdf.suptitle(seg_name)
+    plt.tight_layout()
+    f_taste_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_taste_compare_true_spearman_cdfs.png'))
+    f_taste_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_taste_compare_true_spearman_cdfs.svg'))
+    
+    #Epoch-v-epoch
+    epoch_pairs = list(itertools.combinations(np.arange(max_num_cp),2))
+    epoch_pair_names = []
+    for ep_i, ep in enumerate(epoch_pairs):
+        epoch_pair_names.append('Epoch ' + str(ep[0]) + ' v. ' + 'Epoch ' + str(ep[1]))
+    f_epoch_cdf, ax_epoch_cdf = plt.subplots(ncols=max_num_cp, figsize=(8,5))
+    for t_i in range(num_tastes):
+        ks_datasets = []
+        for cp_i in range(max_num_cp):
+            epoch_data = np.abs(spearmans_dict[t_i][cp_i]['true'].flatten())
+            ks_datasets.append(epoch_data[~np.isnan(epoch_data)])
+            ax_epoch_cdf[t_i].hist(epoch_data, bins = 50, density=True, cumulative=True,
+                                       histtype='step',label='Epoch ' + str(cp_i))
+        if t_i == 0:
+            ax_epoch_cdf[t_i].legend(loc='upper left')
+        ax_epoch_cdf[t_i].set_title(dig_in_names[t_i])
+        #Significance tests
+        ks_sig = np.zeros(len(epoch_pairs))
+        ks_dir = np.zeros(len(epoch_pairs))
+        for p_i, p_vals in enumerate(epoch_pairs):
+            ks_res = stats.ks_2samp(ks_datasets[p_vals[0]], ks_datasets[p_vals[1]], \
+                           alternative='two-sided')
+            if ks_res.pvalue <= 0.05:
+                ks_sig[p_i] = 1
+                ks_dir[p_i] = ks_res.statistic_sign
+        sig_text = 'Significant Pairs:'
+        if np.sum(ks_sig) > 0:
+            sig_inds = np.where(ks_sig > 0)[0]
+            for sig_i in sig_inds:
+                if ks_dir[sig_i] == 1:
+                    sig_text += '\n' + epoch_pair_names[sig_i] + ' < '
+                if ks_dir[sig_i] == -1:
+                    sig_text += '\n' + epoch_pair_names[sig_i] + ' > '
+        ax_epoch_cdf[t_i].text(0,0.2,sig_text)
+    f_epoch_cdf.suptitle(seg_name)
+    plt.tight_layout()
+    f_epoch_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_epoch_compare_true_spearman_cdfs.png'))
+    f_epoch_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_epoch_compare_true_spearman_cdfs.svg'))
+    
