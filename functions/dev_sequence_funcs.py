@@ -274,66 +274,75 @@ def create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean,
                         s_i, bin_dt, epochs_to_analyze, tastant_raster_dict, 
                         taste_seqs_dict, avg_taste_seqs_dict, sequence_dir, 
                         null_sequence_dir, null_sequence_dir_2):
-    tic = time.time()
-    dev_seqs = []
-    null_dev_dict = dict()
-    null_dev_dict_2 = dict()
-    for null_i in range(num_null):
-        null_dev_dict[null_i] = []
-        null_dev_dict_2[null_i] = []
-        
-    #Calculate deviation sequences
-    for dev_i in range(num_dev):
-        #Pull raster and count up firing within bins
-        dev_rast = seg_dev_rast[dev_i]
-        num_spikes_per_neur = np.sum(dev_rast,1).astype('int')
-        _, num_dt = np.shape(dev_rast)
-        bin_starts = np.arange(num_dt-bin_dt)
-        dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
-        for bs in bin_starts:
-            dev_bin_counts[:,bs] = np.sum(dev_rast[:,bs:bs+bin_dt],1)
-        max_counts = np.max(dev_bin_counts,1)
-        #Neuron Ordering: note that if multiple neurons fire the same number 
-        #of times, it will order them by index 
-        max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
-        neur_ord = np.argsort(max_ind, kind='stable')
-        dev_seqs.append(neur_ord)
-        
-        #Create null versions of the event
+    try: #Import of pre-calculated sequences
+        dev_seqs_array = np.load(os.path.join(sequence_dir,segment_names[s_i] + '_dev_seqs_array.npy'),allow_pickle=True)
+        null_dev_dict = np.load(os.path.join(null_sequence_dir,segment_names[s_i] + '_null_dev_dict.npy'),allow_pickle=True).item()
+        null_dev_dict_2 = np.load(os.path.join(null_sequence_dir_2,segment_names[s_i] + '_null_dev_dict.npy'),allow_pickle=True).item()
+        print("\t\t\t\t\tImported previously calculated sequences for " + segment_names[s_i])
+    except: #Create sequences
+        tic = time.time()
+        dev_seqs = []
+        null_dev_dict = dict()
+        null_dev_dict_2 = dict()
         for null_i in range(num_null):
-            #Shuffle within-neuron spike times
-            shuffle_rast = np.zeros(np.shape(dev_rast))
-            for neur_i in range(num_neur):
-                new_spike_ind = random.sample(list(np.arange(num_dt)),num_spikes_per_neur[neur_i])
-                shuffle_rast[neur_i,new_spike_ind] = 1
-            dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
-            for bs in bin_starts:
-                dev_bin_counts[:,bs] = np.sum(shuffle_rast[:,bs:bs+bin_dt],1)
-            max_counts = np.max(dev_bin_counts,1)
-            max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
-            neur_ord = np.argsort(max_ind, kind='stable')
-            null_dev_dict[null_i].append(neur_ord)
-            #Shuffle across-neuron spike times
-            shuffle_rast_2 = np.zeros(np.shape(dev_rast))
-            new_neuron_order = random.sample(list(np.arange(num_neur)),num_neur)
-            for nn_ind, nn in enumerate(new_neuron_order):
-                shuffle_rast_2[nn_ind,:] = shuffle_rast[nn,:]
-            dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
-            for bs in bin_starts:
-                dev_bin_counts[:,bs] = np.sum(shuffle_rast[:,bs:bs+bin_dt],1)
-            max_counts = np.max(dev_bin_counts,1)
-            max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
-            neur_ord = np.argsort(max_ind, kind='stable')
-            null_dev_dict_2[null_i].append(neur_ord)
+            null_dev_dict[null_i] = []
+            null_dev_dict_2[null_i] = []
             
-    dev_seqs_array = np.array(dev_seqs) #num dev x num neur
-    for null_i in range(num_null):
-        null_dev_dict[null_i] = np.array(null_dev_dict[null_i]) #num dev x num neur x 2
-        null_dev_dict_2[null_i] = np.array(null_dev_dict_2[null_i]) #num dev x num neur x 2
-    toc = time.time()
-    print('\t\t\t\t\tTime to calculate sequences for ' + segment_names[s_i] + \
-          ' = ' + str(np.round((toc-tic)/60, 2)) + ' (min)')
-    
+        #Calculate deviation sequences
+        for dev_i in range(num_dev):
+            #Pull raster and count up firing within bins
+            dev_rast = seg_dev_rast[dev_i]
+            num_spikes_per_neur = np.sum(dev_rast,1).astype('int')
+            _, num_dt = np.shape(dev_rast)
+            bin_starts = np.arange(num_dt-bin_dt)
+            dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
+            for bs in bin_starts:
+                dev_bin_counts[:,bs] = np.sum(dev_rast[:,bs:bs+bin_dt],1)
+            max_counts = np.max(dev_bin_counts,1)
+            #Neuron Ordering: note that if multiple neurons fire the same number 
+            #of times, it will order them by index 
+            max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
+            neur_ord = np.argsort(max_ind, kind='stable')
+            dev_seqs.append(neur_ord)
+            
+            #Create null versions of the event
+            for null_i in range(num_null):
+                #Shuffle within-neuron spike times
+                shuffle_rast = np.zeros(np.shape(dev_rast))
+                for neur_i in range(num_neur):
+                    new_spike_ind = random.sample(list(np.arange(num_dt)),num_spikes_per_neur[neur_i])
+                    shuffle_rast[neur_i,new_spike_ind] = 1
+                dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
+                for bs in bin_starts:
+                    dev_bin_counts[:,bs] = np.sum(shuffle_rast[:,bs:bs+bin_dt],1)
+                max_counts = np.max(dev_bin_counts,1)
+                max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
+                neur_ord = np.argsort(max_ind, kind='stable')
+                null_dev_dict[null_i].append(neur_ord)
+                #Shuffle across-neuron spike times
+                shuffle_rast_2 = np.zeros(np.shape(dev_rast))
+                new_neuron_order = random.sample(list(np.arange(num_neur)),num_neur)
+                for nn_ind, nn in enumerate(new_neuron_order):
+                    shuffle_rast_2[nn_ind,:] = shuffle_rast[nn,:]
+                dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
+                for bs in bin_starts:
+                    dev_bin_counts[:,bs] = np.sum(shuffle_rast_2[:,bs:bs+bin_dt],1)
+                max_counts = np.max(dev_bin_counts,1)
+                max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
+                neur_ord = np.argsort(max_ind, kind='stable')
+                null_dev_dict_2[null_i].append(neur_ord)
+                
+        dev_seqs_array = np.array(dev_seqs) #num dev x num neur
+        for null_i in range(num_null):
+            null_dev_dict[null_i] = np.array(null_dev_dict[null_i]) #num dev x num neur x 2
+            null_dev_dict_2[null_i] = np.array(null_dev_dict_2[null_i]) #num dev x num neur x 2
+        toc = time.time()
+        print('\t\t\t\t\tTime to calculate sequences for ' + segment_names[s_i] + \
+              ' = ' + str(np.round((toc-tic)/60, 2)) + ' (min)')
+        np.save(os.path.join(sequence_dir,segment_names[s_i] + '_dev_seqs_array.npy'),dev_seqs_array,allow_pickle=True)
+        np.save(os.path.join(null_sequence_dir,segment_names[s_i] + '_null_dev_dict.npy'),null_dev_dict,allow_pickle=True)
+        np.save(os.path.join(null_sequence_dir_2,segment_names[s_i] + '_null_dev_dict.npy'),null_dev_dict_2,allow_pickle=True)
+        
     #Run rank order correlations for null data and true data and pull out 
     #significant events
     dev_rank_order_tests(dev_seqs_array, null_dev_dict, avg_taste_seqs_dict, 
@@ -1475,7 +1484,7 @@ def dev_rank_order_tests(dev_seqs_array, null_dev_dict, avg_taste_seqs_dict,
                     null_corrs[null_i,dev_i] = res[0]
             spearmans_dict[t_i][cp_i]['null'] = null_corrs
             #Since these are rank order corrs we'll absolute value them and calculate the 95th percentile for null
-            percentile_95 = np.percentile(null_corrs.flatten(),95)
+            percentile_95 = np.percentile(np.abs(null_corrs.flatten()),95)
             spearmans_dict[t_i][cp_i]['percentile_95'] = percentile_95
             sig_true_corrs = np.where(np.abs(true_corrs) > percentile_95)[0]
             spearmans_dict[t_i][cp_i]['sig_true_inds'] = sig_true_corrs
@@ -1571,6 +1580,7 @@ def dev_rank_order_tests(dev_seqs_array, null_dev_dict, avg_taste_seqs_dict,
     plt.tight_layout()
     f_taste_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_taste_compare_true_spearman_cdfs.png'))
     f_taste_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_taste_compare_true_spearman_cdfs.svg'))
+    plt.close(f_taste_cdf)
     
     #Epoch-v-epoch
     epoch_pairs = list(itertools.combinations(np.arange(max_num_cp),2))
@@ -1610,4 +1620,5 @@ def dev_rank_order_tests(dev_seqs_array, null_dev_dict, avg_taste_seqs_dict,
     plt.tight_layout()
     f_epoch_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_epoch_compare_true_spearman_cdfs.png'))
     f_epoch_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_epoch_compare_true_spearman_cdfs.svg'))
+    plt.close(f_epoch_cdf)
     

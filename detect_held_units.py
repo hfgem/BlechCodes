@@ -17,6 +17,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from functions.blech_held_units_funcs import *
     
+# Time to use after a taste is delivered to calculate an average firing rate for each neuron
+post_deliv_time = 500
+
 # Ask the user for the number of days to be compared
 num_days = int_input("How many days-worth of data are you comparing for held units (integer)? ")
 
@@ -51,31 +54,92 @@ for n_i in range(num_days):
     num_neur = len(hf5.root.unit_descriptor[:])
     all_neur_inds.append(list(np.arange(num_neur)))
     data_dict[n_i]['num_neur'] = num_neur
+    #Check if dig in times saved as csv in directory or not
+    start_dig_in_times_csv = os.path.join(dir_name,'start_dig_in_times.csv')
+    if os.path.isfile(start_dig_in_times_csv):
+        print("\t\tImporting previously saved digital input times")
+        start_dig_in_times = []
+        with open(start_dig_in_times_csv, 'r') as file:
+            csvreader = csv.reader(file)
+            for row in csvreader:
+                start_dig_in_times.append(list(np.array(row).astype('int')))
+        num_tastes = len(start_dig_in_times)
+    else:
+        dig_in_node = blech_clust_h5.list_nodes('/digital_in')
+        dig_in_indices = np.array([d_i.name.split('_')[-1] for d_i in dig_in_node])
+        dig_in_ind = []
+        i = 0
+        for d_i in dig_in_indices:
+            try:
+                int(d_i)
+                dig_in_ind.extend([i])
+            except:
+                "not an input - do nothing"
+            i += 1
+        del dig_in_indices
+        try:
+            if len(dig_in_node[0][0]):
+                dig_in_data = [list(dig_in_node[d_i][0][:]) for d_i in dig_in_ind]
+        except:
+            dig_in_data = [list(dig_in_node[d_i][:]) for d_i in dig_in_ind]
+        num_tastes = len(dig_in_data)
+        del dig_in_node
+        #_____Convert dig_in_data to indices of dig_in start and end times_____
+        print("\tConverting digital inputs to free memory")
+        #Again, all are converted to ms timescale
+        start_dig_in_times = [list(np.ceil((np.where(np.diff(np.array(dig_in_data[i])) == 1)[0] + 1)*self.ms_conversion).astype('int')) for i in range(num_tastes)]    
+        #Store these into csv for import in future instead of full dig_in_data load which takes forever!
+        with open(start_dig_in_times_csv, 'w') as f:
+            write = csv.writer(f,delimiter=',')
+            write.writerows(start_dig_in_times)
+    flat_start_dig_in_times = []
+    for d_i in len(start_dig_in_times):
+        flat_start_dig_in_times.extend(start_dig_in_times[d_i])
+    start_dig_in_times = np.sort(np.array(flat_start_dig_in_times)) #All dig in times - regardless of taste
+    data_dict[n_i]['start_dig_in_times'] = start_dig_in_times
+    taste_start_time = np.max([np.min(start_dig_in_times) - 5000,0]).astype('int')
+    taste_end_time = (np.max(start_dig_in_times) + 5000).astype('int')
+    data_dict[n_i]['taste_interval'] = [taste_start_time,taste_end_time]
     #Calculate the Intra-J3 data for the units
     intra_J3 = []
+    all_unit_waveforms = []
+    all_unit_times = []
     for unit in range(num_neur):
         # Only go ahead if this is a single unit
         if hf5.root.unit_descriptor[unit]['single_unit'] == 1:
-            exec("wf_day1 = hf5.root.sorted_units.unit%03d.waveforms[:]" % (unit))
+            exec("wf_day1 = hf5.root.sorted_units.unit%03d.waveforms[:]" % (unit)) #num wav x 60
+            exec("t_day1 = hf5.root.sorted_units.unit%03d.times[:]" % (unit)) #num wav
             if wf_type == 'norm_waveform':
                 wf_day1 = wf_day1 / np.std(wf_day1)
+            #Pull out taste response interval waveforms only
+            taste_wf_inds = np.where((t_day1 >= taste_start_time)*(t_day1 <= taste_end_time))[0]
+            taste_t_day1 = t_day1[taste_wf_inds]
+            all_unit_times.append(taste_t_day1)
+            taste_wf_day1 = wf_day1[taste_wf_inds,:]
+            all_unit_waveforms.append(taste_wf_day1)
             pca = PCA(n_components = 4)
-            pca.fit(wf_day1)
-            pca_wf_day1 = pca.transform(wf_day1)
-            intra_J3.append(calculate_J3(pca_wf_day1[:int(wf_day1.shape[0]*(1.0/3.0)), :], pca_wf_day1[int(wf_day1.shape[0]*(2.0/3.0)):, :]))
+            pca.fit(taste_wf_day1)
+            pca_wf_day1 = pca.transform(taste_wf_day1) #num wav x 4
+            #Calculate firing rates within given interval following taste delivery
+            neur_fr = np.zeros(len(start_dig_in_times))
+            for st_i in start_dig_in_times:
+                spike_hz = len(np.where((taste_t_day1>st_i)*(taste_t_day<=st_i+post_deliv_time))[0])/(post_deliv_time/1000)
+                neur_fr[st_i] = spike_hz
+            mean_fr = np.nanmean(neur_fr)
+            std_fr = np.nanstd(neur_fr)
+            #Add to PCA of waveform the firing rate data in the form of mean and standard deviation
+            pca_wf_day1 = np.concatenate((pca_wf_day1,mean_fr*np.ones((len(taste_t_day1),0)),std_fr*np.ones((len(taste_t_day1),0))),axis=1)
+            intra_J3.append(calculate_J3(pca_wf_day1[:int(taste_wf_day1.shape[0]*(1.0/3.0)), :], 
+                                         pca_wf_day1[int(taste_wf_day1.shape[0]*(2.0/3.0)):, :]))
     data_dict[n_i]['intra_J3'] = intra_J3
+    data_dict[n_i]['all_unit_waveforms'] = all_unit_waveforms
+    data_dict[n_i]['all_unit_times'] = all_unit_times
     all_intra_J3.extend(intra_J3)
     #Pull unit info for all units
     all_unit_info = []
     for unit in range(num_neur):
         all_unit_info.append(get_unit_info(hf5.root.unit_descriptor[unit]))
     data_dict[n_i]['all_unit_info'] = all_unit_info
-    #Pull unit waveforms for all units
-    all_unit_waveforms = []
-    for unit in range(num_neur):
-        exec("wf = hf5.root.sorted_units.unit%03d.waveforms[:]" % (unit))
-        all_unit_waveforms.append(wf)
-    data_dict[n_i]['all_unit_waveforms'] = all_unit_waveforms
     #Close hdf5 file
     hf5.close()
     
