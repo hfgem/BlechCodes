@@ -125,24 +125,24 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
                                 taste_seqs_dict, avg_taste_seqs_dict, sequence_dir, 
                                 null_sequence_dir, null_sequence_dir_2)
         
-def test_taste_epoch_pairs(dig_in_names, tastant_fr_dist_z_pop, z_decode_dir):
+def test_taste_epoch_pairs(dig_in_names, tastant_fr_dist, save_dir):
     #Grab parameters/variables
-    num_tastes = len(tastant_fr_dist_z_pop)
+    num_tastes = len(tastant_fr_dist)
     num_deliv_per_taste = []
     max_num_cp = 0
     for t_i in range(num_tastes):
-        num_deliv = len(tastant_fr_dist_z_pop[t_i])
+        num_deliv = len(tastant_fr_dist[t_i])
         num_deliv_per_taste.append(num_deliv)
         for d_i in range(num_deliv):
-            if len(tastant_fr_dist_z_pop[t_i][d_i]) > max_num_cp:
-                max_num_cp = len(tastant_fr_dist_z_pop[t_i][d_i])
+            if len(tastant_fr_dist[t_i][d_i]) > max_num_cp:
+                max_num_cp = len(tastant_fr_dist[t_i][d_i])
     
     epoch_pairs = list(itertools.combinations(np.arange(max_num_cp),2))
     num_ep = len(epoch_pairs)
     
     sig_storage = np.zeros((num_tastes,3,num_ep)) #Rows: Hotelling's T-Squared, F-statistic, p-val x Cols: epoch pair
     
-    sig_csv_file = os.path.join(z_decode_dir,'taste_epoch_sig_hotellings.csv')
+    sig_csv_file = os.path.join(save_dir,'taste_epoch_sig_hotellings.csv')
     with open(sig_csv_file, 'w') as f_sig:
         write = csv.writer(f_sig, delimiter=',')
         title_list = ['Taste Name', 'Stat Name']
@@ -155,8 +155,15 @@ def test_taste_epoch_pairs(dig_in_names, tastant_fr_dist_z_pop, z_decode_dir):
             ep_1_vals = []
             ep_2_vals = []
             for d_i in range(num_deliv_per_taste[t_i]):
-                ep_1_vals.extend(tastant_fr_dist_z_pop[t_i][d_i][ep[0]])
-                ep_2_vals.extend(tastant_fr_dist_z_pop[t_i][d_i][ep[1]])
+                try:
+                    if np.shape(tastant_fr_dist[t_i][d_i][ep[0]])[0] == 1:
+                        ep_1_vals.extend(tastant_fr_dist[t_i][d_i][ep[0]])
+                        ep_2_vals.extend(tastant_fr_dist[t_i][d_i][ep[1]])
+                    else:
+                        ep_1_vals.extend(tastant_fr_dist[t_i][d_i][ep[0]].T)
+                        ep_2_vals.extend(tastant_fr_dist[t_i][d_i][ep[1]].T)
+                except:
+                    ep_1_vals.extend([])
             ep_1_vals = np.array(ep_1_vals)
             ep_2_vals = np.array(ep_2_vals)
                 

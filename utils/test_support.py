@@ -177,4 +177,3 @@ dsf.split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
                    tastant_raster_dict,tastant_fr_dist_pop,tastant_fr_dist_z_pop,
                    dig_in_names,segment_names,num_null, seq_dir, 
                    segments_to_analyze, epochs_to_analyze)
-

@@ -152,16 +152,16 @@ def taste_fr_dist_zscore(num_neur, tastant_spike_times, segment_spike_times,
 
     if not np.isnan(s_i_taste[0]):
         s_i = int(s_i_taste[0])
-        seg_start = segment_times[s_i]
-        seg_end = segment_times[s_i+1]
+        seg_start = int(segment_times[s_i])
+        seg_end = int(segment_times[s_i+1])
         seg_len = seg_end - seg_start
         time_bin_starts = np.arange(
             seg_start+half_bin, seg_end-half_bin, bin_dt)
         segment_spike_times_s_i = segment_spike_times[s_i]
         segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
         for n_i in range(num_neur):
-            n_i_spike_times = np.array(
-                segment_spike_times_s_i[n_i] - seg_start).astype('int')
+            n_i_spike_times = (np.array(
+                segment_spike_times_s_i[n_i]) - seg_start).astype('int')
             segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
         tb_fr = np.zeros((num_neur, len(time_bin_starts)))
         for tb_i, tb in enumerate(time_bin_starts):
