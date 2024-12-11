@@ -97,6 +97,10 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
     for tp_i, tp in enumerate(taste_pairs):
         taste_pair_names.append(dig_in_names[tp[0]] + ' v. ' + dig_in_names[tp[1]])
         
+    #Test taste epoch pair fr distributions against each other with Hotellings T
+    test_taste_epoch_pairs(dig_in_names, tastant_fr_dist_pop, non_z_decode_split_dir)
+    test_taste_epoch_pairs(dig_in_names, tastant_fr_dist_z_pop, z_decode_dir)
+        
     #Calculate rank order sequences for taste responses by epoch
     taste_seqs_dict, avg_taste_seqs_dict = calc_tastant_seq(tastant_raster_dict, bin_dt)
     
@@ -120,6 +124,60 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
                                 s_i, bin_dt, epochs_to_analyze, tastant_raster_dict,
                                 taste_seqs_dict, avg_taste_seqs_dict, sequence_dir, 
                                 null_sequence_dir, null_sequence_dir_2)
+        
+def test_taste_epoch_pairs(dig_in_names, tastant_fr_dist_z_pop, z_decode_dir):
+    #Grab parameters/variables
+    num_tastes = len(tastant_fr_dist_z_pop)
+    num_deliv_per_taste = []
+    max_num_cp = 0
+    for t_i in range(num_tastes):
+        num_deliv = len(tastant_fr_dist_z_pop[t_i])
+        num_deliv_per_taste.append(num_deliv)
+        for d_i in range(num_deliv):
+            if len(tastant_fr_dist_z_pop[t_i][d_i]) > max_num_cp:
+                max_num_cp = len(tastant_fr_dist_z_pop[t_i][d_i])
+    
+    epoch_pairs = list(itertools.combinations(np.arange(max_num_cp),2))
+    num_ep = len(epoch_pairs)
+    
+    sig_storage = np.zeros((num_tastes,3,num_ep)) #Rows: Hotelling's T-Squared, F-statistic, p-val x Cols: epoch pair
+    
+    sig_csv_file = os.path.join(z_decode_dir,'taste_epoch_sig_hotellings.csv')
+    with open(sig_csv_file, 'w') as f_sig:
+        write = csv.writer(f_sig, delimiter=',')
+        title_list = ['Taste Name', 'Stat Name']
+        for ep in epoch_pairs:
+            title_list.extend([str(ep)])
+        write.writerow(title_list)
+            
+    for t_i in range(num_tastes):
+        for ep_ind, ep in enumerate(epoch_pairs):
+            ep_1_vals = []
+            ep_2_vals = []
+            for d_i in range(num_deliv_per_taste[t_i]):
+                ep_1_vals.extend(tastant_fr_dist_z_pop[t_i][d_i][ep[0]])
+                ep_2_vals.extend(tastant_fr_dist_z_pop[t_i][d_i][ep[1]])
+            ep_1_vals = np.array(ep_1_vals)
+            ep_2_vals = np.array(ep_2_vals)
+                
+            try:
+                T2, F_hot, p_value = hotelling_t2(ep_1_vals, ep_2_vals)
+                sig_storage[t_i,:,ep_ind] = [T2, F_hot, p_value]
+            except:
+                sig_storage[t_i,:,ep_ind] = [np.nan, np.nan, np.nan]
+    
+        with open(sig_csv_file, 'a') as f_sig:
+            write = csv.writer(f_sig, delimiter=',')
+            hot_t_list = [dig_in_names[t_i], 'Hotellings T']
+            hot_t_list.extend([sig_storage[t_i,0,i] for i in range(num_ep)])
+            write.writerow(hot_t_list)
+            f_stat_list = [dig_in_names[t_i], 'F-Stat']
+            f_stat_list.extend([sig_storage[t_i,1,i] for i in range(num_ep)])
+            write.writerow(f_stat_list)
+            p_val_list = [dig_in_names[t_i], 'p-val']
+            p_val_list.extend([sig_storage[t_i,2,i] for i in range(num_ep)])
+            write.writerow(p_val_list)
+        
         
 def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_std, 
                             num_neur, dig_in_names, segment_names, s_i, 
