@@ -12,6 +12,31 @@ import tqdm
 import numpy as np
 from scipy.spatial.distance import cdist
 
+def user_held_unit_input():
+    # Ask the user for the number of days to be compared
+    num_days = int_input("How many days-worth of data are you comparing for held units (integer)? ")
+
+    # Ask the user for the percentile criterion to use to determine held units
+    percent_criterion = int_input('What percentile of intra-J3 do you want to use to pull out held units (provide an integer)? ')
+    percent_criterion_fr = int_input('What percentile of FR distances do you want to use to pull out held units (provide an integer)? ')
+
+    # Ask the user for the waveform to use to determine held units
+    while_end = 0
+    while while_end == 0:
+        wf_ind = int_input('Which types of waveforms should be used for held_unit analysis?' + \
+                             '\n1: raw_CAR_waveform'
+                             '\n2: norm_waveform' + '\nEnter the index: ')
+        if wf_ind == 1:
+            wf_type = 'raw_CAR_waveform'
+            while_end = 1
+        elif wf_ind == 2:
+            wf_type = 'norm_waveform'
+            while_end = 1
+        else:
+            print('Error: Incorrect entry, try again.')
+            
+    return num_days, percent_criterion, percent_criterion_fr
+
 def int_input(prompt):
 	#This function asks a user for an integer input
 	int_loop = 1	
