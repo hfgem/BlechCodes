@@ -50,6 +50,20 @@ def int_input(prompt):
 	
 	return int_val
 
+def bool_input(prompt):
+	#This function asks a user for an integer input
+	bool_loop = 1	
+	while bool_loop == 1:
+		print("Respond with Y/y/N/n:")
+		response = input(prompt)
+		if (response.lower() != 'y')*(response.lower() != 'n'):
+			print("\tERROR: Incorrect data entry, only give Y/y/N/n.")
+		else:
+			bool_val = response.lower()
+			bool_loop = 0
+	
+	return bool_val
+
 def get_unit_info(all_unit_info, 
                   unit_info_labels=['electrode_number', 'fast_spiking', 
                                     'regular_spiking', 'single_unit']):
