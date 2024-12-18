@@ -26,12 +26,12 @@ binning = 100 #ms
 bin_starts = np.arange(-1*pre_deliv_time,post_deliv_time-binning)
 pre_deliv_inds = np.where(bin_starts<0)[0]
 
-#num_days, percent_criterion, percent_criterion_fr = user_held_unit_input()
-num_days = 2
+num_days, use_electrode = user_held_unit_input()
 
 file_exists = bool_input("Do you have a previously compiled held unit pickle file you'd like to use? ")
 
 all_neur_inds = [] #Store all neuron indices to calculate cross-day combinations
+all_electrode_inds = [] #Store the electrode indices for each neuron
 
 if file_exists == 'y':
     print('Where did you save the held units pickle file from a prior run?')
@@ -54,6 +54,8 @@ if file_exists == 'y':
         for d_i in range(num_days):
             num_neur = data_dict[d_i]['num_neur']
             all_neur_inds.append(list(np.arange(num_neur)))
+            all_unit_info = data_dict[d_i]['all_unit_info']
+            all_electrode_inds.append(list(np.squeeze(np.array(all_unit_info)[:,0])))
     except:
         try:
             all_intra_J3 = [] #Store all intra J3 data for original waveforms
@@ -64,6 +66,8 @@ if file_exists == 'y':
             for d_i in range(num_days):
                 num_neur = data_dict[d_i]['num_neur']
                 all_neur_inds.append(list(np.arange(num_neur)))
+                all_unit_info = data_dict[d_i]['all_unit_info']
+                all_electrode_inds.append(list(np.squeeze(np.array(all_unit_info)[:,0])))
                 start_dig_in_times = data_dict[d_i]['start_dig_in_times']
                 [taste_start_time,taste_end_time] = data_dict[d_i]['taste_interval']
                 intra_J3 = data_dict[d_i]['intra_J3']
@@ -74,6 +78,7 @@ if file_exists == 'y':
                 all_intra_J3_norm.extend(intra_J3_norm)
                 all_intra_euc_dist.extend(intra_euc_dist_fr_curves)
                 all_intra_euc_dist_norm.extend(intra_euc_dist_fr_curves_norm)
+            del d_i, num_neur, start_dig_in_times, taste_start_time, taste_end_time
             #Save the calculated intra datasets
             np.save(os.path.join(stat_save_dir,'all_intra_J3.npy'),np.array(all_intra_J3),allow_pickle=True)
             np.save(os.path.join(stat_save_dir,'all_intra_J3_norm.npy'),np.array(all_intra_J3_norm),allow_pickle=True)
@@ -102,6 +107,7 @@ else:
             if files[-2:] == 'h5':
                 hdf5_name = files
         data_dict[d_i]['hdf5_name'] = hdf5_name
+        del file_list
         #Open hdf5 file
         hf5 = tables.open_file(os.path.join(dir_name,hdf5_name), 'r')
         num_neur = len(hf5.root.unit_descriptor[:])
@@ -130,7 +136,7 @@ else:
                 except:
                     "not an input - do nothing"
                 i += 1
-            del dig_in_indices
+            del dig_in_indices, i, dig_i
             try:
                 if len(dig_in_node[0][0]):
                     dig_in_data = [list(dig_in_node[dig_i][0][:]) for dig_i in dig_in_ind]
@@ -146,6 +152,7 @@ else:
             with open(start_dig_in_times_csv, 'w') as f:
                 write = csv.writer(f,delimiter=',')
                 write.writerows(start_dig_in_times)
+            del f, write
         #Request user input on which dig ins to use in the PSTH calculations
         print(str(num_tastes) + " tastes (Dig-Ins) have been identified.")
         num_taste_keep = int_input("How many tastes would you like to keep for PSTH comparisons? ")
@@ -161,6 +168,7 @@ else:
         taste_start_time = np.max([np.min(start_dig_in_times) - 5000,0]).astype('int')
         taste_end_time = (np.max(start_dig_in_times) + 5000).astype('int')
         data_dict[d_i]['taste_interval'] = [taste_start_time,taste_end_time]
+        del keep_inds, ntk_i, flat_start_dig_in_times
         #Grab sampling rate for time conversion of spike times to ms
         try:
             sampling_rate = hf5.root.sampling_rate[0]
@@ -171,7 +179,9 @@ else:
             atom = tables.IntAtom()
             hf5.create_earray('/','sampling_rate',atom,(0,))
             hf5.root.sampling_rate.append([sampling_rate])
+            del rhd_dict, atom
         ms_conversion = (1/sampling_rate)*(1000/1) #ms/samples units
+        del sampling_rate
         #Calculate the Intra-J3/Euclidean Distance data for the units
         all_unit_waveforms = []
         all_unit_waveform_peaks = []
@@ -198,6 +208,7 @@ else:
             all_unit_waveform_peaks_norm.append(wf_peaks_norm)
             t_day1 = t_day1*ms_conversion #times converted to ms
             all_unit_times.append(t_day1)
+            del wf_peak_ind, wf_peaks, wf_peaks_norm
             #PCA waveforms
             pca = PCA(n_components = 4)
             pca.fit(wf_day1)
@@ -210,6 +221,7 @@ else:
                                          pca_wf_day1[int(t_day1.shape[0]*(2.0/3.0)):, :]))
             intra_J3_norm.append(calculate_J3(pca_wf_day1_norm[:int(t_day1.shape[0]*(1.0/3.0)), :], 
                                          pca_wf_day1_norm[int(t_day1.shape[0]*(2.0/3.0)):, :]))
+            del pca, pca_wf_day1, pca_norm, pca_wf_day1_norm
             #Pull out taste response interval times only
             taste_wf_inds = np.where((t_day1 >= taste_start_time)*(t_day1 <= taste_end_time))[0]
             taste_t_day1 = t_day1[taste_wf_inds]
@@ -219,6 +231,7 @@ else:
                 for bst_ind, bst_i in enumerate(bin_starts):
                     spike_hz = len(np.where((taste_t_day1>=st_i+bst_i)*(taste_t_day1<=st_i+bst_i+binning))[0])/(binning/1000)
                     neur_fr[st_ind,bst_ind] = spike_hz
+            del st_ind, st_i, bst_ind, bst_i, spike_hz
             all_unit_fr_curves.append(np.nanmean(neur_fr,0))
             neur_fr_mean1 = np.nanmean(neur_fr[:int(len(start_dig_in_times)*(1.0/3.0)), :],0)
             neur_fr_mean2 = np.nanmean(neur_fr[int(len(start_dig_in_times)*(2.0/3.0)):, :],0)
@@ -232,6 +245,8 @@ else:
             neur_fr_rescale_mean2 = np.nanmean(neur_fr_rescale[int(len(start_dig_in_times)*(2.0/3.0)):, :],0)
             neur_fr_rescale_mean2 = neur_fr_rescale_mean2/np.max(neur_fr_rescale_mean2)
             intra_euc_dist_fr_curves_norm.append(euclidean(neur_fr_rescale_mean1,neur_fr_rescale_mean2))
+            del neur_fr_mean1, neur_fr_mean2, pre_deliv_mean, neur_fr_rescale, rescale_mean, neur_fr_rescale_mean1, neur_fr_rescale_mean2
+        del taste_start_time, taste_end_time, unit, wf_day1, t_day1 
             
         data_dict[d_i]['all_unit_waveforms'] = all_unit_waveforms
         data_dict[d_i]['all_unit_waveform_peaks'] = all_unit_waveform_peaks
@@ -252,9 +267,13 @@ else:
         all_unit_info = []
         for unit in range(num_neur):
             all_unit_info.append(get_unit_info(hf5.root.unit_descriptor[unit]))
+        all_electrode_inds.append(list(np.squeeze(np.array(all_unit_info)[:,0])))
         data_dict[d_i]['all_unit_info'] = all_unit_info
+        del all_unit_info
         #Close hdf5 file
         hf5.close()
+        del hdf5_name, num_neur
+    del d_i
         
     # Ask the user for the output directory to save the held units and plots in
     print('Where do you want to save the held units and plots?')
@@ -275,13 +294,16 @@ else:
 
 #%% Intra-unit joint score
 
-all_intra_unit_J3_score = (all_intra_J3 - np.min(all_intra_J3))/np.max(all_intra_J3 - np.min(all_intra_J3))
+# all_intra_unit_J3_score = (all_intra_J3 - np.min(all_intra_J3))/np.max(all_intra_J3 - np.min(all_intra_J3))
 all_intra_unit_J3_norm_score = (all_intra_J3_norm - np.min(all_intra_J3_norm))/np.max(all_intra_J3_norm - np.min(all_intra_J3_norm))
-all_intra_unit_PSTH_score = (all_intra_euc_dist - np.min(all_intra_euc_dist))/np.max(all_intra_euc_dist - np.min(all_intra_euc_dist))
+#all_intra_unit_PSTH_score = (all_intra_euc_dist - np.min(all_intra_euc_dist))/np.max(all_intra_euc_dist - np.min(all_intra_euc_dist))
 all_intra_unit_PSTH_norm_score = (all_intra_euc_dist_norm - np.min(all_intra_euc_dist_norm))/np.max(all_intra_euc_dist_norm - np.min(all_intra_euc_dist_norm))
 #intra_unit_joint_score = (all_intra_unit_J3_score + all_intra_unit_J3_norm_score + all_intra_unit_PSTH_score + all_intra_unit_PSTH_norm_score)/4
-intra_unit_joint_score = (all_intra_unit_J3_norm_score + all_intra_unit_PSTH_norm_score)/2
-intra_unit_joint_score_percentile = np.percentile(intra_unit_joint_score,95)
+if use_electrode == 'y':
+    intra_unit_joint_norm_score = (all_intra_unit_J3_norm_score + all_intra_unit_PSTH_norm_score)/3 #/3 because the electrode distance for the same unit is 0 so don't need to add in here
+else:
+    intra_unit_joint_norm_score = (all_intra_unit_J3_norm_score + all_intra_unit_PSTH_norm_score)/2
+intra_unit_joint_score_percentile = np.percentile(intra_unit_joint_norm_score,95)
 
 #%%
 
@@ -336,6 +358,12 @@ for d_i in range(num_days):
         f_unit.savefig(os.path.join(day_unit_save_dir,'Neuron_' + str(n_i) + '.png'))
         f_unit.savefig(os.path.join(day_unit_save_dir,'Neuron_' + str(n_i) + '.svg'))
         plt.close(f_unit)
+        
+        del unit_waveforms, avg_waveform, std_waveform, unit_waveforms_norm, avg_waveform_norm, \
+            std_waveform_norm, unit_intra_J3, unit_intra_J3_norm, avg_PSTH, avg_PSTH_norm, \
+                euc_dist_PSTH, euc_dist_PSTH_norm, title, f_unit, ax_unit
+        
+del d_i, day_unit_save_dir, num_neur, n_i
 
 #%%
 #For all pairs of neurons within a day calculate the inter-J3 and PSTH distance
@@ -346,18 +374,23 @@ try:
     all_intra_day_J3_norm = np.load(os.path.join(stat_save_dir,'all_intra_day_J3_norm.npy'),allow_pickle=True)
     all_intra_day_euc_dist = np.load(os.path.join(stat_save_dir,'all_intra_day_euc_dist.npy'),allow_pickle=True)
     all_intra_day_euc_dist_norm = np.load(os.path.join(stat_save_dir,'all_intra_day_euc_dist_norm.npy'),allow_pickle=True)
-    all_intra_day_index_dist = np.load(os.path.join(stat_save_dir,'all_intra_day_index_dist.npy'),allow_pickle=True)
+    all_intra_day_electrode_dist = np.load(os.path.join(stat_save_dir,'all_intra_day_electrode_dist.npy'),allow_pickle=True)
 except:
     all_intra_day_J3 = []
     all_intra_day_J3_norm = []
     all_intra_day_euc_dist = []
     all_intra_day_euc_dist_norm = []
-    all_intra_day_index_dist = []
+    all_intra_day_electrode_dist = []
     for d_i in range(num_days):
         in_day_neur_combos = list(itertools.combinations(np.array(all_neur_inds[d_i]),2))
-        in_day_index_diffs = np.array([np.abs(in_day_neur_combos[id_i][0] - in_day_neur_combos[id_i][1]) for id_i in range(len(in_day_neur_combos))])
-        all_intra_day_index_dist.extend(in_day_index_diffs)
+        in_day_electrode_indices = np.array(all_electrode_inds[d_i])
+        in_day_electrode_dist = np.array([np.abs(in_day_electrode_indices[id_i[0]] - in_day_electrode_indices[id_i[1]]) for id_i in in_day_neur_combos])
+        max_electrode_dist = np.max(in_day_electrode_dist)
+        #distances are normalized by the maximal distance possible
+        all_intra_day_electrode_dist.extend(list(in_day_electrode_dist/max_electrode_dist))
+        del in_day_electrode_indices, in_day_electrode_dist, max_electrode_dist
         for nc_i, nc in tqdm.tqdm(enumerate(in_day_neur_combos)):
+            #Waveforms
             unit_waveforms_1 = data_dict[d_i]['all_unit_waveforms'][nc[0]]
             unit_waveforms_2 = data_dict[d_i]['all_unit_waveforms'][nc[1]]
             combined_waveforms = np.concatenate((unit_waveforms_1,unit_waveforms_2),0)
@@ -384,26 +417,37 @@ except:
             psth_1_norm = data_dict[d_i]['all_unit_fr_curves_norm'][nc[0]]
             psth_2_norm = data_dict[d_i]['all_unit_fr_curves_norm'][nc[1]]
             all_intra_day_euc_dist_norm.append(euclidean(psth_1_norm,psth_2_norm))
+            del unit_waveforms_1, unit_waveforms_2, combined_waveforms, pca, \
+                pca_wf_1, pca_wf_2, unit_waveforms_1_norm, unit_waveforms_2_norm, \
+                    pca_norm, pca_wf_1_norm, pca_wf_2_norm, psth_1, psth_2, \
+                        psth_1_norm, psth_2_norm
+        del nc_i, nc
     all_intra_day_J3 = np.array(all_intra_day_J3)
     all_intra_day_J3_norm = np.array(all_intra_day_J3_norm)
     all_intra_day_euc_dist = np.array(all_intra_day_euc_dist)
     all_intra_day_euc_dist_norm = np.array(all_intra_day_euc_dist_norm)
-    all_intra_day_index_dist = np.array(all_intra_day_index_dist)
+    all_intra_day_electrode_dist = np.array(all_intra_day_electrode_dist)
     
     #Save calcs
     np.save(os.path.join(stat_save_dir,'all_intra_day_J3.npy'),all_intra_day_J3,allow_pickle=True)
     np.save(os.path.join(stat_save_dir,'all_intra_day_J3_norm.npy'),all_intra_day_J3_norm,allow_pickle=True)
     np.save(os.path.join(stat_save_dir,'all_intra_day_euc_dist.npy'),all_intra_day_euc_dist,allow_pickle=True)
     np.save(os.path.join(stat_save_dir,'all_intra_day_euc_dist_norm.npy'),all_intra_day_euc_dist_norm,allow_pickle=True)
-    np.save(os.path.join(stat_save_dir,'all_intra_day_index_dist.npy'),all_intra_day_index_dist,allow_pickle=True)
+    np.save(os.path.join(stat_save_dir,'all_intra_day_electrode_dist.npy'),all_intra_day_electrode_dist,allow_pickle=True)
     
-all_intra_day_J3_score = (all_intra_day_J3 - np.min(all_intra_day_J3))/np.max(all_intra_day_J3 - np.min(all_intra_day_J3))
+    del d_i
+    
+# all_intra_day_J3_score = (all_intra_day_J3 - np.min(all_intra_day_J3))/np.max(all_intra_day_J3 - np.min(all_intra_day_J3))
 all_intra_day_J3_norm_score = (all_intra_day_J3_norm - np.min(all_intra_day_J3_norm))/np.max(all_intra_day_J3_norm - np.min(all_intra_day_J3_norm))
-all_intra_day_PSTH_score = (all_intra_day_euc_dist - np.min(all_intra_day_euc_dist))/np.max(all_intra_day_euc_dist - np.min(all_intra_day_euc_dist))
+# all_intra_day_PSTH_score = (all_intra_day_euc_dist - np.min(all_intra_day_euc_dist))/np.max(all_intra_day_euc_dist - np.min(all_intra_day_euc_dist))
 all_intra_day_PSTH_norm_score = (all_intra_day_euc_dist_norm - np.min(all_intra_day_euc_dist_norm))/np.max(all_intra_day_euc_dist_norm - np.min(all_intra_day_euc_dist_norm))
 # intra_day_joint_score = (all_intra_day_J3_score + all_intra_day_J3_norm_score + all_intra_day_PSTH_score + all_intra_day_PSTH_norm_score)/4
-intra_day_joint_score = (all_intra_day_J3_norm_score + all_intra_day_PSTH_norm_score + all_intra_day_index_dist)/3
-intra_day_joint_score_percentile = np.percentile(intra_day_joint_score,95)
+all_intra_day_electrode_dist_score = (all_intra_day_electrode_dist - np.min(all_intra_day_electrode_dist))/np.max(all_intra_day_electrode_dist - np.min(all_intra_day_electrode_dist))
+if use_electrode == 'y':
+    intra_day_joint_norm_score = (all_intra_day_J3_norm_score + all_intra_day_PSTH_norm_score + all_intra_day_electrode_dist_score)/3
+else:
+    intra_day_joint_norm_score = (all_intra_day_J3_norm_score + all_intra_day_PSTH_norm_score)/2
+intra_day_joint_score_percentile = np.percentile(intra_day_joint_norm_score,95)
 
 #%%
 #For all pairs of units calculate the inter-J3 and euclidean distance 
@@ -417,14 +461,20 @@ try:
     all_inter_J3_norm = np.load(os.path.join(stat_save_dir,'all_inter_J3_norm.npy'),allow_pickle=True)
     all_inter_PSTH = np.load(os.path.join(stat_save_dir,'all_inter_PSTH.npy'),allow_pickle=True)
     all_inter_PSTH_norm = np.load(os.path.join(stat_save_dir,'all_inter_PSTH_norm.npy'),allow_pickle=True)
+    all_inter_electrode_dist = np.load(os.path.join(stat_save_dir,'all_inter_electrode_dist.npy'),allow_pickle=True)
 except:
     all_inter_J3 = np.nan*np.ones((len(all_neur_combos),len(all_day_combos)))
     all_inter_J3_norm = np.nan*np.ones((len(all_neur_combos),len(all_day_combos)))
     all_inter_PSTH = np.nan*np.ones((len(all_neur_combos),len(all_day_combos)))
     all_inter_PSTH_norm = np.nan*np.ones((len(all_neur_combos),len(all_day_combos)))
-    
+    all_inter_electrode_dist = np.nan*np.ones((len(all_neur_combos),len(all_day_combos)))
     for nc_i, nc in tqdm.tqdm(enumerate(all_neur_combos)):
         for dc_i, dc in enumerate(all_day_combos):
+            #Electrode Calcs
+            e_ind_1 = all_electrode_inds[dc[0]][nc[dc[0]]]
+            e_ind_2 = all_electrode_inds[dc[1]][nc[dc[1]]]
+            e_dist = np.abs(e_ind_1 - e_ind_2)
+            all_inter_electrode_dist[nc_i,dc_i] = e_dist
             #J3 Calcs
             #   Regular waveforms
             unit_waveforms_1 = data_dict[dc[0]]['all_unit_waveforms'][nc[dc[0]]]
@@ -459,6 +509,8 @@ except:
     np.save(os.path.join(stat_save_dir,'all_inter_J3_norm.npy'),all_inter_J3_norm,allow_pickle=True)
     np.save(os.path.join(stat_save_dir,'all_inter_PSTH.npy'),all_inter_PSTH,allow_pickle=True)
     np.save(os.path.join(stat_save_dir,'all_inter_PSTH_norm.npy'),all_inter_PSTH_norm,allow_pickle=True)
+    np.save(os.path.join(stat_save_dir,'all_inter_electrode_dist.npy'),all_inter_electrode_dist,allow_pickle=True)
+
   
 all_neur_ind_dist = np.zeros(len(all_neur_combos))
 for dc_i, dc in enumerate(all_day_combos):
@@ -503,12 +555,17 @@ f_stats.savefig(os.path.join(stat_save_dir,'unit_day_pair_stats.png'))
 f_stats.savefig(os.path.join(stat_save_dir,'unit_day_pair_stats.svg'))
 plt.close(f_stats)
 
-all_inter_J3_score = (all_inter_J3 - np.min(all_inter_J3))/np.max(all_inter_J3 - np.min(all_inter_J3))
+# all_inter_J3_score = (all_inter_J3 - np.min(all_inter_J3))/np.max(all_inter_J3 - np.min(all_inter_J3))
 all_inter_J3_norm_score = (all_inter_J3_norm - np.min(all_inter_J3_norm))/np.max(all_inter_J3_norm - np.min(all_inter_J3_norm))
-all_inter_PSTH_score = (all_inter_PSTH - np.min(all_inter_PSTH))/np.max(all_inter_PSTH - np.min(all_inter_PSTH))
+# all_inter_PSTH_score = (all_inter_PSTH - np.min(all_inter_PSTH))/np.max(all_inter_PSTH - np.min(all_inter_PSTH))
 all_inter_PSTH_norm_score = (all_inter_PSTH_norm - np.min(all_inter_PSTH_norm))/np.max(all_inter_PSTH_norm - np.min(all_inter_PSTH_norm))
-# joint_score = ((all_inter_J3_score + all_inter_J3_norm_score + all_inter_PSTH_score + all_inter_PSTH_norm_score)/4).squeeze()
-joint_norm_score = ((all_inter_J3_norm_score + all_inter_PSTH_norm_score + all_neur_ind_dist)/3).squeeze()
+max_inter_electrode_dist = np.max(all_inter_electrode_dist)
+all_inter_electrode_dist = all_inter_electrode_dist/max_inter_electrode_dist
+
+if use_electrode == 'y':
+    joint_norm_score = ((all_inter_J3_norm_score + all_inter_PSTH_norm_score + all_inter_electrode_dist)/3).squeeze()
+else:
+    joint_norm_score = ((all_inter_J3_norm_score + all_inter_PSTH_norm_score)/2).squeeze()
 
 #%% Based on low scores calculated above, determine the best matches for held units
 
@@ -538,9 +595,9 @@ for d_i in range(num_days):
         if len(pair_locs) > 1:
             all_loc_scores = neur_pair_norm_scores[pair_locs]
             min_score = np.argmin(all_loc_scores)
-            best_matches.append(neur_pair_plus_score[pair_locs[min_score],:])
+            best_matches.append(np.squeeze(neur_pair_plus_score[pair_locs[min_score],:]))
         else:
-            best_matches.append(neur_pair_plus_score[pair_locs,:])
+            best_matches.append(np.squeeze(neur_pair_plus_score[pair_locs,:]))
 #Pass 2 get rid of duplicates by day
 best_matches = np.array(best_matches)
 best_matches = np.sort(best_matches,0)
@@ -559,7 +616,7 @@ for d_i in np.sort(np.arange(num_days))[::-1]:
         #Recalculate the neuron counts and repeat neurons
         neur_counts = np.unique(best_matches[:, d_i], return_counts=True)
         repeat_neurons = neur_counts[0][np.where(neur_counts[1] > 1)[0]]
-        if len(repeat_neurons) <= 1:
+        if len(repeat_neurons) < 1:
             loop_repeat = 0
 #Plot neuron pairs and print out .csv file with list
 held_unit_csv = os.path.join(save_dir,'held_units.csv')
