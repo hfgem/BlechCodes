@@ -20,6 +20,7 @@ import functions.load_intan_rhd_format.load_intan_rhd_format as rhd
 from functions.blech_held_units_funcs import *
     
 # Time to use before and after a taste is delivered to compare response curves
+pca_components = 6
 pre_deliv_time = 500 #ms
 post_deliv_time = 1000 #ms
 binning = 100 #ms
@@ -158,7 +159,7 @@ else:
         num_taste_keep = int_input("How many tastes would you like to keep for PSTH comparisons? ")
         keep_inds = []
         for ntk_i in range(num_taste_keep):
-            keep_inds.append(int_input("What is the index of the  " + str(ntk_i + 1) + " taste (starting with a 0 index)? "))
+            keep_inds.append(int_input("What is the index of taste  " + str(ntk_i + 1) + " (starting with a 0 index)? "))
         #Store digital input times and taste interval information
         flat_start_dig_in_times = []
         for st_i in keep_inds:
@@ -210,10 +211,10 @@ else:
             all_unit_times.append(t_day1)
             del wf_peak_ind, wf_peaks, wf_peaks_norm
             #PCA waveforms
-            pca = PCA(n_components = 4)
+            pca = PCA(n_components = pca_components)
             pca.fit(wf_day1)
             pca_wf_day1 = pca.transform(wf_day1) #num wav x 4
-            pca_norm = PCA(n_components = 4)
+            pca_norm = PCA(n_components = pca_components)
             pca_norm.fit(wf_day1_norm)
             pca_wf_day1_norm = pca_norm.transform(wf_day1_norm) #num wav x 4
             #Calculate intra-J3 values
@@ -295,9 +296,9 @@ else:
 #%% Intra-unit joint score
 
 # all_intra_unit_J3_score = (all_intra_J3 - np.min(all_intra_J3))/np.max(all_intra_J3 - np.min(all_intra_J3))
-all_intra_unit_J3_norm_score = (all_intra_J3_norm - np.min(all_intra_J3_norm))/np.max(all_intra_J3_norm - np.min(all_intra_J3_norm))
+all_intra_unit_J3_norm_score = (all_intra_J3_norm - np.min(all_intra_J3_norm))/np.mean(all_intra_J3_norm - np.min(all_intra_J3_norm))
 #all_intra_unit_PSTH_score = (all_intra_euc_dist - np.min(all_intra_euc_dist))/np.max(all_intra_euc_dist - np.min(all_intra_euc_dist))
-all_intra_unit_PSTH_norm_score = (all_intra_euc_dist_norm - np.min(all_intra_euc_dist_norm))/np.max(all_intra_euc_dist_norm - np.min(all_intra_euc_dist_norm))
+all_intra_unit_PSTH_norm_score = (all_intra_euc_dist_norm - np.min(all_intra_euc_dist_norm))/np.mean(all_intra_euc_dist_norm - np.min(all_intra_euc_dist_norm))
 #intra_unit_joint_score = (all_intra_unit_J3_score + all_intra_unit_J3_norm_score + all_intra_unit_PSTH_score + all_intra_unit_PSTH_norm_score)/4
 if use_electrode == 'y':
     intra_unit_joint_norm_score = (all_intra_unit_J3_norm_score + all_intra_unit_PSTH_norm_score)/3 #/3 because the electrode distance for the same unit is 0 so don't need to add in here
@@ -305,7 +306,7 @@ else:
     intra_unit_joint_norm_score = (all_intra_unit_J3_norm_score + all_intra_unit_PSTH_norm_score)/2
 intra_unit_joint_score_percentile = np.percentile(intra_unit_joint_norm_score,95)
 
-#%%
+#%% Plot units
 
 #Create plots of unit information pulled above for manual review
 indiv_unit_save_dir = os.path.join(save_dir,'unit_plots')
@@ -365,7 +366,8 @@ for d_i in range(num_days):
         
 del d_i, day_unit_save_dir, num_neur, n_i
 
-#%%
+#%% Intra-Day Calcs
+
 #For all pairs of neurons within a day calculate the inter-J3 and PSTH distance
 #scores to use as "different neuron" cutoff information
     
@@ -438,18 +440,18 @@ except:
     del d_i
     
 # all_intra_day_J3_score = (all_intra_day_J3 - np.min(all_intra_day_J3))/np.max(all_intra_day_J3 - np.min(all_intra_day_J3))
-all_intra_day_J3_norm_score = (all_intra_day_J3_norm - np.min(all_intra_day_J3_norm))/np.max(all_intra_day_J3_norm - np.min(all_intra_day_J3_norm))
+all_intra_day_J3_norm_score = (all_intra_day_J3_norm - np.min(all_intra_day_J3_norm))/np.mean(all_intra_day_J3_norm - np.min(all_intra_day_J3_norm))
 # all_intra_day_PSTH_score = (all_intra_day_euc_dist - np.min(all_intra_day_euc_dist))/np.max(all_intra_day_euc_dist - np.min(all_intra_day_euc_dist))
-all_intra_day_PSTH_norm_score = (all_intra_day_euc_dist_norm - np.min(all_intra_day_euc_dist_norm))/np.max(all_intra_day_euc_dist_norm - np.min(all_intra_day_euc_dist_norm))
+all_intra_day_PSTH_norm_score = (all_intra_day_euc_dist_norm - np.min(all_intra_day_euc_dist_norm))/np.mean(all_intra_day_euc_dist_norm - np.min(all_intra_day_euc_dist_norm))
 # intra_day_joint_score = (all_intra_day_J3_score + all_intra_day_J3_norm_score + all_intra_day_PSTH_score + all_intra_day_PSTH_norm_score)/4
-all_intra_day_electrode_dist_score = (all_intra_day_electrode_dist - np.min(all_intra_day_electrode_dist))/np.max(all_intra_day_electrode_dist - np.min(all_intra_day_electrode_dist))
+all_intra_day_electrode_dist_score = (all_intra_day_electrode_dist - np.min(all_intra_day_electrode_dist))/np.mean(all_intra_day_electrode_dist - np.min(all_intra_day_electrode_dist))
 if use_electrode == 'y':
     intra_day_joint_norm_score = (all_intra_day_J3_norm_score + all_intra_day_PSTH_norm_score + all_intra_day_electrode_dist_score)/3
 else:
     intra_day_joint_norm_score = (all_intra_day_J3_norm_score + all_intra_day_PSTH_norm_score)/2
-intra_day_joint_score_percentile = np.percentile(intra_day_joint_norm_score,95)
+intra_day_joint_score_percentile = np.percentile(intra_day_joint_norm_score,5)
 
-#%%
+#%% Inter-Day Calcs
 #For all pairs of units calculate the inter-J3 and euclidean distance 
 #metrics and plot the results
 
@@ -556,18 +558,18 @@ f_stats.savefig(os.path.join(stat_save_dir,'unit_day_pair_stats.svg'))
 plt.close(f_stats)
 
 # all_inter_J3_score = (all_inter_J3 - np.min(all_inter_J3))/np.max(all_inter_J3 - np.min(all_inter_J3))
-all_inter_J3_norm_score = (all_inter_J3_norm - np.min(all_inter_J3_norm))/np.max(all_inter_J3_norm - np.min(all_inter_J3_norm))
+all_inter_J3_norm_score = (all_inter_J3_norm - np.min(all_inter_J3_norm))/np.mean(all_inter_J3_norm - np.min(all_inter_J3_norm))
 # all_inter_PSTH_score = (all_inter_PSTH - np.min(all_inter_PSTH))/np.max(all_inter_PSTH - np.min(all_inter_PSTH))
 all_inter_PSTH_norm_score = (all_inter_PSTH_norm - np.min(all_inter_PSTH_norm))/np.max(all_inter_PSTH_norm - np.min(all_inter_PSTH_norm))
-max_inter_electrode_dist = np.max(all_inter_electrode_dist)
-all_inter_electrode_dist = all_inter_electrode_dist/max_inter_electrode_dist
+mean_inter_electrode_dist = np.mean(all_inter_electrode_dist)
+all_inter_electrode_dist = all_inter_electrode_dist/mean_inter_electrode_dist
 
 if use_electrode == 'y':
     joint_norm_score = ((all_inter_J3_norm_score + all_inter_PSTH_norm_score + all_inter_electrode_dist)/3).squeeze()
 else:
     joint_norm_score = ((all_inter_J3_norm_score + all_inter_PSTH_norm_score)/2).squeeze()
 
-#%% Based on low scores calculated above, determine the best matches for held units
+#%% Calc Held Units
 
 #Calculate a joint cutoff based on intra-day and intra-neuron distributions
 score_cutoff = np.min((intra_unit_joint_score_percentile,intra_day_joint_score_percentile))

@@ -410,11 +410,15 @@ def create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean,
         
     #Run rank order correlations for null data and true data and pull out 
     #significant events
+    tic = time.time()
     dev_rank_order_tests(dev_seqs_array, null_dev_dict, avg_taste_seqs_dict, 
                              dig_in_names, segment_names[s_i], sequence_dir, null_sequence_dir)
     
     dev_rank_order_tests(dev_seqs_array, null_dev_dict_2, avg_taste_seqs_dict, 
                              dig_in_names, segment_names[s_i], sequence_dir, null_sequence_dir_2)
+    toc = time.time()
+    print('\t\t\t\t\tRank order tests for ' + segment_names[s_i] + \
+          ' complete in ' + str(np.round((toc-tic)/60, 2)) + ' (min).')
     
 def calc_max_ind(num_neur, dev_bin_counts, max_counts):
     """This function calculates the index for each neuron where its maximal
@@ -1529,30 +1533,34 @@ def dev_rank_order_tests(dev_seqs_array, null_dev_dict, avg_taste_seqs_dict,
     num_null = len(null_dev_dict)
     
     #Run through and calculate Spearman's correlation distributions
-    spearmans_dict = dict()
-    for t_i in range(num_tastes):
-        spearmans_dict[t_i] = dict()
-        for cp_i in range(max_num_cp):
-            spearmans_dict[t_i][cp_i] = dict()
-            #Calculate deviation correlations
-            true_corrs = np.zeros(num_dev)
-            for dev_i in range(num_dev):
-                res = stats.spearmanr(dev_seqs_array[dev_i,:], avg_taste_seqs_dict[t_i][cp_i], axis=0, nan_policy='omit', alternative='two-sided')
-                true_corrs[dev_i] = res[0]
-            spearmans_dict[t_i][cp_i]['true'] = true_corrs
-            #Calculate null correlations
-            null_corrs = np.zeros((num_null, num_dev))
-            for null_i in range(num_null):
-                null_devs = null_dev_dict[null_i]
+    try:
+        spearmans_dict = np.load(os.path.join(null_sequence_dir,seg_name+'_spearman_corr_dict.npy'),allow_pickle=True).item()
+    except:
+        spearmans_dict = dict()
+        for t_i in range(num_tastes):
+            spearmans_dict[t_i] = dict()
+            for cp_i in range(max_num_cp):
+                spearmans_dict[t_i][cp_i] = dict()
+                #Calculate deviation correlations
+                true_corrs = np.zeros(num_dev)
                 for dev_i in range(num_dev):
-                    res = stats.spearmanr(null_devs[dev_i,:], avg_taste_seqs_dict[t_i][cp_i], axis=0, nan_policy='omit', alternative='two-sided')
-                    null_corrs[null_i,dev_i] = res[0]
-            spearmans_dict[t_i][cp_i]['null'] = null_corrs
-            #Since these are rank order corrs we'll absolute value them and calculate the 95th percentile for null
-            percentile_95 = np.percentile(np.abs(null_corrs.flatten()),95)
-            spearmans_dict[t_i][cp_i]['percentile_95'] = percentile_95
-            sig_true_corrs = np.where(np.abs(true_corrs) > percentile_95)[0]
-            spearmans_dict[t_i][cp_i]['sig_true_inds'] = sig_true_corrs
+                    res = stats.spearmanr(dev_seqs_array[dev_i,:], avg_taste_seqs_dict[t_i][cp_i], axis=0, nan_policy='omit', alternative='two-sided')
+                    true_corrs[dev_i] = res[0]
+                spearmans_dict[t_i][cp_i]['true'] = true_corrs
+                #Calculate null correlations
+                null_corrs = np.zeros((num_null, num_dev))
+                for null_i in range(num_null):
+                    null_devs = null_dev_dict[null_i]
+                    for dev_i in range(num_dev):
+                        res = stats.spearmanr(null_devs[dev_i,:], avg_taste_seqs_dict[t_i][cp_i], axis=0, nan_policy='omit', alternative='two-sided')
+                        null_corrs[null_i,dev_i] = res[0]
+                spearmans_dict[t_i][cp_i]['null'] = null_corrs
+                #Since these are rank order corrs we'll absolute value them and calculate the 95th percentile for null
+                percentile_95 = np.percentile(np.abs(null_corrs.flatten()),95)
+                spearmans_dict[t_i][cp_i]['percentile_95'] = percentile_95
+                sig_true_corrs = np.where(np.abs(true_corrs) > percentile_95)[0]
+                spearmans_dict[t_i][cp_i]['sig_true_inds'] = sig_true_corrs
+        np.save(os.path.join(null_sequence_dir,seg_name+'_spearman_corr_dict.npy'),spearmans_dict,allow_pickle=True)
     
     #Now create plots of distributions and statistics
     
