@@ -20,7 +20,8 @@ import matplotlib.pyplot as plt
 import functions.decode_parallel as dp
 from scipy import stats
 from scipy.stats import f
-from matplotlib import colormaps
+from scipy.signal import savgol_filter
+from matplotlib import colormaps, cm
 from multiprocess import Pool
 from sklearn.decomposition import PCA
 from sklearn.mixture import GaussianMixture as gmm
@@ -80,7 +81,8 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
         os.mkdir(null_sequence_dir_2)        
     
     # Variables
-    bin_dt = 10 #Sequence binning size
+    taste_bin_dt = 50 #Taste sequence binning size
+    bin_dt = 10 #Dev sequence binning size
     num_tastes = len(dig_in_names)
     num_taste_deliv = [len(tastant_fr_dist_pop[t_i]) for t_i in range(num_tastes)]
     max_num_cp = 0
@@ -102,7 +104,9 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
     test_taste_epoch_pairs(dig_in_names, tastant_fr_dist_z_pop, z_decode_dir)
         
     #Calculate rank order sequences for taste responses by epoch
-    taste_seqs_dict, avg_taste_seqs_dict = calc_tastant_seq(tastant_raster_dict, bin_dt)
+    taste_seqs_dict, avg_taste_seqs_dict = calc_tastant_seq(tastant_raster_dict, \
+                                                            taste_bin_dt, dig_in_names, \
+                                                                sequence_dir)
     
     #Now go through segments and their deviation events and compare
     for seg_ind, s_i in enumerate(segments_to_analyze):
@@ -291,7 +295,7 @@ def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_s
                     dig_in_names, null_dev_z_dict_2, segment_names, s_i,
                     null_z_decode_dir_2, z_decode_dir, epochs_to_analyze)
                      
-def calc_tastant_seq(tastant_raster_dict, bin_dt):
+def calc_tastant_seq(tastant_raster_dict, taste_bin_dt, dig_in_names, sequence_dir):
     """This function is dedicated to calculating the rank sequences in tastant
     delivery responses"""
     #Gather variables
@@ -306,32 +310,71 @@ def calc_tastant_seq(tastant_raster_dict, bin_dt):
     
     #Organize taste responses into rank sequences based on maximal firing 
     #location of each neuron within an epoch of response
-    taste_seqs_dict = dict()
-    avg_taste_seqs_dict = dict()
-    for t_i in range(num_tastes):
-        taste_seqs_dict[t_i] = dict()
-        avg_taste_seqs_dict[t_i] = []
-        for cp_i in range(max_num_cp):
-            taste_seqs_dict[t_i][cp_i] = []
-            for d_i in range(num_deliv_per_taste[t_i].astype('int')):
-                try:
-                    taste_rast = tastant_raster_dict[t_i][d_i][cp_i]
-                    num_spikes_per_neur = np.sum(taste_rast,1).astype('int')
-                    num_neur, num_dt = np.shape(taste_rast)
-                    bin_starts = np.arange(num_dt-bin_dt)
-                    taste_bin_counts = np.zeros((num_neur,len(bin_starts)))
-                    for bs in bin_starts:
-                        taste_bin_counts[:,bs] = np.sum(taste_rast[:,bs:bs+bin_dt],1)
-                    max_counts = np.max(taste_bin_counts,1)
-                    max_ind = calc_max_ind(num_neur, taste_bin_counts, max_counts)
-                    neur_ord = np.argsort(max_ind, kind='stable')
-                    taste_seqs_dict[t_i][cp_i].append(neur_ord)
-                except:
-                    print("Missing data: taste " + str(t_i) + " epoch " + str(cp_i) + " delivery " + str(d_i))
-            deliv_seq_array = np.array(taste_seqs_dict[t_i][cp_i])
-            mean_rank = np.mean(deliv_seq_array,0)
-            avg_taste_seqs_dict[t_i].append(np.argsort(mean_rank))
+    taste_seqs_plot_dir = os.path.join(sequence_dir,'taste_sequences')
+    if not os.path.isdir(taste_seqs_plot_dir):
+        os.mkdir(taste_seqs_plot_dir)
     
+    try:
+        taste_seqs_dict = np.load(os.path.join(sequence_dir,'taste_seqs_dict.npy'),allow_pickle=True).item()
+        avg_taste_seqs_dict = np.load(os.path.join(sequence_dir,'avg_taste_seqs_dict.npy'),allow_pickle=True).item()
+    except:
+        taste_seqs_dict = dict()
+        avg_taste_seqs_dict = dict()
+        for t_i in range(num_tastes):
+            taste_name = dig_in_names[t_i]
+            taste_seqs_dict[t_i] = dict()
+            avg_taste_seqs_dict[t_i] = []
+            for cp_i in range(max_num_cp):
+                taste_seqs_dict[t_i][cp_i] = []
+            for d_i in range(num_deliv_per_taste[t_i].astype('int')):
+                if t_i < num_tastes-1:
+                    f_deliv, ax_deliv = plt.subplots(nrows = 2, ncols = max_num_cp, \
+                                                     gridspec_kw={'height_ratios': [1, 2]},\
+                                                         figsize=(8,8))
+                for cp_i in range(max_num_cp):
+                    try:
+                        taste_rast = tastant_raster_dict[t_i][d_i][cp_i]
+                        num_spikes_per_neur = np.sum(taste_rast,1).astype('int')
+                        num_neur, num_dt = np.shape(taste_rast)
+                        colors = cm.gist_rainbow(np.arange(num_neur)/(num_neur))
+                        #bin_starts = np.arange(num_dt-taste_bin_dt)
+                        taste_counts_smoothed = []
+                        for n_i in range(num_neur):
+                            taste_counts_smoothed.append(savgol_filter(taste_rast[n_i,:], taste_bin_dt, 2))
+                        taste_counts_smoothed = np.array(taste_counts_smoothed)
+                        _, num_bins = np.shape(taste_counts_smoothed)
+                        max_counts = np.max(taste_counts_smoothed,1)
+                        max_ind = calc_max_ind(num_neur, taste_counts_smoothed, \
+                                               max_counts, num_bins)
+                        neur_ord = np.argsort(max_ind, kind='stable')
+                        taste_seqs_dict[t_i][cp_i].append(neur_ord)
+                        #Plot the taste sequences
+                        if t_i < num_tastes-1:
+                            ax_deliv[0,cp_i].imshow(taste_rast,cmap='binary',aspect='auto')
+                            for n_ind, n_i in enumerate(neur_ord):
+                                ax_deliv[1,cp_i].plot(np.arange(num_bins),n_ind + (taste_counts_smoothed[n_i,:]/np.max(taste_counts_smoothed[n_i,:])),color=colors[n_i,:])
+                            ax_deliv[1,cp_i].plot(np.sort(max_ind),np.arange(num_neur)+1,color='k',linestyle='dashed')
+                            neur_ord_text = [str(no) for no in neur_ord]
+                            ax_deliv[1,cp_i].set_yticks(np.arange(num_neur))
+                            ax_deliv[1,cp_i].set_yticklabels(neur_ord_text)
+                            if cp_i == 0:
+                                ax_deliv[1,cp_i].set_ylabel('Neuron Index')
+                    except:
+                        print("Missing data: taste " + str(t_i) + " epoch " + str(cp_i) + " delivery " + str(d_i))
+                if t_i < num_tastes-1:
+                    plt.suptitle(taste_name + ' delivery ' + str(d_i))
+                    plt.tight_layout()
+                    f_deliv.savefig(os.path.join(taste_seqs_plot_dir,taste_name + '_' + str(d_i) + '.png'))
+                    f_deliv.savefig(os.path.join(taste_seqs_plot_dir,taste_name + '_' + str(d_i) + '.svg'))
+                    plt.close(f_deliv)
+            for cp_i in range(max_num_cp):
+                deliv_seq_array = np.array(taste_seqs_dict[t_i][cp_i])
+                mean_rank = np.mean(deliv_seq_array,0)
+                order_avg = np.argsort(mean_rank)
+                avg_taste_seqs_dict[t_i].append(order_avg)
+        np.save(os.path.join(sequence_dir,'taste_seqs_dict.npy'), taste_seqs_dict,allow_pickle=True)
+        np.save(os.path.join(sequence_dir,'avg_taste_seqs_dict.npy'), avg_taste_seqs_dict,allow_pickle=True)
+        
     return taste_seqs_dict, avg_taste_seqs_dict
 
 def create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, 
@@ -359,14 +402,14 @@ def create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean,
             dev_rast = seg_dev_rast[dev_i]
             num_spikes_per_neur = np.sum(dev_rast,1).astype('int')
             _, num_dt = np.shape(dev_rast)
-            bin_starts = np.arange(num_dt-bin_dt)
-            dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
-            for bs in bin_starts:
-                dev_bin_counts[:,bs] = np.sum(dev_rast[:,bs:bs+bin_dt],1)
+            dev_bin_counts = []
+            for n_i in range(num_neur):
+                dev_bin_counts.append(savgol_filter(dev_rast[n_i,:], bin_dt, 2))
+            dev_bin_counts = np.array(dev_bin_counts)
+            _, num_bins = np.shape(dev_bin_counts)
             max_counts = np.max(dev_bin_counts,1)
-            #Neuron Ordering: note that if multiple neurons fire the same number 
-            #of times, it will order them by index 
-            max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
+            max_ind = calc_max_ind(num_neur, dev_bin_counts, \
+                                   max_counts, num_bins)
             neur_ord = np.argsort(max_ind, kind='stable')
             dev_seqs.append(neur_ord)
             
@@ -377,11 +420,14 @@ def create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean,
                 for neur_i in range(num_neur):
                     new_spike_ind = random.sample(list(np.arange(num_dt)),num_spikes_per_neur[neur_i])
                     shuffle_rast[neur_i,new_spike_ind] = 1
-                dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
-                for bs in bin_starts:
-                    dev_bin_counts[:,bs] = np.sum(shuffle_rast[:,bs:bs+bin_dt],1)
+                dev_bin_counts = []
+                for n_i in range(num_neur):
+                    dev_bin_counts.append(savgol_filter(shuffle_rast[n_i,:], bin_dt, 2))
+                dev_bin_counts = np.array(dev_bin_counts)
+                _, num_bins = np.shape(dev_bin_counts)
                 max_counts = np.max(dev_bin_counts,1)
-                max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
+                max_ind = calc_max_ind(num_neur, dev_bin_counts, \
+                                       max_counts, num_bins)
                 neur_ord = np.argsort(max_ind, kind='stable')
                 null_dev_dict[null_i].append(neur_ord)
                 #Shuffle across-neuron spike times
@@ -389,11 +435,13 @@ def create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean,
                 new_neuron_order = random.sample(list(np.arange(num_neur)),num_neur)
                 for nn_ind, nn in enumerate(new_neuron_order):
                     shuffle_rast_2[nn_ind,:] = shuffle_rast[nn,:]
-                dev_bin_counts = np.zeros((num_neur,len(bin_starts)))
-                for bs in bin_starts:
-                    dev_bin_counts[:,bs] = np.sum(shuffle_rast_2[:,bs:bs+bin_dt],1)
+                dev_bin_counts = []
+                for n_i in range(num_neur):
+                    dev_bin_counts.append(savgol_filter(shuffle_rast_2[n_i,:], bin_dt, 2))
+                dev_bin_counts = np.array(dev_bin_counts)
                 max_counts = np.max(dev_bin_counts,1)
-                max_ind = calc_max_ind(num_neur, dev_bin_counts, max_counts)
+                max_ind = calc_max_ind(num_neur, dev_bin_counts, \
+                                       max_counts, num_bins)
                 neur_ord = np.argsort(max_ind, kind='stable')
                 null_dev_dict_2[null_i].append(neur_ord)
                 
@@ -420,30 +468,129 @@ def create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean,
     print('\t\t\t\t\tRank order tests for ' + segment_names[s_i] + \
           ' complete in ' + str(np.round((toc-tic)/60, 2)) + ' (min).')
     
-def calc_max_ind(num_neur, dev_bin_counts, max_counts):
+def calc_max_ind(num_neur, dev_bin_counts, max_counts, max_len):
     """This function calculates the index for each neuron where its maximal
     firing occurs within a deviation event"""
     max_ind = np.zeros(num_neur)
     for n_i in range(num_neur):
-        max_locs = np.where(dev_bin_counts[n_i,:] == max_counts[n_i])[0]
-        if len(max_locs) > 1:
-            diff_max_locs = np.diff(max_locs)
-            mult_max_locs = np.where(diff_max_locs > 1)[0] + 1
-            if len(mult_max_locs) > 0:
-                mult_max_locs = np.concatenate((np.zeros(1),mult_max_locs,(len(max_locs)-1)*np.ones(1))).astype('int')
-                #Multiple peak firing locations
-                mean_parts = []
-                for part_i in range(len(mult_max_locs)-1):
-                    ind_1 = mult_max_locs[part_i]
-                    ind_2 = mult_max_locs[part_i+1]
-                    mean_parts.extend([np.ceil(max_locs[ind_1] + (max_locs[ind_2] - max_locs[ind_1])/2).astype('int')])
-                max_ind[n_i] = np.nanmean(mean_parts).astype('int')
+        if max_counts[n_i] > 0:
+            max_locs = np.where(dev_bin_counts[n_i,:] == max_counts[n_i])[0]
+            if len(max_locs) > 1:
+                diff_max_locs = np.diff(max_locs)
+                mult_max_locs = np.where(diff_max_locs > 1)[0] + 1
+                if len(mult_max_locs) > 0:
+                    mult_max_locs = np.concatenate((np.zeros(1),mult_max_locs,(len(max_locs)-1)*np.ones(1))).astype('int')
+                    #Multiple peak firing locations
+                    mean_parts = []
+                    for part_i in range(len(mult_max_locs)-1):
+                        ind_1 = mult_max_locs[part_i]
+                        ind_2 = mult_max_locs[part_i+1]
+                        mean_parts.extend([np.ceil(max_locs[ind_1] + (max_locs[ind_2] - max_locs[ind_1])/2).astype('int')])
+                    max_ind[n_i] = np.nanmean(mean_parts).astype('int')
+                else:
+                    mean_max_loc = np.ceil(max_locs[0] + (max_locs[-1] - max_locs[0])/2).astype('int')
+                    max_ind[n_i] = mean_max_loc #Split the difference
             else:
-                mean_max_loc = np.ceil(max_locs[0] + (max_locs[-1] - max_locs[0])/2).astype('int')
-                max_ind[n_i] = mean_max_loc #Split the difference
+                max_ind[n_i] = max_locs
         else:
-            max_ind[n_i] = max_locs
+            max_ind[n_i] = np.nan #max_len
     return max_ind
+
+def correlate_splits_epoch_pairs(tastant_fr_dist, 
+                dig_in_names, dev_mats_array, segment_names, s_i,
+                split_corr_dir, epochs_to_analyze=[]):
+    """Correlate split deviation event firing rate vectors to pairs of epoch
+    firing rate vectors to determine if there's a pair of epochs most
+    represented"""
+    print('\t\tRunning split corr to epoch pairs')
+    
+    #Variables
+    num_tastes = len(dig_in_names)
+    num_dev, num_neur, num_splits = np.shape(dev_mats_array)
+    num_cp = len(tastant_fr_dist[0][0])
+    cmap = colormaps['cividis']
+    epoch_colors = cmap(np.linspace(0, 1, num_cp))
+    cmap = colormaps['gist_rainbow']
+    taste_colors = cmap(np.linspace(0, 1, num_tastes))
+    cmap = colormaps['seismic']
+    is_taste_colors = cmap(np.linspace(0, 1, 3))
+    #Epoch pair options
+    if len(epochs_to_analyze) == 0:
+        epochs_to_analyze = np.arange(num_cp)
+    epoch_splits = list(itertools.combinations(epochs_to_analyze, 2))
+    epoch_splits.extend(list(itertools.combinations(np.fliplr(np.expand_dims(epochs_to_analyze,0)).squeeze(), 2)))
+    epoch_splits.extend([(e_i,e_i) for e_i in epochs_to_analyze])
+    epoch_split_inds = np.arange(len(epoch_splits))
+    epoch_split_names = [str(ep) for ep in epoch_splits]
+    
+    #Begin correlation analysis
+    try:
+        #Add an import statement here
+        corr_dict = np.load(os.path.join(split_corr_dir,'corr_dict.npy'),allow_pickle=True).item()
+        print('\t\t\t\t' + segment_names[s_i] + ' Previously Pair-Correlated')
+    except:
+        print('\t\t\t\tCorrelating ' + segment_names[s_i] + ' Epoch Pairs')
+        
+        tic = time.time()
+        
+        corr_dict = dict()
+        
+        for es_ind, es in enumerate(epoch_splits):
+            es_name = epoch_split_names[es_ind]
+            corr_dict[es] = dict()
+            corr_dict[es]['name'] = es_name
+            corr_dict[es]['pair'] = es
+            epoch_1 = es[0]
+            epoch_2 = es[1]
+            
+            #Collect deviation event firing rate matrices as concatenated vectors
+            dev_fr_vecs = []
+            for dev_i in range(num_dev):
+                #Converting to list for parallel processing
+                dev_fr_mat = np.squeeze(dev_mats_array[dev_i,:,:]) #Shape num_neur x 2
+                dev_fr_vecs.append(np.sqeueeze(np.concatenate((dev_fr_mat[:,0],dev_fr_mat[:,1]),0)))
+            
+            #Collect taste response firing rate pairs as concatenated vectors 
+            #and calculate correlation distributions
+            all_taste_corrs = []
+            for t_i in range(num_tastes):
+                taste_fr_vecs = []
+                for d_i in range(num_deliveries):
+                    try:
+                        if np.shape(tastant_fr_dist[t_i][d_i][epoch_1])[0] == num_neur:
+                            taste_fr_vecs.append(np.concatenate((tastant_fr_dist[t_i][d_i][epoch_1],tastant_fr_dist[t_i][d_i][epoch_2]),0))
+                        else:
+                            taste_fr_vecs.append(np.concatenate((tastant_fr_dist[t_i][d_i][epoch_1].T,tastant_fr_dist[t_i][d_i][epoch_2].T),0))
+                    except: #No taste response stored
+                        taste_fr_vecs = taste_fr_vecs
+                taste_fr_vecs = np.array(this_taste_fr_vecs)
+                if np.shape(taste_fr_vecs)[0] == 2*num_neur:
+                    avg_taste_fr_vec = np.squeeze(np.nanmean(taste_fr_vecs,1))
+                else:
+                    avg_taste_fr_vec = np.squeeze(np.nanmean(taste_fr_vecs,0))
+                
+                dev_fr_vec_corrs = []
+                for dev_i in range(num_dev):
+                    pearson_corr = stats.pearsonr(dev_fr_vecs[dev_i],avg_taste_fr_vec)
+                    dev_fr_vec_corrs.extend(pearson_corr[0])
+                    
+                all_taste_corrs.append(dev_fr_vec_corrs)
+            corr_dict[es]['taste_corrs'] = all_taste_corrs
+            
+            #Create a CDF plot with KS-Test Stats
+            
+        #Now look by taste at epoch pair CDF with KS-Test Stats
+        
+        #Now look if all are compared to each other, if one particular taste 
+        #and epoch pair comes out on top
+            
+        
+        toc = time.time()    
+        print('\t\t\t\t\tTime to correlate ' + segment_names[s_i] + \
+              ' deviation splits = ' + str(np.round((toc-tic)/60, 2)) + ' (min)')
+            
+        np.save(os.path.join(split_corr_dir,'corr_dict.npy'),corr_dict,allow_pickle=True)    
+            
 
 def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist, 
                 dig_in_names, dev_mats_array, segment_names, s_i,
@@ -1562,7 +1709,7 @@ def dev_rank_order_tests(dev_seqs_array, null_dev_dict, avg_taste_seqs_dict,
                 spearmans_dict[t_i][cp_i]['sig_true_inds'] = sig_true_corrs
         np.save(os.path.join(null_sequence_dir,seg_name+'_spearman_corr_dict.npy'),spearmans_dict,allow_pickle=True)
     
-    #Now create plots of distributions and statistics
+    #Now create plots of distributions, statistics, and examples
     
     #Indiv Distributions True vs Null
     f_dist_pdf, ax_dist_pdf = plt.subplots(nrows = num_tastes, ncols = max_num_cp, figsize = (8,8),
@@ -1694,4 +1841,6 @@ def dev_rank_order_tests(dev_seqs_array, null_dev_dict, avg_taste_seqs_dict,
     f_epoch_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_epoch_compare_true_spearman_cdfs.png'))
     f_epoch_cdf.savefig(os.path.join(null_sequence_dir,seg_name+'_epoch_compare_true_spearman_cdfs.svg'))
     plt.close(f_epoch_cdf)
+    
+    
     

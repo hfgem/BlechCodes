@@ -26,6 +26,8 @@ post_deliv_time = 1000 #ms
 binning = 100 #ms
 bin_starts = np.arange(-1*pre_deliv_time,post_deliv_time-binning)
 pre_deliv_inds = np.where(bin_starts<0)[0]
+weight_values = [1,0.75,0.5] #[weight of waveform, weight of PSTH, weight of electrode distance] #larger fraction of 1 means more important
+
 
 num_days, use_electrode = user_held_unit_input()
 
@@ -157,9 +159,12 @@ else:
         #Request user input on which dig ins to use in the PSTH calculations
         print(str(num_tastes) + " tastes (Dig-Ins) have been identified.")
         num_taste_keep = int_input("How many tastes would you like to keep for PSTH comparisons? ")
-        keep_inds = []
-        for ntk_i in range(num_taste_keep):
-            keep_inds.append(int_input("What is the index of taste  " + str(ntk_i + 1) + " (starting with a 0 index)? "))
+        if num_taste_keep < num_tastes:
+            keep_inds = []
+            for ntk_i in range(num_taste_keep):
+                keep_inds.append(int_input("What is the index of taste  " + str(ntk_i + 1) + " (starting with a 0 index)? "))
+        else:
+            keep_inds = list(np.arange(num_tastes))
         #Store digital input times and taste interval information
         flat_start_dig_in_times = []
         for st_i in keep_inds:
@@ -301,9 +306,9 @@ all_intra_unit_J3_norm_score = (all_intra_J3_norm - np.min(all_intra_J3_norm))/n
 all_intra_unit_PSTH_norm_score = (all_intra_euc_dist_norm - np.min(all_intra_euc_dist_norm))/np.mean(all_intra_euc_dist_norm - np.min(all_intra_euc_dist_norm))
 #intra_unit_joint_score = (all_intra_unit_J3_score + all_intra_unit_J3_norm_score + all_intra_unit_PSTH_score + all_intra_unit_PSTH_norm_score)/4
 if use_electrode == 'y':
-    intra_unit_joint_norm_score = (all_intra_unit_J3_norm_score + all_intra_unit_PSTH_norm_score)/3 #/3 because the electrode distance for the same unit is 0 so don't need to add in here
+    intra_unit_joint_norm_score = (weight_values[0]*all_intra_unit_J3_norm_score + weight_values[1]*all_intra_unit_PSTH_norm_score)/3 #/3 because the electrode distance for the same unit is 0 so don't need to add in here
 else:
-    intra_unit_joint_norm_score = (all_intra_unit_J3_norm_score + all_intra_unit_PSTH_norm_score)/2
+    intra_unit_joint_norm_score = (weight_values[0]*all_intra_unit_J3_norm_score + weight_values[1]*all_intra_unit_PSTH_norm_score)/2
 intra_unit_joint_score_percentile = np.percentile(intra_unit_joint_norm_score,95)
 
 #%% Plot units
@@ -446,9 +451,9 @@ all_intra_day_PSTH_norm_score = (all_intra_day_euc_dist_norm - np.min(all_intra_
 # intra_day_joint_score = (all_intra_day_J3_score + all_intra_day_J3_norm_score + all_intra_day_PSTH_score + all_intra_day_PSTH_norm_score)/4
 all_intra_day_electrode_dist_score = (all_intra_day_electrode_dist - np.min(all_intra_day_electrode_dist))/np.mean(all_intra_day_electrode_dist - np.min(all_intra_day_electrode_dist))
 if use_electrode == 'y':
-    intra_day_joint_norm_score = (all_intra_day_J3_norm_score + all_intra_day_PSTH_norm_score + all_intra_day_electrode_dist_score)/3
+    intra_day_joint_norm_score = (weight_values[0]*all_intra_day_J3_norm_score + weight_values[1]*all_intra_day_PSTH_norm_score + weight_values[1]*all_intra_day_electrode_dist_score)/3
 else:
-    intra_day_joint_norm_score = (all_intra_day_J3_norm_score + all_intra_day_PSTH_norm_score)/2
+    intra_day_joint_norm_score = (weight_values[0]*all_intra_day_J3_norm_score + weight_values[1]*all_intra_day_PSTH_norm_score)/2
 intra_day_joint_score_percentile = np.percentile(intra_day_joint_norm_score,5)
 
 #%% Inter-Day Calcs
@@ -565,9 +570,9 @@ mean_inter_electrode_dist = np.mean(all_inter_electrode_dist)
 all_inter_electrode_dist = all_inter_electrode_dist/mean_inter_electrode_dist
 
 if use_electrode == 'y':
-    joint_norm_score = ((all_inter_J3_norm_score + all_inter_PSTH_norm_score + all_inter_electrode_dist)/3).squeeze()
+    joint_norm_score = ((weight_values[0]*all_inter_J3_norm_score + weight_values[1]*all_inter_PSTH_norm_score + weight_values[2]*all_inter_electrode_dist)/3).squeeze()
 else:
-    joint_norm_score = ((all_inter_J3_norm_score + all_inter_PSTH_norm_score)/2).squeeze()
+    joint_norm_score = ((weight_values[0]*all_inter_J3_norm_score + weight_values[1]*all_inter_PSTH_norm_score)/2).squeeze()
 
 #%% Calc Held Units
 

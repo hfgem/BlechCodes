@@ -164,14 +164,15 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
                                                                                            post_taste_dt, bin_dt, trial_start_frac)
 
 
-
-#%%
 import functions.dev_sequence_funcs as dsf
+import time
 
 num_null = 100
 
+tic = time.time()
 dsf.split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
                    tastant_raster_dict,tastant_fr_dist_pop,tastant_fr_dist_z_pop,
                    dig_in_names,segment_names,num_null, seq_dir, 
                    segments_to_analyze, epochs_to_analyze)
-
+toc = time.time()
+print('Total Sequence Analysis Time = ' + str(np.round((toc-tic)/60, 2)) + ' (min).')
