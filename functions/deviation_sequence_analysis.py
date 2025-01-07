@@ -16,7 +16,7 @@ import json
 import numpy as np
 
 current_path = os.path.realpath(__file__)
-blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
+blech_codes_path = ('/').join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
 import functions.analysis_funcs as af
@@ -39,11 +39,11 @@ class run_deviation_sequence_analysis():
     def gather_variables(self,):
         # Directories
         self.hdf5_dir = self.metadata['hdf5_dir']
-        self.seq_dir = self.metadata['dir_name'] + \
-            'Deviation_Sequence_Analysis/'
+        self.seq_dir = os.path.join(self.metadata['dir_name'],
+            'Deviation_Sequence_Analysis/')
         if os.path.isdir(self.seq_dir) == False:
             os.mkdir(self.seq_dir)
-        self.dev_dir = self.metadata['dir_name'] + 'Deviations/'
+        self.dev_dir = os.path.join(self.metadata['dir_name'],'Deviations')
         # General Params/Variables
         self.num_neur = self.data_dict['num_neur']
         self.pre_taste = self.metadata['params_dict']['pre_taste']

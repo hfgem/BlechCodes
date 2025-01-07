@@ -26,7 +26,7 @@ post_deliv_time = 1000 #ms
 binning = 100 #ms
 bin_starts = np.arange(-1*pre_deliv_time,post_deliv_time-binning)
 pre_deliv_inds = np.where(bin_starts<0)[0]
-weight_values = [1,0.75,0.5] #[weight of waveform, weight of PSTH, weight of electrode distance] #larger fraction of 1 means more important
+weight_values = [1,1,1] #[weight of waveform, weight of PSTH, weight of electrode distance] #larger fraction of 1 means more important
 
 
 num_days, use_electrode = user_held_unit_input()
