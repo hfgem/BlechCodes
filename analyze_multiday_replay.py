@@ -27,8 +27,6 @@ if __name__ == '__main__':
     script_path = os.path.realpath(__file__)
     blechcodes_dir = os.path.dirname(script_path)
     
-    num_days = int_input("How many days-worth of data are you comparing for held units (integer)? ")
-    
     print('Where did you save the held units pickle file?')
     held_save_dir = askdirectory()
     held_data_dict = np.load(os.path.join(held_save_dir,'data_dict.npy'),allow_pickle=True).item()
@@ -43,6 +41,8 @@ if __name__ == '__main__':
                 held_units.append([int(row_vals[i]) for i in range(len(row_vals))])
             except:
                 is_header = row_vals
+                
+    num_days = len(held_units[0])
     
     metadata_handler = import_metadata([held_data_dict])
     

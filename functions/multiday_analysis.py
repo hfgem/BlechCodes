@@ -21,7 +21,11 @@ blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
 from functions.blech_held_units_funcs import *
+import functions.analysis_funcs as af
+import functions.dev_funcs as dev_f
+import functions.hdf5_handling as hf5
 from tkinter.filedialog import askdirectory
+
 
 class run_multiday_analysis():
     
@@ -31,6 +35,8 @@ class run_multiday_analysis():
         self.num_days = len(self.data_dict)
         self.create_save_dir()
         self.gather_variables()
+        self.import_deviations()
+        
         
     def create_save_dir(self,):
         # Using the directories of the different days find a common root folder and create save dir there
@@ -61,54 +67,135 @@ class run_multiday_analysis():
             os.mkdir(self.save_dir)
         
     def gather_variables(self,):
-        
+        #For each day store the relevant variables/parameters
         day_vars = dict()
         for n_i in range(self.num_days):
             day_vars[n_i] = dict()
             # Directories
-            day_vars[n_i]['hdf5_dir'] = self.metadata[0]['hdf5_dir']
+            day_vars[n_i]['hdf5_dir'] = os.path.join(self.metadata[n_i]['dir_name'], self.metadata[n_i]['hdf5_dir'])
+            day_vars[n_i]['dev_dir'] = os.path.join(self.metadata[n_i]['dir_name'],'Deviations')
             # General Params/Variables
-            num_neur = self.data_dict['num_neur']
+            num_neur = self.data_dict[n_i]['num_neur']
             keep_neur = self.metadata['held_units'][:,n_i]
+            day_vars[n_i]['keep_neur'] = keep_neur
             day_vars[n_i]['pre_taste'] = self.metadata[n_i]['params_dict']['pre_taste']
             day_vars[n_i]['post_taste'] = self.metadata[n_i]['params_dict']['post_taste']
             day_vars[n_i]['pre_taste_dt'] = np.ceil(day_vars[n_i]['pre_taste']*1000).astype('int')
             day_vars[n_i]['post_taste_dt'] = np.ceil(day_vars[n_i]['pre_taste']*1000).astype('int')
-            day_vars[n_i]['segments_to_analyze'] = self.metadata['params_dict']['segments_to_analyze']
-            day_vars[n_i]['epochs_to_analyze'] = self.metadata['params_dict']['epochs_to_analyze']
-            self.segment_names = self.data_dict['segment_names']
-            self.num_segments = len(self.segment_names)
-            self.segment_spike_times = self.data_dict['segment_spike_times']
-            self.segment_times = self.data_dict['segment_times']
-            self.segment_times_reshaped = [
-                [self.segment_times[i], self.segment_times[i+1]] for i in range(self.num_segments)]
+            day_vars[n_i]['segments_to_analyze'] = self.metadata[n_i]['params_dict']['segments_to_analyze']
+            day_vars[n_i]['epochs_to_analyze'] = self.metadata[n_i]['params_dict']['epochs_to_analyze']
+            day_vars[n_i]['segment_names'] = self.data_dict[n_i]['segment_names']
+            day_vars[n_i]['num_segments'] = len(day_vars[n_i]['segment_names'])
+            day_vars[n_i]['segment_times'] = self.data_dict[n_i]['segment_times']
+            day_vars[n_i]['segment_times_reshaped'] = [
+                [day_vars[n_i]['segment_times'][i], day_vars[n_i]['segment_times'][i+1]] for i in range(day_vars[n_i]['num_segments'])]
             # Remember this imported value is 1 less than the number of epochs
-            self.num_cp = self.metadata['params_dict']['num_cp'] + 1
-            self.tastant_spike_times = self.data_dict['tastant_spike_times']
-            self.start_dig_in_times = self.data_dict['start_dig_in_times']
-            self.end_dig_in_times = self.data_dict['end_dig_in_times']
-            self.dig_in_names = self.data_dict['dig_in_names']
-            self.num_tastes = len(self.dig_in_names)
-            self.fr_bins = self.metadata['params_dict']['fr_bins']
+            day_vars[n_i]['num_cp'] = self.metadata[n_i]['params_dict']['num_cp'] + 1
+            day_vars[n_i]['start_dig_in_times'] = self.data_dict[n_i]['start_dig_in_times']
+            day_vars[n_i]['end_dig_in_times'] = self.data_dict[n_i]['end_dig_in_times']
+            day_vars[n_i]['dig_in_names'] = self.data_dict[n_i]['dig_in_names']
+            day_vars[n_i]['num_tastes'] = len(day_vars[n_i]['dig_in_names'])
+            day_vars[n_i]['fr_bins'] = self.metadata[n_i]['params_dict']['fr_bins']
+            
+            
+            segment_spike_times, tastant_spike_times = self.get_spike_time_datasets(
+                [day_vars[n_i]['segment_times'],self.data_dict[n_i]['spike_times'],
+                 num_neur, keep_neur, day_vars[n_i]['start_dig_in_times'],
+                 day_vars[n_i]['end_dig_in_times'], day_vars[n_i]['pre_taste'],
+                 day_vars[n_i]['post_taste'], day_vars[n_i]['num_tastes']])
+            day_vars[n_i]['segment_spike_times'] = segment_spike_times
+            day_vars[n_i]['tastant_spike_times'] = tastant_spike_times
             #Bayes Params/Variables
-            self.skip_time = self.metadata['params_dict']['bayes_params']['skip_time']
-            self.skip_dt = np.ceil(self.skip_time*1000).astype('int')
-            self.e_skip_time = self.metadata['params_dict']['bayes_params']['e_skip_time']
-            self.e_skip_dt = np.ceil(self.e_skip_time*1000).astype('int')
-            self.taste_e_len_time = self.metadata['params_dict']['bayes_params']['taste_e_len_time']
-            self.taste_e_len_dt = np.ceil(self.taste_e_len_time*1000).astype('int') 
-            self.seg_e_len_time = self.metadata['params_dict']['bayes_params']['seg_e_len_time']
-            self.seg_e_len_dt = np.ceil(self.seg_e_len_time*1000).astype('int') 
-            self.bayes_fr_bins = self.metadata['params_dict']['bayes_params']['fr_bins']
-            self.neuron_count_thresh = self.metadata['params_dict']['bayes_params']['neuron_count_thresh']
-            self.max_decode = self.metadata['params_dict']['bayes_params']['max_decode']
-            self.seg_stat_bin = self.metadata['params_dict']['bayes_params']['seg_stat_bin']
-            self.trial_start_frac = self.metadata['params_dict']['bayes_params']['trial_start_frac']
-            self.decode_prob_cutoff = self.metadata['params_dict']['bayes_params']['decode_prob_cutoff']
-            self.bin_time = self.metadata['params_dict']['bayes_params']['z_score_bin_time']
-            self.bin_dt = np.ceil(self.bin_time*1000).astype('int')
-            self.num_null = 100 #self.metadata['params_dict']['num_null']
+            day_vars[n_i]['skip_time'] = self.metadata[n_i]['params_dict']['bayes_params']['skip_time']
+            day_vars[n_i]['skip_dt'] = np.ceil(day_vars[n_i]['skip_time']*1000).astype('int')
+            day_vars[n_i]['e_skip_time'] = self.metadata[n_i]['params_dict']['bayes_params']['e_skip_time']
+            day_vars[n_i]['e_skip_dt'] = np.ceil(day_vars[n_i]['e_skip_time']*1000).astype('int')
+            day_vars[n_i]['taste_e_len_time'] = self.metadata[n_i]['params_dict']['bayes_params']['taste_e_len_time']
+            day_vars[n_i]['taste_e_len_dt'] = np.ceil(day_vars[n_i]['taste_e_len_time']*1000).astype('int') 
+            day_vars[n_i]['seg_e_len_time'] = self.metadata[n_i]['params_dict']['bayes_params']['seg_e_len_time']
+            day_vars[n_i]['seg_e_len_dt'] = np.ceil(day_vars[n_i]['seg_e_len_time']*1000).astype('int') 
+            day_vars[n_i]['bayes_fr_bins'] = self.metadata[n_i]['params_dict']['bayes_params']['fr_bins']
+            day_vars[n_i]['neuron_count_thresh'] = self.metadata[n_i]['params_dict']['bayes_params']['neuron_count_thresh']
+            day_vars[n_i]['max_decode'] = self.metadata[n_i]['params_dict']['bayes_params']['max_decode']
+            day_vars[n_i]['seg_stat_bin'] = self.metadata[n_i]['params_dict']['bayes_params']['seg_stat_bin']
+            day_vars[n_i]['trial_start_frac'] = self.metadata[n_i]['params_dict']['bayes_params']['trial_start_frac']
+            day_vars[n_i]['decode_prob_cutoff'] = self.metadata[n_i]['params_dict']['bayes_params']['decode_prob_cutoff']
+            day_vars[n_i]['bin_time'] = self.metadata[n_i]['params_dict']['bayes_params']['z_score_bin_time']
+            day_vars[n_i]['bin_dt'] = np.ceil(day_vars[n_i]['bin_time']*1000).astype('int')
+            day_vars[n_i]['num_null'] = 100 #self.metadata['params_dict']['num_null']
             # Import changepoint data
-            self.pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
-                self.hdf5_dir, 'changepoint_data', 'pop_taste_cp_raster_inds')
-            self.num_pt_cp = self.num_cp + 2
+            day_vars[n_i]['pop_taste_cp_raster_inds'] = hf5.pull_data_from_hdf5(
+                day_vars[n_i]['hdf5_dir'], 'changepoint_data', 'pop_taste_cp_raster_inds')
+            day_vars[n_i]['num_pt_cp'] = day_vars[n_i]['num_cp'] + 2
+            
+        self.day_vars = day_vars
+        
+    def get_spike_time_datasets(self,args):
+        segment_times, spike_times, num_neur, keep_neur, start_dig_in_times, \
+            end_dig_in_times, pre_taste, post_taste, num_tastes = args
+        
+        # _____Pull out spike times for all tastes (and no taste)_____
+        segment_spike_times = af.calc_segment_spike_times(
+            segment_times, spike_times, num_neur)
+        tastant_spike_times = af.calc_tastant_spike_times(segment_times, spike_times,
+                                                          start_dig_in_times, end_dig_in_times,
+                                                          pre_taste, post_taste, 
+                                                          num_tastes, num_neur)
+        
+        # _____Update spike times for only held units_____
+        keep_segment_spike_times = []
+        for s_i in range(len(segment_spike_times)):
+            seg_neur_keep = []
+            for n_i in keep_neur:
+                seg_neur_keep.append(segment_spike_times[s_i][n_i])
+            keep_segment_spike_times.append(seg_neur_keep)
+            
+        keep_tastant_spike_times = []
+        for t_i in range(len(tastant_spike_times)):
+            taste_deliv_list = []
+            for d_i in range(len(tastant_spike_times[t_i])):
+                deliv_neur_keep = []
+                for n_i in keep_neur:
+                    deliv_neur_keep.append(tastant_spike_times[t_i][d_i][n_i])
+                taste_deliv_list.append(deliv_neur_keep)
+            keep_tastant_spike_times.append(taste_deliv_list)
+            
+        return keep_segment_spike_times, keep_tastant_spike_times
+    
+    def import_deviations(self,):
+        print("\tNow importing calculated deviations for first day")
+        
+        num_seg_to_analyze = len(self.day_vars[0]['segments_to_analyze'])
+        segment_names_to_analyze = [self.day_vars[0]['segment_names'][i] for i in self.day_vars[0]['segments_to_analyze']]
+        segment_times_to_analyze_reshaped = [
+            [self.day_vars[0]['segment_times'][i], self.day_vars[0]['segment_times'][i+1]] for i in self.day_vars[0]['segments_to_analyze']]
+        segment_spike_times_to_analyze = [self.day_vars[0]['segment_spike_times'][i] for i in self.day_vars[0]['segments_to_analyze']]
+        
+        segment_deviations = []
+        for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
+            filepath = os.path.join(self.day_vars[0]['dev_dir'],segment_names_to_analyze[s_i],'deviations.json')
+            with gzip.GzipFile(filepath, mode="r") as f:
+                json_bytes = f.read()
+                json_str = json_bytes.decode('utf-8')
+                data = json.loads(json_str)
+                segment_deviations.append(data)
+
+        print("\tNow pulling true deviation rasters")
+        #Note, these will already reflect the held units
+        segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
+            segment_dev_fr_vecs_zscore, _, _ = dev_f.create_dev_rasters(num_seg_to_analyze, 
+                                                                segment_spike_times_to_analyze,
+                                                                np.array(segment_times_to_analyze_reshaped),
+                                                                segment_deviations, self.day_vars[0]['pre_taste'])
+        self.segment_dev_rasters = segment_dev_rasters
+        self.segment_dev_times = segment_dev_times
+        self.segment_dev_fr_vecs = segment_dev_fr_vecs
+        self.segment_dev_fr_vecs_zscore = segment_dev_fr_vecs_zscore
+        
+    def pull_taste_fr_dist(self,):
+        #Here we need to combine tastes across days and pull the distributions for all of them
+        all_dig_in_names = []
+        for n_i in range(self.num_days):
+            day_names = day_vars[n_i]['dig_in_names']
+            new_day_names = [dn + '_' + str(n_i) for dn in day_names]
+            all_dig_in_names.extend(new_day_names)

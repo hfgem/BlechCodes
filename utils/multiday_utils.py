@@ -12,6 +12,7 @@ import os
 import csv
 import json
 import glob
+import functions.analysis_funcs as af
 
 class import_metadata():
     
@@ -60,7 +61,7 @@ class import_metadata():
                 file_found = 1
             if file_found == 0:
                 print('No info file found. Please ensure you ran clustering / are in the correct folder!')
-                quit()    
+                quit()
                 
     def bool_input(self,prompt):
         #This function asks a user for an integer input
