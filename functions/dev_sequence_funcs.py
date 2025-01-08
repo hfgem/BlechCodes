@@ -44,9 +44,15 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
     # dist_dir = os.path.join(save_dir, 'dist_tests')
     # if not os.path.isdir(dist_dir):
     #     os.mkdir(dist_dir)
-    # corr_dir = os.path.join(save_dir, 'corr_tests')
-    # if not os.path.isdir(corr_dir):
-    #     os.mkdir(corr_dir)
+    corr_dir = os.path.join(save_dir, 'corr_tests')
+    if not os.path.isdir(corr_dir):
+        os.mkdir(corr_dir)
+    non_z_split_corr_dir = os.path.join(corr_dir,'firing_rates')
+    if not os.path.isdir(non_z_split_corr_dir):
+        os.mkdir(non_z_split_corr_dir)
+    z_split_corr_dir = os.path.join(corr_dir,'zscore_firing_rates')
+    if not os.path.isdir(z_split_corr_dir):
+        os.mkdir(z_split_corr_dir)
     decode_split_dir = os.path.join(save_dir,'decode_splits')
     if not os.path.isdir(decode_split_dir):
         os.mkdir(decode_split_dir)
@@ -120,14 +126,15 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
                                 seg_z_std, num_neur, dig_in_names, segment_names, 
                                 s_i, epochs_to_analyze, tastant_fr_dist_pop, 
                                 tastant_fr_dist_z_pop, z_decode_dir, 
-                                null_z_decode_dir, null_z_decode_dir_2)
+                                null_z_decode_dir, null_z_decode_dir_2,
+                                z_split_corr_dir)
         
         #Sequence calcs
-        create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, 
-                                seg_z_std, num_neur, dig_in_names, segment_names, 
-                                s_i, bin_dt, epochs_to_analyze, tastant_raster_dict,
-                                taste_seqs_dict, avg_taste_seqs_dict, sequence_dir, 
-                                null_sequence_dir, null_sequence_dir_2)
+        # create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, 
+        #                         seg_z_std, num_neur, dig_in_names, segment_names, 
+        #                         s_i, bin_dt, epochs_to_analyze, tastant_raster_dict,
+        #                         taste_seqs_dict, avg_taste_seqs_dict, sequence_dir, 
+        #                         null_sequence_dir, null_sequence_dir_2)
         
 def test_taste_epoch_pairs(dig_in_names, tastant_fr_dist, save_dir):
     #Grab parameters/variables
@@ -193,7 +200,8 @@ def test_taste_epoch_pairs(dig_in_names, tastant_fr_dist, save_dir):
 def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_std, 
                             num_neur, dig_in_names, segment_names, s_i, 
                             epochs_to_analyze, tastant_fr_dist_pop, tastant_fr_dist_z_pop,
-                            z_decode_dir, null_z_decode_dir, null_z_decode_dir_2):
+                            z_decode_dir, null_z_decode_dir, null_z_decode_dir_2,
+                            z_split_corr_dir):
     dev_mats = []
     dev_mats_z = []
     null_dev_dict = dict()
@@ -269,34 +277,36 @@ def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_s
         null_dev_z_dict_2[null_i] = np.array(null_dev_z_dict_2[null_i]) #num dev x num neur x 2
         
     #Correlate deviation splits with epoch orders
-    correlate_splits_epoch_pairs()
+    correlate_splits_epoch_pairs(tastant_fr_dist_z_pop, 
+                    dig_in_names, dev_mats_array, segment_names, s_i,
+                    z_split_corr_dir, epochs_to_analyze)
         
     #Decode each deviation event split
     
     # decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
     #                 dig_in_names, dev_mats_array, segment_names, s_i,
     #                 non_z_decode_dir, epochs_to_analyze)
-    decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
-                    dig_in_names, dev_mats_z_array, segment_names, s_i,
-                    z_decode_dir, epochs_to_analyze)
+    # decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
+    #                 dig_in_names, dev_mats_z_array, segment_names, s_i,
+    #                 z_decode_dir, epochs_to_analyze)
     
-    #Run decoded splits significance tests
-    decode_splits_significance_tests(dig_in_names, dev_mats_z_array, segment_names, 
-                                         s_i, z_decode_dir, epochs_to_analyze)
+    # #Run decoded splits significance tests
+    # decode_splits_significance_tests(dig_in_names, dev_mats_z_array, segment_names, 
+    #                                      s_i, z_decode_dir, epochs_to_analyze)
     
-    #Decode null distribution
-    # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
-    #                 dig_in_names, null_dev_dict, segment_names, s_i,
-    #                 null_decode_dir, non_z_decode_dir, epochs_to_analyze)
-    decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
-                    dig_in_names, null_dev_z_dict, segment_names, s_i,
-                    null_z_decode_dir, z_decode_dir, epochs_to_analyze)
-    # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
-    #                 dig_in_names, null_dev_dict_2, segment_names, s_i,
-    #                 null_decode_dir_2, non_z_decode_dir, epochs_to_analyze)
-    decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
-                    dig_in_names, null_dev_z_dict_2, segment_names, s_i,
-                    null_z_decode_dir_2, z_decode_dir, epochs_to_analyze)
+    # #Decode null distribution
+    # # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
+    # #                 dig_in_names, null_dev_dict, segment_names, s_i,
+    # #                 null_decode_dir, non_z_decode_dir, epochs_to_analyze)
+    # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
+    #                 dig_in_names, null_dev_z_dict, segment_names, s_i,
+    #                 null_z_decode_dir, z_decode_dir, epochs_to_analyze)
+    # # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
+    # #                 dig_in_names, null_dev_dict_2, segment_names, s_i,
+    # #                 null_decode_dir_2, non_z_decode_dir, epochs_to_analyze)
+    # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
+    #                 dig_in_names, null_dev_z_dict_2, segment_names, s_i,
+    #                 null_z_decode_dir_2, z_decode_dir, epochs_to_analyze)
                      
 def calc_tastant_seq(tastant_raster_dict, taste_bin_dt, dig_in_names, sequence_dir):
     """This function is dedicated to calculating the rank sequences in tastant
@@ -525,6 +535,8 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
     epoch_splits.extend([(e_i,e_i) for e_i in epochs_to_analyze])
     epoch_split_inds = np.arange(len(epoch_splits))
     epoch_split_names = [str(ep) for ep in epoch_splits]
+    epoch_root = np.ceil(np.sqrt(len(epoch_splits))).astype('int')
+    epoch_ind_reference = np.reshape(np.arange(epoch_root**2),(epoch_root,epoch_root))
     #Taste pair options
     taste_pairs = list(itertools.combinations(np.arange(num_tastes),2))
     taste_pair_names = []
@@ -534,7 +546,7 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
     #Begin correlation analysis
     try:
         #Add an import statement here
-        corr_dict = np.load(os.path.join(split_corr_dir,'corr_dict.npy'),allow_pickle=True).item()
+        corr_dict = np.load(os.path.join(split_corr_dir,segment_names[s_i] + '_corr_dict.npy'),allow_pickle=True).item()
         print('\t\t\t\t' + segment_names[s_i] + ' Previously Pair-Correlated')
     except:
         print('\t\t\t\tCorrelating ' + segment_names[s_i] + ' Epoch Pairs')
@@ -542,7 +554,9 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
         tic = time.time()
         
         corr_dict = dict()
-        
+        f_taste_cdf, ax_taste_cdf = plt.subplots(nrows = epoch_root, ncols = epoch_root, 
+                                                 sharex = True, sharey = True,
+                                                 figsize=(10,10))
         for es_ind, es in enumerate(epoch_splits):
             es_name = epoch_split_names[es_ind]
             corr_dict[es] = dict()
@@ -550,7 +564,7 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
             corr_dict[es]['pair'] = es
             epoch_1 = es[0]
             epoch_2 = es[1]
-            
+            epoch_plot_ind = np.where(epoch_ind_reference == es_ind)
             #Collect deviation event firing rate matrices as concatenated vectors
             dev_fr_vecs = []
             for dev_i in range(num_dev):
@@ -589,12 +603,9 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
             corr_dict[es]['taste_corrs'] = all_taste_corrs
             
             #Create a CDF plot with KS-Test Stats
-            f_taste_cdf = plt.figure(figsize=(8,5))
-            plot_title = 'Epoch pair ' + str(es) + ' CDFs'
-            plot_savename = 'epoch_' + str(epoch_1) + '_epoch_' + str(epoch_2) + \
-                '_taste_corrs'
+            plot_title = 'Epoch pair ' + str(es)
             for t_i in range(num_tastes):
-                plt.hist(all_taste_corrs[t_i],bins=1000,density=True,\
+                ax_taste_cdf[epoch_plot_ind[0][0],epoch_plot_ind[1][0]].hist(all_taste_corrs[t_i],bins=1000,density=True,\
                          cumulative=True,histtype='step',label=dig_in_names[t_i])
             #Calculate pairwise significances
             ks_sig = np.zeros(len(taste_pairs))
@@ -613,24 +624,70 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
                         sig_text += '\n' + taste_pair_names[sig_i] + ' < '
                     if ks_dir[sig_i] == -1:
                         sig_text += '\n' + taste_pair_names[sig_i] + ' > '
-            plt.text(0,0.2,sig_text)
-            plt.legend(loc='upper left')
-            plt.title(plot_title)
-            f_taste_cdf.savefig(os.path.join(split_corr_dir,plot_savename+'.png'))
-            f_taste_cdf.savefig(os.path.join(split_corr_dir,plot_savename+'.svg'))
-            plt.close(f_taste_cdf)
-            
-        #Now look by taste at epoch pair CDF with KS-Test Stats
+            ax_taste_cdf[epoch_plot_ind[0][0],epoch_plot_ind[1][0]].text(0,0.2,sig_text)
+            ax_taste_cdf[epoch_plot_ind[0][0],epoch_plot_ind[1][0]].legend(loc='upper left')
+            ax_taste_cdf[epoch_plot_ind[0][0],epoch_plot_ind[1][0]].set_title(plot_title)
+        for er_i in range(epoch_root):
+            ax_taste_cdf[-1,er_i].set_xlabel('Pearson Correlation')
+            ax_taste_cdf[er_i,0].set_ylabel('Cumulative Probability')
+        plt.suptitle(segment_names[s_i] + ' epoch pair CDFs')
+        plt.tight_layout()
+        f_taste_cdf.savefig(os.path.join(split_corr_dir,segment_names[s_i] + '_epoch_pair_cdfs_taste_compare.png'))
+        f_taste_cdf.savefig(os.path.join(split_corr_dir,segment_names[s_i] + '_epoch_pair_cdfs_taste_compare.svg'))
+        plt.close(f_taste_cdf)
         
-        #Now look if all are compared to each other, if one particular taste 
-        #and epoch pair comes out on top
-            
+        #Now look by taste at epoch pair CDF
+        f_epoch_cdf, ax_epoch_cdf = plt.subplots(nrows = 1, ncols = num_tastes, 
+                                                 sharex = True, sharey = True,
+                                                 figsize=(15,5))
+        epoch_taste_means = np.zeros((len(epoch_splits),num_tastes))
+        for t_i in range(num_tastes):
+            #Plot epoch pair correlation distributions for this taste
+            epoch_data_means = []
+            epoch_names_compiled = []
+            for es_ind, es in enumerate(epoch_splits):
+                es_name = corr_dict[es]['name']
+                epoch_names_compiled.append(es_name)
+                data = corr_dict[es]['taste_corrs'][t_i]
+                data_mean = np.nanmean(data)
+                epoch_data_means.append(data_mean)
+                epoch_taste_means[es_ind,t_i] = data_mean
+                ax_epoch_cdf[t_i].hist(data, bins=1000,density=True,\
+                         cumulative=True,histtype='step',label=es_name)
+            ax_epoch_cdf[t_i].legend(loc='upper left')
+            #Rank distributions based on mean
+            rank_inds = np.argsort(epoch_data_means)
+            sort_vals = str(epoch_data_means[rank_inds[0]])
+            sort_text = str(epoch_splits[rank_inds[0]])
+            sort_text_newline_flag = 0
+            for r_i in range(len(rank_inds)-1):
+                last_mean = epoch_data_means[rank_inds[r_i]]
+                this_mean = epoch_data_means[rank_inds[r_i+1]]
+                if (len(sort_text) > 35) and (sort_text_newline_flag == 0):
+                    sort_text = sort_text + '\n'
+                    sort_text_newline_flag = 1
+                if this_mean > last_mean:
+                    sort_text = sort_text + ' < ' + str(epoch_splits[rank_inds[r_i+1]])
+                elif this_mean == last_mean:
+                    sort_text = sort_text + ' = ' + str(epoch_splits[rank_inds[r_i+1]])
+                else:
+                    sort_text = sort_text + ' > ' + str(epoch_splits[rank_inds[r_i+1]])
+            ax_epoch_cdf[t_i].set_title(dig_in_names[t_i] + '\n' + sort_text)
+            ax_epoch_cdf[t_i].set_xlabel('Pearson Correlation')
+        ax_epoch_cdf[0].set_ylabel('Cumulative Probability')
+        max_mean = np.where(epoch_taste_means == np.max(epoch_taste_means))
+        plt.suptitle(segment_names[s_i] + ' overall max = ' + dig_in_names[max_mean[1][0]] + \
+                     ' ' + str(epoch_splits[max_mean[0][0]]))
+        plt.tight_layout()
+        f_epoch_cdf.savefig(os.path.join(split_corr_dir,segment_names[s_i] + '_taste_cdfs_epoch_pair_compare.png'))
+        f_epoch_cdf.savefig(os.path.join(split_corr_dir,segment_names[s_i] + '_taste_cdfs_taste_compare.svg'))
+        plt.close(f_taste_cdf)
         
         toc = time.time()    
         print('\t\t\t\t\tTime to correlate ' + segment_names[s_i] + \
               ' deviation splits = ' + str(np.round((toc-tic)/60, 2)) + ' (min)')
             
-        np.save(os.path.join(split_corr_dir,'corr_dict.npy'),corr_dict,allow_pickle=True)    
+        np.save(os.path.join(split_corr_dir,segment_names[s_i] + '_corr_dict.npy'),corr_dict,allow_pickle=True)    
             
 
 def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist, 
