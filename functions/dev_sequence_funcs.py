@@ -268,6 +268,9 @@ def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_s
         null_dev_dict_2[null_i] = np.array(null_dev_dict_2[null_i]) #num dev x num neur x 2
         null_dev_z_dict_2[null_i] = np.array(null_dev_z_dict_2[null_i]) #num dev x num neur x 2
         
+    #Correlate deviation splits with epoch orders
+    correlate_splits_epoch_pairs()
+        
     #Decode each deviation event split
     
     # decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
@@ -522,6 +525,11 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
     epoch_splits.extend([(e_i,e_i) for e_i in epochs_to_analyze])
     epoch_split_inds = np.arange(len(epoch_splits))
     epoch_split_names = [str(ep) for ep in epoch_splits]
+    #Taste pair options
+    taste_pairs = list(itertools.combinations(np.arange(num_tastes),2))
+    taste_pair_names = []
+    for tp_i, tp in enumerate(taste_pairs):
+        taste_pair_names.append(dig_in_names[tp[0]] + ' v. ' + dig_in_names[tp[1]])
     
     #Begin correlation analysis
     try:
@@ -548,22 +556,25 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
             for dev_i in range(num_dev):
                 #Converting to list for parallel processing
                 dev_fr_mat = np.squeeze(dev_mats_array[dev_i,:,:]) #Shape num_neur x 2
-                dev_fr_vecs.append(np.sqeueeze(np.concatenate((dev_fr_mat[:,0],dev_fr_mat[:,1]),0)))
+                dev_fr_vecs.append(np.squeeze(np.concatenate((dev_fr_mat[:,0],dev_fr_mat[:,1]),0)))
             
             #Collect taste response firing rate pairs as concatenated vectors 
             #and calculate correlation distributions
             all_taste_corrs = []
             for t_i in range(num_tastes):
                 taste_fr_vecs = []
+                num_deliveries = len(tastant_fr_dist[t_i])
                 for d_i in range(num_deliveries):
+                    vec1 = np.squeeze(tastant_fr_dist[t_i][d_i][epoch_1])
+                    vec2 = np.squeeze(tastant_fr_dist[t_i][d_i][epoch_2])
                     try:
-                        if np.shape(tastant_fr_dist[t_i][d_i][epoch_1])[0] == num_neur:
-                            taste_fr_vecs.append(np.concatenate((tastant_fr_dist[t_i][d_i][epoch_1],tastant_fr_dist[t_i][d_i][epoch_2]),0))
+                        if np.shape(vec1)[0] == num_neur:
+                            taste_fr_vecs.append(np.concatenate((vec1,vec2),0))
                         else:
-                            taste_fr_vecs.append(np.concatenate((tastant_fr_dist[t_i][d_i][epoch_1].T,tastant_fr_dist[t_i][d_i][epoch_2].T),0))
+                            taste_fr_vecs.append(np.concatenate((vec1.T,vec2.T),0))
                     except: #No taste response stored
-                        taste_fr_vecs = taste_fr_vecs
-                taste_fr_vecs = np.array(this_taste_fr_vecs)
+                        except_hold = len(taste_fr_vecs)
+                taste_fr_vecs = np.array(taste_fr_vecs)
                 if np.shape(taste_fr_vecs)[0] == 2*num_neur:
                     avg_taste_fr_vec = np.squeeze(np.nanmean(taste_fr_vecs,1))
                 else:
@@ -572,12 +583,42 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
                 dev_fr_vec_corrs = []
                 for dev_i in range(num_dev):
                     pearson_corr = stats.pearsonr(dev_fr_vecs[dev_i],avg_taste_fr_vec)
-                    dev_fr_vec_corrs.extend(pearson_corr[0])
+                    dev_fr_vec_corrs.extend([pearson_corr[0]])
                     
                 all_taste_corrs.append(dev_fr_vec_corrs)
             corr_dict[es]['taste_corrs'] = all_taste_corrs
             
             #Create a CDF plot with KS-Test Stats
+            f_taste_cdf = plt.figure(figsize=(8,5))
+            plot_title = 'Epoch pair ' + str(es) + ' CDFs'
+            plot_savename = 'epoch_' + str(epoch_1) + '_epoch_' + str(epoch_2) + \
+                '_taste_corrs'
+            for t_i in range(num_tastes):
+                plt.hist(all_taste_corrs[t_i],bins=1000,density=True,\
+                         cumulative=True,histtype='step',label=dig_in_names[t_i])
+            #Calculate pairwise significances
+            ks_sig = np.zeros(len(taste_pairs))
+            ks_dir = np.zeros(len(taste_pairs))
+            for p_i, p_vals in enumerate(taste_pairs):
+                ks_res = stats.ks_2samp(all_taste_corrs[p_vals[0]], all_taste_corrs[p_vals[1]], \
+                               alternative='two-sided')
+                if ks_res.pvalue <= 0.05:
+                    ks_sig[p_i] = 1
+                    ks_dir[p_i] = ks_res.statistic_sign
+            sig_text = 'Significant Pairs:'
+            if np.sum(ks_sig) > 0:
+                sig_inds = np.where(ks_sig > 0)[0]
+                for sig_i in sig_inds:
+                    if ks_dir[sig_i] == 1:
+                        sig_text += '\n' + taste_pair_names[sig_i] + ' < '
+                    if ks_dir[sig_i] == -1:
+                        sig_text += '\n' + taste_pair_names[sig_i] + ' > '
+            plt.text(0,0.2,sig_text)
+            plt.legend(loc='upper left')
+            plt.title(plot_title)
+            f_taste_cdf.savefig(os.path.join(split_corr_dir,plot_savename+'.png'))
+            f_taste_cdf.savefig(os.path.join(split_corr_dir,plot_savename+'.svg'))
+            plt.close(f_taste_cdf)
             
         #Now look by taste at epoch pair CDF with KS-Test Stats
         

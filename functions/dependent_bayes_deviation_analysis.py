@@ -35,6 +35,7 @@ class run_deviation_dependent_bayes():
         self.import_deviations()
         self.pull_fr_dist()
         self.decode_all_neurons()
+        self.decode_all_neurons_zscore()
 
     def gather_variables(self,):
         # Directories
@@ -175,7 +176,7 @@ class run_deviation_dependent_bayes():
         self.plot_decoded_data()
 
     def decode_all_neurons_zscore(self,):
-        print("\tDecoding all neurons")
+        print("\tDecoding all z-scored neurons")
         all_neur_z_dir = self.bayes_dir + 'All_Neurons_Z_Scored/'
         if os.path.isdir(all_neur_z_dir) == False:
             os.mkdir(all_neur_z_dir)

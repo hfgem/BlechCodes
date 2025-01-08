@@ -24,6 +24,7 @@ from functions.blech_held_units_funcs import *
 import functions.analysis_funcs as af
 import functions.dev_funcs as dev_f
 import functions.hdf5_handling as hf5
+import functions.dependent_decoding_funcs as ddf
 from tkinter.filedialog import askdirectory
 
 
@@ -36,6 +37,7 @@ class run_multiday_analysis():
         self.create_save_dir()
         self.gather_variables()
         self.import_deviations()
+        self.pull_taste_fr_dist()
         
         
     def create_save_dir(self,):
@@ -193,9 +195,56 @@ class run_multiday_analysis():
         self.segment_dev_fr_vecs_zscore = segment_dev_fr_vecs_zscore
         
     def pull_taste_fr_dist(self,):
+        day_vars = self.day_vars
+        
         #Here we need to combine tastes across days and pull the distributions for all of them
         all_dig_in_names = []
+        tastant_fr_dist_pop = dict()
+        taste_num_deliv = []
+        max_hz_pop = 0
+        tastant_fr_dist_z_pop = dict()
+        max_hz_z_pop = 0
+        min_hz_z_pop = np.inf
         for n_i in range(self.num_days):
-            day_names = day_vars[n_i]['dig_in_names']
+            #Collect tastant names
+            day_names = self.day_vars[n_i]['dig_in_names']
             new_day_names = [dn + '_' + str(n_i) for dn in day_names]
             all_dig_in_names.extend(new_day_names)
+            #Collect firing rate distribution dictionaries
+            tastant_fr_dist_pop_day, taste_num_deliv_day, max_hz_pop_day = ddf.taste_fr_dist(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
+                                                                            	 day_vars[n_i]['pop_taste_cp_raster_inds'], day_vars[n_i]['bayes_fr_bins'],
+                                                                            	 day_vars[n_i]['start_dig_in_times'], day_vars[n_i]['pre_taste_dt'],
+                                                                            	 day_vars[n_i]['post_taste_dt'], day_vars[n_i]['trial_start_frac'])
+            start_update_ind = len(tastant_fr_dist_pop)
+            for tf_i in range(len(tastant_fr_dist_pop_day)):
+                tastant_fr_dist_pop[tf_i+start_update_ind] = tastant_fr_dist_pop_day[tf_i]
+            taste_num_deliv.extend(list(taste_num_deliv_day))
+            if max_hz_pop_day > max_hz_pop:
+                max_hz_pop = max_hz_pop_day
+            tastant_fr_dist_z_pop_day, _, max_hz_z_pop_day, min_hz_z_pop_day = ddf.taste_fr_dist_zscore(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
+                                                                                                day_vars[n_i]['segment_spike_times'], day_vars[n_i]['segment_names'],
+                                                                                                day_vars[n_i]['segment_times'], day_vars[n_i]['pop_taste_cp_raster_inds'],
+                                                                                                day_vars[n_i]['bayes_fr_bins'], day_vars[n_i]['start_dig_in_times'],
+                                                                                                day_vars[n_i]['pre_taste_dt'], day_vars[n_i]['post_taste_dt'], 
+                                                                                                day_vars[n_i]['bin_dt'], day_vars[n_i]['trial_start_frac'])
+            start_update_ind = len(tastant_fr_dist_z_pop)
+            for tf_i in range(len(tastant_fr_dist_z_pop_day)):
+                tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
+            taste_num_deliv.extend(list(taste_num_deliv_day))
+            if max_hz_z_pop_day > max_hz_z_pop:
+                max_hz_z_pop = max_hz_z_pop_day
+            if min_hz_z_pop_day < min_hz_z_pop:
+                min_hz_z_pop = min_hz_z_pop_day
+                
+        self.all_dig_in_names = all_dig_in_names
+        self.tastant_fr_dist_pop = tastant_fr_dist_pop
+        self.taste_num_deliv = taste_num_deliv
+        self.max_hz_pop = max_hz_pop
+        self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
+        self.max_hz_z_pop = max_hz_z_pop
+        self.min_hz_z_pop = min_hz_z_pop
+            
+    def decode_dev_all_tastes_zscore(self,):
+        #Z-scored decoding
+        decode_save_dir = os.path.join(self.save_dir,'Dev_Decode_Zscore')
+        
