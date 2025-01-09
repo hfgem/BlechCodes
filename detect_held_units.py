@@ -24,9 +24,8 @@ pca_components = 6
 pre_deliv_time = 500 #ms
 post_deliv_time = 1000 #ms
 binning = 100 #ms
-bin_starts = np.arange(-1*pre_deliv_time,post_deliv_time-binning)
-pre_deliv_inds = np.where(bin_starts<0)[0]
-weight_values = [1,1,1] #[weight of waveform, weight of PSTH, weight of electrode distance] #larger fraction of 1 means more important
+bin_starts = np.arange(-1*pre_deliv_time-binning,post_deliv_time-binning)
+weight_values = [1,1/4,1/20] #[weight of waveform, weight of PSTH, weight of electrode distance] #larger fraction of 1 means more important
 
 
 num_days, use_electrode = user_held_unit_input()
@@ -239,16 +238,17 @@ else:
                     neur_fr[st_ind,bst_ind] = spike_hz
             del st_ind, st_i, bst_ind, bst_i, spike_hz
             all_unit_fr_curves.append(np.nanmean(neur_fr,0))
-            neur_fr_mean1 = np.nanmean(neur_fr[:int(len(start_dig_in_times)*(1.0/3.0)), :],0)
-            neur_fr_mean2 = np.nanmean(neur_fr[int(len(start_dig_in_times)*(2.0/3.0)):, :],0)
+            #Compare distance for post-delivery only
+            neur_fr_mean1 = np.nanmean(neur_fr[:int(len(start_dig_in_times)*(1.0/3.0)), pre_deliv_time:],0)
+            neur_fr_mean2 = np.nanmean(neur_fr[int(len(start_dig_in_times)*(2.0/3.0)):, pre_deliv_time:],0)
             intra_euc_dist_fr_curves.append(euclidean(neur_fr_mean1,neur_fr_mean2))
-            pre_deliv_mean = np.nanmean(neur_fr[:,pre_deliv_inds],1)
+            pre_deliv_mean = np.nanmean(neur_fr[:,:pre_deliv_time],1)
             neur_fr_rescale = neur_fr - np.expand_dims(pre_deliv_mean,1)*np.ones(np.shape(neur_fr)) #Subtract pre-delivery fr means
             rescale_mean = np.nanmean(neur_fr_rescale,0)
             all_unit_fr_curves_norm.append(rescale_mean/np.max(rescale_mean))
-            neur_fr_rescale_mean1 = np.nanmean(neur_fr_rescale[:int(len(start_dig_in_times)*(1.0/3.0)), :],0)
+            neur_fr_rescale_mean1 = np.nanmean(neur_fr_rescale[:int(len(start_dig_in_times)*(1.0/3.0)), pre_deliv_time:],0)
             neur_fr_rescale_mean1 = neur_fr_rescale_mean1/np.max(neur_fr_rescale_mean1)
-            neur_fr_rescale_mean2 = np.nanmean(neur_fr_rescale[int(len(start_dig_in_times)*(2.0/3.0)):, :],0)
+            neur_fr_rescale_mean2 = np.nanmean(neur_fr_rescale[int(len(start_dig_in_times)*(2.0/3.0)):, pre_deliv_time:],0)
             neur_fr_rescale_mean2 = neur_fr_rescale_mean2/np.max(neur_fr_rescale_mean2)
             intra_euc_dist_fr_curves_norm.append(euclidean(neur_fr_rescale_mean1,neur_fr_rescale_mean2))
             del neur_fr_mean1, neur_fr_mean2, pre_deliv_mean, neur_fr_rescale, rescale_mean, neur_fr_rescale_mean1, neur_fr_rescale_mean2
@@ -417,12 +417,12 @@ except:
             all_intra_day_J3_norm.append(calculate_J3(pca_wf_1_norm,pca_wf_2_norm))
             #Euclidean PSTH Calcs
             #   Regular PSTH
-            psth_1 = data_dict[d_i]['all_unit_fr_curves'][nc[0]]
-            psth_2 = data_dict[d_i]['all_unit_fr_curves'][nc[1]]
+            psth_1 = data_dict[d_i]['all_unit_fr_curves'][nc[0]][pre_deliv_time:]
+            psth_2 = data_dict[d_i]['all_unit_fr_curves'][nc[1]][pre_deliv_time:]
             all_intra_day_euc_dist.append(euclidean(psth_1,psth_2))
             #   Normalized PSTH
-            psth_1_norm = data_dict[d_i]['all_unit_fr_curves_norm'][nc[0]]
-            psth_2_norm = data_dict[d_i]['all_unit_fr_curves_norm'][nc[1]]
+            psth_1_norm = data_dict[d_i]['all_unit_fr_curves_norm'][nc[0]][pre_deliv_time:]
+            psth_2_norm = data_dict[d_i]['all_unit_fr_curves_norm'][nc[1]][pre_deliv_time:]
             all_intra_day_euc_dist_norm.append(euclidean(psth_1_norm,psth_2_norm))
             del unit_waveforms_1, unit_waveforms_2, combined_waveforms, pca, \
                 pca_wf_1, pca_wf_2, unit_waveforms_1_norm, unit_waveforms_2_norm, \
@@ -503,12 +503,12 @@ except:
             all_inter_J3_norm[nc_i,dc_i] = calculate_J3(pca_wf_1_norm,pca_wf_2_norm)
             #Euclidean PSTH Calcs
             #   Regular PSTH
-            psth_1 = data_dict[dc[0]]['all_unit_fr_curves'][nc[dc[0]]]
-            psth_2 = data_dict[dc[1]]['all_unit_fr_curves'][nc[dc[1]]]
+            psth_1 = data_dict[dc[0]]['all_unit_fr_curves'][nc[dc[0]]][pre_deliv_time:]
+            psth_2 = data_dict[dc[1]]['all_unit_fr_curves'][nc[dc[1]]][pre_deliv_time:]
             all_inter_PSTH[nc_i,dc_i] = euclidean(psth_1,psth_2)
             #   Normalized PSTH
-            psth_1_norm = data_dict[dc[0]]['all_unit_fr_curves_norm'][nc[dc[0]]]
-            psth_2_norm = data_dict[dc[1]]['all_unit_fr_curves_norm'][nc[dc[1]]]
+            psth_1_norm = data_dict[dc[0]]['all_unit_fr_curves_norm'][nc[dc[0]]][pre_deliv_time:]
+            psth_2_norm = data_dict[dc[1]]['all_unit_fr_curves_norm'][nc[dc[1]]][pre_deliv_time:]
             all_inter_PSTH_norm[nc_i,dc_i] = euclidean(psth_1_norm,psth_2_norm)
             
     #Save calcs
@@ -666,230 +666,65 @@ for bm_i, bm in enumerate(best_matches):
     f.savefig(os.path.join(held_unit_save_dir,'held_pair_' + str(bm_i) + '.svg'))
     plt.close(f)
 
-#%% OLD CODE: Below is the more classic approach with percentile cutoffs
+#%% User Input - Remove Pairs?
 
-#Calculate the intra-J3 percentile cutoff
-all_intra_J3_cutoff = np.percentile(all_intra_J3, percent_criterion)
+print("Please review the held unit pairs selected and plotted in the folder unit_plots/held_units.")
+remove_pairs = bool_input("Would you like to remove any of the pairs? ")
 
-#Calculate the euclidean distance cutoff
-all_euc_dist_cutoff = np.percentile(all_intra_euc_dist, percent_criterion_fr)
-
-held_unit_storage = [] #placeholder storage for held units across days
-
-#Calculate all pairwise unit tests
-all_neur_combos = list(itertools.product(*all_neur_inds))
-all_day_combos = list(itertools.combinations(np.arange(num_days),2))
-
-header = ''
-for day in range(num_days-1):
-    header += 'Day ' + str(day+1) + ','
-header += 'Day ' + str(num_days)
-    
-# Make a file to save the numbers of the units that are deemed to have been held across days
-with open(os.path.join(save_dir,f'held_units_{wf_type}_{percent_criterion}.csv'), 'w') as f:
-    f.write(header)
-
-
-all_inter_J3 = []
-all_inter_euc_dist = []
-held_index_counter = 0
-shape = tuple([len(all_neur_inds[i]) for i in range(len(all_neur_inds))])
-shape2 = tuple(np.concatenate((np.array(shape),len(all_day_combos)*np.ones(1))).astype('int'))
-all_neur_combo_vals = np.zeros(shape2)
-avg_neur_combo_val = np.zeros(shape)
-viable_neur_combo = np.zeros(shape)
-for nc in all_neur_combos:
-    #Collect waveforms and pca data to be compared
-    waveform_peaks = [] #list of numpy arrays
-    waveforms_pca = []
-    all_waveforms_pca = []
-    fr_curves = []
-    
-    for day in range(len(nc)):
-        wf_peaks = data_dict[day]['all_unit_waveform_peaks'][nc[day]]
-        waveform_peaks.append(wf_peaks)
-        wf_pca = data_dict[day]['all_unit_pca'][nc[day]]
-        waveforms_pca.append(wf_pca)
-        all_waveforms_pca.extend(wf_pca)
-        fr_curves.append(data_dict[day]['all_unit_fr_curves'][nc[day]])
-            
-    #Do all inter_J3 match the cutoff?
-    
-    #Calculate the inter_J3 across days
-    all_days_inter_J3 = []
-    for dc in all_day_combos:
-        all_days_inter_J3.extend([calculate_J3(waveforms_pca[dc[0]], waveforms_pca[dc[1]])])
-    all_inter_J3.append(all_days_inter_J3) 
-    avg_neur_combo_val[nc] = np.nanmean(all_days_inter_J3)
-    all_neur_combo_vals[nc,:] = all_days_inter_J3
-    
-    if np.sum((np.array(all_days_inter_J3) <= all_intra_J3_cutoff).astype('int')) == len(all_day_combos):
-        
-        #Compare peak distributions via ttest
-        ttest_res = np.ones(len(all_day_combos))
-        for dp_i, dp in enumerate(all_day_combos):
-            _, p_val = ttest_ind(waveform_peaks[dp[0]],waveform_peaks[dp[1]],nan_policy='omit')
-            ttest_res[dp_i] = p_val
-        
-        ttest_check = np.sum((ttest_res >= .05).astype('int')) == len(all_day_combos)
-        
-        #Compare inter euclidean distance of rescaled firing rate curves to intra cutoff
-        all_days_inter_euc_dist = []
-        for dc in all_day_combos:
-            #all_days_inter_J3.extend([calculate_J3(day_pca[dc[0]], day_pca[dc[1]])])
-            day_1_mean = fr_curves[dc[0]]
-            day_2_mean = fr_curves[dc[1]]
-            all_days_inter_euc_dist.extend([np.sqrt(np.sum(np.square(np.abs(day_1_mean - day_2_mean))))])
-          
-        fr_check = np.sum((np.array(all_days_inter_euc_dist) <= all_euc_dist_cutoff).astype('int')) == len(all_day_combos)
-            
-        if ttest_check and fr_check:
-        
-            viable_neur_combo[nc] = 1
-        
-            #Save to csv the unit indices per day
-            statement = '\n'
-            for i in range(len(nc)-1):
-                statement += str(nc[i]) + ','
-            statement += str(nc[-1])
-            with open(os.path.join(save_dir,f'held_units_{wf_type}_{percent_criterion}.csv'), 'a') as f:
-                f.write(statement)
-            
-            #Create a plot of the matching waveforms
-            fig, ax = plt.subplots(2, num_days, figsize=(12, 6))
-            min_wf_val = 10000
-            max_wf_val = -10000
-            for d_i in range(num_days):
-                #Plot waveforms
-                wf_day_i = data_dict[d_i]['all_unit_waveforms'][nc[d_i]]
-                num_wav = wf_day_i.shape[0]
-                t = np.arange(wf_day_i.shape[1])
-                mean_wfs = np.mean(wf_day_i, axis = 0)
-                max_, min_ = np.max(mean_wfs), np.min(mean_wfs)
-                if min_ < min_wf_val:
-                    min_wf_val = min_
-                if max_ > max_wf_val:
-                    max_wf_val = max_
-                ax[0,d_i].plot(t - 15, mean_wfs, linewidth = 5.0, color = 'black')
-                ax[0,d_i].plot(t - 15, mean_wfs - np.std(wf_day_i, axis = 0), 
-                        linewidth = 2.0, color = 'black', alpha = 0.5)
-                ax[0,d_i].plot(t - 15, mean_wfs + np.std(wf_day_i, axis = 0), 
-                        linewidth = 2.0, color = 'black', alpha = 0.5)
-                ax[0,d_i].axhline(max_, color='r', ls='--')
-                ax[0,d_i].axhline(min_, color='r', ls='--')
-                ax[0,d_i].set_xlabel('Time (samples (30 per ms))', fontsize = 12)
-                ax[0,d_i].set_ylabel('Voltage (microvolts)', fontsize = 12)
-                ax[0,d_i].set_title('Unit ' + str(nc[d_i]) + ', total waveforms = ' + str(num_wav) + \
-                                  '\nElectrode: ' + str(data_dict[d_i]['all_unit_info'][nc[d_i]][0]) , fontsize = 12)
-                #Plot average firing rate curve rescaled
-                fr_day_i = fr_curves[d_i]
-                ax[1,d_i].plot(bin_starts,fr_day_i)
-                ax[1,d_i].set_xlabel('Time from Delivery (ms)')
-                ax[1,d_i].set_ylabel('Rescaled Binned Average Firing Rate')
-            for d_i in range(num_days):
-                ax[0,d_i].set_ylim([min_wf_val - 5, max_wf_val + 5])
-            plt.tight_layout()
-            fig.savefig(os.path.join(save_dir,'held_index_' + str(held_index_counter) + '.png'), bbox_inches = 'tight')
-            plt.close(fig)
-            
-            held_index_counter += 1
-        
-    # elif analysis_type == 'Euclidean':
-    #     #Calculate the average inter_euc_dist across days
-    #     all_days_inter_euc_dist = []
-    #     for dc in all_day_combos:
-    #         dc_euc_dist = calculate_euc_dist(waveforms_pca[dc[0]], waveforms_pca[dc[1]])
-    #         all_days_inter_euc_dist.extend([dc_euc_dist])
-    #     all_inter_euc_dist.append(all_days_inter_euc_dist)
-    #     avg_neur_combo_val[nc] = np.nanmean(all_days_inter_euc_dist)
-    #     all_neur_combo_vals[nc,:] = all_days_inter_euc_dist
-        
-    #     #Do all euc distances match the cutoff?
-    #     if np.sum((np.array(all_days_inter_euc_dist) <= all_euc_dist_cutoff).astype('int')) == len(all_day_combos):
-            
-    #         #Compare peak distributions via ttest
-    #         ttest_res = np.ones(len(all_day_combos))
-    #         for dp_i, dp in enumerate(all_day_combos):
-    #             _, p_val = ttest_ind(waveform_peaks[dp[0]],waveform_peaks[dp[1]],nan_policy='omit')
-    #             ttest_res[dp_i] = p_val
-                
-    #         if np.sum((ttest_res >= .05).astype('int')) == len(all_day_combos):
-    #             viable_neur_combo[nc] = 1
-            
-    #             #Save to csv the viable unit indices per day
-    #             statement = '\n'
-    #             for i in range(len(nc)-1):
-    #                 statement += str(nc[i]) + ','
-    #             statement += str(nc[-1])
-    #             with open(os.path.join(save_dir,f'held_units_{wf_type}_{percent_criterion}.csv'), 'a') as f:
-    #                 f.write(statement)
-                
-    #             #Create a plot of the matching waveforms
-    #             fig, ax = plt.subplots(1, num_days, sharex=True, sharey=True, figsize=(12, 6))
-    #             min_wf_val = 10000
-    #             max_wf_val = -10000
-    #             for d_i in range(num_days):
-    #                 wf_day_i = data_dict[d_i]['all_unit_waveforms'][nc[d_i]]
-    #                 num_wav = wf_day_i.shape[0]
-    #                 t = np.arange(wf_day_i.shape[1])
-    #                 mean_wfs = np.mean(wf_day_i, axis = 0)
-    #                 max_, min_ = np.max(mean_wfs), np.min(mean_wfs)
-    #                 if min_ < min_wf_val:
-    #                     min_wf_val = min_
-    #                 if max_ > max_wf_val:
-    #                     max_wf_val = max_
-    #                 ax[d_i].plot(t - 15, mean_wfs, linewidth = 5.0, color = 'black')
-    #                 ax[d_i].plot(t - 15, mean_wfs - np.std(wf_day_i, axis = 0), 
-    #                         linewidth = 2.0, color = 'black', alpha = 0.5)
-    #                 ax[d_i].plot(t - 15, mean_wfs + np.std(wf_day_i, axis = 0), 
-    #                         linewidth = 2.0, color = 'black', alpha = 0.5)
-    #                 ax[d_i].axhline(max_, color='r', ls='--')
-    #                 ax[d_i].axhline(min_, color='r', ls='--')
-    #                 ax[d_i].set_xlabel('Time (samples (30 per ms))', fontsize = 12)
-    #                 ax[d_i].set_ylabel('Voltage (microvolts)', fontsize = 12)
-    #                 ax[d_i].set_title('Unit ' + str(nc[d_i]) + ', total waveforms = ' + str(num_wav) + \
-    #                                   '\nElectrode: ' + str(data_dict[d_i]['all_unit_info'][nc[d_i]][0]) , fontsize = 12)
-    #             for d_i in range(num_days):
-    #                 ax[d_i].set_ylim([min_wf_val - 20, max_wf_val + 20])
-    #             plt.tight_layout()
-    #             fig.savefig(os.path.join(save_dir,'held_index_' + str(held_index_counter) + '.png'), bbox_inches = 'tight')
-    #             plt.close(fig)
-                
-    #             held_index_counter += 1
-
-# if analysis_type == 'J3':
-    # Plot the intra and inter J3 in a different file
-fig = plt.figure()
-plt.hist(np.array(all_inter_J3).flatten(), bins = 20, alpha = 0.3, label = 'Across-session J3')
-plt.hist(np.array(all_intra_J3).flatten(), bins = 20, alpha = 0.3, label = 'Within-session J3')
-# Draw a vertical line at the percentile criterion used to choose held units
-plt.axvline(all_intra_J3_cutoff, linewidth = 5.0, color = 'black', linestyle = 'dashed', label='J3 Cutoff')
-plt.legend(loc='upper left')
-plt.xlabel('J3', fontsize = 12)
-plt.ylabel('Number of single unit pairs', fontsize = 12)
-#plt.tick_params(axis='both', which='major', labelsize=32)
-fig.savefig(os.path.join(save_dir,'J3_distributions_{wf_type}.png'), bbox_inches = 'tight')
-plt.close(fig)  
-# elif analysis_type == 'Euclidean':
-#     # Plot the intra and inter euclidean distances in a different file
-#     fig = plt.figure()
-#     plt.hist(np.array(all_inter_euc_dist).flatten(), bins = 20, alpha = 0.3, label = 'Across-session Average Distances')
-#     plt.hist(np.array(all_intra_euc_dist).flatten(), bins = 20, alpha = 0.3, label = 'Within-session Average Distances')
-#     # Draw a vertical line at the percentile criterion used to choose held units
-#     plt.axvline(all_euc_dist_cutoff, linewidth = 5.0, color = 'black', linestyle = 'dashed', label='J3 Cutoff')
-#     plt.legend(loc='upper left')
-#     plt.xlabel('J3', fontsize = 12)
-#     plt.ylabel('Number of single unit pairs', fontsize = 12)
-#     #plt.tick_params(axis='both', which='major', labelsize=32)
-#     fig.savefig(os.path.join(save_dir,f'Euclidean_distributions_{wf_type}.png'), bbox_inches = 'tight')
-#     plt.close(fig)
-    
-viable_where = np.where(viable_neur_combo)
-viable_indices = np.array(viable_where)
-avg_vals_viable = avg_neur_combo_val[viable_where]
-day_1_neur = np.unique(viable_indices[0,:])
-for n_1_i in day_1_neur:
-    day_1_inds = np.where(viable_indices[0,:] == n_1_i)[0]
-    other_inds = viable_indices[1:,day_1_inds]
-    metric_avgs = avg_vals_viable[day_1_inds]
-    
+if remove_pairs == 'y':
+    #Reload held units
+    held_units = []
+    with open(held_unit_csv, 'r') as heldunitcsv:
+        heldreader = csv.reader(heldunitcsv, delimiter=' ', quotechar='|')
+        for row in heldreader:
+            row_vals = row[0].split(',')
+            try:
+                is_int = int(row_vals[0])
+                held_units.append([int(row_vals[i]) for i in range(len(row_vals))])
+            except:
+                is_header = row_vals
+    #Ask for which indices to remove
+    num_remove = int_input("How many pairs would you like to remove? ")
+    ind_remove = []
+    for nr_i in range(num_remove):
+        ind_remove.append(int_input("What is the index (first is 0) of pair #" + str(nr_i + 1) + "? "))
+    ind_reverse = np.array(ind_remove)[::-1]
+    for i_r in ind_reverse:
+        del held_units[i_r]
+    #Resave held units
+    header = ''
+    for day in range(num_days-1):
+        header += 'Day ' + str(day+1) + ','
+    header += 'Day ' + str(num_days)
+    # Make a file to save the numbers of the units that are deemed to have been held across days
+    with open(held_unit_csv, 'w') as f:
+        f.write(header)
+        for r_i in range(len(held_units)):
+            row_match_string = '\n'
+            for d_i in range(num_days-1):
+                row_match_string += str(held_units[r_i][d_i]) + ','
+            row_match_string += str(held_units[r_i][num_days-1]) 
+            f.write(row_match_string)
+    #Remove prior held unit plots
+    held_unit_plots = os.listdir(held_unit_save_dir)
+    for hup in held_unit_plots:
+        os.remove(os.path.join(held_unit_save_dir,hup))
+    #Replot held units
+    for hu_i in range(len(held_units)):
+        f, ax = plt.subplots(nrows = 2, ncols = num_days, figsize = (8,8), sharey='row')
+        for d_i in range(num_days):
+            unit_waveforms_norm = data_dict[d_i]['all_unit_waveforms_norm'][held_units[hu_i][d_i]]
+            avg_waveform_norm = np.nanmean(unit_waveforms_norm,0)
+            std_waveform_norm = np.nanstd(unit_waveforms_norm,0)
+            avg_psth = data_dict[d_i]['all_unit_fr_curves_norm'][held_units[hu_i][d_i]]
+            #Plot waveform
+            ax[0,d_i].plot(avg_waveform_norm,color='k')
+            ax[0,d_i].plot(avg_waveform_norm + std_waveform_norm,color='gray',alpha=0.5)
+            ax[0,d_i].plot(avg_waveform_norm - std_waveform_norm,color='gray',alpha=0.5)
+            ax[0,d_i].set_title('Day ' + str(d_i) + '\nUnit ' + str(held_units[hu_i][d_i]) + '\nWaveform')
+            #Plot PSTH
+            ax[1,d_i].plot(bin_starts,avg_psth)
+            ax[1,d_i].set_title('Avg PSTH')
+        f.savefig(os.path.join(held_unit_save_dir,'held_pair_' + str(hu_i) + '.png'))
+        f.savefig(os.path.join(held_unit_save_dir,'held_pair_' + str(hu_i) + '.svg'))
+        plt.close(f)
