@@ -205,9 +205,13 @@ class run_multiday_analysis():
         tastant_fr_dist_z_pop = dict()
         max_hz_z_pop = 0
         min_hz_z_pop = np.inf
+        max_num_cp = 0
         for n_i in range(self.num_days):
             #Collect tastant names
             day_names = self.day_vars[n_i]['dig_in_names']
+            day_cp = self.day_vars[n_i]['num_cp']
+            if day_cp > max_num_cp:
+                max_num_cp = day_cp
             new_day_names = [dn + '_' + str(n_i) for dn in day_names]
             all_dig_in_names.extend(new_day_names)
             #Collect firing rate distribution dictionaries
@@ -230,7 +234,6 @@ class run_multiday_analysis():
             start_update_ind = len(tastant_fr_dist_z_pop)
             for tf_i in range(len(tastant_fr_dist_z_pop_day)):
                 tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
-            taste_num_deliv.extend(list(taste_num_deliv_day))
             if max_hz_z_pop_day > max_hz_z_pop:
                 max_hz_z_pop = max_hz_z_pop_day
             if min_hz_z_pop_day < min_hz_z_pop:
@@ -243,8 +246,8 @@ class run_multiday_analysis():
         self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
         self.max_hz_z_pop = max_hz_z_pop
         self.min_hz_z_pop = min_hz_z_pop
+        self.max_num_cp = max_num_cp
             
-    def decode_dev_all_tastes_zscore(self,):
-        #Z-scored decoding
-        decode_save_dir = os.path.join(self.save_dir,'Dev_Decode_Zscore')
+    def multiday_dev_tests(self,):
+        
         

@@ -3,7 +3,7 @@ import sys
 import os
 import csv
 
-current_path = os.path.realpath(__file__)
+current_path = os.path.realpath(__file__) 
 os.chdir(('/').join(current_path.split('/')[:-1]))
 
 import tables
@@ -25,7 +25,7 @@ pre_deliv_time = 500 #ms
 post_deliv_time = 1000 #ms
 binning = 100 #ms
 bin_starts = np.arange(-1*pre_deliv_time-binning,post_deliv_time-binning)
-weight_values = [1,1/4,1/20] #[weight of waveform, weight of PSTH, weight of electrode distance] #larger fraction of 1 means more important
+weight_values = [1,1/3,1/20] #[weight of waveform, weight of PSTH, weight of electrode distance] #larger fraction of 1 means more important
 
 
 num_days, use_electrode = user_held_unit_input()
@@ -298,6 +298,10 @@ else:
     np.save(os.path.join(stat_save_dir,'all_intra_euc_dist.npy'),np.array(all_intra_euc_dist),allow_pickle=True)
     np.save(os.path.join(stat_save_dir,'all_intra_euc_dist_norm.npy'),np.array(all_intra_euc_dist_norm),allow_pickle=True)
 
+indiv_unit_save_dir = os.path.join(save_dir,'unit_plots')
+if not os.path.isdir(indiv_unit_save_dir):
+    os.mkdir(indiv_unit_save_dir)
+
 #%% Intra-unit joint score
 
 # all_intra_unit_J3_score = (all_intra_J3 - np.min(all_intra_J3))/np.max(all_intra_J3 - np.min(all_intra_J3))
@@ -313,11 +317,7 @@ intra_unit_joint_score_percentile = np.percentile(intra_unit_joint_norm_score,95
 
 #%% Plot units
 
-#Create plots of unit information pulled above for manual review
-indiv_unit_save_dir = os.path.join(save_dir,'unit_plots')
-if not os.path.isdir(indiv_unit_save_dir):
-    os.mkdir(indiv_unit_save_dir)
-    
+#Create plots of unit information pulled above for manual review    
 for d_i in range(num_days):
     day_unit_save_dir = os.path.join(indiv_unit_save_dir,'day_' + str(d_i+1))
     if not os.path.isdir(day_unit_save_dir):
@@ -646,6 +646,10 @@ with open(held_unit_csv, 'w') as f:
 held_unit_save_dir = os.path.join(indiv_unit_save_dir,'held_units')
 if not os.path.isdir(held_unit_save_dir):
     os.mkdir(held_unit_save_dir)
+    
+held_unit_plots = os.listdir(held_unit_save_dir)
+for hup in held_unit_plots:
+    os.remove(os.path.join(held_unit_save_dir,hup))
 
 for bm_i, bm in enumerate(best_matches):
     f, ax = plt.subplots(nrows = 2, ncols = num_days, figsize = (8,8), sharey='row')
@@ -728,3 +732,60 @@ if remove_pairs == 'y':
         f.savefig(os.path.join(held_unit_save_dir,'held_pair_' + str(hu_i) + '.png'))
         f.savefig(os.path.join(held_unit_save_dir,'held_pair_' + str(hu_i) + '.svg'))
         plt.close(f)
+
+#%% User Input - Manually Overwrite Pairs?
+
+overwrite_pairs = bool_input("Would you like to overwrite and manually input all held units? ")
+if overwrite_pairs == 'y':
+    #Reload held units
+    held_units = []
+    keep_adding = 1
+    while keep_adding == 1:
+        unit_pair = input("Please enter held unit indices as unit1,unit2,... for the correct number of days: ")
+        unit_indiv = unit_pair.split(',')
+        try:
+            unit_indiv_int = [int(ui) for ui in unit_indiv]
+            held_units.append(unit_indiv_int)
+            add_more = bool_input("Would you like to add more? ")
+            if add_more == 'n':
+                keep_adding = 0
+        except:
+            print("Error, you did not enter an integer index. Try again.")
+
+#Resave held units
+header = ''
+for day in range(num_days-1):
+    header += 'Day ' + str(day+1) + ','
+header += 'Day ' + str(num_days)
+# Make a file to save the numbers of the units that are deemed to have been held across days
+with open(held_unit_csv, 'w') as f:
+    f.write(header)
+    for r_i in range(len(held_units)):
+        row_match_string = '\n'
+        for d_i in range(num_days-1):
+            row_match_string += str(held_units[r_i][d_i]) + ','
+        row_match_string += str(held_units[r_i][num_days-1]) 
+        f.write(row_match_string)
+#Remove prior held unit plots
+held_unit_plots = os.listdir(held_unit_save_dir)
+for hup in held_unit_plots:
+    os.remove(os.path.join(held_unit_save_dir,hup))
+#Replot held units
+for hu_i in range(len(held_units)):
+    f, ax = plt.subplots(nrows = 2, ncols = num_days, figsize = (8,8), sharey='row')
+    for d_i in range(num_days):
+        unit_waveforms_norm = data_dict[d_i]['all_unit_waveforms_norm'][held_units[hu_i][d_i]]
+        avg_waveform_norm = np.nanmean(unit_waveforms_norm,0)
+        std_waveform_norm = np.nanstd(unit_waveforms_norm,0)
+        avg_psth = data_dict[d_i]['all_unit_fr_curves_norm'][held_units[hu_i][d_i]]
+        #Plot waveform
+        ax[0,d_i].plot(avg_waveform_norm,color='k')
+        ax[0,d_i].plot(avg_waveform_norm + std_waveform_norm,color='gray',alpha=0.5)
+        ax[0,d_i].plot(avg_waveform_norm - std_waveform_norm,color='gray',alpha=0.5)
+        ax[0,d_i].set_title('Day ' + str(d_i) + '\nUnit ' + str(held_units[hu_i][d_i]) + '\nWaveform')
+        #Plot PSTH
+        ax[1,d_i].plot(bin_starts,avg_psth)
+        ax[1,d_i].set_title('Avg PSTH')
+    f.savefig(os.path.join(held_unit_save_dir,'held_pair_' + str(hu_i) + '.png'))
+    f.savefig(os.path.join(held_unit_save_dir,'held_pair_' + str(hu_i) + '.svg'))
+    plt.close(f)

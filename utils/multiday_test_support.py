@@ -238,9 +238,13 @@ max_hz_pop = 0
 tastant_fr_dist_z_pop = dict()
 max_hz_z_pop = 0
 min_hz_z_pop = np.inf
+max_num_cp = 0
 for n_i in range(num_days):
     #Collect tastant names
     day_names = day_vars[n_i]['dig_in_names']
+    day_cp = day_vars[n_i]['num_cp']
+    if day_cp > max_num_cp:
+        max_num_cp = day_cp
     new_day_names = [dn + '_' + str(n_i) for dn in day_names]
     all_dig_in_names.extend(new_day_names)
     #Collect firing rate distribution dictionaries
@@ -263,9 +267,38 @@ for n_i in range(num_days):
     start_update_ind = len(tastant_fr_dist_z_pop)
     for tf_i in range(len(tastant_fr_dist_z_pop_day)):
         tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
-    taste_num_deliv.extend(list(taste_num_deliv_day))
     if max_hz_z_pop_day > max_hz_z_pop:
         max_hz_z_pop = max_hz_z_pop_day
     if min_hz_z_pop_day < min_hz_z_pop:
         min_hz_z_pop = min_hz_z_pop_day
 
+#%% multiday_dev_tests
+
+corr_dir = os.path.join(save_dir,'Correlations')
+if not os.path.isdir(corr_dir):
+    os.mkdir(corr_dir)
+decode_dir = os.path.join(save_dir,'Decodes')
+if not os.path.isdir(decode_dir):
+    os.mkdir(decode_dir)
+    
+#Variables
+num_seg = len(segment_dev_fr_vecs)
+num_neur = len(segment_dev_fr_vecs[0][0])
+num_tastes = len(all_dig_in_names)
+
+s_i = 0
+seg_name = segment_names_to_analyze[s_i]
+dev_rast = segment_dev_rasters[s_i]
+dev_times = segment_dev_times[s_i]
+dev_fr_vecs = segment_dev_fr_vecs[s_i]
+dev_fr_vecs_z = segment_dev_fr_vecs_zscore[s_i]
+
+fr_z_dir = os.path.join(corr_dir,'zscore_fr_corrs')
+if not os.path.isdir(fr_z_dir):
+    os.mkdir(fr_z_dir)
+    
+corr_z_dict = dict()
+for t_i, t_name in enumerate(all_dig_in_names):
+    corr_z_dict[t_i] = dict()
+    corr_z_dict[t_i]['name'] = t_name
+    
