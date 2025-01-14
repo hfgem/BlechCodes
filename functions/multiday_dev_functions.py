@@ -13,6 +13,8 @@ import os
 import csv
 import time
 import itertools
+import numpy as np
+import matplotlib.pyplot as plt
 from scipy.stats import pearsonr, ks_2samp
 
 
@@ -48,9 +50,9 @@ def multiday_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
         dev_fr_vecs_z = segment_dev_fr_vecs_zscore[s_i]
         
         #Run correlation analyses
-        # correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
-        #                            taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
-        #                            dev_times,dev_fr_vecs,seg_name,corr_dir)
+        correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
+                                   taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
+                                   dev_times,dev_fr_vecs,seg_name,corr_dir)
         correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
                                           taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
                                           max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
@@ -100,6 +102,8 @@ def correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
     
     np.save(os.path.join(fr_dir,seg_name+'_corr_dict.npy'),corr_dict,allow_pickle=True)
             
+    #Now plot
+    plot_corr_dist(fr_dir,corr_dict,all_dig_in_names,max_num_cp,seg_name)
         
 def correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
                                   taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
@@ -144,8 +148,9 @@ def correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_po
     np.save(os.path.join(fr_z_dir,seg_name+'_corr_z_dict.npy'),corr_z_dict,allow_pickle=True)
             
     #Now plot
+    plot_corr_dist(fr_z_dir,corr_z_dict,all_dig_in_names,max_num_cp,seg_name)
     
-def plot_corr_dist(corr_save_dir,corr_dict,all_dig_in_names,max_num_cp):
+def plot_corr_dist(corr_save_dir,corr_dict,all_dig_in_names,max_num_cp,seg_name):
     
     num_tastes = len(all_dig_in_names)
     epoch_pairs = list(itertools.combinations(np.arange(max_num_cp),2))
@@ -198,9 +203,13 @@ def plot_corr_dist(corr_save_dir,corr_dict,all_dig_in_names,max_num_cp):
                     e_pair_text += ' > Epoch ' + str(e_2)
                 sig_text += '\n' + e_pair_text
         ax_taste[r_i,c_i].text(-0.75,0.2,sig_text)
+    f_taste.savefig(os.path.join(corr_save_dir,seg_name+'_taste_corr.png'))
+    f_taste.savefig(os.path.join(corr_save_dir,seg_name+'_taste_corr.svg'))
+    plt.close(f_taste)
     
     #Plot tastes against each other for each epoch
     f_epoch, ax_epoch = plt.subplots(nrows = 2, ncols = max_num_cp, 
+                                     gridspec_kw={'height_ratios': [2, 3]},
                                      sharex = True, sharey = True, figsize=(8,8))
     ax_epoch[0,0].set_xlim([-1,1])
     ax_epoch[0,0].set_ylim([0,1])
@@ -218,10 +227,31 @@ def plot_corr_dist(corr_save_dir,corr_dict,all_dig_in_names,max_num_cp):
             ax_epoch[0,e_i].legend(loc='upper left')
             ax_epoch[0,e_i].set_ylabel('Cumulative Density')
         #Calculate Taste Mean Orders
-        
-        #Calculate Taste 90th Percentile Orders
-        
-            
+        taste_corr_means = [np.nanmean(taste_corrs[tc_i]) for tc_i in range(num_tastes)]
+        taste_mean_order = np.argsort(taste_corr_means)
+        taste_mean_name_order = 'Mean Order: '
+        len_mod = 0
+        for tmo_i, tmo in enumerate(taste_mean_order):
+            if np.floor(len(taste_mean_name_order)/20).astype('int') > len_mod:
+                len_mod = np.floor(len(taste_mean_name_order)/20).astype('int')
+                taste_mean_name_order += '\n'
+            if tmo_i < len(taste_mean_order)-1:
+                taste_mean_name_order += all_dig_in_names[tmo] + ' < '
+            else:
+                taste_mean_name_order += all_dig_in_names[tmo]
+        ax_epoch[1,e_i].set_title(taste_mean_name_order)    
+        #Calculate Taste Percentile Orders
+        taste_corr_90_percentiles = [np.percentile(taste_corrs[tc_i],90) for tc_i in range(num_tastes)]
+        taste_90_order = np.argsort(taste_corr_90_percentiles)
+        taste_90_name_order = '90th Percentile Order \n (min to max):'
+        for tmo in taste_90_order:
+            taste_90_name_order += '\n' + all_dig_in_names[tmo]
+        ax_epoch[1,e_i].text(-0.75,0.1,taste_90_name_order)
+    plt.suptitle(seg_name + ' Dev Correlations')
+    plt.tight_layout()
+    f_epoch.savefig(os.path.join(corr_save_dir,seg_name+'_epoch_corr.png'))
+    f_epoch.savefig(os.path.join(corr_save_dir,seg_name+'_epoch_corr.svg'))
+    plt.close(f_epoch)
         #Calculate pairwise epoch significances
         # ks_sig = np.zeros(len(taste_pairs))
         # ks_dir = np.zeros(len(taste_pairs))

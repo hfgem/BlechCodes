@@ -274,6 +274,9 @@ for n_i in range(num_days):
 
 #%% multiday_dev_tests
 
+import functions.multiday_dev_functions as mdf
+import numpy as np
+
 corr_dir = os.path.join(save_dir,'Correlations')
 if not os.path.isdir(corr_dir):
     os.mkdir(corr_dir)
@@ -286,19 +289,19 @@ num_seg = len(segment_dev_fr_vecs)
 num_neur = len(segment_dev_fr_vecs[0][0])
 num_tastes = len(all_dig_in_names)
 
-s_i = 0
-seg_name = segment_names_to_analyze[s_i]
-dev_rast = segment_dev_rasters[s_i]
-dev_times = segment_dev_times[s_i]
-dev_fr_vecs = segment_dev_fr_vecs[s_i]
-dev_fr_vecs_z = segment_dev_fr_vecs_zscore[s_i]
-
-fr_z_dir = os.path.join(corr_dir,'zscore_fr_corrs')
-if not os.path.isdir(fr_z_dir):
-    os.mkdir(fr_z_dir)
+#Now go through segments and their deviation events and compare
+for s_i in range(num_seg):
+    seg_name = segment_names_to_analyze[s_i]
+    dev_rast = segment_dev_rasters[s_i]
+    dev_times = segment_dev_times[s_i]
+    dev_fr_vecs = segment_dev_fr_vecs[s_i]
+    dev_fr_vecs_z = segment_dev_fr_vecs_zscore[s_i]
     
-corr_z_dict = dict()
-for t_i, t_name in enumerate(all_dig_in_names):
-    corr_z_dict[t_i] = dict()
-    corr_z_dict[t_i]['name'] = t_name
-    
+    #Run correlation analyses
+    mdf.correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
+                               taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
+                               dev_times,dev_fr_vecs,seg_name,corr_dir)
+    mdf.correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
+                                      taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
+                                      max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
+                                      seg_name,corr_dir)
