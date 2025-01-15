@@ -245,7 +245,10 @@ for n_i in range(num_days):
     day_cp = day_vars[n_i]['num_cp']
     if day_cp > max_num_cp:
         max_num_cp = day_cp
-    new_day_names = [dn + '_' + str(n_i) for dn in day_names]
+    if n_i == 0:
+        new_day_names = [dn + '_' + str(n_i) for dn in day_names]
+    else: #Leave out "no taste" from other day(s)
+        new_day_names = [dn + '_' + str(n_i) for dn in day_names[:-1]]
     all_dig_in_names.extend(new_day_names)
     #Collect firing rate distribution dictionaries
     tastant_fr_dist_pop_day, taste_num_deliv_day, max_hz_pop_day = ddf.taste_fr_dist(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
@@ -253,11 +256,17 @@ for n_i in range(num_days):
                                                                     	 day_vars[n_i]['start_dig_in_times'], day_vars[n_i]['pre_taste_dt'],
                                                                     	 day_vars[n_i]['post_taste_dt'], day_vars[n_i]['trial_start_frac'])
     start_update_ind = len(tastant_fr_dist_pop)
-    for tf_i in range(len(tastant_fr_dist_pop_day)):
-        tastant_fr_dist_pop[tf_i+start_update_ind] = tastant_fr_dist_pop_day[tf_i]
-    taste_num_deliv.extend(list(taste_num_deliv_day))
+    if n_i == 0:
+        for tf_i in range(len(tastant_fr_dist_pop_day)):
+            tastant_fr_dist_pop[tf_i+start_update_ind] = tastant_fr_dist_pop_day[tf_i]
+        taste_num_deliv.extend(list(taste_num_deliv_day))
+    else: #Leave out "no taste" from other day(s)
+        for tf_i in range(len(tastant_fr_dist_pop_day)-1):
+            tastant_fr_dist_pop[tf_i+start_update_ind] = tastant_fr_dist_pop_day[tf_i]
+        taste_num_deliv.extend(list(taste_num_deliv_day[:-1]))
     if max_hz_pop_day > max_hz_pop:
         max_hz_pop = max_hz_pop_day
+        
     tastant_fr_dist_z_pop_day, _, max_hz_z_pop_day, min_hz_z_pop_day = ddf.taste_fr_dist_zscore(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
                                                                                         day_vars[n_i]['segment_spike_times'], day_vars[n_i]['segment_names'],
                                                                                         day_vars[n_i]['segment_times'], day_vars[n_i]['pop_taste_cp_raster_inds'],
@@ -265,8 +274,12 @@ for n_i in range(num_days):
                                                                                         day_vars[n_i]['pre_taste_dt'], day_vars[n_i]['post_taste_dt'], 
                                                                                         day_vars[n_i]['bin_dt'], day_vars[n_i]['trial_start_frac'])
     start_update_ind = len(tastant_fr_dist_z_pop)
-    for tf_i in range(len(tastant_fr_dist_z_pop_day)):
-        tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
+    if n_i == 0:
+        for tf_i in range(len(tastant_fr_dist_z_pop_day)):
+            tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
+    else: #Leave out "no taste" from other day(s)
+        for tf_i in range(len(tastant_fr_dist_z_pop_day)-1):
+            tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
     if max_hz_z_pop_day > max_hz_z_pop:
         max_hz_z_pop = max_hz_z_pop_day
     if min_hz_z_pop_day < min_hz_z_pop:
@@ -298,10 +311,17 @@ for s_i in range(num_seg):
     dev_fr_vecs_z = segment_dev_fr_vecs_zscore[s_i]
     
     #Run correlation analyses
-    mdf.correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
-                               taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
-                               dev_times,dev_fr_vecs,seg_name,corr_dir)
-    mdf.correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
-                                      taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
-                                      max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
-                                      seg_name,corr_dir)
+    # mdf.correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
+    #                            taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
+    #                            dev_times,dev_fr_vecs,seg_name,corr_dir)
+    # mdf.correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
+    #                                   taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
+    #                                   max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
+    #                                   seg_name,corr_dir)
+    mdf.decode_dev_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_pop,
+                               taste_num_deliv,max_num_cp,dev_rast,
+                               dev_times,dev_fr_vecs,seg_name,s_i,decode_dir)
+    mdf.decode_dev_zscore_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
+                               taste_num_deliv,max_num_cp,dev_rast,dev_times,
+                               dev_fr_vecs_z,seg_name,s_i,decode_dir)
+    
