@@ -504,63 +504,17 @@ def decode_dev_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_pop,
         print('\t\t\t\t\tTime to decode ' + seg_name + \
               ' deviation splits = ' + str(np.round((toc-tic)/60, 2)) + ' (min)')
         
+    dev_is_taste_inds, dev_which_taste_argmax = np.where(dev_decode_which_taste_array == 1)
+        
     #Plot outcomes
     print('\t\t\t\t\tPlotting outcomes now.')
     plot_save_dir = os.path.join(fr_dir,seg_name)
     if not os.path.isdir(plot_save_dir):
         os.mkdir(plot_save_dir)
         
-    #Pie chart of taste vs none decode fractions
-    f_istaste_pie = plt.figure(figsize=(5,5))
-    num_taste = len(dev_is_taste_inds)
-    num_not_taste = num_dev - num_taste
-    pie_fracs = [num_taste/num_dev, num_not_taste/num_dev]
-    plt.pie(pie_fracs, labels=['Is Taste', 'Not Taste'], autopct = '%1.1f%%',
-            pctdistance=2,labeldistance = 1)
-    plt.title('Dev Events Decoded as Taste')
-    plt.tight_layout()
-    f_istaste_pie.savefig(os.path.join(plot_save_dir,'is_taste_pie.png'))
-    f_istaste_pie.savefig(os.path.join(plot_save_dir,'is_taste_pie.svg'))
-    plt.close(f_istaste_pie)
-    
-    #Pie chart of which taste fractions from all dev events
-    f_whichtaste_pie, ax_whichtaste_pie = plt.subplots(ncols = 2, figsize=(8,8))
-    taste_counts = [len(np.where(dev_which_taste_argmax[dev_is_taste_inds] == t_i)[0]) for t_i in range(len(true_taste_names))]
-    taste_fracs_all_dev = list(np.array(taste_counts)/num_dev)
-    taste_fracs_all_dev.extend([num_not_taste/num_dev])
-    taste_fracs_all_dev = np.array(taste_fracs_all_dev)
-    remove_ind = np.where(taste_fracs_all_dev == 0)[0]
-    keep_ind = np.setdiff1d(np.arange(len(taste_fracs_all_dev)),remove_ind)
-    taste_names_with_none = []
-    taste_names_with_none.extend(true_taste_names)
-    taste_names_with_none.extend(['none'])
-    taste_names_with_none = list(np.array(taste_names_with_none)[keep_ind])
-    
-    #Pie chart of which taste fractions from only taste decoded dev events
-    f_whichtaste_pie = plt.figure(figsize = (5,5))
-    plt.pie(taste_fracs_all_dev[keep_ind],labels=taste_names_with_none,
-                             explode= np.arange(len(taste_names_with_none))/len(taste_names_with_none), 
-                             autopct = '%1.1f%%',pctdistance=2,labeldistance = 1)
-    plt.title('Fraction of All Events')
-    f_whichtaste_pie.savefig(os.path.join(plot_save_dir,'which_taste_pie_all_events.png'))
-    f_whichtaste_pie.savefig(os.path.join(plot_save_dir,'which_taste_pie_all_events.svg'))
-    plt.close(f_whichtaste_pie)
-    
-    taste_fracs_just_taste = np.array(taste_counts)/num_taste
-    remove_ind = np.where(taste_fracs_just_taste == 0)[0]
-    keep_ind = np.setdiff1d(np.arange(len(taste_fracs_just_taste)),remove_ind)
-    keep_labels = list(np.array(true_taste_names)[keep_ind])
-    f_whichtaste_pie_taste = plt.figure(figsize = (5,5))
-    plt.pie(taste_fracs_just_taste[keep_ind],labels=keep_labels,
-                             explode= np.arange(len(keep_ind))/len(keep_ind), 
-                             autopct = '%1.1f%%',pctdistance=2,labeldistance = 1)
-    plt.title('Fraction of Taste Decoded Events')
-    f_whichtaste_pie_taste.savefig(os.path.join(plot_save_dir,'which_taste_pie_taste_events.png'))
-    f_whichtaste_pie_taste.savefig(os.path.join(plot_save_dir,'which_taste_pie_taste_events.svg'))
-    plt.close(f_whichtaste_pie_taste)
-    
-    #Pie chart of which epoch for each taste decoded from taste decoded dev events
-    
+    decode_pie_plots(dev_is_taste_inds,num_dev,num_cp,dev_which_taste_argmax,
+                         dev_decode_epoch_array,true_taste_names,
+                         plot_save_dir)
     
     
 def decode_dev_zscore_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
@@ -576,12 +530,6 @@ def decode_dev_zscore_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
     dev_vec_mat = np.array(dev_fr_vecs_z)
     num_dev, num_neur = np.shape(dev_vec_mat)
     num_cp = len(tastant_fr_dist_z_pop[0][0])
-    cmap = colormaps['cividis']
-    epoch_colors = cmap(np.linspace(0, 1, num_cp))
-    cmap = colormaps['gist_rainbow']
-    taste_colors = cmap(np.linspace(0, 1, num_tastes))
-    cmap = colormaps['seismic']
-    is_taste_colors = cmap(np.linspace(0, 1, 3))
     epochs_to_analyze = np.arange(num_cp)
     none_ind = -1
     for adi_i, adi_name in enumerate(all_dig_in_names):
@@ -760,8 +708,96 @@ def decode_dev_zscore_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
         toc = time.time()
         print('\t\t\t\t\tTime to decode ' + seg_name + \
               ' deviation splits = ' + str(np.round((toc-tic)/60, 2)) + ' (min)')
+    
+    dev_is_taste_inds, dev_which_taste_argmax = np.where(dev_decode_which_taste_array == 1)
         
     #Plot outcomes
     print('\t\t\t\t\tPlotting outcomes now.')
+    plot_save_dir = os.path.join(fr_z_dir,seg_name)
+    if not os.path.isdir(plot_save_dir):
+        os.mkdir(plot_save_dir)
+        
+    decode_pie_plots(dev_is_taste_inds,num_dev,num_cp,dev_which_taste_argmax,
+                         dev_decode_epoch_array,true_taste_names,plot_save_dir)
     
+def decode_pie_plots(dev_is_taste_inds,num_dev,num_cp,dev_which_taste_argmax,
+                     dev_decode_epoch_array,true_taste_names,plot_save_dir):
+    """Plot decoding results in pie charts!"""
+    epoch_labels = ['Epoch ' + str(e_i) for e_i in np.arange(num_cp)]
+    num_tastes = len(true_taste_names)
     
+    #Pie chart of taste vs none decode fractions
+    f_istaste_pie = plt.figure(figsize=(5,5))
+    num_taste = len(dev_is_taste_inds)
+    num_not_taste = num_dev - num_taste
+    pie_fracs = [num_taste/num_dev, num_not_taste/num_dev]
+    pie_labels = ['Is Taste\n' + str(np.round(100*pie_fracs[0],2)) + '%','Not Taste\n' + str(np.round(100*pie_fracs[1],2)) + '%']
+    plt.pie(pie_fracs, labels=pie_labels, labeldistance = 1)
+    plt.title('Dev Events Decoded as Taste')
+    plt.tight_layout()
+    f_istaste_pie.savefig(os.path.join(plot_save_dir,'is_taste_pie.png'))
+    f_istaste_pie.savefig(os.path.join(plot_save_dir,'is_taste_pie.svg'))
+    plt.close(f_istaste_pie)
+    
+    #Pie chart of which taste fractions from all dev events
+    taste_counts = [len(np.where(dev_which_taste_argmax == t_i)[0]) for t_i in range(len(true_taste_names))]
+    taste_fracs_all_dev = list(np.array(taste_counts)/num_dev)
+    taste_fracs_all_dev.extend([num_not_taste/num_dev])
+    taste_fracs_all_dev = np.array(taste_fracs_all_dev)
+    remove_ind = np.where(taste_fracs_all_dev == 0)[0]
+    keep_ind = np.setdiff1d(np.arange(len(taste_fracs_all_dev)),remove_ind)
+    taste_names_with_none = []
+    taste_names_with_none.extend(true_taste_names)
+    taste_names_with_none.extend(['none'])
+    taste_names_with_none = list(np.array(taste_names_with_none)[keep_ind])
+    keep_taste_fracs = taste_fracs_all_dev[keep_ind]
+    keep_percent_labels = [taste_names_with_none[k_i] + '\n' + str(np.round(100*keep_taste_fracs[k_i],2)) + '%' for k_i in range(len(keep_ind))]
+    
+    #Pie chart of which taste fractions from only taste decoded dev events
+    f_whichtaste_pie = plt.figure(figsize = (8,8))
+    plt.pie(keep_taste_fracs,labels=keep_percent_labels,
+                             explode= np.arange(len(taste_names_with_none))/len(taste_names_with_none), 
+                             labeldistance = 1)
+    plt.title('Fraction of All Events')
+    plt.tight_layout()
+    f_whichtaste_pie.savefig(os.path.join(plot_save_dir,'which_taste_pie_all_events.png'))
+    f_whichtaste_pie.savefig(os.path.join(plot_save_dir,'which_taste_pie_all_events.svg'))
+    plt.close(f_whichtaste_pie)
+    
+    taste_fracs_just_taste = np.array(taste_counts)/num_taste
+    remove_ind = np.where(taste_fracs_just_taste == 0)[0]
+    keep_ind = np.setdiff1d(np.arange(len(taste_fracs_just_taste)),remove_ind)
+    keep_labels = list(np.array(true_taste_names)[keep_ind])
+    keep_fracs = taste_fracs_just_taste[keep_ind]
+    keep_percent_labels = [keep_labels[k_i] + '\n' + str(np.round(100*keep_fracs[k_i],2)) + '%' for k_i in range(len(keep_ind))]
+    f_whichtaste_pie_taste = plt.figure(figsize = (8,8))
+    plt.pie(keep_fracs,labels=keep_percent_labels,
+                             explode= np.arange(len(keep_ind))/len(keep_ind), 
+                             labeldistance = 1)
+    plt.title('Fraction of Taste Decoded Events')
+    plt.tight_layout()
+    f_whichtaste_pie_taste.savefig(os.path.join(plot_save_dir,'which_taste_pie_taste_events.png'))
+    f_whichtaste_pie_taste.savefig(os.path.join(plot_save_dir,'which_taste_pie_taste_events.svg'))
+    plt.close(f_whichtaste_pie_taste)
+    
+    #Pie chart of which epoch for each taste decoded from taste decoded dev events
+    f_taste_epoch_pie, ax_taste_epoch_pie = plt.subplots(nrows = num_tastes, ncols = 1,
+                                                        figsize = (num_tastes*2,5))
+    for t_i, t_name in enumerate(true_taste_names):
+        dev_this_taste_inds = np.where(dev_which_taste_argmax == t_i)[0]
+        epoch_counts = []
+        for e_i in range(num_cp):
+            epoch_inds = np.where(dev_decode_epoch_array[dev_is_taste_inds[dev_this_taste_inds],:] == 1)[1]
+            epoch_counts.append(len(np.where(epoch_inds == e_i)[0]))
+        if np.sum(epoch_counts) > 0:
+            epoch_frac = np.array(epoch_counts)/np.sum(epoch_counts)
+            epoch_percent_labels = [epoch_labels[e_i] + '\n' + str(np.round(100*epoch_frac[e_i],2)) + '%' for e_i in range(num_cp)]
+            ax_taste_epoch_pie[t_i].pie(np.array(epoch_counts)/len(dev_is_taste_inds),
+                                                  labels=epoch_percent_labels, 
+                                                  explode= np.arange(num_cp)/num_cp, 
+                                                  labeldistance = 1)
+            ax_taste_epoch_pie[t_i].set_title(t_name)
+    plt.tight_layout()
+    f_taste_epoch_pie.savefig(os.path.join(plot_save_dir,'which_epoch_pie.png'))
+    f_taste_epoch_pie.savefig(os.path.join(plot_save_dir,'which_epoch_pie.svg'))
+    plt.close(f_taste_epoch_pie)

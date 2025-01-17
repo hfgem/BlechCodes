@@ -311,13 +311,13 @@ for s_i in range(num_seg):
     dev_fr_vecs_z = segment_dev_fr_vecs_zscore[s_i]
     
     #Run correlation analyses
-    # mdf.correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
-    #                            taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
-    #                            dev_times,dev_fr_vecs,seg_name,corr_dir)
-    # mdf.correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
-    #                                   taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
-    #                                   max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
-    #                                   seg_name,corr_dir)
+    mdf.correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
+                                taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
+                                dev_times,dev_fr_vecs,seg_name,corr_dir)
+    mdf.correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
+                                      taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
+                                      max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
+                                      seg_name,corr_dir)
     mdf.decode_dev_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_pop,
                                taste_num_deliv,max_num_cp,dev_rast,
                                dev_times,dev_fr_vecs,seg_name,s_i,decode_dir)
