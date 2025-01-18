@@ -25,6 +25,7 @@ import functions.analysis_funcs as af
 import functions.dev_funcs as dev_f
 import functions.hdf5_handling as hf5
 import functions.dependent_decoding_funcs as ddf
+import functions.multiday_dev_functions as mdf
 from tkinter.filedialog import askdirectory
 
 
@@ -38,7 +39,7 @@ class run_multiday_analysis():
         self.gather_variables()
         self.import_deviations()
         self.pull_taste_fr_dist()
-        
+        self.multiday_dev_tests()
         
     def create_save_dir(self,):
         # Using the directories of the different days find a common root folder and create save dir there
@@ -172,6 +173,7 @@ class run_multiday_analysis():
         segment_times_to_analyze_reshaped = [
             [self.day_vars[0]['segment_times'][i], self.day_vars[0]['segment_times'][i+1]] for i in self.day_vars[0]['segments_to_analyze']]
         segment_spike_times_to_analyze = [self.day_vars[0]['segment_spike_times'][i] for i in self.day_vars[0]['segments_to_analyze']]
+        self.segment_names_to_analyze = segment_names_to_analyze
         
         segment_deviations = []
         for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
@@ -249,5 +251,10 @@ class run_multiday_analysis():
         self.max_num_cp = max_num_cp
             
     def multiday_dev_tests(self,):
-        
+        mdf.multiday_dev_analysis(self.save_dir,self.all_dig_in_names,self.tastant_fr_dist_pop,
+                                  self.taste_num_deliv,self.max_hz_pop,self.tastant_fr_dist_z_pop,
+                                  self.max_hz_z_pop,self.min_hz_z_pop,self.max_num_cp,
+                                  self.segment_dev_rasters,self.segment_dev_times,
+                                  self.segment_dev_fr_vecs,self.segment_dev_fr_vecs_zscore,
+                                  self.segment_names_to_analyze)
         
