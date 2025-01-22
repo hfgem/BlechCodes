@@ -62,8 +62,6 @@ for n_i in range(num_days):
     del data_handler
     data_dict[n_i] = day_data
 
-#%% multiday_analysis imports
-
 import os
 import tqdm
 import gzip
@@ -76,7 +74,6 @@ import functions.hdf5_handling as hf5
 import functions.dependent_decoding_funcs as ddf
 from tkinter.filedialog import askdirectory
 
-#%% create_save_dir()
 # Using the directories of the different days find a common root folder and create save dir there
 joint_name = metadata[0]['info_dict']['name']
 day_dirs = []
@@ -104,7 +101,6 @@ save_dir = os.path.join(root_path,joint_name)
 if not os.path.isdir(save_dir):
     os.mkdir(save_dir)
     
-#%%
 
 def get_spike_time_datasets(args):
     segment_times, spike_times, num_neur, keep_neur, start_dig_in_times, \
@@ -137,8 +133,6 @@ def get_spike_time_datasets(args):
         keep_tastant_spike_times.append(taste_deliv_list)
         
     return keep_segment_spike_times, keep_tastant_spike_times
-    
-#%% gather_variables
 
 #For each day store the relevant variables/parameters
 day_vars = dict()
@@ -200,8 +194,6 @@ for n_i in range(num_days):
     day_vars[n_i]['pop_taste_cp_raster_inds'] = hf5.pull_data_from_hdf5(
         day_vars[n_i]['hdf5_dir'], 'changepoint_data', 'pop_taste_cp_raster_inds')
     day_vars[n_i]['num_pt_cp'] = day_vars[n_i]['num_cp'] + 2
-    
-#%%import_deviations()
 
 print("\tNow importing calculated deviations for first day")
 
@@ -227,8 +219,6 @@ segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
                                                         segment_spike_times_to_analyze,
                                                         np.array(segment_times_to_analyze_reshaped),
                                                         segment_deviations, day_vars[0]['pre_taste'])
-
-#%% pull_taste_fr_dist()
 
 #Here we need to combine tastes across days and pull the distributions for all of them
 all_dig_in_names = []
@@ -285,8 +275,6 @@ for n_i in range(num_days):
     if min_hz_z_pop_day < min_hz_z_pop:
         min_hz_z_pop = min_hz_z_pop_day
 
-#%% multiday_dev_tests
-
 import functions.multiday_dev_functions as mdf
 import numpy as np
 
@@ -318,10 +306,11 @@ for s_i in range(num_seg):
                                       taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
                                       max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
                                       seg_name,corr_dir)
-    mdf.decode_dev_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_pop,
-                               taste_num_deliv,max_num_cp,dev_rast,
-                               dev_times,dev_fr_vecs,seg_name,s_i,decode_dir)
-    mdf.decode_dev_zscore_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
-                               taste_num_deliv,max_num_cp,dev_rast,dev_times,
-                               dev_fr_vecs_z,seg_name,s_i,decode_dir)
+    # mdf.decode_dev_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_pop,
+    #                            taste_num_deliv,max_num_cp,dev_rast,
+    #                            dev_times,dev_fr_vecs,seg_name,s_i,decode_dir)
+    # mdf.decode_dev_zscore_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
+    #                            taste_num_deliv,max_num_cp,dev_rast,dev_times,
+    #                            dev_fr_vecs_z,seg_name,s_i,decode_dir)
     
+print("\nDONE!")
