@@ -110,7 +110,9 @@ def correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
             for d_i in range(int(taste_num_deliv[t_i])):
                 p_num = np.sum(dev_num*(taste_num[d_i,:]*np.ones(np.shape(dev_num))),1)
                 p_denom = np.sqrt(dev_denom*taste_denom[d_i])
-                all_corr_vals.extend(list(p_num/p_denom))
+                corr_vec = p_num/p_denom
+                all_corr_vals.extend(list(corr_vec))
+                corr_vals_by_deliv[:,d_i] = corr_vec
             avg_taste_epoch_corr = np.nanmean(corr_vals_by_deliv,1)
             avg_corr_array[:,t_i,e_i] = avg_taste_epoch_corr
             
@@ -119,11 +121,14 @@ def correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
     np.save(os.path.join(fr_dir,seg_name+'_corr_dict.npy'),corr_dict,allow_pickle=True)
     
     #Calculate best taste,epoch for each deviation
-    best_dev_inds = np.zeros((num_dev,2))
+    best_dev_inds = np.nan*np.ones((num_dev,3))
     for dev_i in range(num_dev):
-        ind_1, ind_2 = np.where(np.squeeze(avg_corr_array[dev_i,:,:]) == np.nanmax(np.squeeze(avg_corr_array[dev_i,:,:])))
-        best_dev_inds[dev_i,0] = ind_1[0]
-        best_dev_inds[dev_i,1] = ind_1[0]
+        max_corr = np.nanmax(np.squeeze(avg_corr_array[dev_i,:,:]))
+        ind_1, ind_2 = np.where(np.squeeze(avg_corr_array[dev_i,:,:]) == max_corr)
+        if (len(ind_1) > 0) and (len(ind_2) > 0): #nan catch
+            best_dev_inds[dev_i,0] = ind_1[0]
+            best_dev_inds[dev_i,1] = ind_2[0]
+            best_dev_inds[dev_i,2] = max_corr
     np.save(os.path.join(fr_dir,seg_name+'_best_corr.npy'),best_dev_inds,allow_pickle=True)
     if not os.path.isfile(os.path.join(fr_dir,'all_taste_names.npy')):
         np.save(os.path.join(fr_dir,'all_taste_names.npy'),all_dig_in_names,allow_pickle=True)
@@ -170,8 +175,9 @@ def correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_po
             for d_i in range(int(taste_num_deliv[t_i])):
                 p_num = np.sum(dev_num*(taste_num[d_i,:]*np.ones(np.shape(dev_num))),1)
                 p_denom = np.sqrt(dev_denom*taste_denom[d_i])
-                corr_vals_by_deliv[:,d_i] = p_num/p_denom
-                all_corr_vals.extend(list(p_num/p_denom))
+                corr_vec = p_num/p_denom
+                corr_vals_by_deliv[:,d_i] = corr_vec
+                all_corr_vals.extend(list(corr_vec))
             avg_taste_epoch_corr = np.nanmean(corr_vals_by_deliv,1)
             avg_corr_z_array[:,t_i,e_i] = avg_taste_epoch_corr
               
@@ -180,11 +186,13 @@ def correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_po
     np.save(os.path.join(fr_z_dir,seg_name+'_corr_z_dict.npy'),corr_z_dict,allow_pickle=True)
     
     #Calculate best taste,epoch for each deviation
-    best_dev_inds = np.zeros((num_dev,2))
+    best_dev_inds = np.zeros((num_dev,3))
     for dev_i in range(num_dev):
+        max_corr = np.nanmax(np.squeeze(avg_corr_z_array[dev_i,:,:]))
         ind_1, ind_2 = np.where(np.squeeze(avg_corr_z_array[dev_i,:,:]) == np.nanmax(np.squeeze(avg_corr_z_array[dev_i,:,:])))
         best_dev_inds[dev_i,0] = ind_1[0]
-        best_dev_inds[dev_i,1] = ind_1[0]
+        best_dev_inds[dev_i,1] = ind_2[0]
+        best_dev_inds[dev_i,2] = max_corr
     np.save(os.path.join(fr_z_dir,seg_name+'_best_corr.npy'),best_dev_inds,allow_pickle=True)
     if not os.path.isfile(os.path.join(fr_z_dir,'all_taste_names.npy')):
         np.save(os.path.join(fr_z_dir,'all_taste_names.npy'),all_dig_in_names,allow_pickle=True)
