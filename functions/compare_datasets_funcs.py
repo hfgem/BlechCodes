@@ -3272,3 +3272,12 @@ def cross_dataset_cp_plots(cp_data, unique_given_names, unique_taste_names,
     f_all_cp.savefig(os.path.join(results_dir,'all_cp_combined.svg'))
     plt.close(f_all_cp)
         
+def cross_dataset_dev_split_corr_plots(dev_split_corr_data, unique_given_names, 
+                                 unique_epoch_pairs, unique_segment_names, 
+                                 unique_taste_names, results_dir):
+    """
+    This function plots the results of split deviation event correlation data
+    across multiple animals.
+    """
+    
+    
