@@ -175,4 +175,4 @@ dsf.split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
                    dig_in_names,segment_names,num_null, seq_dir, 
                    segments_to_analyze, epochs_to_analyze)
 toc = time.time()
-print('Total Pair Correlation Analysis Time = ' + str(np.round((toc-tic)/60, 2)) + ' (min).')
+print('Total Pair Hotellings Analysis Time = ' + str(np.round((toc-tic)/60, 2)) + ' (min).')

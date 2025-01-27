@@ -748,7 +748,8 @@ for name in unique_given_names:
     unique_segment_names.extend(segment_names)
     for seg_name in segment_names:
         epoch_pairs = dev_split_corr_data[name]['corr_data'][seg_name]['epoch_pairs']
-        unique_epoch_pairs.extend(epoch_pairs)
+        epoch_pair_strings = [str(ep) for ep in epoch_pairs]
+        unique_epoch_pairs.extend(epoch_pair_strings)
         taste_names = list(dev_split_corr_data[name]['corr_data'][seg_name].keys())
         epoch_pairs_ind = np.where(np.array(taste_names) == 'epoch_pairs')
         if len(np.shape(np.where(np.array(taste_names) == 'epoch_pairs'))) == 2:
@@ -768,4 +769,16 @@ unique_taste_indices = np.sort(
 unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
 
 #%% plot_dev_split_results()
+num_cond = len(dev_split_corr_data)
+results_dir = dev_split_corr_results_dir
 
+print("Beginning Plots.")
+if num_cond > 1:
+    cdf.cross_dataset_dev_split_corr_plots(dev_split_corr_data, unique_given_names, 
+                                     unique_epoch_pairs, unique_segment_names, 
+                                     unique_taste_names, results_dir)
+    cdf.cross_dataset_dev_split_best_corr_plots(dev_split_corr_data, unique_given_names, 
+                                     unique_epoch_pairs, unique_segment_names, 
+                                     unique_taste_names, results_dir)
+else:
+    print("Not enough animals for cross-animal dev stat plots.")

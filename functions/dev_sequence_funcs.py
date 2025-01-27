@@ -275,11 +275,14 @@ def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_s
         null_dev_z_dict[null_i] = np.array(null_dev_z_dict[null_i]) #num dev x num neur x 2
         null_dev_dict_2[null_i] = np.array(null_dev_dict_2[null_i]) #num dev x num neur x 2
         null_dev_z_dict_2[null_i] = np.array(null_dev_z_dict_2[null_i]) #num dev x num neur x 2
-        
+       
+    #Hotellings test the dev splits
+    test_dev_split_hotellings(dev_mats_z_array, segment_names, s_i, z_split_corr_dir)
+    
     #Correlate deviation splits with epoch orders
-    correlate_splits_epoch_pairs(tastant_fr_dist_z_pop, 
-                    dig_in_names, dev_mats_array, segment_names, s_i,
-                    z_split_corr_dir, epochs_to_analyze)
+    # correlate_splits_epoch_pairs(tastant_fr_dist_z_pop, 
+    #                 dig_in_names, dev_mats_array, segment_names, s_i,
+    #                 z_split_corr_dir, epochs_to_analyze)
         
     #Decode each deviation event split
     
@@ -307,7 +310,35 @@ def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_s
     # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
     #                 dig_in_names, null_dev_z_dict_2, segment_names, s_i,
     #                 null_z_decode_dir_2, z_decode_dir, epochs_to_analyze)
-                     
+      
+def test_dev_split_hotellings(dev_mats_array, segment_names, s_i, save_dir):
+    #Grab parameters/variables
+    num_dev, num_neur, _ = np.shape(dev_mats_array)
+    split_1 = np.squeeze(dev_mats_array[:,:,0])
+    split_2 = np.squeeze(dev_mats_array[:,:,1])
+    
+    sig_csv_file = os.path.join(save_dir,'dev_split_sig_hotellings.csv')
+    if not os.path.isfile(sig_csv_file):
+        with open(sig_csv_file, 'w') as f_sig:
+            write = csv.writer(f_sig, delimiter=',')
+            title_list = ['Taste Name', 'Stat Name', 'Value']
+            write.writerow(title_list)
+            
+    try:
+        T2, F_hot, p_value = hotelling_t2(split_1, split_2)
+        sig_vec = [T2, F_hot, p_value]
+    except:
+        sig_vec = [np.nan, np.nan, np.nan]
+    
+    with open(sig_csv_file, 'a') as f_sig:
+        write = csv.writer(f_sig, delimiter=',')
+        hot_t_list = [segment_names[s_i], 'Hotellings T', sig_vec[0]]
+        write.writerow(hot_t_list)
+        f_stat_list = [segment_names[s_i], 'F-Stat', sig_vec[1]]
+        write.writerow(f_stat_list)
+        p_val_list = [segment_names[s_i], 'p-val', sig_vec[2]]
+        write.writerow(p_val_list)
+               
 def calc_tastant_seq(tastant_raster_dict, taste_bin_dt, dig_in_names, sequence_dir):
     """This function is dedicated to calculating the rank sequences in tastant
     delivery responses"""
