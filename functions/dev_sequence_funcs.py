@@ -24,7 +24,9 @@ from scipy.signal import savgol_filter
 from matplotlib import colormaps, cm
 from multiprocess import Pool
 from sklearn.decomposition import PCA
+from sklearn.manifold import MDS
 from sklearn.mixture import GaussianMixture as gmm
+from sklearn import svm
 
 def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
                    tastant_raster_dict,tastant_fr_dist_pop,tastant_fr_dist_z_pop,
@@ -44,6 +46,9 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
     # dist_dir = os.path.join(save_dir, 'dist_tests')
     # if not os.path.isdir(dist_dir):
     #     os.mkdir(dist_dir)
+    base_split_dir = os.path.join(save_dir,'base_splits')
+    if not os.path.isdir(base_split_dir):
+        os.mkdir(base_split_dir)
     corr_dir = os.path.join(save_dir, 'corr_tests')
     if not os.path.isdir(corr_dir):
         os.mkdir(corr_dir)
@@ -127,7 +132,7 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
                                 s_i, epochs_to_analyze, tastant_fr_dist_pop, 
                                 tastant_fr_dist_z_pop, z_decode_dir, 
                                 null_z_decode_dir, null_z_decode_dir_2,
-                                z_split_corr_dir)
+                                z_split_corr_dir, base_split_dir)
         
         #Sequence calcs
         # create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, 
@@ -201,7 +206,7 @@ def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_s
                             num_neur, dig_in_names, segment_names, s_i, 
                             epochs_to_analyze, tastant_fr_dist_pop, tastant_fr_dist_z_pop,
                             z_decode_dir, null_z_decode_dir, null_z_decode_dir_2,
-                            z_split_corr_dir):
+                            z_split_corr_dir, base_split_dir):
     dev_mats = []
     dev_mats_z = []
     null_dev_dict = dict()
@@ -277,7 +282,11 @@ def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_s
         null_dev_z_dict_2[null_i] = np.array(null_dev_z_dict_2[null_i]) #num dev x num neur x 2
        
     #Hotellings test the dev splits
-    test_dev_split_hotellings(dev_mats_z_array, segment_names, s_i, z_split_corr_dir)
+    # test_dev_split_hotellings(dev_mats_z_array, segment_names, s_i, base_split_dir)
+    
+    #Plot the dev splits in reduced form against taste epochs
+    dev_split_halves_PCA_plot(dev_mats_z_array,tastant_fr_dist_z_pop,dig_in_names,
+                              segment_names,s_i,base_split_dir)
     
     #Correlate deviation splits with epoch orders
     # correlate_splits_epoch_pairs(tastant_fr_dist_z_pop, 
@@ -311,13 +320,13 @@ def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_s
     #                 dig_in_names, null_dev_z_dict_2, segment_names, s_i,
     #                 null_z_decode_dir_2, z_decode_dir, epochs_to_analyze)
       
-def test_dev_split_hotellings(dev_mats_array, segment_names, s_i, save_dir):
+def test_dev_split_hotellings(dev_mats_array, segment_names, s_i, base_split_dir):
     #Grab parameters/variables
     num_dev, num_neur, _ = np.shape(dev_mats_array)
     split_1 = np.squeeze(dev_mats_array[:,:,0])
     split_2 = np.squeeze(dev_mats_array[:,:,1])
     
-    sig_csv_file = os.path.join(save_dir,'dev_split_sig_hotellings.csv')
+    sig_csv_file = os.path.join(base_split_dir,'dev_split_sig_hotellings.csv')
     if not os.path.isfile(sig_csv_file):
         with open(sig_csv_file, 'w') as f_sig:
             write = csv.writer(f_sig, delimiter=',')
@@ -338,7 +347,7 @@ def test_dev_split_hotellings(dev_mats_array, segment_names, s_i, save_dir):
         write.writerow(f_stat_list)
         p_val_list = [segment_names[s_i], 'p-val', sig_vec[2]]
         write.writerow(p_val_list)
-               
+    
 def calc_tastant_seq(tastant_raster_dict, taste_bin_dt, dig_in_names, sequence_dir):
     """This function is dedicated to calculating the rank sequences in tastant
     delivery responses"""
@@ -541,7 +550,7 @@ def calc_max_ind(num_neur, dev_bin_counts, max_counts, max_len):
     return max_ind
 
 def correlate_splits_epoch_pairs(tastant_fr_dist, 
-                dig_in_names, dev_mats_array, segment_names, s_i,
+                dig_in_names, dev_mats, segment_names, s_i,
                 split_corr_dir, epochs_to_analyze=[]):
     """Correlate split deviation event firing rate vectors to pairs of epoch
     firing rate vectors to determine if there's a pair of epochs most
@@ -550,7 +559,7 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
     
     #Variables
     num_tastes = len(dig_in_names)
-    num_dev, num_neur, num_splits = np.shape(dev_mats_array)
+    num_dev, num_neur, num_splits = np.shape(dev_mats)
     num_cp = len(tastant_fr_dist[0][0])
     cmap = colormaps['cividis']
     epoch_colors = cmap(np.linspace(0, 1, num_cp))
@@ -574,6 +583,39 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
     for tp_i, tp in enumerate(taste_pairs):
         taste_pair_names.append(dig_in_names[tp[0]] + ' v. ' + dig_in_names[tp[1]])
     
+    #Collect deviation event firing rate matrices as concatenated vectors
+    dev_fr_vecs = []
+    for dev_i in range(num_dev):
+        #Converting to list for parallel processing
+        dev_fr_mat = np.squeeze(dev_mats[dev_i,:,:]) #Shape num_neur x 2
+        dev_fr_vecs.append(np.squeeze(np.concatenate((dev_fr_mat[:,0],dev_fr_mat[:,1]),0)))
+    
+    avg_taste_fr_vecs_by_es = []
+    for es_ind, es in enumerate(epoch_splits):
+        epoch_1 = es[0]
+        epoch_2 = es[1]
+        all_avg_taste_fr_vecs = []
+        for t_i in range(num_tastes):
+            taste_fr_vecs = []
+            num_deliveries = len(tastant_fr_dist[t_i])
+            for d_i in range(num_deliveries):
+                vec1 = np.squeeze(tastant_fr_dist[t_i][d_i][epoch_1])
+                vec2 = np.squeeze(tastant_fr_dist[t_i][d_i][epoch_2])
+                try:
+                    if np.shape(vec1)[0] == num_neur:
+                        taste_fr_vecs.append(np.concatenate((vec1,vec2),0))
+                    else:
+                        taste_fr_vecs.append(np.concatenate((vec1.T,vec2.T),0))
+                except: #No taste response stored
+                    except_hold = len(taste_fr_vecs)
+            taste_fr_vecs = np.array(taste_fr_vecs)
+            if np.shape(taste_fr_vecs)[0] == 2*num_neur:
+                avg_taste_fr_vec = np.squeeze(np.nanmean(taste_fr_vecs,1))
+            else:
+                avg_taste_fr_vec = np.squeeze(np.nanmean(taste_fr_vecs,0))
+            all_avg_taste_fr_vecs.append(avg_taste_fr_vec)
+        avg_taste_fr_vecs_by_es.append(all_avg_taste_fr_vecs)
+    
     #Begin correlation analysis
     try:
         #Add an import statement here
@@ -596,42 +638,21 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
             epoch_1 = es[0]
             epoch_2 = es[1]
             epoch_plot_ind = np.where(epoch_ind_reference == es_ind)
-            #Collect deviation event firing rate matrices as concatenated vectors
-            dev_fr_vecs = []
-            for dev_i in range(num_dev):
-                #Converting to list for parallel processing
-                dev_fr_mat = np.squeeze(dev_mats_array[dev_i,:,:]) #Shape num_neur x 2
-                dev_fr_vecs.append(np.squeeze(np.concatenate((dev_fr_mat[:,0],dev_fr_mat[:,1]),0)))
             
-            #Collect taste response firing rate pairs as concatenated vectors 
-            #and calculate correlation distributions
+            #Collect average taste response firing rate correlations
             all_taste_corrs = []
             for t_i in range(num_tastes):
-                taste_fr_vecs = []
-                num_deliveries = len(tastant_fr_dist[t_i])
-                for d_i in range(num_deliveries):
-                    vec1 = np.squeeze(tastant_fr_dist[t_i][d_i][epoch_1])
-                    vec2 = np.squeeze(tastant_fr_dist[t_i][d_i][epoch_2])
-                    try:
-                        if np.shape(vec1)[0] == num_neur:
-                            taste_fr_vecs.append(np.concatenate((vec1,vec2),0))
-                        else:
-                            taste_fr_vecs.append(np.concatenate((vec1.T,vec2.T),0))
-                    except: #No taste response stored
-                        except_hold = len(taste_fr_vecs)
-                taste_fr_vecs = np.array(taste_fr_vecs)
-                if np.shape(taste_fr_vecs)[0] == 2*num_neur:
-                    avg_taste_fr_vec = np.squeeze(np.nanmean(taste_fr_vecs,1))
-                else:
-                    avg_taste_fr_vec = np.squeeze(np.nanmean(taste_fr_vecs,0))
-                
+                avg_taste_fr_vec = avg_taste_fr_vecs_by_es[es_ind][t_i]
                 dev_fr_vec_corrs = []
                 for dev_i in range(num_dev):
                     pearson_corr = stats.pearsonr(dev_fr_vecs[dev_i],avg_taste_fr_vec)
                     dev_fr_vec_corrs.extend([pearson_corr[0]])
-                    
                 all_taste_corrs.append(dev_fr_vec_corrs)
             corr_dict[es]['taste_corrs'] = all_taste_corrs
+            
+            #Plot the dev fr vectors against the average taste vectors in reduced dim
+            dev_split_vs_taste_PCA(dev_fr_vecs, all_avg_taste_fr_vecs, dig_in_names, 
+                                   es, segment_names, s_i, split_corr_dir)
             
             #Create a CDF plot with KS-Test Stats
             plot_title = 'Epoch pair ' + str(es)
@@ -712,7 +733,7 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
         plt.tight_layout()
         f_epoch_cdf.savefig(os.path.join(split_corr_dir,segment_names[s_i] + '_taste_cdfs_epoch_pair_compare.png'))
         f_epoch_cdf.savefig(os.path.join(split_corr_dir,segment_names[s_i] + '_taste_cdfs_taste_compare.svg'))
-        plt.close(f_taste_cdf)
+        plt.close(f_epoch_cdf)
         
         toc = time.time()    
         print('\t\t\t\t\tTime to correlate ' + segment_names[s_i] + \
@@ -720,6 +741,443 @@ def correlate_splits_epoch_pairs(tastant_fr_dist,
             
         np.save(os.path.join(split_corr_dir,segment_names[s_i] + '_corr_dict.npy'),corr_dict,allow_pickle=True)    
             
+    #Create best corr dim reduction plots
+    e_t_corrs = np.zeros((len(epoch_splits),num_tastes,num_dev))
+    for es_ind, es in enumerate(epoch_splits):
+        for t_i in range(num_tastes):
+            e_t_corrs[es_ind,t_i,:] = np.array(corr_dict[es]['taste_corrs'][t_i])
+            
+    best_e_t = np.zeros((num_dev,2)) #column 1 = best epoch pair, column 2 = best taste
+    for dev_i in range(num_dev):
+        dev_corr_array = np.squeeze(e_t_corrs[:,:,dev_i])
+        max_inds = np.where(dev_corr_array == np.max(dev_corr_array))
+        if len(max_inds[0]) > 0:
+            best_e_t[dev_i,0] = max_inds[0][0]
+            best_e_t[dev_i,1] = max_inds[1][0]
+        else:
+            best_e_t[dev_i,0] = np.nan
+            best_e_t[dev_i,1] = np.nan
+    
+    for es_ind, es in enumerate(epoch_splits):
+        all_avg_taste_fr_vecs = avg_taste_fr_vecs_by_es[es_ind]
+        es_best_dev = np.where(best_e_t[:,0] == es_ind)[0]
+        best_dev_fr_vecs = np.array(dev_fr_vecs)[es_best_dev,:]
+        #Plot the dev fr vectors against the average taste vectors in reduced dim
+        dev_split_vs_taste_PCA(best_dev_fr_vecs, all_avg_taste_fr_vecs, dig_in_names, 
+                               es, segment_names, s_i, split_corr_dir, 'best')
+    
+    dev_split_vs_e_pair(dev_fr_vecs, avg_taste_fr_vecs_by_es, best_e_t, epoch_splits,
+                        dig_in_names, segment_names, s_i, split_corr_dir)
+    
+def dev_split_halves_PCA_plot(dev_mats_array,tastant_fr_dist,dig_in_names,
+                              segment_names,s_i,base_split_dir):
+    """This function is dedicated to plotting in reduced dimensions the two 
+    halves of a deviation event in reduced space to visualize their difference"""
+    
+    print("\t\tPlotting Dev Splits for Segment " + segment_names[s_i])
+    
+    #Collect variables
+    colors = ['forestgreen','maroon','royalblue','palevioletred','teal','red',
+              'darkslateblue','green','blue']
+    num_dev, num_neur, _ = np.shape(dev_mats_array)
+    num_tastes = len(dig_in_names)
+    split_1 = np.squeeze(dev_mats_array[:,:,0])
+    split_2 = np.squeeze(dev_mats_array[:,:,1])
+    X = np.concatenate((split_1,split_2),0)
+    X_norm = (X - np.expand_dims(np.nanmean(X,1),1))/np.expand_dims(np.nanstd(X,1),1)
+    num_cp = len(tastant_fr_dist[0][0])
+    epochs_to_analyze = np.arange(num_cp)
+    epoch_splits = list(itertools.combinations(epochs_to_analyze, 2))
+    epoch_splits.extend(list(itertools.combinations(np.fliplr(np.expand_dims(epochs_to_analyze,0)).squeeze(), 2)))
+    epoch_splits.extend([(e_i,e_i) for e_i in epochs_to_analyze])
+    epoch_root = np.ceil(np.sqrt(len(epoch_splits))).astype('int')
+    epoch_ind_reference = np.reshape(np.arange(epoch_root**2),(epoch_root,epoch_root))
+    
+    #Collect taste responses
+    avg_taste_fr_vecs_by_e = []
+    e_ind_collection = []
+    t_ind_collection = []
+    for e_i in range(num_cp):
+        for t_i in range(num_tastes):
+            taste_fr_vecs = []
+            num_deliveries = len(tastant_fr_dist[t_i])
+            for d_i in range(num_deliveries):
+                vec = np.squeeze(tastant_fr_dist[t_i][d_i][e_i])
+                try:
+                    taste_fr_vecs.append(vec)
+                except: #No taste response stored
+                    except_hold = len(taste_fr_vecs)
+            taste_fr_vecs = np.array(taste_fr_vecs)
+            avg_taste_fr_vecs = np.nanmean(taste_fr_vecs,0)
+            avg_taste_fr_vecs_by_e.append(avg_taste_fr_vecs)
+            e_ind_collection.append(e_i)
+            t_ind_collection.append(t_i)
+    avg_taste_fr_vecs_by_e = np.array(avg_taste_fr_vecs_by_e)
+    e_ind_collection = np.array(e_ind_collection)
+    t_ind_collection = np.array(t_ind_collection)
+    avg_tastes_norm = (avg_taste_fr_vecs_by_e - np.expand_dims(np.nanmean(avg_taste_fr_vecs_by_e,
+                                                1),1))/np.expand_dims(np.nanstd(
+                                                avg_taste_fr_vecs_by_e,1),1)
+    big_concat = np.concatenate((avg_tastes_norm,X_norm))
+    
+    #Fit SVM to dev splits
+    #Rescale values using z-scoring
+    y_svm = np.concatenate((np.ones(num_dev),2*np.ones(num_dev)))
+    svm_class = svm.SVC(kernel='linear')
+    svm_class.fit(X_norm,y_svm)
+    w = svm_class.coef_[0] #weights of classifier normal vector
+    w_norm = np.linalg.norm(w)
+    X_projected = w@X_norm.T/w_norm**2
+    split_1_projected = X_projected[:num_dev]
+    split_2_projected = X_projected[num_dev:]
+    avg_tastes_projected = w@avg_tastes_norm.T/w_norm**2
+    
+    #Calculate orthogonal vectors with significantly different distributions for 2D plot
+    sig_u = [] #significant vector storage
+    u_p = [] #p-vals of significance
+    for i in range(20):
+        inds_to_use = random.sample(list(np.arange(num_neur)),2)
+        u = np.zeros(num_neur)
+        u[inds_to_use[0]] = -1*w[inds_to_use[1]]
+        u[inds_to_use[1]] = w[inds_to_use[0]]
+        u_norm = np.linalg.norm(u)
+        u_proj = u@X_norm.T/u_norm**2
+        sp_1_u_proj = u_proj[:num_dev]
+        sp_2_u_proj = u_proj[num_dev:]
+        ks_stats = stats.ks_2samp(sp_1_u_proj,sp_2_u_proj)
+        if ks_stats.pvalue <= 0.05:
+            sig_u.append(u)
+            u_p.append(ks_stats.pvalue)
+    min_p = np.argmin(u_p)
+    u = sig_u[min_p]
+    u_norm = np.linalg.norm(u)
+    X_orth_projected = u@X_norm.T/u_norm**2
+    split_1_orth_projected = X_orth_projected[:num_dev]
+    split_2_orth_projected = X_orth_projected[num_dev:]
+    avg_taste_orth_projected = u@avg_tastes_norm.T/u_norm**2
+    
+    split_diff = np.abs(split_1_projected-split_2_projected)
+    split_orth_diff = np.abs(split_1_orth_projected-split_2_orth_projected)
+    max_split_diff = np.ceil(np.nanmax(np.concatenate((split_diff,split_orth_diff))))
+    
+    #Plot the projected dev split values as both scatters and hists with taste epochs
+    for t_i, t_name in enumerate(dig_in_names):
+        taste_data_ind = np.where(t_ind_collection == t_i)[0]
+        f_split, ax_split = plt.subplots(ncols=3,figsize=(8,4))
+        ax_split[0].scatter(split_1_projected,split_1_orth_projected,alpha=0.1,
+                            color = colors[0], marker='o',label='Split 1')
+        ax_split[0].scatter(split_2_projected,split_2_orth_projected,alpha=0.1,
+                            color = colors[1], marker='o',label='Split 2')
+        ax_split[0].set_xlabel('Normal Projection')
+        ax_split[0].set_ylabel('In-Plane Projection')
+        ax_split[0].set_title('Split Projections')
+        ax_split[1].hist(split_1_projected,bins=20,histtype='step',alpha=0.5,
+                         color=colors[0],density=True,cumulative=False,label='Split 1')
+        ax_split[1].hist(split_2_projected,bins=20,histtype='step',alpha=0.5,
+                         color=colors[1],density=True,cumulative=False,label='Split 2')
+        for e_i in range(num_cp):
+            epoch_data_ind = np.where(e_ind_collection == e_i)[0]
+            et_ind = np.intersect1d(epoch_data_ind,taste_data_ind)
+            ax_split[0].scatter(avg_tastes_projected[et_ind],avg_taste_orth_projected[et_ind],
+                                color=colors[e_i+2],alpha=0.9,marker='^',s=70,
+                                label='Epoch ' + str(e_i))
+            ax_split[1].axvline(avg_tastes_projected[et_ind],alpha=0.9,
+                                color=colors[e_i+2],linestyle='dashed',
+                                label='Epoch ' + str(e_i))
+        
+        ax_split[1].set_xlabel('Normalized Orthogonal Projection')
+        ax_split[1].set_ylabel('Distribution Density')
+        ax_split[1].set_title('Split Othogonal Projections')
+        ax_split[0].legend(loc='upper left')
+        ax_split[2].plot([0,max_split_diff],[0,max_split_diff],alpha=0.1,
+                         color='k',linestyle='dashed',label='_')
+        ax_split[2].scatter(split_diff,split_orth_diff,alpha=0.1,marker='o',
+                            color=colors[0],label='|Split 1 - Split 2|')
+        ax_split[2].set_xlabel('|Diff Orth Proj|')
+        ax_split[2].set_ylabel('|Diff Plane Proj|')
+        plt.suptitle(segment_names[s_i] + ' ' + dig_in_names[t_i] + ' Dev Split Projection')
+        plt.tight_layout()
+        f_split.savefig(os.path.join(base_split_dir,segment_names[s_i] +
+                                     '_' + dig_in_names[t_i] + '_svm_orth_proj_splits.png'))
+        f_split.savefig(os.path.join(base_split_dir,segment_names[s_i] +
+                                     '_' + dig_in_names[t_i] + '_svm_orth_proj_splits.svg'))
+        plt.close(f_split)
+                                                
+    #First plot overall reduced just deviation splits                                                         
+    split_pca = PCA(2)
+    transformed_data = split_pca.fit_transform(X_norm)
+    f_split_dev = plt.figure(figsize=(8,8))
+    plt.scatter(transformed_data[:num_dev,0],transformed_data[:num_dev,1],
+                alpha=0.2,label='Half 1')
+    plt.scatter(transformed_data[num_dev:,0],transformed_data[num_dev:,1],
+                alpha=0.2,label='Half 2')
+    plt.title(segment_names[s_i] + ' Split Dev PCA')
+    f_split_dev.savefig(os.path.join(base_split_dir,'pca_split_dev_' + \
+                                     segment_names[s_i] + '.png'))
+    f_split_dev.savefig(os.path.join(base_split_dir,'pca_split_dev_' + \
+                                     segment_names[s_i] + '.svg'))
+    plt.close(f_split_dev)
+    
+    mds_split = MDS(n_components=2, normalized_stress='auto')
+    transformed_data = mds_split.fit_transform(X_norm)
+    f_split_dev = plt.figure(figsize=(8,8))
+    plt.scatter(transformed_data[:num_dev,0],transformed_data[:num_dev,1],
+                alpha=0.2,label='Half 1')
+    plt.scatter(transformed_data[num_dev:,0],transformed_data[num_dev:,1],
+                alpha=0.2,label='Half 2')
+    plt.title(segment_names[s_i] + ' Split Dev MDS')
+    f_split_dev.savefig(os.path.join(base_split_dir,'mds_split_dev_' + \
+                                     segment_names[s_i] + '.png'))
+    f_split_dev.savefig(os.path.join(base_split_dir,'mds_split_dev_' + \
+                                     segment_names[s_i] + '.svg'))
+    plt.close(f_split_dev)
+    
+    #Next plot reduced deviation splits w/ taste epoch pairs
+    f_epair, ax_epair = plt.subplots(nrows = epoch_root, ncols = epoch_root,
+                                     sharex = True, sharey = True, 
+                                     figsize = (12,12))
+    split_pca_all = PCA(2)
+    transformed_data = split_pca_all.fit_transform(big_concat)
+    for es_ind, es in enumerate(epoch_splits):
+        epoch_1 = es[0]
+        epoch_1_ind = np.where(e_ind_collection == epoch_1)[0]
+        epoch_2 = es[1]
+        epoch_2_ind = np.where(e_ind_collection == epoch_2)[0]
+        epoch_ax_ind = np.where(epoch_ind_reference == es_ind)
+        
+        dev_split_1_transformed = transformed_data[num_tastes*num_cp:num_tastes*num_cp+num_dev,:]
+        dev_split_2_transformed = transformed_data[:num_tastes*num_cp+num_dev:,:]
+        ax_epair[epoch_ax_ind[0][0],epoch_ax_ind[1][0]].scatter(dev_split_1_transformed[:,0],
+                                                                dev_split_1_transformed[:,1],
+                                                                alpha=0.2,label='Split 1')
+        ax_epair[epoch_ax_ind[0][0],epoch_ax_ind[1][0]].scatter(dev_split_2_transformed[:,0],
+                                                                dev_split_2_transformed[:,1],
+                                                                alpha=0.2,label='Split 2')
+        ax_epair[epoch_ax_ind[0][0],epoch_ax_ind[1][0]].set_title('Epoch ' + str(epoch_1) + ' , Epoch ' + str(epoch_2))
+        for t_i in range(num_tastes):
+            taste_data_ind = np.where(t_ind_collection == t_i)[0]
+            et_ind_1 = np.intersect1d(epoch_1_ind,taste_data_ind)
+            et_ind_2 = np.intersect1d(epoch_2_ind,taste_data_ind)
+            taste_split_1_transformed = np.squeeze(transformed_data[et_ind_1,:])
+            taste_split_2_transformed = np.squeeze(transformed_data[et_ind_2,:])
+            ax_epair[epoch_ax_ind[0][0],epoch_ax_ind[1][0]].scatter(taste_split_1_transformed[0],
+                                                                    taste_split_1_transformed[1],
+                                                                    alpha=1,marker='^',s=80,
+                                                                    label=dig_in_names[t_i])
+            ax_epair[epoch_ax_ind[0][0],epoch_ax_ind[1][0]].scatter(taste_split_2_transformed[0],
+                                                                    taste_split_2_transformed[1],
+                                                                    alpha=1,marker='x',s=80,
+                                                                    label='_')
+    ax_epair[0,0].legend(loc='upper left')
+    f_epair.savefig(os.path.join(base_split_dir,'pca_split_dev_w_taste_' + \
+                                     segment_names[s_i] + '.png'))
+    f_epair.savefig(os.path.join(base_split_dir,'pca_split_dev_w_taste_' + \
+                                     segment_names[s_i] + '.svg'))
+    plt.close(f_epair)
+            
+            
+            
+    
+def dev_split_vs_taste_PCA(dev_fr_vecs, avg_taste_vecs, 
+                           dig_in_names, epoch_pair, segment_names,
+                           s_i, save_dir, name_modifier = ''):
+    """This function is dedicated to plotting in reduced dimensions the splits of
+    deviation events against each other as well as with taste response epochs"""
+    
+    #Grab parameters/variables
+    save_name = segment_names[s_i] + '_epoch_' + str(epoch_pair[0]) + '_' \
+        + str(epoch_pair[1]) + '_' + name_modifier
+    title = segment_names[s_i] + ' Epoch pair (' + str(epoch_pair[0]) + ',' \
+        + str(epoch_pair[1]) + ') ' + name_modifier
+    num_tastes = len(dig_in_names)
+    colors = ['maroon','forestgreen','teal','royalblue','darkslateblue','palevioletred']
+    concat_vecs = np.concatenate((avg_taste_vecs,dev_fr_vecs),0)
+    concat_vecs_self_norm = (concat_vecs - np.expand_dims(np.nanmean(concat_vecs,1),1))/np.expand_dims(np.nanstd(concat_vecs,1),1)
+    
+    f_scaling = plt.figure(figsize=(12,8))
+    
+    #3D PCA
+    split_pca = PCA(3)
+    transformed_data = split_pca.fit_transform(concat_vecs_self_norm)
+    ax = f_scaling.add_subplot(1, 3, 1, projection='3d')
+    ax.scatter(transformed_data[num_tastes:,0],transformed_data[num_tastes:,1],
+               transformed_data[num_tastes:,2],c = colors[num_tastes], marker='o',
+               alpha=0.05,label='Deviation Event')
+    for t_i, t_name in enumerate(dig_in_names):
+        ax.scatter(transformed_data[t_i,0],transformed_data[t_i,1],transformed_data[t_i,2],
+                   c = colors[t_i], marker='o', s = 30, alpha=1, label=t_name)
+    ax.legend(loc='upper left')
+    ax.set_title('3D PCA')
+    
+    #2D PCA
+    ax = f_scaling.add_subplot(1, 3, 2)
+    ax.scatter(transformed_data[num_tastes:,0],transformed_data[num_tastes:,1],
+               c = colors[num_tastes], marker='o',alpha=0.2,label='Deviation Event')
+    for t_i, t_name in enumerate(dig_in_names):
+        ax.scatter(transformed_data[t_i,0],transformed_data[t_i,1],
+                   c = colors[t_i], marker='o', alpha=1, label=t_name)
+    ax.legend(loc='upper left')
+    ax.set_title('2D PCA')
+    
+    #2D MDS
+    mds_epochs = MDS(n_components=2, normalized_stress='auto')
+    transformed_data = mds_epochs.fit_transform(concat_vecs_self_norm)
+    ax = f_scaling.add_subplot(1, 3, 3)
+    ax.scatter(transformed_data[num_tastes:,0],transformed_data[num_tastes:,1],
+               c = colors[num_tastes], marker='o',alpha=0.2,label='Deviation Event')
+    for t_i, t_name in enumerate(dig_in_names):
+        ax.scatter(transformed_data[t_i,0],transformed_data[t_i,1],
+                   c = colors[t_i], marker='o', alpha=1, label=t_name)
+    ax.legend(loc='upper left')
+    ax.set_title('2D MDS')
+    
+    plt.suptitle(title)
+    plt.tight_layout()
+    f_scaling.savefig(os.path.join(save_dir,save_name+'.png'))
+    f_scaling.savefig(os.path.join(save_dir,save_name+'.svg'))
+    plt.close(f_scaling)
+    
+def dev_split_vs_e_pair(dev_fr_vecs, avg_taste_fr_vecs_by_es, best_e_t, 
+                           epoch_splits, dig_in_names, segment_names, s_i, save_dir):
+    """This function is dedicated to plotting in reduced dimensions the splits of
+    deviation events against each other as well as with taste response epochs"""
+    
+    #Grab parameters/variables
+    save_name = segment_names[s_i] + '_best'
+    title = segment_names[s_i] + ' Best'
+    num_tastes = len(dig_in_names)
+    num_es = len(epoch_splits)
+    sqrt_es = np.ceil(np.sqrt(num_es)).astype('int')
+    es_grid = np.reshape(np.arange(sqrt_es**2),(sqrt_es,sqrt_es))
+    colors = ['maroon','forestgreen','teal','royalblue','darkslateblue','palevioletred']
+    
+    joint_array = []
+    joint_array_inds = []
+    joint_array_es_inds = []
+    joint_array_t_inds = []
+    for es_i in range(num_es):
+        for t_i in range(num_tastes):
+            start_ind = len(joint_array)
+            joint_array.append(list(avg_taste_fr_vecs_by_es[es_i][t_i]))
+            end_ind = len(joint_array)
+            joint_array_inds.append([start_ind,end_ind])
+            joint_array_es_inds.extend([es_i])
+            joint_array_t_inds.extend([t_i])
+    start_devs = len(joint_array)
+    joint_array.extend(dev_fr_vecs)
+    end_devs = len(joint_array)
+    joint_array_inds.append([start_devs,end_devs])
+    joint_array = np.array(joint_array)
+    joint_array_self_norm = (joint_array - np.expand_dims(np.nanmean(joint_array,1),1))/np.expand_dims(np.nanstd(joint_array,1),1)
+    joint_array_es_inds = np.squeeze(np.array(joint_array_es_inds))
+    joint_array_t_inds = np.squeeze(np.array(joint_array_t_inds))
+    
+    #Perform MDS
+    mds_joint_data = MDS(n_components=2, normalized_stress='auto')
+    transformed_data = mds_joint_data.fit_transform(joint_array_self_norm)
+    
+    #Plot the dev events and taste epoch pair location in space
+    f_scaling, ax_scaling = plt.subplots(nrows=sqrt_es, ncols=sqrt_es, 
+                                         sharex=True, sharey=True, 
+                                         figsize=(12,12))
+    for t_i in range(num_tastes):
+        f_taste_scaling, ax_taste_scaling = plt.subplots(nrows=sqrt_es, ncols=sqrt_es, 
+                                             sharex=True, sharey=True, 
+                                             figsize=(12,12))
+        taste_best = np.where(best_e_t[:,1] == t_i)[0]
+        t_joint_ind = np.where(joint_array_t_inds == t_i)[0]
+        for es_i in range(num_es):
+            #Find where the dev events are in transformed data
+            epoch_best = np.where(best_e_t[:,0] == es_i)[0]
+            overlap_best = np.intersect1d(taste_best,epoch_best) + joint_array_inds[-1][0]
+            best_dev_data = transformed_data[overlap_best,:]
+            #Find where the taste response is in transformed data
+            e_joint_ind = np.where(joint_array_es_inds == es_i)[0]
+            overlap_taste_ind = np.intersect1d(t_joint_ind,e_joint_ind)[0]
+            taste_data = transformed_data[overlap_taste_ind,:]
+            #Plotting
+            ax_loc = np.where(es_grid == es_i)
+            ax_r = ax_loc[0][0]
+            ax_c = ax_loc[1][0]
+            ax_scaling[ax_r,ax_c].scatter(best_dev_data[:,0],best_dev_data[:,1],
+                                  c = colors[t_i], marker='o',alpha=0.2,
+                                  s = 40, label=dig_in_names[t_i] + ' Best Dev')
+            ax_taste_scaling[ax_r,ax_c].scatter(best_dev_data[:,0],best_dev_data[:,1],
+                                  c = colors[t_i], marker='o',alpha=0.2,
+                                  s = 40, label=dig_in_names[t_i] + ' Best Dev')
+            ax_scaling[ax_r,ax_c].scatter(taste_data[0],taste_data[1],
+                                  c = colors[t_i], marker='^',alpha=0.9,
+                                  s = 60, label=dig_in_names[t_i] + ' ' + str(epoch_splits[es_i]))
+            ax_taste_scaling[ax_r,ax_c].scatter(taste_data[0],taste_data[1],
+                                  c = colors[t_i], marker='^',alpha=0.9,
+                                  s = 60, label=dig_in_names[t_i] + ' ' + str(epoch_splits[es_i]))
+            ax_scaling[ax_r,ax_c].set_title(str(epoch_splits[es_i]))
+            ax_taste_scaling[ax_r,ax_c].set_title(str(epoch_splits[es_i]))
+        ax_taste_scaling[0,0].legend(loc='upper left')
+        plt.suptitle(segment_names[s_i])
+        plt.tight_layout()
+        f_taste_scaling.savefig(os.path.join(save_dir,segment_names[s_i] + '_mds_best_' + dig_in_names[t_i] + '.png'))
+        f_taste_scaling.savefig(os.path.join(save_dir,segment_names[s_i] + '_mds_best_' + dig_in_names[t_i] + '.svg'))
+        plt.close(f_taste_scaling)
+    ax_scaling[0,0].legend(loc='upper left')
+    plt.suptitle(segment_names[s_i])
+    plt.tight_layout()
+    f_scaling.savefig(os.path.join(save_dir,segment_names[s_i] + '_mds_best.png'))
+    f_scaling.savefig(os.path.join(save_dir,segment_names[s_i] + '_mds_best.svg'))
+    plt.close(f_scaling)
+    
+    #Perform 2D PCA
+    split_pca = PCA(2)
+    transformed_data = split_pca.fit_transform(joint_array_self_norm)
+    
+    #Plot the dev events and taste epoch pair location in space
+    f_pca, ax_pca = plt.subplots(nrows=sqrt_es, ncols=sqrt_es, sharex=True, 
+                                 sharey=True, figsize=(12,12))
+    for t_i in range(num_tastes):
+        f_taste_pca, ax_taste_pca = plt.subplots(nrows=sqrt_es, ncols=sqrt_es, sharex=True, 
+                                     sharey=True, figsize=(12,12))
+        taste_best = np.where(best_e_t[:,1] == t_i)[0]
+        t_joint_ind = np.where(joint_array_t_inds == t_i)[0]
+        for es_i in range(num_es):
+            #Find where the dev events are in transformed data
+            epoch_best = np.where(best_e_t[:,0] == es_i)[0]
+            overlap_best = np.intersect1d(taste_best,epoch_best) + joint_array_inds[-1][0]
+            best_dev_data = transformed_data[overlap_best,:]
+            #Find where the taste response is in transformed data
+            e_joint_ind = np.where(joint_array_es_inds == es_i)[0]
+            overlap_taste_ind = np.intersect1d(t_joint_ind,e_joint_ind)[0]
+            taste_data = transformed_data[overlap_taste_ind,:]
+            #Plotting
+            ax_loc = np.where(es_grid == es_i)
+            ax_r = ax_loc[0][0]
+            ax_c = ax_loc[1][0]
+            ax_pca[ax_r,ax_c].scatter(best_dev_data[:,0],best_dev_data[:,1],
+                                  c = colors[t_i], marker='o',alpha=0.2,
+                                  s = 40, label=dig_in_names[t_i] + ' Best Dev')
+            ax_taste_pca[ax_r,ax_c].scatter(best_dev_data[:,0],best_dev_data[:,1],
+                                  c = colors[t_i], marker='o',alpha=0.2,
+                                  s = 40, label=dig_in_names[t_i] + ' Best Dev')
+            ax_pca[ax_r,ax_c].scatter(taste_data[0],taste_data[1],
+                                  c = colors[t_i], marker='^',alpha=0.9,
+                                  s = 80, label=dig_in_names[t_i] + ' ' + str(epoch_splits[es_i]))
+            ax_taste_pca[ax_r,ax_c].scatter(taste_data[0],taste_data[1],
+                                  c = colors[t_i], marker='^',alpha=0.9,
+                                  s = 80, label=dig_in_names[t_i] + ' ' + str(epoch_splits[es_i]))
+            ax_pca[ax_r,ax_c].set_title(str(epoch_splits[es_i]))
+            ax_taste_pca[ax_r,ax_c].set_title(str(epoch_splits[es_i]))
+        ax_taste_pca[0,0].legend(loc='upper left')
+        plt.suptitle(segment_names[s_i] + ' ' + dig_in_names[t_i])
+        plt.tight_layout()
+        f_taste_pca.savefig(os.path.join(save_dir,segment_names[s_i] + '_pca_best_' + dig_in_names[t_i] + '.png'))
+        f_taste_pca.savefig(os.path.join(save_dir,segment_names[s_i] + '_pca_best_' + dig_in_names[t_i] + '.svg'))
+        plt.close(f_taste_pca)
+    ax_pca[0,0].legend(loc='upper left')
+    plt.suptitle(segment_names[s_i])
+    plt.tight_layout()
+    f_pca.savefig(os.path.join(save_dir,segment_names[s_i] + '_pca_best.png'))
+    f_pca.savefig(os.path.join(save_dir,segment_names[s_i] + '_pca_best.svg'))
+    plt.close(f_pca)
+        
 
 def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist, 
                 dig_in_names, dev_mats_array, segment_names, s_i,
