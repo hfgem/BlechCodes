@@ -163,15 +163,20 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
                                                                                            bayes_fr_bins, start_dig_in_times, pre_taste_dt,
                                                                                            post_taste_dt, bin_dt, trial_start_frac)
 
-import functions.dev_sequence_funcs as dsf
-import time
+#%% Sliding bin decoding
 
-num_null = 100
+slide_decode_dir = metadata['dir_name'] + \
+    'Sliding_Decoding/'
+if os.path.isdir(slide_decode_dir) == False:
+    os.mkdir(slide_decode_dir)
 
-tic = time.time()
-dsf.split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
-                   tastant_raster_dict,tastant_fr_dist_pop,tastant_fr_dist_z_pop,
-                   dig_in_names,segment_names,num_null, seq_dir, 
-                   segments_to_analyze, epochs_to_analyze)
-toc = time.time()
-print('Total Corr Analysis + Plotting Time = ' + str(np.round((toc-tic)/60, 2)) + ' (min).')
+print("\tDecoding all z-scored neurons")
+decode_dir = slide_decode_dir + 'All_Neurons_Z_Scored/'
+if os.path.isdir(decode_dir) == False:
+    os.mkdir(decode_dir)
+
+# tastant_fr_dist = tastant_fr_dist_z_pop
+# segment_dev_fr_vecs = segment_dev_fr_vecs_zscore
+# save_dir = decode_dir
+# z_score = True
+
