@@ -40,6 +40,10 @@ class run_deviation_dependent_bayes():
     def gather_variables(self,):
         # Directories
         self.hdf5_dir = self.metadata['hdf5_dir']
+        self.slide_decode_dir = self.metadata['dir_name'] + \
+            'Sliding_Decoding/'
+        if os.path.isdir(self.slide_decode_dir) == False:
+            os.mkdir(self.slide_decode_dir)
         self.bayes_dir = self.metadata['dir_name'] + \
             'Deviation_Dependent_Decoding/'
         if os.path.isdir(self.bayes_dir) == False:
@@ -175,6 +179,20 @@ class run_deviation_dependent_bayes():
 
     #     self.plot_decoded_data()
 
+    def decode_sliding_bin_zscore(self,):
+        print("\tDecoding sliding bins of rest intervals z-scored.")
+
+        decode_dir = self.slide_decode_dir + 'All_Neurons_Z_Scored/'
+        if os.path.isdir(decode_dir) == False:
+            os.mkdir(decode_dir)
+            
+        
+        ddf.decode_sliding_bins_is_taste_which_taste(self.tastant_fr_dist_z_pop, 
+                          self.segment_spike_times, self.dig_in_names, self.segment_times, 
+                          self.segment_names, self.start_dig_in_times, self.taste_num_deliv,
+                          self.segment_dev_times, self.segment_dev_fr_vecs_zscore, self.bin_dt, 
+                          decode_dir, True, self.epochs_to_analyze, self.segments_to_analyze)
+        
     def decode_all_neurons_zscore(self,):
         print("\tDecoding all z-scored neurons")
         all_neur_z_dir = self.bayes_dir + 'All_Neurons_Z_Scored/'
@@ -215,3 +233,4 @@ class run_deviation_dependent_bayes():
                                                self.seg_e_len_dt, self.trial_start_frac,
                                                self.epochs_to_analyze, self.segments_to_analyze, 
                                                self.decode_prob_cutoff)
+    

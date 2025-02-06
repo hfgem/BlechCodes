@@ -782,3 +782,6 @@ if num_cond > 1:
                                      unique_taste_names, results_dir)
 else:
     print("Not enough animals for cross-animal dev stat plots.")
+
+#%% gather_sliding_decode_data()
+

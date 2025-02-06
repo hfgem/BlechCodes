@@ -163,7 +163,37 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
                                                                                            bayes_fr_bins, start_dig_in_times, pre_taste_dt,
                                                                                            post_taste_dt, bin_dt, trial_start_frac)
 
-#%% Sliding bin decoding
+
+# tastant_fr_dist = tastant_fr_dist_z_pop
+# segment_dev_fr_vecs = segment_dev_fr_vecs_zscore
+# save_dir = decode_dir
+# z_score = True
+
+# Dev decoding
+bayes_dir = metadata['dir_name'] + \
+    'Deviation_Dependent_Decoding/'
+if os.path.isdir(bayes_dir) == False:
+    os.mkdir(bayes_dir)
+    
+all_neur_z_dir = bayes_dir + 'All_Neurons_Z_Scored/'
+if os.path.isdir(all_neur_z_dir) == False:
+    os.mkdir(all_neur_z_dir)
+    
+decode_dir = all_neur_z_dir + 'GMM_Decoding/'
+if os.path.isdir(decode_dir) == False:
+    os.mkdir(decode_dir)
+    
+ddf.decode_deviations_is_taste_which_taste(tastant_fr_dist_z_pop, segment_spike_times,
+                             dig_in_names, segment_times, 
+                             segment_names, start_dig_in_times, 
+                             taste_num_deliv, segment_dev_times,
+                             segment_dev_fr_vecs_zscore, bin_dt, 
+                             decode_dir, True, 
+                             epochs_to_analyze, segments_to_analyze)
+
+# Sliding bin decoding
+
+import functions.dependent_decoding_funcs as ddf
 
 slide_decode_dir = metadata['dir_name'] + \
     'Sliding_Decoding/'
@@ -175,8 +205,7 @@ decode_dir = slide_decode_dir + 'All_Neurons_Z_Scored/'
 if os.path.isdir(decode_dir) == False:
     os.mkdir(decode_dir)
 
-# tastant_fr_dist = tastant_fr_dist_z_pop
-# segment_dev_fr_vecs = segment_dev_fr_vecs_zscore
-# save_dir = decode_dir
-# z_score = True
-
+ddf.decode_sliding_bins_is_taste_which_taste(tastant_fr_dist_z_pop, segment_spike_times, dig_in_names, 
+                  segment_times, segment_names, start_dig_in_times, taste_num_deliv,
+                  segment_dev_times, segment_dev_fr_vecs_zscore, bin_dt, 
+                  decode_dir, True, epochs_to_analyze, segments_to_analyze)
