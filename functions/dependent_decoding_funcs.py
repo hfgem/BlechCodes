@@ -463,10 +463,6 @@ def decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times,
         
         #Import existing data
         try:
-            #REMOVE THE FOLLOWING STATEMENT
-            dev_decode_is_taste_array = np.load(
-                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
-                             '_deviations_is_taste_FOILED.npy'))
             decode_is_taste_prob_array = np.load(
                 os.path.join(decode_save_dir,'segment_' + str(s_i) + \
                              '_deviations_is_taste.npy'))
@@ -893,7 +889,7 @@ def decode_sliding_bins_is_taste_which_taste(tastant_fr_dist, segment_spike_time
             taste_epoch_gmm[t_i][e_ind] = gm
     
     #Store segment by segment correlation between pop rate and decoding taste
-    seg_is_taste_rate_corr = np.nan*np.ones(len(segments_to_analyze))
+    seg_is_taste_rate_corr = np.nan*np.ones((len(segments_to_analyze),2))
     seg_which_taste_rate_corr = np.nan*np.ones((len(segments_to_analyze),num_tastes-1))
     seg_which_epoch_rate_corr = np.nan*np.ones((len(segments_to_analyze),num_cp))
     
@@ -936,10 +932,6 @@ def decode_sliding_bins_is_taste_which_taste(tastant_fr_dist, segment_spike_time
         
         # Grab neuron firing rates in sliding bins
         try:
-            #REMOVE NEXT LOAD STATEMENT LATER
-            decode_is_taste_prob_array = np.load(
-                os.path.join(save_dir,'segment_' + str(s_i) + \
-                             '_sliding_is_taste_FOILED.npy'))
             decode_is_taste_prob_array = np.load(
                 os.path.join(save_dir,'segment_' + str(s_i) + \
                              '_sliding_is_taste.npy'))
@@ -1021,33 +1013,58 @@ def decode_sliding_bins_is_taste_which_taste(tastant_fr_dist, segment_spike_time
                     
         decode_is_taste_argmax = np.squeeze(np.argmax(decode_is_taste_prob_array,1))
         is_taste_inds = np.where(decode_is_taste_argmax == 0)[0]
-        seg_is_taste_frac[seg_ind,:] = np.array([len(is_taste_inds)/num_bin,1 - len(is_taste_inds)/num_bin])
+        is_taste_bin_vector = np.zeros(seg_len)
+        for iti in is_taste_inds:
+            iti_s = segment_slide_bins[iti] - half_bin
+            iti_e = segment_slide_bins[iti] + half_bin
+            is_taste_bin_vector[iti_s:iti_e] = 1
+        frac_is_taste = np.sum(is_taste_bin_vector)/seg_len
+        seg_is_taste_frac[seg_ind,:] = np.array([frac_is_taste,1 - frac_is_taste])
         if len(is_taste_inds) > 0:
             decode_which_taste_argmax = np.squeeze(np.argmax(decode_which_taste_prob_array[is_taste_inds,:],1))
             decode_which_epoch_argmax = np.squeeze(np.argmax(decode_epoch_prob_array[is_taste_inds,:],1))
         
-            #Calculate correlation between population rate and taste decode data
-            seg_is_taste_rate_corr[seg_ind] = pearsonr(decode_is_taste_argmax,segment_binned_pop_fr).statistic
+            #Is-Taste decodes
+            for it_i in range(2):
+                decode_is_taste_bin = np.zeros(num_bin)
+                decode_is_taste_bin[np.where(decode_is_taste_argmax == it_i)[0]] = 1
+                seg_is_taste_rate_corr[seg_ind,it_i] = pearsonr(decode_is_taste_bin,segment_binned_pop_fr).statistic
+            
+            #Taste decodes
             decode_which_taste_corr = []
             decode_which_taste_frac = []
             for t_i in range(num_tastes-1):
-                taste_bin_vec = np.zeros(num_bin)
+                #Calculate segment decode fraction
+                taste_bin_vec = np.zeros(seg_len)
                 taste_inds = is_taste_inds[np.where(decode_which_taste_argmax == t_i)[0]]
-                decode_which_taste_frac.append(len(taste_inds)/len(is_taste_inds))
+                for ti_i in taste_inds:
+                    iti_s = segment_slide_bins[ti_i] - half_bin
+                    iti_e = segment_slide_bins[ti_i] + half_bin
+                    taste_bin_vec[iti_s:iti_e] = 1
+                decode_which_taste_frac.append(np.sum(taste_bin_vec)/seg_len)
+                #Calculate pop rate corr
+                taste_bin_vec = np.zeros(num_bin)
                 taste_bin_vec[taste_inds] = 1
                 decode_which_taste_corr.append(pearsonr(taste_bin_vec,segment_binned_pop_fr).statistic)
             seg_which_taste_rate_corr[seg_ind,:] = np.array(decode_which_taste_corr)
             seg_which_taste_frac[seg_ind,:] = np.array(decode_which_taste_frac)
             
-            #Calculate correlation between population rate and epoch decode data
+            #Epoch decodes
             decode_which_epoch_corr = []
             decode_which_epoch_frac = []
             for e_i in range(num_cp):
-                epoch_bin_vec = np.zeros(num_bin)
+                #Calculate segment decode fraction
+                epoch_bin_vec = np.zeros(seg_len)
                 epoch_inds = is_taste_inds[np.where(decode_which_epoch_argmax == e_i)[0]]
+                for ei_i in epoch_inds:
+                    iti_s = segment_slide_bins[ei_i] - half_bin
+                    iti_e = segment_slide_bins[ei_i] + half_bin
+                    epoch_bin_vec[iti_s:iti_e] = 1
+                decode_which_epoch_frac.append(np.sum(epoch_bin_vec)/seg_len)
+                #Calculate pop rate corr
+                epoch_bin_vec = np.zeros(num_bin)
                 epoch_bin_vec[epoch_inds] = 1
                 decode_which_epoch_corr.append(pearsonr(epoch_bin_vec,segment_binned_pop_fr).statistic)
-                decode_which_epoch_frac.append(len(epoch_inds)/len(is_taste_inds))
             seg_which_epoch_rate_corr[seg_ind,:] = np.array(decode_which_epoch_corr)
             seg_which_epoch_frac[seg_ind,:] = np.array(decode_which_epoch_frac)
     
@@ -1063,10 +1080,10 @@ def decode_sliding_bins_is_taste_which_taste(tastant_fr_dist, segment_spike_time
     f_corr, ax_corr = plt.subplots(nrows = 3, sharey = True, figsize = (4,8))
     #Pop rate x is-taste
     ax_corr[0].set_ylim([-1,1])
-    ax_corr[0].plot(np.arange(len(segments_to_analyze)),seg_is_taste_rate_corr,
+    ax_corr[0].plot(np.arange(len(segments_to_analyze)),seg_is_taste_rate_corr[:,0],
                     color='b')
     ax_corr[0].axhline(0,linestyle='dashed',c='k',alpha=0.2)
-    for sv_i, sv in enumerate(seg_is_taste_rate_corr):
+    for sv_i, sv in enumerate(seg_is_taste_rate_corr[:,0]):
         ax_corr[0].text(sv_i,sv+0.02,str(np.round(sv,2)))
     ax_corr[0].set_title('Population Rate x Is Taste Decode')
     ax_corr[0].set_xticks(np.arange(len(segments_to_analyze)),seg_names)

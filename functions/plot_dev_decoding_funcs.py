@@ -543,9 +543,8 @@ def plot_decoded(num_tastes, num_neur, segment_spike_times, tastant_spike_times,
 def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times, 
                 tastant_spike_times, start_dig_in_times, post_taste_dt, pre_taste_dt,
                 cp_raster_inds, z_bin_dt, dig_in_names, segment_times,
-                segment_names, save_dir, max_hz,
-                segment_dev_times, segment_dev_fr_vecs, segment_dev_fr_vecs_zscore,
-                neuron_count_thresh, e_len_dt, trial_start_frac=0,
+                segment_names, save_dir, segment_dev_times, segment_dev_fr_vecs, 
+                segment_dev_fr_vecs_zscore, neuron_count_thresh, e_len_dt,
                 epochs_to_analyze=[], segments_to_analyze=[],
                 decode_prob_cutoff=0.95):
     """Function to plot the deviation events with a buffer on either side with
@@ -616,12 +615,6 @@ def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times,
         max_num_deliv = len(taste_deliv_times)
         cp_times = cp_raster_inds[t_i]
 
-        # If trial_start_frac > 0 use only trials after that threshold
-        trial_start_ind = np.floor(
-            max_num_deliv*trial_start_frac).astype('int')
-        new_max_num_deliv = (
-            max_num_deliv - trial_start_ind).astype('int')
-
         # Store as binary spike arrays
         by_epoch_all_taste_fr_vecs = []
         by_epoch_all_taste_fr_vecs_z = []
@@ -629,54 +622,53 @@ def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times,
         by_epoch_taste_fr_vecs_mean_z = np.zeros((num_cp, num_neur))
         for e_i in epochs_to_analyze:
             taste_spike_times_bin = np.zeros(
-                (new_max_num_deliv, num_neur, post_taste_dt))  # Taste response spike times
+                (max_num_deliv, num_neur, post_taste_dt))  # Taste response spike times
             taste_cp_times = np.zeros(
-                (new_max_num_deliv, num_cp+1)).astype('int')
+                (max_num_deliv, num_cp+1)).astype('int')
             taste_epoch_fr_vecs = np.zeros(
-                (new_max_num_deliv, num_neur))  # original firing rate vecs
+                (max_num_deliv, num_neur))  # original firing rate vecs
             taste_epoch_fr_vecs_z = np.zeros(
-                (new_max_num_deliv, num_neur))  # z-scored firing rate vecs
+                (max_num_deliv, num_neur))  # z-scored firing rate vecs
             # store each delivery to binary spike matrix
             for d_i in range(len(taste_spike_times)):
-                if d_i >= trial_start_ind:
-                    pre_taste_spike_times_bin = np.zeros(
-                        (num_neur, pre_taste_dt))  # Pre-taste spike times
-                    taste_deliv_i = taste_deliv_times[d_i]
-                    for n_i in range(num_neur):
-                        spikes_deliv_i = taste_spike_times[d_i][n_i]
-                        if t_i == num_tastes-1:
-                            if len(taste_spike_times[d_i-trial_start_ind][n_i]) > 0:
-                                d_i_spikes = np.array(
-                                    spikes_deliv_i - (np.min(spikes_deliv_i)+pre_taste_dt)).astype('int')
-                            else:
-                                d_i_spikes = np.empty(0)
-                        else:
+                pre_taste_spike_times_bin = np.zeros(
+                    (num_neur, pre_taste_dt))  # Pre-taste spike times
+                taste_deliv_i = taste_deliv_times[d_i]
+                for n_i in range(num_neur):
+                    spikes_deliv_i = taste_spike_times[d_i][n_i]
+                    if t_i == num_tastes-1:
+                        if len(taste_spike_times[d_i][n_i]) > 0:
                             d_i_spikes = np.array(
-                                spikes_deliv_i - taste_deliv_i).astype('int')
-                        d_i_spikes_posttaste = d_i_spikes[(
-                            d_i_spikes < post_taste_dt)*(d_i_spikes >= 0)]
-                        d_i_spikes_pretaste = d_i_spikes[d_i_spikes <
-                                                         0] + pre_taste_dt
-                        if len(d_i_spikes_posttaste) > 0:
-                            taste_spike_times_bin[d_i-trial_start_ind,
-                                                  n_i, d_i_spikes_posttaste] = 1
-                        if len(d_i_spikes_pretaste) > 0:
-                            pre_taste_spike_times_bin[n_i,
-                                                      d_i_spikes_pretaste] = 1
-                    taste_cp_times[d_i-trial_start_ind, :] = np.concatenate(
-                        (np.zeros(1), np.cumsum(np.diff(cp_times[d_i, :])))).astype('int')
-                    # Calculate the FR vectors by epoch for each taste response and the average FR vector
-                    
-                    epoch_len_i = (taste_cp_times[d_i, e_i+1]-taste_cp_times[d_i, e_i])/1000
-                    if epoch_len_i == 0:
-                        taste_epoch_fr_vecs[d_i-trial_start_ind,
-                                            :] = np.zeros(num_neur)
+                                spikes_deliv_i - (np.min(spikes_deliv_i)+pre_taste_dt)).astype('int')
+                        else:
+                            d_i_spikes = np.empty(0)
                     else:
-                        taste_epoch_fr_vecs[d_i-trial_start_ind, :] = np.sum(
-                            taste_spike_times_bin[d_i-trial_start_ind, :, taste_cp_times[d_i, e_i]:taste_cp_times[d_i, e_i+1]], 1)/epoch_len_i  # FR in HZ
-                    # Calculate z-scored FR vector
-                    taste_epoch_fr_vecs_z[d_i-trial_start_ind, :] = (
-                        taste_epoch_fr_vecs[d_i-trial_start_ind, :].flatten() - mean_fr_taste)/std_fr_taste
+                        d_i_spikes = np.array(
+                            spikes_deliv_i - taste_deliv_i).astype('int')
+                    d_i_spikes_posttaste = d_i_spikes[(
+                        d_i_spikes < post_taste_dt)*(d_i_spikes >= 0)]
+                    d_i_spikes_pretaste = d_i_spikes[d_i_spikes <
+                                                     0] + pre_taste_dt
+                    if len(d_i_spikes_posttaste) > 0:
+                        taste_spike_times_bin[d_i,
+                                              n_i, d_i_spikes_posttaste] = 1
+                    if len(d_i_spikes_pretaste) > 0:
+                        pre_taste_spike_times_bin[n_i,
+                                                  d_i_spikes_pretaste] = 1
+                taste_cp_times[d_i, :] = np.concatenate(
+                    (np.zeros(1), np.cumsum(np.diff(cp_times[d_i, :])))).astype('int')
+                # Calculate the FR vectors by epoch for each taste response and the average FR vector
+                
+                epoch_len_i = (taste_cp_times[d_i, e_i+1]-taste_cp_times[d_i, e_i])/1000
+                if epoch_len_i == 0:
+                    taste_epoch_fr_vecs[d_i,
+                                        :] = np.zeros(num_neur)
+                else:
+                    taste_epoch_fr_vecs[d_i, :] = np.sum(
+                        taste_spike_times_bin[d_i, :, taste_cp_times[d_i, e_i]:taste_cp_times[d_i, e_i+1]], 1)/epoch_len_i  # FR in HZ
+                # Calculate z-scored FR vector
+                taste_epoch_fr_vecs_z[d_i, :] = (
+                    taste_epoch_fr_vecs[d_i, :].flatten() - mean_fr_taste)/std_fr_taste
 
             by_epoch_all_taste_fr_vecs.append(taste_epoch_fr_vecs)
             by_epoch_all_taste_fr_vecs_z.append(taste_epoch_fr_vecs_z)
@@ -699,7 +691,7 @@ def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times,
     
     for seg_ind, s_i in tqdm.tqdm(enumerate(segments_to_analyze)):
         try:
-            dev_decode_is_taste_array = np.load(
+            decode_is_taste_prob_array = np.load(
                 os.path.join(decode_save_dir,'segment_' + str(s_i) + \
                              '_deviations_is_taste.npy'))
             pre_dev_decode_is_taste_array = np.load(
@@ -708,7 +700,7 @@ def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times,
             post_dev_decode_is_taste_array = np.load(
                 os.path.join(decode_save_dir,'segment_' + str(s_i) + \
                              '_post_deviations_is_taste.npy'))
-            dev_decode_array = np.load(
+            decode_which_taste_prob_array = np.load(
                 os.path.join(decode_save_dir,'segment_' + str(s_i) + \
                              '_deviations_which_taste.npy'))
             pre_dev_decode_array = np.load(
@@ -716,7 +708,10 @@ def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times,
                              '_pre_deviations_which_taste.npy'))
             post_dev_decode_array = np.load(
                 os.path.join(decode_save_dir,'segment_' + str(s_i) + \
-                             '_post_deviations_which_taste.npy'))   
+                             '_post_deviations_which_taste.npy')) 
+            decode_epoch_prob_array = np.load(
+                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
+                             '_deviations_which_epoch.npy')) 
         except:
             print("\t\t\t\tSegment " + str(s_i) + " Never Decoded")
             pass
@@ -724,52 +719,46 @@ def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times,
         seg_decode_save_dir = os.path.join(decode_save_dir,
             'segment_' + str(s_i) + '/')
         
-        dev_decode_stats[s_i] = dict()
-        
-        _, num_dev = np.shape(dev_decode_array)
-        dev_decode_stats[s_i]['num_dev'] = num_dev
+        num_dev, _ = np.shape(decode_is_taste_prob_array)
         
         #Dev decodes
-        dev_decode_is_taste_ind = np.argmax(dev_decode_is_taste_array, 0)
-        dev_decode_taste_ind = np.argmax(dev_decode_array, 0)
+        dev_decode_is_taste_ind = np.argmax(decode_is_taste_prob_array, 1)
+        dev_decode_taste_ind = np.argmax(decode_which_taste_prob_array, 1)
         dev_decode_is_taste_bin = np.zeros((2,num_dev)) #First row is taste, second row not taste
         for t_i in range(2):
             dev_decode_is_taste_bin[t_i,np.where(dev_decode_is_taste_ind == t_i)[0]] = 1
+        is_taste_inds = np.where(dev_decode_is_taste_ind == 0)[0]
         dev_decode_bin = np.zeros((num_tastes-1,num_dev))
         for t_i in range(num_tastes-1):
-            is_taste_inds = np.where(dev_decode_is_taste_ind == 0)[0]
             taste_inds = np.where(dev_decode_taste_ind == t_i)[0]
             true_taste_inds = np.intersect1d(is_taste_inds, taste_inds)
             dev_decode_bin[t_i,true_taste_inds] = 1
-        dev_decode_array_prob_fixed = dev_decode_array*dev_decode_bin
+        dev_decode_array_prob_fixed = decode_which_taste_prob_array.T*dev_decode_bin
         #Pre-Dev decodes
-        pre_dev_decode_is_taste_ind = np.argmax(pre_dev_decode_is_taste_array, 0)
-        pre_dev_decode_taste_ind = np.argmax(pre_dev_decode_array, 0)
+        pre_dev_decode_is_taste_ind = np.argmax(pre_dev_decode_is_taste_array, 1)
+        pre_dev_decode_taste_ind = np.argmax(pre_dev_decode_array, 1)
         pre_dev_decode_is_taste_bin = np.zeros((2,num_dev)) #First row is taste, second row not taste
-        for t_i in range(2):
-            pre_dev_decode_is_taste_bin[t_i,np.where(pre_dev_decode_is_taste_ind == t_i)[0]] = 1
+        is_taste_inds = np.where(pre_dev_decode_is_taste_ind == 0)[0]
+        pre_dev_decode_is_taste_bin[:,is_taste_inds] = 1
         pre_dev_decode_bin = np.zeros((num_tastes-1,num_dev))
         for t_i in range(num_tastes-1):
-            is_taste_inds = np.where(pre_dev_decode_is_taste_ind == 0)[0]
             taste_inds = np.where(pre_dev_decode_taste_ind == t_i)[0]
             true_taste_inds = np.intersect1d(is_taste_inds, taste_inds)
             pre_dev_decode_bin[t_i,true_taste_inds] = 1
-        pre_dev_decode_array_prob_fixed = pre_dev_decode_array*pre_dev_decode_bin
+        pre_dev_decode_array_prob_fixed = pre_dev_decode_array.T*pre_dev_decode_bin
         #Post-Dev decodes
-        post_dev_decode_is_taste_ind = np.argmax(post_dev_decode_is_taste_array, 0)
-        post_dev_decode_taste_ind = np.argmax(post_dev_decode_array, 0)
+        post_dev_decode_is_taste_ind = np.argmax(post_dev_decode_is_taste_array, 1)
+        post_dev_decode_taste_ind = np.argmax(post_dev_decode_array, 1)
         post_dev_decode_is_taste_bin = np.zeros((2,num_dev)) #First row is taste, second row not taste
-        for t_i in range(2):
-            post_dev_decode_is_taste_bin[t_i,np.where(post_dev_decode_is_taste_ind == t_i)[0]] = 1
+        is_taste_inds = np.where(post_dev_decode_is_taste_ind == 0)[0]
+        post_dev_decode_is_taste_bin[:,is_taste_inds] = 1
         post_dev_decode_bin = np.zeros((num_tastes-1,num_dev))
         for t_i in range(num_tastes-1):
             is_taste_inds = np.where(post_dev_decode_is_taste_ind == 0)[0]
             taste_inds = np.where(post_dev_decode_taste_ind == t_i)[0]
             true_taste_inds = np.intersect1d(is_taste_inds, taste_inds)
             post_dev_decode_bin[t_i,true_taste_inds] = 1
-        post_dev_decode_array_prob_fixed = post_dev_decode_array*post_dev_decode_bin
-        
-        plot_inds = np.array(random.sample(list(np.arange(num_dev)),num_to_plot))
+        post_dev_decode_array_prob_fixed = post_dev_decode_array.T*post_dev_decode_bin
         
         seg_start = segment_times[s_i]
         seg_end = segment_times[s_i+1]
@@ -794,14 +783,11 @@ def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times,
         std_fr = np.std(tb_fr, 1)
         std_fr[std_fr == 0] = 1
         
-        #Calculate the number of deviation events decoded for each taste
-        dev_decode_stats[s_i]['decode_probabilities'] = dev_decode_array_prob_fixed
-        dev_decode_stats[s_i]['num_dev_per_taste'] = np.nansum(dev_decode_bin,1)
-        
         #For each deviation event create plots of decoded results
-        dev_taste_corrs = np.zeros((num_tastes,num_dev))
-        dev_taste_z_corrs = np.zeros((num_tastes,num_dev))
-        for dev_i in range(num_dev):
+        dev_to_plot = np.where(dev_decode_is_taste_ind == 0)[0]
+        plot_inds = np.sort(np.array(random.sample(list(dev_to_plot),np.min([num_to_plot,len(dev_to_plot)]))))
+        
+        for dev_i in plot_inds:
             #Collect deviation decoding probabilities
             # dev_prob_is_taste_decoded = dev_decode_is_taste_array[:,dev_i]
             # pre_dev_prob_is_taste_decoded = pre_dev_decode_is_taste_array[:,dev_i]
@@ -822,9 +808,9 @@ def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times,
             d_plot_len = len(decode_x_vals)
             decode_x_ticks = np.linspace(decode_x_vals[0], decode_x_vals[-1]-1, 10).astype('int')
             raster_x_ticks = np.linspace(0,d_plot_len-1,10).astype('int')
-            raster_x_tick_labels = decode_x_vals[raster_x_ticks]
+            raster_x_tick_labels = decode_x_ticks #decode_x_vals[raster_x_ticks]
             
-            #Collect spike times for raster plot and firing rate plotå
+            #Collect spike times for raster plot and firing rate plots
             plot_spike_bin = segment_spike_times_s_i_bin[:,pre_dev_time:post_dev_time]
             plot_spike_times = [np.where(plot_spike_bin[n_i,:] == 1)[0] for n_i in range(num_neur)]
             firing_rate_vec = np.zeros(d_plot_len)
@@ -852,10 +838,8 @@ def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times,
             #Calculate correlation to mean taste responses
             corr_dev_event = np.array([pearsonr(all_taste_fr_vecs_mean[t_i][e_i, :], dev_fr_vec)[
                                          0] for t_i in range(num_tastes)])
-            dev_taste_corrs[:,dev_i] = corr_dev_event
             corr_dev_event_zscore = np.array([pearsonr(all_taste_fr_vecs_mean_z[t_i][e_i, :], dev_fr_vec_zscore)[
                                          0] for t_i in range(num_tastes)])
-            dev_taste_z_corrs[:,dev_i] = corr_dev_event_zscore
             
             if len(np.where(plot_inds == dev_i)[0])>0: 
                 corr_title_norm = [dig_in_names[t_i] + ' corr = ' + str(
@@ -976,100 +960,5 @@ def plot_is_taste_which_taste_decoded(num_tastes, num_neur, segment_spike_times,
                 f.savefig(os.path.join(
                     seg_decode_save_dir, 'dev_' + str(dev_i) + '.svg'))
                 plt.close(f)
-        dev_decode_stats[s_i]['dev_taste_corrs'] = dev_taste_corrs
-        dev_decode_stats[s_i]['dev_taste_z_corrs'] = dev_taste_z_corrs
-    np.save(os.path.join(save_dir,'dev_decode_stats.npy'),dev_decode_stats)
-        
-    #Now go by segment and for plot the different decode statistics to compare - 
-    #histograms of decoding probability, fractions of decoded taste
-    
-    f_decode_seg_hist, ax_decode_seg_hist = plt.subplots(ncols=len(segments_to_analyze),\
-                                                 nrows=1,figsize=(8,5))
-    f_decode_taste_hist, ax_decode_taste_hist = plt.subplots(ncols=num_tastes-1,\
-                                                 nrows=1,figsize=(8,5))
-    decode_frac_compiled = np.zeros((num_tastes,len(segments_to_analyze)))
-    true_taste_decode_frac_compiled = np.zeros((num_tastes-1,len(segments_to_analyze)))
-    min_decode_prob = 1
-    for seg_ind, s_i in tqdm.tqdm(enumerate(segments_to_analyze)):
-        num_dev = dev_decode_stats[s_i]['num_dev']
-        decode_probabilities = dev_decode_stats[s_i]['decode_probabilities']
-        num_dev_per_taste = dev_decode_stats[s_i]['num_dev_per_taste']
-        dev_taste_corrs = dev_decode_stats[s_i]['dev_taste_corrs']
-        dev_taste_z_corrs = dev_decode_stats[s_i]['dev_taste_z_corrs']
-        
-        for t_i in range(num_tastes):
-            if t_i < num_tastes-1:
-                decode_frac_compiled[t_i,seg_ind] = num_dev_per_taste[t_i]/num_dev
-                true_taste_decode_frac_compiled[t_i,seg_ind] = num_dev_per_taste[t_i]/np.sum(num_dev_per_taste)
-            else:
-                decode_frac_compiled[t_i,seg_ind] = 1 - np.sum(decode_frac_compiled[:-1,seg_ind])
-        
-        #Create histograms of decoding probability of the best decoded taste by segment
-        for t_i in range(num_tastes-1):
-            decode_prob_data = decode_probabilities[t_i,:]
-            non_zero_data = decode_prob_data[np.where(decode_prob_data > 0)[0]]
-            if len(non_zero_data) > 0:
-                if np.nanmin(non_zero_data) < min_decode_prob:
-                    min_decode_prob = np.nanmin(non_zero_data)
-            
-            ax_decode_seg_hist[seg_ind].hist(non_zero_data, \
-                                       histtype='step',cumulative = True, \
-                                       density=True,color=taste_colors[t_i,:], \
-                                       label=dig_in_names[t_i],alpha=0.8)
-            ax_decode_taste_hist[t_i].hist(non_zero_data, \
-                                       histtype='step',cumulative = True, \
-                                       density=True,color=segment_colors[seg_ind,:], \
-                                       label=segment_names[s_i],alpha=0.8)
-            ax_decode_seg_hist[seg_ind].set_xlabel('Decode Probability')
-            ax_decode_seg_hist[seg_ind].set_ylabel('Cumulative Density')
-            ax_decode_seg_hist[seg_ind].set_title((' ').join(segment_names[s_i].split('_')))
-            if seg_ind == 0:
-                ax_decode_seg_hist[seg_ind].legend()
-        for seg_ind, s_i in tqdm.tqdm(enumerate(segments_to_analyze)):
-            ax_decode_seg_hist[seg_ind].set_xlim([min_decode_prob - 0.1,1.1])
-            plt.tight_layout()
-        for t_i in range(num_tastes-1):
-            ax_decode_taste_hist[t_i].set_xlabel('Decode Probability')
-            ax_decode_taste_hist[t_i].set_ylabel('Cumulative Density')
-            ax_decode_taste_hist[t_i].set_title(dig_in_names[t_i])
-            ax_decode_taste_hist[t_i].set_xlim([min_decode_prob - 0.1,1.1])
-            if t_i == 0:
-                ax_decode_taste_hist[t_i].legend()
-            plt.tight_layout()
-        f_decode_seg_hist.savefig(os.path.join(save_dir,'segment_decode_prob_hist.png'))
-        f_decode_seg_hist.savefig(os.path.join(save_dir,'segment_decode_prob_hist.svg'))
-        plt.close(f_decode_seg_hist)
-        f_decode_taste_hist.savefig(os.path.join(save_dir,'taste_decode_prob_hist.png'))
-        f_decode_taste_hist.savefig(os.path.join(save_dir,'taste_decode_prob_hist.svg'))
-        plt.close(f_decode_taste_hist)
-        
-    f_decode_frac = plt.figure(figsize = (8,5))
-    for t_i in range(num_tastes):
-        plt.plot(np.arange(len(segments_to_analyze)),decode_frac_compiled[t_i,:],\
-                 color=taste_colors[t_i,:],label=dig_in_names[t_i],alpha=0.8)
-    plt.legend()
-    plt.xticks(np.arange(len(segments_to_analyze)),np.array(segment_names)[segments_to_analyze])
-    plt.xlabel('Segment')
-    plt.ylabel('Fraction of Deviation Events')
-    plt.title('Taste Decode Fractions')
-    plt.tight_layout()
-    f_decode_frac.savefig(os.path.join(save_dir,'taste_decode_fractions.png'))
-    f_decode_frac.savefig(os.path.join(save_dir,'taste_decode_fractions.svg'))
-    plt.close(f_decode_frac)
-    
-    f_true_decode_frac = plt.figure(figsize = (8,5))
-    for t_i in range(num_tastes-1):
-        plt.plot(np.arange(len(segments_to_analyze)),true_taste_decode_frac_compiled[t_i,:],\
-                 color=taste_colors[t_i,:],label=dig_in_names[t_i],alpha=0.8)
-    plt.legend()
-    plt.xticks(np.arange(len(segments_to_analyze)),np.array(segment_names)[segments_to_analyze])
-    plt.xlabel('Segment')
-    plt.ylabel('Fraction of Deviation Events')
-    plt.title('Taste Decode Fractions')
-    plt.tight_layout()
-    f_decode_frac.savefig(os.path.join(save_dir,'true_taste_decode_fractions.png'))
-    f_decode_frac.savefig(os.path.join(save_dir,'true_taste_decode_fractions.svg'))
-    plt.close(f_decode_frac)
-    
     
     

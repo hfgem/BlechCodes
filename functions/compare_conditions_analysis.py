@@ -56,6 +56,14 @@ class run_compare_conditions_analysis():
                 self.import_dev_null_stats()
             except:
                 self.gather_dev_null_data()
+            try:
+                self.import_dev_split_corr_data()
+            except:
+                self.gather_dev_split_data()
+            try:
+                self.import_dev_decode_data()
+            except:
+                self.gather_dev_decode_data()
         else:
             print("Please select a storage folder for results.")
             print('Please select the storage folder.')
@@ -68,6 +76,8 @@ class run_compare_conditions_analysis():
             self.gather_rate_corr_data()
             self.gather_dev_stats_data()
             self.gather_dev_null_data()
+            self.gather_dev_split_data()
+            self.gather_dev_decode_data()
         #Correlation comparisons
         self.find_corr_groupings()
         self.plot_corr_results()
@@ -86,6 +96,12 @@ class run_compare_conditions_analysis():
         #Deviation True x Null comparisons
         self.find_dev_null_groupings()
         self.plot_dev_null_results()
+        #Sliding bin decoding results
+        self.find_dev_split_corr_groupings()
+        self.plot_dev_split_results()
+        #Dev decode results
+        self.find_dev_decode_groupings()
+        self.plot_dev_decode_results()
 
     def import_corr(self,):
         """Import previously saved correlation data"""
@@ -990,6 +1006,8 @@ class run_compare_conditions_analysis():
             num_segments = len(sliding_decode_data[data_name]['segment_names'])
             sliding_decode_data[data_name]['segment_times_reshaped'] = [
                 [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+            epochs_to_analyze = metadata['params_dict']['epochs_to_analyze']
+            sliding_decode_data[data_name]['epochs_to_analyze'] = epochs_to_analyze
             dig_in_names = data_dict['dig_in_names']
             sliding_decode_data[data_name]['dig_in_names'] = dig_in_names
             data_save_dir = data_dict['data_path']
@@ -1005,7 +1023,6 @@ class run_compare_conditions_analysis():
                     sliding_decode_zscore_dict_files.append(sd_z_f)
             sliding_decode_data[data_name]['pop_corr_data'] = dict()
             sliding_decode_data[data_name]['frac_decode_data'] = dict()
-            sliding_decode_data[data_name]['decode_prob'] = dict()
             for stat_i in range(len(sliding_decode_zscore_dict_files)):
                 stat_full_filename = sliding_decode_zscore_dict_files[stat_i]
                 stat_filename = stat_full_filename.split('.')[0]
@@ -1018,22 +1035,7 @@ class run_compare_conditions_analysis():
                     frac_type = ('_').join(stat_filename.split('_')[1:3])
                     sliding_decode_data[data_name]['frac_decode_data'][frac_type] = np.load(os.path.join(sliding_decode_zscore_dir,stat_full_filename),
                                                                                          allow_pickle=True)
-                else: #probabilities of decodes
-                    
-                    
-                dev_split_corr_data[data_name]['corr_data'][stat_segment] = dict()
-                dict_data = np.load(os.path.join(dev_split_corr_dir,stat_filename),allow_pickle=True).item()
-                epoch_pairs = list(dict_data.keys())
-                dev_split_corr_data[data_name]['corr_data'][stat_segment]['epoch_pairs'] = epoch_pairs
-                num_tastes = len(dig_in_names)
-                for t_i, t_name in enumerate(dig_in_names):
-                    taste_corr_data = []
-                    for ep_i, ep in enumerate(epoch_pairs):
-                        taste_corr_data.append(dict_data[ep]['taste_corrs'][t_i])
-                    taste_corr_data = np.array(taste_corr_data)
-                    _, num_dev = np.shape(taste_corr_data)
-                    dev_split_corr_data[data_name]['corr_data'][stat_segment][t_name] = taste_corr_data
-                    
+                
         self.sliding_decode_data = sliding_decode_data
         dict_save_dir = os.path.join(self.save_dir, 'sliding_decode_data.npy')
         np.save(dict_save_dir,sliding_decode_data,allow_pickle=True)
@@ -1047,54 +1049,183 @@ class run_compare_conditions_analysis():
         deviation null statistic combinations and names/indices, and unique  
         segment names/indices to align datasets to each other in these
         different groups."""
-        dev_split_corr_data = self.dev_split_corr_data
+        sliding_decode_data = self.sliding_decode_data
 
-        unique_given_names = list(dev_split_corr_data.keys())
+        unique_given_names = list(sliding_decode_data.keys())
         unique_given_indices = np.sort(
             np.unique(unique_given_names, return_index=True)[1])
         unique_given_names = [unique_given_names[i]
                               for i in unique_given_indices]
-        unique_epoch_pairs = []
         unique_segment_names = []
+        unique_epochs = []
         unique_taste_names = []
+        unique_decode_types = []
         for name in unique_given_names:
-            segment_names = list(dev_split_corr_data[name]['corr_data'].keys())
-            unique_segment_names.extend(segment_names)
-            for seg_name in segment_names:
-                epoch_pairs = dev_split_corr_data[name]['corr_data'][seg_name]['epoch_pairs']
-                unique_epoch_pairs.extend(epoch_pairs)
-                taste_names = list(dev_split_corr_data[name]['corr_data'][seg_name].keys())
-                epoch_pairs_ind = np.where(np.array(taste_names) == 'epoch_pairs')
-                if len(np.shape(np.where(np.array(taste_names) == 'epoch_pairs'))) == 2:
-                    taste_names.pop(epoch_pairs_ind[0][0])
-                else:
-                    taste_names.pop(epoch_pairs_ind[0])
-                unique_taste_names.extend(taste_names)
-       
-        unique_epoch_indices = np.sort(
-            np.unique(unique_epoch_pairs, return_index=True)[1])
-        unique_epoch_pairs = [unique_epoch_pairs[i] for i in unique_epoch_indices]
+            epoch_inds = list(sliding_decode_data[name]['epochs_to_analyze'])
+            unique_epochs.extend(epoch_inds)
+            segment_names = sliding_decode_data[name]['segment_names']
+            used_segment_names = np.array(segment_names)[sliding_decode_data[name]['segments_to_analyze']]
+            unique_segment_names.extend(used_segment_names)
+            decode_types = list(sliding_decode_data[name]['frac_decode_data'].keys())
+            unique_decode_types.extend(decode_types)
+            unique_taste_names.extend(sliding_decode_data[name]['dig_in_names'][:-1])
+               
         unique_segment_indices = np.sort(
             np.unique(unique_segment_names, return_index=True)[1])
         unique_segment_names = [unique_segment_names[i] for i in unique_segment_indices]
+        unique_epoch_indices = np.sort(
+            np.unique(unique_epochs, return_index=True)[1])
+        unique_epochs = [unique_epochs[i] for i in unique_epoch_indices]
+        unique_taste_indices = np.sort(
+            np.unique(unique_taste_names, return_index=True)[1])
+        unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
+        unique_decode_indices = np.sort(
+            np.unique(unique_decode_types, return_index=True)[1])
+        unique_decode_types = [unique_decode_types[i] for i in unique_decode_indices]
+        
+        
+        self.unique_given_names = unique_given_names
+        self.unique_segment_names = unique_segment_names
+        self.unique_epochs = unique_epochs
+        self.unique_taste_names = unique_taste_names
+        self.unique_decode_types = unique_decode_types
+
+    def plot_sliding_decode_results(self,):
+        num_cond = len(self.sliding_decode_data)
+        results_dir = self.sliding_decode_results_dir
+
+        print("Beginning Plots.")
+        if num_cond > 1:
+            cdf.cross_dataset_sliding_decode_frac_plots(self.sliding_decode_data,
+                                            self.unique_given_names,self.unique_segment_names,
+                                            self.unique_epochs,self.unique_taste_names,
+                                            self.unique_decode_types,self.results_dir)
+            cdf.cross_dataset_sliding_decode_corr_plots(self.sliding_decode_data,
+                                            self.unique_given_names,self.unique_segment_names,
+                                            self.unique_epochs,self.unique_taste_names,
+                                            self.unique_decode_types,self.results_dir)
+        else:
+            print("Not enough animals for cross-animal dev stat plots.")
+           
+    def import_dev_decode_data(self,):
+        """Import previously saved sliding bin decode data"""
+        dict_save_dir = os.path.join(self.save_dir, 'dev_decode_data.npy')
+        dev_decode_data = np.load(dict_save_dir,allow_pickle=True).item()
+        self.dev_decode_data = dev_decode_data
+        if not os.path.isdir(os.path.join(self.save_dir,'Dev_Decode')):
+            os.mkdir(os.path.join(self.save_dir,'Dev_Decode'))
+        self.dev_decode_results_dir = os.path.join(self.save_dir,'Dev_Decode')
+
+    def gather_dev_decode_data(self,):
+        """Import the relevant data from each dataset to be analyzed. This 
+        includes the number of neurons, segments to analyze, segment names, 
+        segment start and end times, taste dig in names, and the sliding
+        decode data for all neurons"""
+
+        num_datasets = len(self.all_data_dict)
+        dataset_names = list(self.all_data_dict.keys())
+        dev_decode_data = dict()
+        for n_i in range(num_datasets):
+            data_name = dataset_names[n_i]
+            data_dict = self.all_data_dict[data_name]['data']
+            metadata = self.all_data_dict[data_name]['metadata']
+            dev_decode_data[data_name] = dict()
+            dev_decode_data[data_name]['num_neur'] = data_dict['num_neur']
+            segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+            dev_decode_data[data_name]['segments_to_analyze'] = segments_to_analyze
+            dev_decode_data[data_name]['segment_names'] = data_dict['segment_names']
+            segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
+            segment_times = data_dict['segment_times']
+            num_segments = len(dev_decode_data[data_name]['segment_names'])
+            dev_decode_data[data_name]['segment_times_reshaped'] = [
+                [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+            epochs_to_analyze = metadata['params_dict']['epochs_to_analyze']
+            dev_decode_data[data_name]['epochs_to_analyze'] = epochs_to_analyze
+            dig_in_names = data_dict['dig_in_names']
+            dev_decode_data[data_name]['dig_in_names'] = dig_in_names
+            data_save_dir = data_dict['data_path']
+            dev_decode_dir = os.path.join(
+                data_save_dir, 'Deviation_Dependent_Decoding')
+            #Subfolders we care about: corr_tests and decode_splits
+            #First load correlation data
+            dev_decode_zscore_dir = os.path.join(dev_decode_dir,'All_Neurons_Z_Scored',\
+                                                 'GMM_Decoding','Is_Taste_Which_Taste')
+            dev_decode_zscore_files = os.listdir(dev_decode_zscore_dir)
+            dev_decode_zscore_dict_files = []
+            for dd_z_f in dev_decode_zscore_files:
+                if dd_z_f[-4:] == '.npy':
+                    dev_decode_zscore_dict_files.append(dd_z_f)
+            dev_decode_data[data_name]['is_taste'] = dict()
+            dev_decode_data[data_name]['which_taste'] = dict()
+            dev_decode_data[data_name]['which_epoch'] = dict()
+            for stat_i, stat_full_filename in enumerate(dev_decode_zscore_dict_files):
+                stat_filename = stat_full_filename.split('.')[0]
+                stat_filename_split = stat_filename.split('_')
+                if len(stat_filename_split) == 5: #Deviation data
+                    seg_ind = int(stat_filename_split[1])
+                    seg_name = data_dict['segment_names'][seg_ind]
+                    stat_type = ('_').join(stat_filename_split[-2:])
+                    dev_decode_data[data_name][stat_type][seg_name] = np.load(os.path.join(\
+                                    dev_decode_zscore_dir,stat_full_filename),
+                                                        allow_pickle=True)
+                
+        self.dev_decode_data = dev_decode_data
+        dict_save_dir = os.path.join(self.save_dir, 'dev_decode_data.npy')
+        np.save(dict_save_dir,dev_decode_data,allow_pickle=True)
+        # _____Analysis Storage Directory_____
+        if not os.path.isdir(os.path.join(self.save_dir,'Dev_Decode')):
+            os.mkdir(os.path.join(self.save_dir,'Dev_Decode'))
+        self.dev_decode_results_dir = os.path.join(self.save_dir,'Dev_Decode')
+
+    def find_dev_decode_groupings(self,):
+        """Across the different datasets, get the unique data names/indices,
+        deviation null statistic combinations and names/indices, and unique  
+        segment names/indices to align datasets to each other in these
+        different groups."""
+        dev_decode_data = self.dev_decode_data
+
+        unique_given_names = list(dev_decode_data.keys())
+        unique_given_indices = np.sort(
+            np.unique(unique_given_names, return_index=True)[1])
+        unique_given_names = [unique_given_names[i]
+                              for i in unique_given_indices]
+        unique_segment_names = []
+        unique_epochs = []
+        unique_taste_names = []
+        unique_decode_types = ['is_taste','which_epoch','which_taste']
+        for name in unique_given_names:
+            epoch_inds = list(dev_decode_data[name]['epochs_to_analyze'])
+            unique_epochs.extend(epoch_inds)
+            segment_names = dev_decode_data[name]['segment_names']
+            used_segment_names = np.array(segment_names)[dev_decode_data[name]['segments_to_analyze']]
+            unique_segment_names.extend(used_segment_names)
+            unique_taste_names.extend(dev_decode_data[name]['dig_in_names'][:-1])
+               
+        unique_segment_indices = np.sort(
+            np.unique(unique_segment_names, return_index=True)[1])
+        unique_segment_names = [unique_segment_names[i] for i in unique_segment_indices]
+        unique_epoch_indices = np.sort(
+            np.unique(unique_epochs, return_index=True)[1])
+        unique_epochs = [unique_epochs[i] for i in unique_epoch_indices]
         unique_taste_indices = np.sort(
             np.unique(unique_taste_names, return_index=True)[1])
         unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
         
         self.unique_given_names = unique_given_names
-        self.unique_epoch_pairs = unique_epoch_pairs
         self.unique_segment_names = unique_segment_names
+        self.unique_epochs = unique_epochs
         self.unique_taste_names = unique_taste_names
+        self.unique_decode_types = unique_decode_types
 
-    def plot_sliding_decode_results(self,):
-        num_cond = len(self.dev_split_corr_data)
-        results_dir = self.dev_split_corr_results_dir
+    def plot_dev_decode_results(self,):
+        num_cond = len(self.dev_decode_data)
+        results_dir = self.dev_decode_results_dir
 
         print("Beginning Plots.")
         if num_cond > 1:
-            cdf.cross_dataset_dev_split_corr_plots(self.dev_split_corr_data, self.unique_given_names, 
-                                             self.unique_epoch_pairs, self.unique_segment_names, 
-                                             self.unique_taste_names, results_dir)
+            cdf.cross_dataset_dev_decode_frac_plots(self.dev_decode_data, self.unique_given_names,
+                                                    self.unique_segment_names, self.unique_epochs,
+                                                    self.unique_taste_names, self.unique_decode_types,
+                                                    results_dir)
         else:
             print("Not enough animals for cross-animal dev stat plots.")
-           

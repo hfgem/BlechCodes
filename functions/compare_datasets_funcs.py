@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 from scipy.stats import ks_2samp, ttest_ind, mannwhitneyu, percentileofscore
 from scipy.signal import savgol_filter
+from matplotlib import colormaps
 
 
 def cross_dataset_dev_freq(corr_data, unique_given_names, unique_corr_names,
@@ -3613,3 +3614,340 @@ def cross_dataset_dev_split_best_corr_plots(dev_split_corr_data, unique_given_na
     f_seg_taste.savefig(os.path.join(results_dir,'seg_x_taste_epoch_cmfs_best.png'))
     f_seg_taste.savefig(os.path.join(results_dir,'seg_x_taste_epoch_cmfs_best.svg'))
     plt.close(f_seg_taste)
+    
+def cross_dataset_sliding_decode_frac_plots(sliding_decode_data, unique_given_names,
+                                            unique_segment_names, unique_epochs,
+                                            unique_taste_names, unique_decode_types,
+                                            results_dir):
+    """Plot the sliding decode fractions by decode type"""
+    #Variables
+    num_segments = len(unique_segment_names)
+    num_tastes = len(unique_taste_names)
+    num_epochs = len(unique_epochs)
+    cmap = colormaps['brg']
+    segment_colors = cmap(np.linspace(0, 1, num_segments))
+    
+    f_frac, ax_frac = plt.subplots(nrows = 3, ncols = 1, sharey = True,
+                                   figsize = (4,12))
+    ax_frac[0].set_ylim([-0.1,1.1])
+    #Is Taste Data + Plots
+    dt = 'is_taste'
+    labels = ['Taste', 'No Taste']
+    is_taste_seg_data = [] #num seg x num anim x 2
+    for s_i, s_name in enumerate(unique_segment_names):
+        all_animal_data = []
+        for name_i, name in enumerate(unique_given_names):
+            an_seg_names = np.array(sliding_decode_data[name]['segment_names'])
+            an_seg_inds = np.array(sliding_decode_data[name]['segments_to_analyze'])
+            an_seg_names = an_seg_names[an_seg_inds]
+            an_s_i = np.where(an_seg_names == s_name)[0]
+            if len(an_s_i) > 0:
+                decode_data_i = np.squeeze(sliding_decode_data[name]['frac_decode_data'][dt][an_s_i[0],:])
+                all_animal_data.append(list(decode_data_i))
+        is_taste_seg_data.append(np.array(all_animal_data))
+    is_taste_seg_means = np.nanmean(is_taste_seg_data,1)
+    is_taste_seg_stds = np.nanstd(is_taste_seg_data,1)
+    for s_i, s_name in enumerate(unique_segment_names):
+        ax_frac[0].plot(np.arange(2),is_taste_seg_means[s_i,:],
+                        color=segment_colors[s_i,:],label=s_name)
+        ax_frac[0].fill_between(np.arange(2),
+                                is_taste_seg_means[s_i,:]+is_taste_seg_stds[s_i,:],
+                                is_taste_seg_means[s_i,:]-is_taste_seg_stds[s_i,:],
+                                color=segment_colors[s_i,:],alpha=0.2,label='_')
+    ax_frac[0].legend(loc='upper left')
+    ax_frac[0].set_title('Is Taste Fraction')
+    ax_frac[0].set_xticks(np.arange(2),labels)
+    
+    dt = 'which_taste'
+    which_taste_data = [] #num taste x num seg x num anim
+    for t_i, t_name in enumerate(unique_taste_names):
+        all_seg_data = []
+        for s_i, s_name in enumerate(unique_segment_names):
+            all_animal_data = []
+            for name_i, name in enumerate(unique_given_names):
+                an_seg_names = np.array(sliding_decode_data[name]['segment_names'])
+                an_seg_inds = np.array(sliding_decode_data[name]['segments_to_analyze'])
+                an_seg_names = an_seg_names[an_seg_inds]
+                an_s_i = np.where(an_seg_names == s_name)[0]
+                taste_names = sliding_decode_data[name]['dig_in_names']
+                an_t_i = np.where(np.array(taste_names) == t_name)[0]
+                if (len(an_t_i) > 0) and (len(an_s_i) > 0):
+                    decode_data_i = sliding_decode_data[name]['frac_decode_data'][dt]
+                    all_animal_data.append(decode_data_i[an_s_i[0],an_t_i[0]])
+            all_seg_data.append(all_animal_data)
+        which_taste_data.append(np.array(all_seg_data))
+    which_taste_seg_means = np.nanmean(which_taste_data,-1) #num taste x num seg
+    which_taste_seg_stds = np.nanstd(which_taste_data,-1) #num taste x num seg
+    for s_i, s_name in enumerate(unique_segment_names):
+        ax_frac[1].plot(np.arange(num_tastes),which_taste_seg_means[:,s_i],
+                        color=segment_colors[s_i,:],label=s_name)
+        ax_frac[1].fill_between(np.arange(num_tastes),
+                                which_taste_seg_means[:,s_i]+which_taste_seg_stds[:,s_i],
+                                which_taste_seg_means[:,s_i]-which_taste_seg_stds[:,s_i],
+                                color=segment_colors[s_i,:],label='_',alpha=0.2)
+    ax_frac[1].legend(loc='upper left')
+    ax_frac[1].set_title('Which Taste Fraction')
+    ax_frac[1].set_xticks(np.arange(num_tastes),unique_taste_names)
+    
+    dt = 'which_epoch'
+    unique_epoch_names = ['Epoch ' + str(e_i) for e_i in unique_epochs]
+    which_epoch_data = [] #num epoch x num seg x num animals
+    for e_i in unique_epochs:
+        all_seg_data = []
+        for s_i, s_name in enumerate(unique_segment_names):
+            all_animal_data = []
+            for name_i, name in enumerate(unique_given_names):
+                an_seg_names = np.array(sliding_decode_data[name]['segment_names'])
+                an_seg_inds = np.array(sliding_decode_data[name]['segments_to_analyze'])
+                an_seg_names = an_seg_names[an_seg_inds]
+                an_s_i = np.where(an_seg_names == s_name)[0]
+                an_epochs = sliding_decode_data[name]['epochs_to_analyze']
+                an_e_i = np.where(np.array(an_epochs) == e_i)[0]
+                if (len(an_e_i) > 0) and (len(an_s_i) > 0):
+                    decode_data_i = sliding_decode_data[name]['frac_decode_data'][dt]
+                    all_animal_data.append(decode_data_i[an_s_i[0],an_e_i[0]])
+            all_seg_data.append(all_animal_data)
+        which_epoch_data.append(np.array(all_seg_data))
+    which_epoch_seg_means = np.nanmean(which_epoch_data,-1) #num epoch x num seg 
+    which_epoch_seg_stds = np.nanstd(which_epoch_data,-1) #num epoch x num seg 
+    for s_i, s_name in enumerate(unique_segment_names):
+        ax_frac[2].plot(np.arange(num_epochs),which_epoch_seg_means[:,s_i],
+                        color=segment_colors[s_i,:],label=s_name)
+        ax_frac[2].fill_between(np.arange(num_epochs),
+                                which_epoch_seg_means[:,s_i]+which_epoch_seg_stds[:,s_i],
+                                which_epoch_seg_means[:,s_i]-which_epoch_seg_stds[:,s_i],
+                                color=segment_colors[s_i,:],alpha=0.2,label='_')
+    ax_frac[2].legend(loc='upper left')
+    ax_frac[2].set_title('Which Epoch Fraction')
+    ax_frac[2].set_xticks(np.arange(num_epochs),unique_epoch_names)
+    
+    f_frac.savefig(os.path.join(results_dir,'decode_fracs.png'))
+    f_frac.savefig(os.path.join(results_dir,'decode_fracs.svg'))
+    plt.close(f_frac)
+    
+def cross_dataset_sliding_decode_corr_plots(sliding_decode_data, unique_given_names,
+                                            unique_segment_names, unique_epochs,
+                                            unique_taste_names, unique_decode_types, 
+                                            results_dir):
+    """Plot the sliding decode correlation to population rate by decode type"""
+    #Variables
+    num_segments = len(unique_segment_names)
+    num_tastes = len(unique_taste_names)
+    num_epochs = len(unique_epochs)
+    cmap = colormaps['brg']
+    segment_colors = cmap(np.linspace(0, 1, num_segments))
+    
+    f_corr, ax_corr = plt.subplots(nrows = 3, ncols = 1, sharey = True,
+                                   figsize = (4,12))
+    ax_corr[0].set_ylim([-1.1,1.1])
+    #Is Taste Data + Plots
+    dt = 'is_taste'
+    labels = ['Taste', 'No Taste']
+    is_taste_seg_data = [] #num seg x num anim x 2
+    for s_i, s_name in enumerate(unique_segment_names):
+        all_animal_data = []
+        for name_i, name in enumerate(unique_given_names):
+            an_seg_names = np.array(sliding_decode_data[name]['segment_names'])
+            an_seg_inds = np.array(sliding_decode_data[name]['segments_to_analyze'])
+            an_seg_names = an_seg_names[an_seg_inds]
+            an_s_i = np.where(an_seg_names == s_name)[0]
+            if len(an_s_i) > 0:
+                decode_data_i = np.squeeze(sliding_decode_data[name]['pop_corr_data'][dt][an_s_i[0],:])
+                all_animal_data.append(list(decode_data_i))
+        is_taste_seg_data.append(np.array(all_animal_data))
+    is_taste_seg_means = np.nanmean(is_taste_seg_data,1) #num seg x 2
+    is_taste_seg_stds = np.nanstd(is_taste_seg_data,1)  #num seg x 2
+    ax_corr[0].axhline(0,linestyle='dashed',color='k',alpha=0.5)
+    ax_corr[0].plot(np.arange(num_segments),is_taste_seg_means[:,0],
+                        color='b',label='Mean')
+    ax_corr[0].fill_between(np.arange(num_segments),
+                            is_taste_seg_means[:,0]+is_taste_seg_stds[:,0],
+                            is_taste_seg_means[:,0]-is_taste_seg_stds[:,0],
+                            color='b',alpha=0.2,label='Std')
+    ax_corr[0].legend(loc='upper left')
+    ax_corr[0].set_title('Is Taste x Pop Rate')
+    ax_corr[0].set_xticks(np.arange(num_segments),unique_segment_names)
+    
+    dt = 'which_taste'
+    which_taste_data = [] #num taste x num seg x num anim
+    for t_i, t_name in enumerate(unique_taste_names):
+        all_seg_data = []
+        for s_i, s_name in enumerate(unique_segment_names):
+            all_animal_data = []
+            for name_i, name in enumerate(unique_given_names):
+                an_seg_names = np.array(sliding_decode_data[name]['segment_names'])
+                an_seg_inds = np.array(sliding_decode_data[name]['segments_to_analyze'])
+                an_seg_names = an_seg_names[an_seg_inds]
+                an_s_i = np.where(an_seg_names == s_name)[0]
+                taste_names = sliding_decode_data[name]['dig_in_names']
+                an_t_i = np.where(np.array(taste_names) == t_name)[0]
+                if (len(an_t_i) > 0) and (len(an_s_i) > 0):
+                    decode_data_i = sliding_decode_data[name]['pop_corr_data'][dt]
+                    all_animal_data.append(decode_data_i[an_s_i[0],an_t_i[0]])
+            all_seg_data.append(all_animal_data)
+        which_taste_data.append(np.array(all_seg_data))
+    which_taste_seg_means = np.nanmean(which_taste_data,-1) #num taste x num seg
+    which_taste_seg_stds = np.nanstd(which_taste_data,-1) #num taste x num seg
+    ax_corr[1].axhline(0,linestyle='dashed',color='k',alpha=0.5)
+    for s_i, s_name in enumerate(unique_segment_names):
+        ax_corr[1].plot(np.arange(num_tastes),which_taste_seg_means[:,s_i],
+                        color=segment_colors[s_i,:],label=s_name)
+        ax_corr[1].fill_between(np.arange(num_tastes),
+                                which_taste_seg_means[:,s_i]+which_taste_seg_stds[:,s_i],
+                                which_taste_seg_means[:,s_i]-which_taste_seg_stds[:,s_i],
+                                color=segment_colors[s_i,:],label='_',alpha=0.2)
+    ax_corr[1].legend(loc='upper left')
+    ax_corr[1].set_title('Which Taste x Pop Rate')
+    ax_corr[1].set_xticks(np.arange(num_tastes),unique_taste_names)
+    
+    dt = 'which_epoch'
+    unique_epoch_names = ['Epoch ' + str(e_i) for e_i in unique_epochs]
+    which_epoch_data = [] #num epoch x num seg x num animals
+    for e_i in unique_epochs:
+        all_seg_data = []
+        for s_i, s_name in enumerate(unique_segment_names):
+            all_animal_data = []
+            for name_i, name in enumerate(unique_given_names):
+                an_seg_names = np.array(sliding_decode_data[name]['segment_names'])
+                an_seg_inds = np.array(sliding_decode_data[name]['segments_to_analyze'])
+                an_seg_names = an_seg_names[an_seg_inds]
+                an_s_i = np.where(an_seg_names == s_name)[0]
+                an_epochs = sliding_decode_data[name]['epochs_to_analyze']
+                an_e_i = np.where(np.array(an_epochs) == e_i)[0]
+                if (len(an_e_i) > 0) and (len(an_s_i) > 0):
+                    decode_data_i = sliding_decode_data[name]['pop_corr_data'][dt]
+                    all_animal_data.append(decode_data_i[an_s_i[0],an_e_i[0]])
+            all_seg_data.append(all_animal_data)
+        which_epoch_data.append(np.array(all_seg_data))
+    which_epoch_seg_means = np.nanmean(which_epoch_data,-1) #num epoch x num seg 
+    which_epoch_seg_stds = np.nanstd(which_epoch_data,-1) #num epoch x num seg 
+    ax_corr[2].axhline(0,linestyle='dashed',color='k',alpha=0.5)
+    for s_i, s_name in enumerate(unique_segment_names):
+        ax_corr[2].plot(np.arange(num_epochs),which_epoch_seg_means[:,s_i],
+                        color=segment_colors[s_i,:],label=s_name)
+        ax_corr[2].fill_between(np.arange(num_epochs),
+                                which_epoch_seg_means[:,s_i]+which_epoch_seg_stds[:,s_i],
+                                which_epoch_seg_means[:,s_i]-which_epoch_seg_stds[:,s_i],
+                                color=segment_colors[s_i,:],alpha=0.2,label='_')
+    ax_corr[2].legend(loc='upper left')
+    ax_corr[2].set_title('Which Epoch x Pop Rate')
+    ax_corr[2].set_xticks(np.arange(num_epochs),unique_epoch_names)
+    
+    f_corr.savefig(os.path.join(results_dir,'decode_pop_corr.png'))
+    f_corr.savefig(os.path.join(results_dir,'decode_pop_corr.svg'))
+    plt.close(f_corr)
+    
+def cross_dataset_dev_decode_frac_plots(dev_decode_data, unique_given_names,
+                                            unique_segment_names, unique_epochs,
+                                            unique_taste_names, unique_decode_types,
+                                            results_dir):
+    """Plot the sliding decode fractions by decode type"""
+    #Variables
+    num_segments = len(unique_segment_names)
+    num_tastes = len(unique_taste_names)
+    num_epochs = len(unique_epochs)
+    cmap = colormaps['brg']
+    segment_colors = cmap(np.linspace(0, 1, num_segments))
+    
+    f_frac, ax_frac = plt.subplots(nrows = 3, ncols = 1, sharey = True,
+                                   figsize = (4,12))
+    ax_frac[0].set_ylim([-0.1,1.1])
+    #Is Taste Data + Plots
+    dt = 'is_taste'
+    labels = ['Taste', 'No Taste']
+    is_taste_seg_data = [] #num seg x num anim x 2
+    for s_i, s_name in enumerate(unique_segment_names):
+        all_animal_data = []
+        for name_i, name in enumerate(unique_given_names):
+            try:
+                decode_data_i = np.squeeze(dev_decode_data[name][dt][s_name])
+                num_dev, _ = np.shape(decode_data_i)
+                decode_argmax = np.squeeze(np.argmax(decode_data_i,1))
+                no_taste_count = np.sum(decode_argmax)
+                all_animal_data.append([(num_dev - no_taste_count)/num_dev,no_taste_count/num_dev])
+            except:
+                decode_data_i = []
+        is_taste_seg_data.append(np.array(all_animal_data))
+    is_taste_seg_means = np.nanmean(is_taste_seg_data,1)
+    is_taste_seg_stds = np.nanstd(is_taste_seg_data,1)
+    for s_i, s_name in enumerate(unique_segment_names):
+        ax_frac[0].plot(np.arange(2),is_taste_seg_means[s_i,:],
+                        color=segment_colors[s_i,:],label=s_name)
+        ax_frac[0].fill_between(np.arange(2),
+                                is_taste_seg_means[s_i,:]+is_taste_seg_stds[s_i,:],
+                                is_taste_seg_means[s_i,:]-is_taste_seg_stds[s_i,:],
+                                color=segment_colors[s_i,:],alpha=0.2,label='_')
+    ax_frac[0].legend(loc='upper left')
+    ax_frac[0].set_title('Is Taste Fraction')
+    ax_frac[0].set_xticks(np.arange(2),labels)
+    
+    dt = 'which_taste'
+    which_taste_data = [] #num taste x num seg x num anim
+    for t_i, t_name in enumerate(unique_taste_names):
+        all_seg_data = []
+        for s_i, s_name in enumerate(unique_segment_names):
+            all_animal_data = []
+            for name_i, name in enumerate(unique_given_names):
+                is_taste_inds = np.where(np.argmax(dev_decode_data[name]['is_taste'][s_name],1) == 0)[0]
+                decode_data_i = np.squeeze(dev_decode_data[name][dt][s_name][is_taste_inds,:])
+                num_dev_is_taste, _ = np.shape(decode_data_i)
+                decode_argmax = np.squeeze(np.argmax(decode_data_i,1))
+                taste_names = dev_decode_data[name]['dig_in_names']
+                an_t_i = np.where(np.array(taste_names) == t_name)[0]
+                if len(an_t_i) > 0:
+                    num_taste_decode = len(np.where(decode_argmax == an_t_i)[0])
+                    frac_taste_decode = num_taste_decode/num_dev_is_taste
+                    all_animal_data.append(frac_taste_decode)
+            all_seg_data.append(all_animal_data)
+        which_taste_data.append(np.array(all_seg_data))
+    which_taste_seg_means = np.nanmean(which_taste_data,-1) #num taste x num seg
+    which_taste_seg_stds = np.nanstd(which_taste_data,-1) #num taste x num seg
+    for s_i, s_name in enumerate(unique_segment_names):
+        ax_frac[1].plot(np.arange(num_tastes),which_taste_seg_means[:,s_i],
+                        color=segment_colors[s_i,:],label=s_name)
+        ax_frac[1].fill_between(np.arange(num_tastes),
+                                which_taste_seg_means[:,s_i]+which_taste_seg_stds[:,s_i],
+                                which_taste_seg_means[:,s_i]-which_taste_seg_stds[:,s_i],
+                                color=segment_colors[s_i,:],label='_',alpha=0.2)
+    ax_frac[1].legend(loc='upper left')
+    ax_frac[1].set_title('Which Taste Fraction')
+    ax_frac[1].set_xticks(np.arange(num_tastes),unique_taste_names)
+    
+    dt = 'which_epoch'
+    unique_epoch_names = ['Epoch ' + str(e_i) for e_i in unique_epochs]
+    which_epoch_data = [] #num epoch x num seg x num animals
+    for e_i in unique_epochs:
+        all_seg_data = []
+        for s_i, s_name in enumerate(unique_segment_names):
+            all_animal_data = []
+            for name_i, name in enumerate(unique_given_names):
+                is_taste_inds = np.where(np.argmax(dev_decode_data[name]['is_taste'][s_name],1) == 0)[0]
+                decode_data_i = np.squeeze(dev_decode_data[name][dt][s_name][is_taste_inds,:])
+                data_argmax = np.argmax(decode_data_i,1)
+                num_is_taste = len(is_taste_inds)
+                an_epochs = dev_decode_data[name]['epochs_to_analyze']
+                an_e_i = np.where(np.array(an_epochs) == e_i)[0]
+                if (len(an_e_i) > 0):
+                    frac_epoch_decodes = len(np.where(data_argmax == an_e_i)[0])/num_is_taste
+                    all_animal_data.append(frac_epoch_decodes)
+            all_seg_data.append(all_animal_data)
+        which_epoch_data.append(np.array(all_seg_data))
+    which_epoch_seg_means = np.nanmean(which_epoch_data,-1) #num epoch x num seg 
+    which_epoch_seg_stds = np.nanstd(which_epoch_data,-1) #num epoch x num seg 
+    for s_i, s_name in enumerate(unique_segment_names):
+        ax_frac[2].plot(np.arange(num_epochs),which_epoch_seg_means[:,s_i],
+                        color=segment_colors[s_i,:],label=s_name)
+        ax_frac[2].fill_between(np.arange(num_epochs),
+                                which_epoch_seg_means[:,s_i]+which_epoch_seg_stds[:,s_i],
+                                which_epoch_seg_means[:,s_i]-which_epoch_seg_stds[:,s_i],
+                                color=segment_colors[s_i,:],alpha=0.2,label='_')
+    ax_frac[2].legend(loc='upper left')
+    ax_frac[2].set_title('Which Epoch Fraction')
+    ax_frac[2].set_xticks(np.arange(num_epochs),unique_epoch_names)
+    
+    f_frac.savefig(os.path.join(results_dir,'decode_fracs.png'))
+    f_frac.savefig(os.path.join(results_dir,'decode_fracs.svg'))
+    plt.close(f_frac)
+    
+    #Plot the epoch fractions by taste now
+    
