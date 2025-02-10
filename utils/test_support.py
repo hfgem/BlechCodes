@@ -163,33 +163,13 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
                                                                                            bayes_fr_bins, start_dig_in_times, pre_taste_dt,
                                                                                            post_taste_dt, bin_dt, trial_start_frac)
 
-#Plot decoded events
+#%% Test decoder accuracy
 
-import functions.plot_dev_decoding_funcs as pddf
+bayes_dir = metadata['dir_name'] + 'Deviation_Dependent_Decoding/'
 
-bayes_dir = metadata['dir_name'] + \
-    'Deviation_Dependent_Decoding/'
 
-all_neur_z_dir = bayes_dir + 'All_Neurons_Z_Scored/'
-if os.path.isdir(all_neur_z_dir) == False:
-    os.mkdir(all_neur_z_dir)
-
-decode_dir = all_neur_z_dir + 'GMM_Decoding/'
-if os.path.isdir(decode_dir) == False:
-    os.mkdir(decode_dir)
-    
-pddf.plot_is_taste_which_taste_decoded(num_tastes, num_neur, 
-                                       segment_spike_times, tastant_spike_times,
-                                       start_dig_in_times, post_taste_dt, 
-                                       pre_taste_dt, pop_taste_cp_raster_inds, 
-                                       bin_dt, dig_in_names, segment_times,
-                                       segment_names, decode_dir,
-                                       segment_dev_times, segment_dev_fr_vecs, 
-                                       segment_dev_fr_vecs_zscore, neuron_count_thresh, 
-                                       seg_e_len_dt, epochs_to_analyze, 
-                                       segments_to_analyze, decode_prob_cutoff)
-
-# cp_raster_inds = pop_taste_cp_raster_inds
-# z_bin_dt = bin_dt
-# save_dir = decode_dir
-# e_len_dt = seg_e_len_dt
+is_taste_decode_success, which_taste_decode_success, which_epoch_decode_success = ddf.is_taste_which_taste_accuracy_tests(\
+                tastant_fr_dist_z_pop, segment_spike_times, dig_in_names, segment_times, \
+                segment_names, start_dig_in_times, taste_num_deliv, segment_dev_times, \
+                segment_dev_fr_vecs, bin_dt, bayes_dir, True, \
+                epochs_to_analyze, segments_to_analyze)
