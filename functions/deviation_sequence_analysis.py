@@ -160,5 +160,6 @@ class run_deviation_sequence_analysis():
                            self.segment_zscore_means,self.segment_zscore_stds,
                            self.tastant_raster_dict,
                            self.tastant_fr_dist_pop,self.tastant_fr_dist_z_pop,
-                           self.dig_in_names,self.segment_names,self.num_null,
+                           self.dig_in_names,self.segment_names,self.segment_times,
+                           self.segment_spike_times,self.bin_dt,self.num_null,
                            self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)

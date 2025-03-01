@@ -1229,3 +1229,114 @@ class run_compare_conditions_analysis():
                                                     results_dir)
         else:
             print("Not enough animals for cross-animal dev stat plots.")
+            
+    def import_dev_split_decode_data(self,):
+        """Import previously saved deviation true x null data"""
+        dict_save_dir = os.path.join(self.save_dir, 'dev_split_decode_data.npy')
+        dev_split_decode_data = np.load(dict_save_dir,allow_pickle=True).item()
+        self.dev_split_decode_data = dev_split_decode_data
+        if not os.path.isdir(os.path.join(self.save_dir,'Dev_Split_Decode')):
+            os.mkdir(os.path.join(self.save_dir,'Dev_Split_Decode'))
+        self.dev_split_decode_results_dir = os.path.join(self.save_dir,'Dev_Split_Decode')
+
+    def gather_dev_split_decode_data(self,):
+        """Import the relevant data from each dataset to be analyzed. This 
+        includes the number of neurons, segments to analyze, segment names, 
+        segment start and end times, taste dig in names, and the decoding
+        data for all neurons"""
+        
+        decode_types = ['is_taste','which_taste','which_epoch']
+
+        num_datasets = len(self.all_data_dict)
+        dataset_names = list(self.all_data_dict.keys())
+        dev_split_decode_data = dict()
+        for n_i in range(num_datasets):
+            data_name = dataset_names[n_i]
+            data_dict = self.all_data_dict[data_name]['data']
+            metadata = self.all_data_dict[data_name]['metadata']
+            dev_split_decode_data[data_name] = dict()
+            dev_split_decode_data[data_name]['num_neur'] = data_dict['num_neur']
+            segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+            dev_split_decode_data[data_name]['segments_to_analyze'] = segments_to_analyze
+            dev_split_decode_data[data_name]['segment_names'] = data_dict['segment_names']
+            segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
+            segment_times = data_dict['segment_times']
+            num_segments = len(dev_split_decode_data[data_name]['segment_names'])
+            dev_split_decode_data[data_name]['segment_times_reshaped'] = [
+                [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+            dig_in_names = data_dict['dig_in_names']
+            dev_split_decode_data[data_name]['dig_in_names'] = dig_in_names
+            data_save_dir = data_dict['data_path']
+            dev_split_save_dir = os.path.join(
+                data_save_dir, 'Deviation_Sequence_Analysis')
+            #Subfolders we care about: corr_tests and decode_splits
+            #First load correlation data
+            dev_split_decode_dir = os.path.join(dev_split_save_dir,'decode_splits','zscore_firing_rates')
+            dev_split_decode_files = os.listdir(dev_split_decode_dir)
+            dev_split_decode_dict_files = []
+            for dev_dec_f in dev_split_decode_files:
+                if dev_dec_f[-4:] == '.npy':
+                    dev_split_decode_dict_files.append(dev_dec_f)
+            dev_split_decode_data[data_name]['decode_data'] = dict()
+            for sna in segment_names_to_analyze:
+                dev_split_decode_data[data_name]['decode_data'][sna] = dict()
+            for stat_i, stat_filename in enumerate(dev_split_decode_dict_files):
+                stat_filename_split = (stat_filename.split('.')[0]).split('_')
+                if stat_filename_split[-1] != 'argmax':
+                    stat_seg_name = stat_filename_split[0]
+                    file_decode_type = ('_').join(stat_filename_split[-2:])
+                    file_decode_type_ind = [i for i in range(len(decode_types)) if file_decode_type == decode_types[i]]
+                    if len(file_decode_type_ind) > 0:
+                        dev_split_decode_data[data_name]['decode_data'][stat_seg_name][file_decode_type] = \
+                            np.load(os.path.join(dev_split_decode_dir,stat_filename),allow_pickle=True)
+                    
+        self.dev_split_decode_data = dev_split_decode_data
+        dict_save_dir = os.path.join(self.save_dir, 'dev_split_decode_data.npy')
+        np.save(dict_save_dir,dev_split_decode_data,allow_pickle=True)
+        # _____Analysis Storage Directory_____
+        if not os.path.isdir(os.path.join(self.save_dir,'Dev_Split_Decode')):
+            os.mkdir(os.path.join(self.save_dir,'Dev_Split_Decode'))
+        self.dev_split_decode_results_dir = os.path.join(self.save_dir,'Dev_Split_Decode')
+
+    def find_dev_split_decode_groupings(self,):
+        """Across the different datasets, get the unique data names/indices,
+        deviation null statistic combinations and names/indices, and unique  
+        segment names/indices to align datasets to each other in these
+        different groups."""
+        dev_split_decode_data = self.dev_split_decode_data
+
+        unique_given_names = list(dev_split_decode_data.keys())
+        unique_given_indices = np.sort(
+            np.unique(unique_given_names, return_index=True)[1])
+        unique_given_names = [unique_given_names[i]
+                              for i in unique_given_indices]
+        unique_segment_names = []
+        unique_taste_names = []
+        for name in unique_given_names:
+            segment_names = list(dev_split_decode_data[name]['decode_data'].keys())
+            unique_segment_names.extend(segment_names)
+            for seg_name in segment_names:
+                taste_names = list(dev_split_decode_data[name]['dig_in_names'][:-1])
+                unique_taste_names.extend(taste_names)
+       
+        unique_segment_indices = np.sort(
+            np.unique(unique_segment_names, return_index=True)[1])
+        unique_segment_names = [unique_segment_names[i] for i in unique_segment_indices]
+        unique_taste_indices = np.sort(
+            np.unique(unique_taste_names, return_index=True)[1])
+        unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
+        
+        self.unique_given_names = unique_given_names
+        self.unique_segment_names = unique_segment_names
+        self.unique_taste_names = unique_taste_names
+
+    def plot_dev_split_decode_results(self,):
+        num_cond = len(self.dev_split_decode_data)
+        results_dir = self.dev_split_decode_results_dir
+
+        print("Beginning Plots.")
+        if num_cond > 1:
+            print("Add plot call here.")
+        else:
+            print("Not enough animals for cross-animal dev stat plots.")
+            

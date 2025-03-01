@@ -163,13 +163,16 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
                                                                                            bayes_fr_bins, start_dig_in_times, pre_taste_dt,
                                                                                            post_taste_dt, bin_dt, trial_start_frac)
 
-#%% Test decoder accuracy
+#%%
+import functions.dev_sequence_funcs as dsf
 
-bayes_dir = metadata['dir_name'] + 'Deviation_Dependent_Decoding/'
+seq_dir = os.path.join(metadata['dir_name'],'Deviation_Sequence_Analysis/')
+num_null = 100
 
-
-is_taste_decode_success, which_taste_decode_success, which_epoch_decode_success = ddf.is_taste_which_taste_accuracy_tests(\
-                tastant_fr_dist_z_pop, segment_spike_times, dig_in_names, segment_times, \
-                segment_names, start_dig_in_times, taste_num_deliv, segment_dev_times, \
-                segment_dev_fr_vecs, bin_dt, bayes_dir, True, \
-                epochs_to_analyze, segments_to_analyze)
+dsf.split_match_calc(num_neur, segment_dev_rasters,
+                   segment_zscore_means,segment_zscore_stds,
+                   tastant_raster_dict,
+                   tastant_fr_dist_pop,tastant_fr_dist_z_pop,
+                   dig_in_names,segment_names,segment_times,
+                   segment_spike_times,bin_dt,num_null,
+                   seq_dir,segments_to_analyze,epochs_to_analyze)

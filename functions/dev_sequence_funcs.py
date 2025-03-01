@@ -30,8 +30,8 @@ from sklearn import svm
 
 def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
                    tastant_raster_dict,tastant_fr_dist_pop,tastant_fr_dist_z_pop,
-                   dig_in_names,segment_names,num_null,save_dir,
-                   segments_to_analyze,epochs_to_analyze = []):
+                   dig_in_names,segment_names,segment_times,segment_spike_times,
+                   z_bin_dt,num_null,save_dir,segments_to_analyze=[],epochs_to_analyze = []):
     """
     This function is dedicated to an analysis of whether, when a deviation event
     is split in half down the middle, the pair of sides looks similar to adjacent
@@ -93,7 +93,7 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
     
     # Variables
     taste_bin_dt = 50 #Taste sequence binning size
-    bin_dt = 10 #Dev sequence binning size
+    seq_bin_dt = 10 #Dev sequence binning size
     num_tastes = len(dig_in_names)
     num_taste_deliv = [len(tastant_fr_dist_pop[t_i]) for t_i in range(num_tastes)]
     max_num_cp = 0
@@ -110,14 +110,14 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
     for tp_i, tp in enumerate(taste_pairs):
         taste_pair_names.append(dig_in_names[tp[0]] + ' v. ' + dig_in_names[tp[1]])
         
-    #Test taste epoch pair fr distributions against each other with Hotellings T
-    test_taste_epoch_pairs(dig_in_names, tastant_fr_dist_pop, non_z_decode_split_dir)
-    test_taste_epoch_pairs(dig_in_names, tastant_fr_dist_z_pop, z_decode_dir)
+    # #Test taste epoch pair fr distributions against each other with Hotellings T
+    # test_taste_epoch_pairs(dig_in_names, tastant_fr_dist_pop, non_z_decode_split_dir)
+    # test_taste_epoch_pairs(dig_in_names, tastant_fr_dist_z_pop, z_decode_dir)
         
-    #Calculate rank order sequences for taste responses by epoch
-    taste_seqs_dict, avg_taste_seqs_dict = calc_tastant_seq(tastant_raster_dict, \
-                                                            taste_bin_dt, dig_in_names, \
-                                                                sequence_dir)
+    # #Calculate rank order sequences for taste responses by epoch
+    # taste_seqs_dict, avg_taste_seqs_dict = calc_tastant_seq(tastant_raster_dict, \
+    #                                                         taste_bin_dt, dig_in_names, \
+    #                                                             sequence_dir)
     
     #Now go through segments and their deviation events and compare
     for seg_ind, s_i in enumerate(segments_to_analyze):
@@ -128,16 +128,16 @@ def split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,segment_z
         
         #Split in half calcs
         create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, 
-                                seg_z_std, num_neur, dig_in_names, segment_names, 
+                                seg_z_std, num_neur, dig_in_names, segments_to_analyze, 
+                                segment_times, segment_spike_times, z_bin_dt, segment_names, 
                                 s_i, epochs_to_analyze, tastant_fr_dist_pop, 
                                 tastant_fr_dist_z_pop, z_decode_dir, 
                                 null_z_decode_dir, null_z_decode_dir_2,
                                 z_split_corr_dir, base_split_dir)
-        
         #Sequence calcs
         # create_sequence_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, 
         #                         seg_z_std, num_neur, dig_in_names, segment_names, 
-        #                         s_i, bin_dt, epochs_to_analyze, tastant_raster_dict,
+        #                         s_i, seq_bin_dt, epochs_to_analyze, tastant_raster_dict,
         #                         taste_seqs_dict, avg_taste_seqs_dict, sequence_dir, 
         #                         null_sequence_dir, null_sequence_dir_2)
         
@@ -203,7 +203,8 @@ def test_taste_epoch_pairs(dig_in_names, tastant_fr_dist, save_dir):
         
         
 def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_std, 
-                            num_neur, dig_in_names, segment_names, s_i, 
+                            num_neur, dig_in_names, segments_to_analyze, segment_times, 
+                            segment_spike_times, bin_dt, segment_names, s_i, 
                             epochs_to_analyze, tastant_fr_dist_pop, tastant_fr_dist_z_pop,
                             z_decode_dir, null_z_decode_dir, null_z_decode_dir_2,
                             z_split_corr_dir, base_split_dir):
@@ -285,26 +286,27 @@ def create_splits_run_calcs(num_null, num_dev, seg_dev_rast, seg_z_mean, seg_z_s
     # test_dev_split_hotellings(dev_mats_z_array, segment_names, s_i, base_split_dir)
     
     #Plot the dev splits in reduced form against taste epochs
-    dev_split_halves_PCA_plot(dev_mats_z_array,tastant_fr_dist_z_pop,dig_in_names,
-                              segment_names,s_i,base_split_dir)
+    # dev_split_halves_PCA_plot(dev_mats_z_array,tastant_fr_dist_z_pop,dig_in_names,
+    #                           segment_names,s_i,base_split_dir)
     
     #Correlate deviation splits with epoch orders
-    correlate_splits_epoch_pairs(tastant_fr_dist_z_pop, 
-                    dig_in_names, dev_mats_z_array, segment_names, s_i,
-                    z_split_corr_dir, epochs_to_analyze)
+    # correlate_splits_epoch_pairs(tastant_fr_dist_z_pop, 
+    #                 dig_in_names, dev_mats_z_array, segment_names, s_i,
+    #                 z_split_corr_dir, epochs_to_analyze)
         
     #Decode each deviation event split
     
     # decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
     #                 dig_in_names, dev_mats_array, segment_names, s_i,
     #                 non_z_decode_dir, epochs_to_analyze)
-    # decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
-    #                 dig_in_names, dev_mats_z_array, segment_names, s_i,
-    #                 z_decode_dir, epochs_to_analyze)
+    decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_z_pop, 
+                    dig_in_names, dev_mats_z_array, segment_names, s_i, 
+                    segments_to_analyze, segment_times, segment_spike_times, 
+                    bin_dt, z_decode_dir, True, epochs_to_analyze)
     
     # #Run decoded splits significance tests
-    # decode_splits_significance_tests(dig_in_names, dev_mats_z_array, segment_names, 
-    #                                      s_i, z_decode_dir, epochs_to_analyze)
+    decode_splits_significance_tests(dig_in_names, dev_mats_z_array, segment_names, 
+                                          s_i, z_decode_dir, epochs_to_analyze)
     
     # #Decode null distribution
     # # decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist_pop, 
@@ -1124,10 +1126,11 @@ def dev_split_vs_e_pair(dev_fr_vecs, avg_taste_fr_vecs_by_es, best_e_t,
         
 
 def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist, 
-                dig_in_names, dev_mats_array, segment_names, s_i,
-                decode_dir, epochs_to_analyze=[]):
+                dig_in_names, dev_mats_array, segment_names, s_i_test, 
+                segments_to_analyze, segment_times, segment_spike_times, 
+                bin_dt, decode_dir, z_score = False, epochs_to_analyze=[]):
     """Decode taste from epoch-specific firing rates"""
-    print('\t\tRunning Is-Taste-Which-Taste GMM Decoder')
+    print('\t\tRunning Is-Taste-Which-Taste GMM Decoder on Segment ' + segment_names[s_i_test])
     
     # Variables
     num_tastes = len(dig_in_names)
@@ -1148,6 +1151,53 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
     epoch_split_inds = np.arange(len(epoch_splits))
     epoch_split_names = [str(ep) for ep in epoch_splits]
         
+    #Create null dataset from shuffled rest spikes
+    shuffled_fr_vecs = []
+    segment_spike_times_bin = []
+    seg_means = []
+    seg_stds = []
+    
+    for seg_i, s_i in enumerate(segments_to_analyze):
+        # Get segment variables
+        seg_start = segment_times[s_i]
+        seg_end = segment_times[s_i+1]
+        seg_len = segment_times[s_i+1] - segment_times[s_i]  # in dt = ms
+        # Binerize Segment Spike Times
+        segment_spike_times_s_i = segment_spike_times[s_i]
+        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in range(num_neur):
+            n_i_spike_times = np.array(
+                segment_spike_times_s_i[n_i] - seg_start).astype('int')
+            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
+        segment_spike_times_bin.append(segment_spike_times_s_i_bin)
+        if z_score == True:
+            # Calculate mean and std of binned segment spikes for z-scoring
+            z_time_bins = np.arange(0,seg_len-bin_dt,bin_dt)
+            seg_fr = np.zeros((num_neur,len(z_time_bins))) #Hz
+            for bdt_i, bdt in enumerate(z_time_bins):
+                seg_fr[:,bdt_i] = np.sum(segment_spike_times_s_i_bin[:,bdt:bdt+bin_dt],1)/(bin_dt/1000)
+            mean_fr = np.nanmean(seg_fr,1)
+            seg_means.append(mean_fr)
+            std_fr = np.nanstd(seg_fr,1)
+            seg_stds.append(std_fr)
+        # Binerize Shuffled Segment Spike Times
+        segment_spike_times_s_i_shuffle = [random.sample(list(np.arange(seg_len)),len(segment_spike_times[s_i][n_i])) for n_i in range(num_neur)]
+        segment_spike_times_s_i_shuffle_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in range(num_neur):
+            n_i_spike_times = np.array(
+                segment_spike_times_s_i_shuffle[n_i]).astype('int')
+            segment_spike_times_s_i_shuffle_bin[n_i, n_i_spike_times] = 1
+        #Create fr vecs
+        fr_vec_widths = random.sample(list(np.arange(250,800)),500)
+        fr_vec_starts = random.sample(list(np.arange(800,seg_len-800)),500)
+        for fr_i, fr_s in enumerate(fr_vec_starts):
+            fr_w = fr_vec_widths[fr_i]
+            fr_vec = np.sum(segment_spike_times_s_i_shuffle_bin[:,fr_s:fr_s+fr_w],1)/(fr_w/1000)
+            if z_score == True:
+                shuffled_fr_vecs.append(list((fr_vec-mean_fr)/std_fr))
+            else:
+                shuffled_fr_vecs.append(list(fr_vec))
+    
     #Collect data to train decoders
     true_taste_train_data = [] #For PCA all combined true taste data
     none_data = []
@@ -1179,11 +1229,15 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
             true_taste_train_data.extend(train_taste_data)
         else:
             none_data.extend(train_taste_data)
-            neur_max = np.expand_dims(np.max(np.array(train_taste_data),0),1)
-            none_data.extend(list((neur_max*np.random.rand(num_neur,100)).T)) #Fully randomized data
-            none_data.extend(list(((neur_max/10)*np.random.rand(num_neur,100)).T)) #Low frequency randomized data
-            for nd_i in range(10): #Single spike by neuron data
-                none_data.extend(list((np.eye(num_neur)).T))
+            if z_score == True:
+                neur_max = np.expand_dims(np.max(np.abs(np.array(train_taste_data)),0),1)
+                none_data.extend(list((neur_max*np.random.randn(num_neur,100)).T)) #Fully randomized data
+                none_data.extend(list(((neur_max/10)*np.random.randn(num_neur,100)).T)) #Low frequency randomized data
+            else:
+                neur_max = np.expand_dims(np.max(np.array(train_taste_data),0),1)
+                none_data.extend(list((neur_max*np.random.rand(num_neur,100)).T)) #Fully randomized data
+                none_data.extend(list(((neur_max/10)*np.random.rand(num_neur,100)).T)) #Low frequency randomized data
+            none_data.extend(shuffled_fr_vecs)
         by_taste_train_data.append(train_taste_data)
     by_taste_counts = np.array([len(by_taste_train_data[t_i]) for t_i in range(num_tastes)])
     by_taste_prob = by_taste_counts/np.sum(by_taste_counts)
@@ -1258,7 +1312,6 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
                 transformed_data)
             taste_epoch_gmm[t_i][e_ind] = gm
             
-       
     # If trial_start_frac > 0 use only trials after that threshold
     #trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
     
@@ -1269,20 +1322,24 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
     # Grab neuron firing rates in sliding bins
     try:
         dev_decode_is_taste_array = np.load(
-            os.path.join(decode_dir,segment_names[s_i] + \
+            os.path.join(decode_dir,segment_names[s_i_test] + \
+                         '_deviations_is_taste_FOILED.npy')) #REMOVE AFTER DONE
+        
+        dev_decode_is_taste_array = np.load(
+            os.path.join(decode_dir,segment_names[s_i_test] + \
                          '_deviations_is_taste.npy'))
         
         dev_decode_array = np.load(
-            os.path.join(decode_dir,segment_names[s_i] + \
+            os.path.join(decode_dir,segment_names[s_i_test] + \
                          '_deviations_which_taste.npy'))
             
         dev_decode_epoch_array = np.load(
-            os.path.join(decode_dir,segment_names[s_i] + \
+            os.path.join(decode_dir,segment_names[s_i_test] + \
                          '_deviations_which_epoch.npy'))
             
-        print('\t\t\t\t' + segment_names[s_i] + ' Previously Decoded')
+        print('\t\t\t\t' + segment_names[s_i_test] + ' Previously Decoded')
     except:
-        print('\t\t\t\tDecoding ' + segment_names[s_i] + ' Deviation Splits')
+        print('\t\t\t\tDecoding ' + segment_names[s_i_test] + ' Deviation Splits')
         
         dev_decode_is_taste_array = np.zeros((num_dev,2,num_splits)) #deviation x is taste x split index
         dev_decode_array = np.zeros((num_dev,num_tastes-1,num_splits)) #deviation x which taste x split index
@@ -1316,7 +1373,7 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
         dev_decode_is_taste_prob_array = np.squeeze(np.array(dev_decode_is_taste_prob)).T #2 x num dev splits
         dev_is_taste_argmax = []
         for dev_i in range(num_dev):
-            dev_decode_is_taste_array[dev_i,:,:] = dev_decode_is_taste_prob_array[:,dev_i*2:dev_i*2+1]
+            dev_decode_is_taste_array[dev_i,:,:] = dev_decode_is_taste_prob_array[:,dev_i*2:dev_i*2+2]
             is_taste_argmax = np.argmax(dev_decode_is_taste_array[dev_i,:,:].squeeze(),0)
             dev_is_taste_argmax.append(is_taste_argmax)
         dev_is_taste_argmax_sum = np.sum(np.array(dev_is_taste_argmax),1)
@@ -1334,7 +1391,7 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
             dev_decode_prob_array = np.squeeze(np.array(dev_decode_prob)).T #2 x num dev splits
             dev_which_taste_argmax = []
             for dev_i in dev_is_taste_inds:
-                dev_decode_array[dev_i,:,:] = dev_decode_prob_array[:,dev_i*2:dev_i*2+1]
+                dev_decode_array[dev_i,:,:] = dev_decode_prob_array[:,dev_i*2:dev_i*2+2]
                 which_taste_argmax = np.argmax(dev_decode_array[dev_i,:,:],0)
                 dev_which_taste_argmax.append(which_taste_argmax)
             dev_which_taste_argmax_array = np.array(dev_which_taste_argmax)
@@ -1376,15 +1433,15 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
                     epoch_orders.append(which_epoch_argmax)
         
         # Save decoding probabilities        
-        np.save(os.path.join(decode_dir,segment_names[s_i]
+        np.save(os.path.join(decode_dir,segment_names[s_i_test]
                              + '_deviations_is_taste.npy'), dev_decode_is_taste_array)
-        np.save(os.path.join(decode_dir,segment_names[s_i]
+        np.save(os.path.join(decode_dir,segment_names[s_i_test]
                              + '_deviations_which_taste.npy'), dev_decode_array)
-        np.save(os.path.join(decode_dir,segment_names[s_i]
+        np.save(os.path.join(decode_dir,segment_names[s_i_test]
                              + '_deviations_which_epoch.npy'), dev_decode_epoch_array)
         
         toc = time.time()
-        print('\t\t\t\t\tTime to decode ' + segment_names[s_i] + \
+        print('\t\t\t\t\tTime to decode ' + segment_names[s_i_test] + \
               ' deviation splits = ' + str(np.round((toc-tic)/60, 2)) + ' (min)')
             
     # Plot outcomes
@@ -1395,7 +1452,7 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
     dev_decode_same_diff_is_taste = np.sum(dev_decode_is_taste_ind,1)
     #    dev_decode_same_diff_is_taste will have 0 for all-splits decoded as taste, num_splits for all splits decoded as not taste
     frac_taste = (num_splits*np.ones(np.shape(dev_decode_same_diff_is_taste)) - dev_decode_same_diff_is_taste)/num_splits
-    np.save(os.path.join(decode_dir,segment_names[s_i]+'_frac_taste.npy'),frac_taste)
+    np.save(os.path.join(decode_dir,segment_names[s_i_test]+'_frac_taste.npy'),frac_taste)
     #    frac_taste converts dev_decode_same_diff_is_taste to what fraction of splits were decoded as taste for each dev event
     #    Plot the distribution of fraction of deviation event decoded as taste
     f_frac_is_taste, ax_frac_is_taste = plt.subplots(ncols=2, figsize=(10,5))
@@ -1411,9 +1468,9 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
     ax_frac_is_taste[1].set_title('Cumulative Distribution of Taste Fractions')
     plt.suptitle('Distribution of Fraction of Deviation Event Decoded as Taste')
     plt.tight_layout()
-    f_frac_is_taste.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_frac_is_taste.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_dev_is_taste.png'))
-    f_frac_is_taste.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_frac_is_taste.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_dev_is_taste.svg'))
     plt.close(f_frac_is_taste)
     #    Plot pie chart of deviation events decoded fully as taste, fully as no-taste, and fractionally decoded
@@ -1433,9 +1490,9 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
             rotatelabels = True, autopct='%1.2f%%')
     plt.title('Percent of Deviation Events Split-Decoded as Taste')
     plt.tight_layout()
-    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_dev_is_taste_pie.png'))
-    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_dev_is_taste_pie.svg'))
     plt.close(f_frac_pie)
     
@@ -1443,7 +1500,7 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
     is_taste_inds = np.where(frac_taste == 1)[0]
     is_taste_which_taste_decode_probs = dev_decode_array[is_taste_inds,:,:] #len(is_taste_inds) x num_tastes-1 x num_splits
     which_taste_argmax = np.argmax(is_taste_which_taste_decode_probs,1) #len(is_taste_inds) x num_splits
-    np.save(os.path.join(decode_dir,segment_names[s_i]+'_which_taste_argmax.npy'),which_taste_argmax)
+    np.save(os.path.join(decode_dir,segment_names[s_i_test]+'_which_taste_argmax.npy'),which_taste_argmax)
     same_taste_bool = np.zeros(taste_count)
     for tc_i in range(taste_count):
         taste_0 = which_taste_argmax[tc_i,0]
@@ -1457,9 +1514,9 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
             rotatelabels = False, autopct='%1.2f%%')
     plt.title('Percent of Deviation Events Split-Decoded as Same Taste')
     plt.tight_layout()
-    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_dev_same_taste_pie.png'))
-    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_dev_same_taste_pie.svg'))
     plt.close(f_frac_pie)
     
@@ -1467,7 +1524,7 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
     same_taste_ind = np.where(same_taste_bool == 1)[0]
     same_taste_which_taste_decode_probs = is_taste_which_taste_decode_probs[same_taste_ind,:,:] #same_taste_count x num_tastes-1 x num_splits
     same_taste_which_taste_argmax = which_taste_argmax[same_taste_ind,:]
-    np.save(os.path.join(decode_dir,segment_names[s_i]+'_same_taste_which_taste_argmax.npy'),same_taste_which_taste_argmax)
+    np.save(os.path.join(decode_dir,segment_names[s_i_test]+'_same_taste_which_taste_argmax.npy'),same_taste_which_taste_argmax)
     count_data = {}
     for t_i in range(num_tastes-1):
         count_data[dig_in_names[t_i]] = len(np.where(same_taste_which_taste_argmax == t_i)[0])
@@ -1481,16 +1538,16 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
             rotatelabels = False, autopct='%1.2f%%')
     plt.title('Which Taste are Same-Taste Deviation Events')
     plt.tight_layout()
-    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_dev_same_taste_which_taste_pie.png'))
-    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_dev_same_taste_which_taste_pie.svg'))
     plt.close(f_frac_pie)
     
     #Which-Epoch Summaries
     is_taste_dev_decode_epoch_array = dev_decode_epoch_array[is_taste_inds,:,:]
     same_taste_dev_decode_epoch_array = is_taste_dev_decode_epoch_array[same_taste_ind,:,:]
-    np.save(os.path.join(decode_dir,segment_names[s_i]+'_same_taste_dev_decode_epoch_array.npy'),same_taste_dev_decode_epoch_array)
+    np.save(os.path.join(decode_dir,segment_names[s_i_test]+'_same_taste_dev_decode_epoch_array.npy'),same_taste_dev_decode_epoch_array)
     f_epoch_order_pie, ax_epoch_order_pie = plt.subplots(ncols = num_tastes-1, figsize=((num_tastes-1)*5,5))
     f_epoch_order_bar, ax_epoch_order_bar = plt.subplots(ncols = num_tastes-1, figsize=((num_tastes-1)*5,5))
     f_epoch_joint_bar = plt.figure(figsize=(5,5))
@@ -1521,25 +1578,25 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
                 width=0.2,label=dig_in_names[t_i])
     plt.figure(f_epoch_order_pie)
     plt.tight_layout()
-    f_epoch_order_pie.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_epoch_order_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_which_epoch_pie.png'))
-    f_epoch_order_pie.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_epoch_order_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_which_epoch_pie.svg'))
     plt.close(f_epoch_order_pie)
     plt.figure(f_epoch_order_bar)
     plt.tight_layout()
-    f_epoch_order_bar.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_epoch_order_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_which_epoch_bar.png'))
-    f_epoch_order_bar.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_epoch_order_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_which_epoch_bar.svg'))
     plt.close(f_epoch_order_bar)
     plt.figure(f_epoch_joint_bar)
     plt.xticks(epoch_split_inds,epoch_split_names)
     plt.legend(loc='upper left')
     plt.tight_layout()
-    f_epoch_joint_bar.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_epoch_joint_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_which_epoch_bar_joint.png'))
-    f_epoch_joint_bar.savefig(os.path.join(decode_dir,segment_names[s_i]
+    f_epoch_joint_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
                          + '_frac_which_epoch_bar_joint.svg'))
     plt.close(f_epoch_joint_bar)
     
