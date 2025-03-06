@@ -1312,9 +1312,6 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
                 transformed_data)
             taste_epoch_gmm[t_i][e_ind] = gm
             
-    # If trial_start_frac > 0 use only trials after that threshold
-    #trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
-    
     # Segment-by-segment use deviation rasters and times to zoom in and test
     #	epoch-specific decoding of tastes. Add decoding of 50 ms on either
     #	side of the deviation event as well for context decoding.
@@ -1474,7 +1471,8 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
                          + '_frac_dev_is_taste.svg'))
     plt.close(f_frac_is_taste)
     #    Plot pie chart of deviation events decoded fully as taste, fully as no-taste, and fractionally decoded
-    taste_count = len(np.where(frac_taste == 1)[0])
+    is_taste_inds = np.where(frac_taste == 1)[0]
+    taste_count = len(is_taste_inds)
     no_taste_count = len(np.where(frac_taste == 0)[0])
     frac_count = num_dev - (taste_count + no_taste_count)
     
@@ -1497,109 +1495,114 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
     plt.close(f_frac_pie)
     
     #Same-Taste Summaries
-    is_taste_inds = np.where(frac_taste == 1)[0]
-    is_taste_which_taste_decode_probs = dev_decode_array[is_taste_inds,:,:] #len(is_taste_inds) x num_tastes-1 x num_splits
-    which_taste_argmax = np.argmax(is_taste_which_taste_decode_probs,1) #len(is_taste_inds) x num_splits
-    np.save(os.path.join(decode_dir,segment_names[s_i_test]+'_which_taste_argmax.npy'),which_taste_argmax)
-    same_taste_bool = np.zeros(taste_count)
-    for tc_i in range(taste_count):
-        taste_0 = which_taste_argmax[tc_i,0]
-        if all([i == taste_0 for i in which_taste_argmax[tc_i,:]]):
-            same_taste_bool[tc_i] = 1
-    same_taste_count = np.sum(same_taste_bool)
-    diff_taste_count = taste_count - same_taste_count
-    f_frac_pie = plt.figure(figsize=(5,5))
-    plt.pie([same_taste_count, diff_taste_count], labels = ['Same Taste', 'Diff Taste'], \
-        explode = [0,0.2], pctdistance=1.2, labeldistance = 1.5, \
-            rotatelabels = False, autopct='%1.2f%%')
-    plt.title('Percent of Deviation Events Split-Decoded as Same Taste')
-    plt.tight_layout()
-    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
-                         + '_frac_dev_same_taste_pie.png'))
-    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
-                         + '_frac_dev_same_taste_pie.svg'))
-    plt.close(f_frac_pie)
-    
-    #Which-Taste Summaries
-    same_taste_ind = np.where(same_taste_bool == 1)[0]
-    same_taste_which_taste_decode_probs = is_taste_which_taste_decode_probs[same_taste_ind,:,:] #same_taste_count x num_tastes-1 x num_splits
-    same_taste_which_taste_argmax = which_taste_argmax[same_taste_ind,:]
-    np.save(os.path.join(decode_dir,segment_names[s_i_test]+'_same_taste_which_taste_argmax.npy'),same_taste_which_taste_argmax)
-    count_data = {}
-    for t_i in range(num_tastes-1):
-        count_data[dig_in_names[t_i]] = len(np.where(same_taste_which_taste_argmax == t_i)[0])
-    # Filter out zero values
-    filtered_count_data = {k: v for k, v in count_data.items() if v > 0}
-    explode_vals = [0.1*i for i in range(len(filtered_count_data))]
-    
-    f_frac_pie = plt.figure(figsize=(5,5))
-    plt.pie(count_data.values(), labels = count_data.keys(), \
-        explode = explode_vals, pctdistance=1.2, labeldistance = 1.5, \
-            rotatelabels = False, autopct='%1.2f%%')
-    plt.title('Which Taste are Same-Taste Deviation Events')
-    plt.tight_layout()
-    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
-                         + '_frac_dev_same_taste_which_taste_pie.png'))
-    f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
-                         + '_frac_dev_same_taste_which_taste_pie.svg'))
-    plt.close(f_frac_pie)
-    
-    #Which-Epoch Summaries
-    is_taste_dev_decode_epoch_array = dev_decode_epoch_array[is_taste_inds,:,:]
-    same_taste_dev_decode_epoch_array = is_taste_dev_decode_epoch_array[same_taste_ind,:,:]
-    np.save(os.path.join(decode_dir,segment_names[s_i_test]+'_same_taste_dev_decode_epoch_array.npy'),same_taste_dev_decode_epoch_array)
-    f_epoch_order_pie, ax_epoch_order_pie = plt.subplots(ncols = num_tastes-1, figsize=((num_tastes-1)*5,5))
-    f_epoch_order_bar, ax_epoch_order_bar = plt.subplots(ncols = num_tastes-1, figsize=((num_tastes-1)*5,5))
-    f_epoch_joint_bar = plt.figure(figsize=(5,5))
-    for t_i in range(num_tastes-1):
-        taste_name = dig_in_names[t_i]
-        taste_decode_inds = np.where(same_taste_which_taste_argmax == t_i)[0]
-        taste_decode_probs = is_taste_dev_decode_epoch_array[taste_decode_inds,:,:] #decoded as taste x num epochs x num splits
-        epoch_decode_argmax = np.argmax(taste_decode_probs,1)
-        epoch_order_dict = {}
-        for ep_i, ep in enumerate(epoch_splits):
-            match_1 = epoch_decode_argmax[:,0] == ep[0]
-            match_2 = epoch_decode_argmax[:,1] == ep[1]
-            epoch_order_dict[ep_i] = len(np.where(match_1*match_2)[0])
-        # Filter out zero values
-        filtered_count_data = {k: v for k, v in epoch_order_dict.items() if v > 0}
-        filtered_labels = [str(epoch_splits[int(i)]) for i in filtered_count_data.keys()]
-        #Pie Chart
-        ax_epoch_order_pie[t_i].pie(filtered_count_data.values(), labels = filtered_labels, \
-            pctdistance=1.2, labeldistance = 1.5, \
+    # print('\t\t\t\t\t  All taste count: ' + str(taste_count))
+    if taste_count > 0:
+        is_taste_which_taste_decode_probs = dev_decode_array[is_taste_inds,:,:] #len(is_taste_inds) x num_tastes-1 x num_splits
+        which_taste_argmax = np.argmax(is_taste_which_taste_decode_probs,1) #len(is_taste_inds) x num_splits
+        np.save(os.path.join(decode_dir,segment_names[s_i_test]+'_which_taste_argmax.npy'),which_taste_argmax)
+        same_taste_bool = np.zeros(taste_count)
+        for tc_i in range(taste_count):
+            taste_0 = which_taste_argmax[tc_i,0]
+            if all([i == taste_0 for i in which_taste_argmax[tc_i,:]]):
+                same_taste_bool[tc_i] = 1
+        same_taste_bool = same_taste_bool.astype('int')
+        
+        same_taste_count = np.sum(same_taste_bool)
+        diff_taste_count = taste_count - same_taste_count
+        f_frac_pie = plt.figure(figsize=(5,5))
+        plt.pie([same_taste_count, diff_taste_count], labels = ['Same Taste', 'Diff Taste'], \
+            explode = [0,0.2], pctdistance=1.2, labeldistance = 1.5, \
                 rotatelabels = False, autopct='%1.2f%%')
-        ax_epoch_order_pie[t_i].set_title(taste_name)
-        #Histograms Split
-        ax_epoch_order_bar[t_i].bar(filtered_labels,filtered_count_data.values())
-        ax_epoch_order_bar[t_i].set_title(taste_name)
-        #Histograms Combined
-        plt.figure(f_epoch_joint_bar)
-        plt.bar(epoch_split_inds+(0.25*t_i),epoch_order_dict.values(),\
-                width=0.2,label=dig_in_names[t_i])
-    plt.figure(f_epoch_order_pie)
-    plt.tight_layout()
-    f_epoch_order_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
-                         + '_frac_which_epoch_pie.png'))
-    f_epoch_order_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
-                         + '_frac_which_epoch_pie.svg'))
-    plt.close(f_epoch_order_pie)
-    plt.figure(f_epoch_order_bar)
-    plt.tight_layout()
-    f_epoch_order_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
-                         + '_frac_which_epoch_bar.png'))
-    f_epoch_order_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
-                         + '_frac_which_epoch_bar.svg'))
-    plt.close(f_epoch_order_bar)
-    plt.figure(f_epoch_joint_bar)
-    plt.xticks(epoch_split_inds,epoch_split_names)
-    plt.legend(loc='upper left')
-    plt.tight_layout()
-    f_epoch_joint_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
-                         + '_frac_which_epoch_bar_joint.png'))
-    f_epoch_joint_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
-                         + '_frac_which_epoch_bar_joint.svg'))
-    plt.close(f_epoch_joint_bar)
+        plt.title('Percent of Deviation Events Split-Decoded as Same Taste')
+        plt.tight_layout()
+        f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
+                             + '_frac_dev_same_taste_pie.png'))
+        f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
+                             + '_frac_dev_same_taste_pie.svg'))
+        plt.close(f_frac_pie)
     
+        #Which-Taste Summaries
+        # print('\t\t\t\t\t  Same taste count: ' + str(same_taste_count))
+        if same_taste_count > 0:
+            same_taste_ind = np.where(same_taste_bool == 1)[0]
+            same_taste_which_taste_decode_probs = is_taste_which_taste_decode_probs[same_taste_ind,:,:] #same_taste_count x num_tastes-1 x num_splits
+            same_taste_which_taste_argmax = which_taste_argmax[same_taste_ind,:]
+            np.save(os.path.join(decode_dir,segment_names[s_i_test]+'_same_taste_which_taste_argmax.npy'),same_taste_which_taste_argmax)
+            count_data = {}
+            for t_i in range(num_tastes-1):
+                count_data[dig_in_names[t_i]] = len(np.where(same_taste_which_taste_argmax == t_i)[0])
+            # Filter out zero values
+            filtered_count_data = {k: v for k, v in count_data.items() if v > 0}
+            explode_vals = [0.1*i for i in range(len(filtered_count_data))]
+            
+            f_frac_pie = plt.figure(figsize=(5,5))
+            plt.pie(filtered_count_data.values(), labels = filtered_count_data.keys(), \
+                explode = explode_vals, pctdistance=1.2, labeldistance = 1.5, \
+                    rotatelabels = False, autopct='%1.2f%%')
+            plt.title('Which Taste are Same-Taste Deviation Events')
+            plt.tight_layout()
+            f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
+                                 + '_frac_dev_same_taste_which_taste_pie.png'))
+            f_frac_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
+                                 + '_frac_dev_same_taste_which_taste_pie.svg'))
+            plt.close(f_frac_pie)
+            
+            #Which-Epoch Summaries
+            is_taste_dev_decode_epoch_array = dev_decode_epoch_array[is_taste_inds,:,:]
+            same_taste_dev_decode_epoch_array = is_taste_dev_decode_epoch_array[same_taste_ind,:,:]
+            np.save(os.path.join(decode_dir,segment_names[s_i_test]+'_same_taste_dev_decode_epoch_array.npy'),same_taste_dev_decode_epoch_array)
+            f_epoch_order_pie, ax_epoch_order_pie = plt.subplots(ncols = num_tastes-1, figsize=((num_tastes-1)*5,5))
+            f_epoch_order_bar, ax_epoch_order_bar = plt.subplots(ncols = num_tastes-1, figsize=((num_tastes-1)*5,5))
+            f_epoch_joint_bar = plt.figure(figsize=(5,5))
+            for t_i in range(num_tastes-1):
+                taste_name = dig_in_names[t_i]
+                taste_decode_inds = np.where(same_taste_which_taste_argmax == t_i)[0]
+                taste_decode_probs = is_taste_dev_decode_epoch_array[taste_decode_inds,:,:] #decoded as taste x num epochs x num splits
+                epoch_decode_argmax = np.argmax(taste_decode_probs,1)
+                epoch_order_dict = {}
+                for ep_i, ep in enumerate(epoch_splits):
+                    match_1 = epoch_decode_argmax[:,0] == ep[0]
+                    match_2 = epoch_decode_argmax[:,1] == ep[1]
+                    epoch_order_dict[ep_i] = len(np.where(match_1*match_2)[0])
+                # Filter out zero values
+                filtered_count_data = {k: v for k, v in epoch_order_dict.items() if v > 0}
+                filtered_labels = [str(epoch_splits[int(i)]) for i in filtered_count_data.keys()]
+                #Pie Chart
+                ax_epoch_order_pie[t_i].pie(filtered_count_data.values(), labels = filtered_labels, \
+                    pctdistance=1.2, labeldistance = 1.5, \
+                        rotatelabels = False, autopct='%1.2f%%')
+                ax_epoch_order_pie[t_i].set_title(taste_name)
+                #Histograms Split
+                ax_epoch_order_bar[t_i].bar(filtered_labels,filtered_count_data.values())
+                ax_epoch_order_bar[t_i].set_title(taste_name)
+                #Histograms Combined
+                plt.figure(f_epoch_joint_bar)
+                plt.bar(epoch_split_inds+(0.25*t_i),epoch_order_dict.values(),\
+                        width=0.2,label=dig_in_names[t_i])
+            plt.figure(f_epoch_order_pie)
+            plt.tight_layout()
+            f_epoch_order_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
+                                 + '_frac_which_epoch_pie.png'))
+            f_epoch_order_pie.savefig(os.path.join(decode_dir,segment_names[s_i_test]
+                                 + '_frac_which_epoch_pie.svg'))
+            plt.close(f_epoch_order_pie)
+            plt.figure(f_epoch_order_bar)
+            plt.tight_layout()
+            f_epoch_order_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
+                                 + '_frac_which_epoch_bar.png'))
+            f_epoch_order_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
+                                 + '_frac_which_epoch_bar.svg'))
+            plt.close(f_epoch_order_bar)
+            plt.figure(f_epoch_joint_bar)
+            plt.xticks(epoch_split_inds,epoch_split_names)
+            plt.legend(loc='upper left')
+            plt.tight_layout()
+            f_epoch_joint_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
+                                 + '_frac_which_epoch_bar_joint.png'))
+            f_epoch_joint_bar.savefig(os.path.join(decode_dir,segment_names[s_i_test]
+                                 + '_frac_which_epoch_bar_joint.svg'))
+            plt.close(f_epoch_joint_bar)
+        
 def decode_null_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist, 
                 dig_in_names, null_dev_dict, segment_names, s_i,
                 null_decode_dir, true_decode_dir, epochs_to_analyze=[]):
@@ -2061,8 +2064,12 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
             vals_2_z = (vals_2 - np.ones(np.shape(vals_2))*neur_mean)/(np.ones(np.shape(vals_2))*neur_std)
             nan_inds = np.where(neur_std == 0)[0]
             non_nan_inds = np.setdiff1d(np.arange(num_neur),nan_inds)
-            vals_1_z = vals_1_z[:,non_nan_inds]
-            vals_2_z = vals_2_z[:,non_nan_inds]
+            if len(dev_is_taste_inds) > 1:
+                vals_1_z = vals_1_z[:,non_nan_inds]
+                vals_2_z = vals_2_z[:,non_nan_inds]
+            else:
+                vals_1_z = vals_1_z[non_nan_inds]
+                vals_2_z = vals_2_z[non_nan_inds]
             # Perform the Hotelling's t-squared test
             try:
                 T2, F_hot, p_value = hotelling_t2(vals_1_z, vals_2_z)
@@ -2078,8 +2085,12 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
                                  figsize = (8,8))
             for n_i in range(len(non_nan_inds)):
                 ax_ind = np.where(neur_inds == n_i)
-                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
-                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                if len(dev_is_taste_inds) > 1:
+                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                else:
+                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[n_i],alpha=0.2,label='Split ' + str(sp[1]))
                 ax[ax_ind[0][0],ax_ind[1][0]].set_title('Neuron ' + str(n_i))
                 ax[ax_ind[0][0],ax_ind[1][0]].set_xlabel('Firing Rate (Hz)')
             ax[0,0].legend()
@@ -2121,8 +2132,12 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
                 vals_2_z = (vals_2 - np.ones(np.shape(vals_2))*neur_mean)/(np.ones(np.shape(vals_2))*neur_std)
                 nan_inds = np.where(neur_std == 0)[0]
                 non_nan_inds = np.setdiff1d(np.arange(num_neur),nan_inds)
-                vals_1_z = vals_1_z[:,non_nan_inds]
-                vals_2_z = vals_2_z[:,non_nan_inds]
+                if len(dev_same_taste_inds) > 1:
+                    vals_1_z = vals_1_z[:,non_nan_inds]
+                    vals_2_z = vals_2_z[:,non_nan_inds]
+                else:
+                    vals_1_z = vals_1_z[non_nan_inds]
+                    vals_2_z = vals_2_z[non_nan_inds]
                 # Perform the Hotelling's t-squared test
                 try:
                     T2, F_hot, p_value = hotelling_t2(vals_1_z, vals_2_z)
@@ -2138,8 +2153,12 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
                                      figsize = (8,8))
                 for n_i in range(len(non_nan_inds)):
                     ax_ind = np.where(neur_inds == n_i)
-                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
-                    ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                    if len(dev_same_taste_inds) > 1:
+                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                    else:
+                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[n_i],alpha=0.2,label='Split ' + str(sp[1]))
                     ax[ax_ind[0][0],ax_ind[1][0]].set_title('Neuron ' + str(n_i))
                     ax[ax_ind[0][0],ax_ind[1][0]].set_xlabel('Firing Rate (Hz)')
                 ax[0,0].legend()
@@ -2168,8 +2187,12 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
                     vals_2_z = (vals_2 - np.ones(np.shape(vals_2))*neur_mean)/(np.ones(np.shape(vals_2))*neur_std)
                     nan_inds = np.where(neur_std == 0)[0]
                     non_nan_inds = np.setdiff1d(np.arange(num_neur),nan_inds)
-                    vals_1_z = vals_1_z[:,non_nan_inds]
-                    vals_2_z = vals_2_z[:,non_nan_inds]
+                    try:
+                        vals_1_z = vals_1_z[:,non_nan_inds]
+                        vals_2_z = vals_2_z[:,non_nan_inds]
+                    except:
+                        vals_1_z = np.empty()
+                        vals_2_z = np.empty()
                     # Perform the Hotelling's t-squared test
                     try:
                         T2, F_hot, p_value = hotelling_t2(vals_1_z, vals_2_z)
@@ -2180,27 +2203,33 @@ def decode_splits_significance_tests(dig_in_names, dev_mats_array, segment_names
                     except:
                         sig_storage[sp_ind,:,2+t_i] = [np.nan, np.nan, np.nan]
                         title = "Not enough samples for hotelling's t"
-                    
-                    f_plot, ax = plt.subplots(nrows = sqrt_neur, ncols = sqrt_neur,
-                                         figsize = (8,8))
-                    for n_i in range(len(non_nan_inds)):
-                        ax_ind = np.where(neur_inds == n_i)
-                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
-                        ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
-                        ax[ax_ind[0][0],ax_ind[1][0]].set_title('Neuron ' + str(n_i))
-                        ax[ax_ind[0][0],ax_ind[1][0]].set_xlabel('Firing Rate (Hz)')
-                    ax[0,0].legend()
-                    plt.suptitle(title)
-                    plt.tight_layout()
-                    f_plot.savefig(os.path.join(splits_decode_dir,segment_names[s_i] + \
-                                 '_' + str(sp[0]) + '_vs_' + str(sp[1]) + \
-                                     '_' + dig_in_names[t_i] + \
-                                         '_deviations_which_taste_split_sig.png'))
-                    f_plot.savefig(os.path.join(splits_decode_dir,segment_names[s_i] + \
-                                 '_' + str(sp[0]) + '_vs_' + str(sp[1]) + \
-                                     '_' + dig_in_names[t_i] + \
-                                         '_deviations_which_taste_split_sig.svg'))
-                    plt.close(f_plot)
+                    try:
+                        f_plot, ax = plt.subplots(nrows = sqrt_neur, ncols = sqrt_neur,
+                                             figsize = (8,8))
+                        for n_i in range(len(non_nan_inds)):
+                            ax_ind = np.where(neur_inds == n_i)
+                            if len(dev_which_taste_inds) > 1:
+                                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[:,n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[:,n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                            else:
+                                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_1_z[n_i],alpha=0.2,label='Split ' + str(sp[0]))
+                                ax[ax_ind[0][0],ax_ind[1][0]].hist(vals_2_z[n_i],alpha=0.2,label='Split ' + str(sp[1]))
+                            ax[ax_ind[0][0],ax_ind[1][0]].set_title('Neuron ' + str(n_i))
+                            ax[ax_ind[0][0],ax_ind[1][0]].set_xlabel('Firing Rate (Hz)')
+                        ax[0,0].legend()
+                        plt.suptitle(title)
+                        plt.tight_layout()
+                        f_plot.savefig(os.path.join(splits_decode_dir,segment_names[s_i] + \
+                                     '_' + str(sp[0]) + '_vs_' + str(sp[1]) + \
+                                         '_' + dig_in_names[t_i] + \
+                                             '_deviations_which_taste_split_sig.png'))
+                        f_plot.savefig(os.path.join(splits_decode_dir,segment_names[s_i] + \
+                                     '_' + str(sp[0]) + '_vs_' + str(sp[1]) + \
+                                         '_' + dig_in_names[t_i] + \
+                                             '_deviations_which_taste_split_sig.svg'))
+                        plt.close(f_plot)
+                    except:
+                        hold_plot = "cannot plot."
     
     for sp_ind, sp in enumerate(split_pairs):
         sig_csv_file = os.path.join(splits_decode_dir,'split_sig_hotellings_' + str(sp[0]) + '_x_' + str(sp[1]) + '.csv')

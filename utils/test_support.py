@@ -163,10 +163,12 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
                                                                                            bayes_fr_bins, start_dig_in_times, pre_taste_dt,
                                                                                            post_taste_dt, bin_dt, trial_start_frac)
 
-#%%
+
 import functions.dev_sequence_funcs as dsf
 
 seq_dir = os.path.join(metadata['dir_name'],'Deviation_Sequence_Analysis/')
+if not os.path.isdir(seq_dir):
+    os.mkdir(seq_dir)
 num_null = 100
 
 dsf.split_match_calc(num_neur, segment_dev_rasters,
