@@ -11,6 +11,7 @@ in their correlation trends.
 
 import os
 import warnings
+import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
@@ -4114,15 +4115,8 @@ def cross_dataset_dev_split_decode_frac_plots(dev_split_decode_data, unique_give
     anim_colors = cmap(np.linspace(0, 1, num_anim))
     seg_pairs = list(combinations(np.arange(num_segments), 2))
     
-    f_frac, ax_frac = plt.subplots(nrows = 2 + num_tastes, ncols = 1, sharey = True,
-                                   figsize = (4,4*(2+num_tastes)))
-    f_box, ax_box = plt.subplots(nrows = 2, ncols = 1, sharey = True,
-                                   figsize = (4,8))
-    ax_frac[0].set_ylim([-0.1,1.1])
-    ax_box[0].set_ylim([-0.1,1.1])
-    #Is Taste Data + Plots
+    #Is-Taste Calcs
     dt = 'is_taste'
-    labels = ['Taste', 'No Taste']
     is_taste_seg_data_1 = [] #num seg x num anim x 2 - split 1
     is_taste_seg_data_2 = [] #num seg x num anim x 2 - split 2
     same_is_taste_data = [] #num_seg x num_anim
@@ -4148,226 +4142,215 @@ def cross_dataset_dev_split_decode_frac_plots(dev_split_decode_data, unique_give
         is_taste_seg_data_1.append(np.array(all_animal_1_data))
         is_taste_seg_data_2.append(np.array(all_animal_2_data))
         same_is_taste_data.append(all_animal_same_data)
-    same_is_taste_data = np.squeeze(same_is_taste_data)
-    #Pairwise TTests
-    pair_sig = np.zeros(len(seg_pairs))
-    for sp_i, sp in enumerate(seg_pairs):
-        s_1 = sp[0]
-        s_2 = sp[1]
-        s_data1 = is_taste_seg_data[s_1][:,0]
-        s_data2 = is_taste_seg_data[s_2][:,0]
-        ks_res = ks_2samp(s_data1, s_data2)
-        if ks_res.pvalue < 0.05:
-            pair_sig[sp_i] = 1
-    #Averages
-    is_taste_seg_means = np.nanmean(is_taste_seg_data,1)
-    is_taste_seg_stds = np.nanstd(is_taste_seg_data,1)
-    for s_i, s_name in enumerate(unique_segment_names):
-        box_data = is_taste_seg_data[s_i][:,0]
-        ax_box[0].boxplot(box_data,positions=s_i*np.ones(1))
-        box_x = (np.random.rand(len(box_data))-0.5)/10 + s_i
-        for n_i in range(num_anim):
-            ax_box[0].scatter(box_x[n_i],box_data[n_i],alpha=0.2,c=anim_colors[n_i,:])
-        if np.sum(pair_sig) > 0:
-            sig_inds = np.where(pair_sig == 1)[0]
-            for sig_i in sig_inds:
-                s_1 = seg_pairs[sig_i][0]
-                s_2 = seg_pairs[sig_i][1]
-                ax_box[0].plot([s_1,s_2],[1,1],color='k')
-                ax_box[0].scatter((s_2-s_1)/2+s_1,1.05,marker='*',color='k')
-        ax_frac[0].plot(np.arange(2),is_taste_seg_means[s_i,:],
-                        color=segment_colors[s_i,:],label=s_name)
-        ax_frac[0].fill_between(np.arange(2),
-                                is_taste_seg_means[s_i,:]+is_taste_seg_stds[s_i,:],
-                                is_taste_seg_means[s_i,:]-is_taste_seg_stds[s_i,:],
-                                color=segment_colors[s_i,:],alpha=0.2,label='_')
-    ax_frac[0].legend(loc='upper left')
-    ax_box[0].set_xticks(np.arange(num_segments),unique_segment_names)
-    ax_frac[0].set_title('Is Taste Fraction')
-    ax_box[0].set_title('Is Taste Fraction')
-    ax_frac[0].set_xticks(np.arange(2),labels)
+    same_is_taste_data = np.squeeze(same_is_taste_data) #num_seg x num_anim
+    is_taste_seg_data_1 = np.squeeze(is_taste_seg_data_1) #num seg x num anim x 2
+    is_taste_seg_data_2 = np.squeeze(is_taste_seg_data_2) #num seg x num anim x 2
     
-    dt = 'which_taste'
-    which_taste_data = [] #num taste x num seg x num anim
+    #Which-Taste and Epoch pair calcs
+    same_taste_data = [] #num taste x num seg x num anim
+    all_taste_ep_pair_frac = dict()
+    max_cp = 0
     for t_i, t_name in enumerate(unique_taste_names):
-        all_seg_data = []
+        all_seg_same_taste_frac = []
+        all_seg_animal_ep_pair_frac = dict()
         for s_i, s_name in enumerate(unique_segment_names):
-            all_animal_data = []
+            all_animal_same_taste_frac = []
+            all_animal_ep_pair_frac = dict()
             for name_i, name in enumerate(unique_given_names):
-                is_taste_inds = np.where(np.argmax(dev_decode_data[name]['is_taste'][s_name],1) == 0)[0]
-                decode_data_i = np.squeeze(dev_decode_data[name][dt][s_name][is_taste_inds,:])
-                num_dev_is_taste, _ = np.shape(decode_data_i)
-                decode_argmax = np.squeeze(np.argmax(decode_data_i,1))
-                taste_names = dev_decode_data[name]['dig_in_names']
+                taste_names = dev_split_decode_data[name]['dig_in_names']
                 an_t_i = np.where(np.array(taste_names) == t_name)[0]
-                if len(an_t_i) > 0:
-                    num_taste_decode = len(np.where(decode_argmax == an_t_i)[0])
-                    frac_taste_decode = num_taste_decode/num_dev_is_taste
-                    all_animal_data.append(frac_taste_decode)
-            all_seg_data.append(all_animal_data)
-        which_taste_data.append(np.array(all_seg_data))
-    #Pairwise TTests
-    sac_ind = [i for i in range(num_tastes) if unique_taste_names[i] == 'saccharin'][0]
-    pair_sig = np.zeros(len(seg_pairs))
-    for sp_i, sp in enumerate(seg_pairs):
-        s_1 = sp[0]
-        s_2 = sp[1]
-        s_data1 = which_taste_data[sac_ind][s_1,:]
-        s_data2 = which_taste_data[sac_ind][s_2,:]
-        ks_res = ks_2samp(s_data1, s_data2)
-        if ks_res.pvalue < 0.05:
-            pair_sig[sp_i] = 1
-    which_taste_seg_means = np.nanmean(which_taste_data,-1) #num taste x num seg
-    which_taste_seg_stds = np.nanstd(which_taste_data,-1) #num taste x num seg
+                #Is taste indices
+                decode_data_i = np.squeeze(dev_split_decode_data[name]['decode_data'][s_name]['is_taste']) #deviation x is taste x split index
+                num_dev, _, _ = np.shape(decode_data_i)
+                split_1_argmax = np.squeeze(np.argmax(np.squeeze(decode_data_i[:,:,0]),1))
+                split_2_argmax = np.squeeze(np.argmax(np.squeeze(decode_data_i[:,:,1]),1))
+                is_taste_inds_1 = np.where(split_1_argmax == 0)[0]
+                is_taste_inds_2 = np.where(split_2_argmax == 0)[0]
+                both_taste_inds = np.intersect1d(is_taste_inds_1,is_taste_inds_2)
+                #Which taste decode fracs
+                which_decode_data_i = np.squeeze(dev_split_decode_data[name]['decode_data'][s_name]['which_taste']) #deviation x which taste x split index
+                #Individual split taste decode fracs
+                split_1_which_argmax = np.squeeze(np.argmax(np.squeeze(which_decode_data_i[is_taste_inds_1,:,0]),1))
+                split_2_which_argmax = np.squeeze(np.argmax(np.squeeze(which_decode_data_i[is_taste_inds_2,:,1]),1))
+                split_1_taste_inds = np.where(split_1_which_argmax == an_t_i)[0]
+                split_2_taste_inds = np.where(split_2_which_argmax == an_t_i)[0]
+                #Both split taste decode fracs
+                both_taste_inds = np.intersect1d(split_1_taste_inds,split_2_taste_inds)
+                all_animal_same_taste_frac.append(len(both_taste_inds)/num_dev)
+                #Which epoch data
+                which_epoch_data = np.squeeze(dev_split_decode_data[name]['decode_data'][s_name]['which_epoch']) #deviation x num epochs x split index
+                _, num_epoch, _ = np.shape(which_epoch_data)
+                if num_epoch > max_cp:
+                    max_cp = num_epoch
+                epoch_pairs = list(itertools.combinations(np.arange(num_epoch),2))
+                epoch_pairs.extend(list(itertools.combinations(reversed(np.arange(num_epoch)),2)))
+                epoch_pairs.extend([(i,i) for i in range(num_epoch)])
+                both_taste_epoch_prob_1 = np.squeeze(which_epoch_data[is_taste_inds_1[both_taste_inds],:,0]) #len(both_taste_inds) x num epochs
+                both_taste_epoch_prob_2 = np.squeeze(which_epoch_data[is_taste_inds_1[both_taste_inds],:,1])
+                if len(both_taste_inds) > 1:
+                    both_taste_epoch_ind_1 = np.argmax(both_taste_epoch_prob_1,1)
+                    both_taste_epoch_ind_2 = np.argmax(both_taste_epoch_prob_2,1)
+                elif len(both_taste_inds) == 1:
+                    both_taste_epoch_ind_1 = np.argmax(both_taste_epoch_prob_1)
+                    both_taste_epoch_ind_2 = np.argmax(both_taste_epoch_prob_2)
+                else:
+                    both_taste_epoch_ind_1 = []
+                    both_taste_epoch_ind_2 = []
+                for ep in epoch_pairs:
+                    ep_1 = ep[0]
+                    ep_2 = ep[1]
+                    ep_1_ind = np.where(both_taste_epoch_ind_1 == ep_1)[0]
+                    ep_2_ind = np.where(both_taste_epoch_ind_2 == ep_2)[0]
+                    pair_counts = len(np.intersect1d(ep_1_ind, ep_2_ind))
+                    if name_i == 0:
+                        all_animal_ep_pair_frac[str(ep)] = []
+                    if len(both_taste_inds) > 0:
+                        all_animal_ep_pair_frac[str(ep)].append(pair_counts/len(both_taste_inds))
+                    else:
+                        all_animal_ep_pair_frac[str(ep)].append(np.nan)
+            all_seg_same_taste_frac.append(all_animal_same_taste_frac)
+            all_seg_animal_ep_pair_frac[s_name] = all_animal_ep_pair_frac
+        same_taste_data.append(np.array(all_seg_same_taste_frac))
+        all_taste_ep_pair_frac[t_name] = all_seg_animal_ep_pair_frac
+    
+    #Create plots if is-taste, which-taste fracs
+    f_box, ax_box = plt.subplots(nrows = 2, ncols = 1, figsize = (4,8))
+    #    is-taste plots
+    ax_box[0].set_ylim([-0.1,1.1])
     for s_i, s_name in enumerate(unique_segment_names):
-        box_data = which_taste_data[sac_ind][s_i,:]
-        ax_box[1].boxplot(box_data,positions=s_i*np.ones(1))
-        box_x = (np.random.rand(len(box_data))-0.5)/10 + s_i
+        box_data_1 = list(is_taste_seg_data_1[s_i][:,0])
+        box_data_2 = list(is_taste_seg_data_2[s_i][:,0])
+        box_x = (np.random.rand(len(box_data_1))-0.5)/10
         for n_i in range(num_anim):
-            ax_box[1].scatter(box_x[n_i],box_data[n_i],alpha=0.2,c=anim_colors[n_i,:])
-        if np.sum(pair_sig) > 0:
-            sig_inds = np.where(pair_sig == 1)[0]
-            for sig_i in sig_inds:
-                s_1 = seg_pairs[sig_i][0]
-                s_2 = seg_pairs[sig_i][1]
-                ax_box[1].plot([s_1,s_2],[1+0.1*sig_i,1+0.1*sig_i],color='k')
-                ax_box[1].scatter((s_2-s_1)/2+s_1,1.05+0.1*sig_i,marker='*',\
-                                  color='k')
-        ax_frac[1].plot(np.arange(num_tastes),which_taste_seg_means[:,s_i],
-                        color=segment_colors[s_i,:],label=s_name)
-        ax_frac[1].fill_between(np.arange(num_tastes),
-                                which_taste_seg_means[:,s_i]+which_taste_seg_stds[:,s_i],
-                                which_taste_seg_means[:,s_i]-which_taste_seg_stds[:,s_i],
-                                color=segment_colors[s_i,:],label='_',alpha=0.2)
-    ax_frac[1].legend(loc='upper left')
-    ax_box[1].set_xticks(np.arange(num_segments),unique_segment_names)
-    ax_frac[1].set_title('Which Taste Fraction')
-    ax_box[1].set_title('Saccharin Fraction')
-    ax_frac[1].set_xticks(np.arange(num_tastes),unique_taste_names)
-    plt.figure(f_frac)
+            ax_box[0].scatter(box_x[n_i]+2*s_i,box_data_1[n_i],alpha=0.2,c=anim_colors[n_i,:],label='_')
+            ax_box[0].scatter(box_x[n_i]+2*s_i+1,box_data_2[n_i],alpha=0.2,c=anim_colors[n_i,:],label='_')
+        ax_box[0].boxplot(box_data_1,positions=[s_i*2])
+        ax_box[0].boxplot(box_data_2,positions=[s_i*2+1])
+        ax_box[0].plot([s_i*2,s_i*2+1],[1,1],c=segment_colors[s_i,:],label=s_name)
+    x_tick_labels = []
+    for us_i, us_n in enumerate(unique_segment_names):
+        x_tick_labels.append('\nSplit 1')
+        x_tick_labels.append('\nSplit 2')
+    ax_box[0].set_xticks(np.arange(2*num_segments),x_tick_labels)
+    ax_box[0].set_title('Is Taste Fraction')
+    ax_box[0].legend(loc='upper left')
+    #    which-taste plots
+    x_tick_labels = []
+    max_frac = np.max(same_taste_data)
+    for s_i, s_name in enumerate(unique_segment_names):
+        for t_i, t_name in enumerate(unique_taste_names):
+            box_data = same_taste_data[t_i][s_i,:]
+            x_loc = s_i*num_tastes + t_i
+            x_tick_labels.append(t_name)
+            ax_box[1].boxplot(box_data,positions=x_loc*np.ones(1))
+            box_x = (np.random.rand(len(box_data))-0.5)/10 + x_loc
+            for n_i in range(num_anim):
+                ax_box[1].scatter(box_x[n_i],box_data[n_i],alpha=0.2,c=anim_colors[n_i,:])
+        ax_box[1].plot([s_i*num_tastes,s_i*num_tastes + (num_tastes-1)],\
+                       [max_frac+0.1*max_frac,max_frac+0.1*max_frac],\
+                       c=segment_colors[s_i,:],label=s_name)
+    ax_box[1].set_xticks(np.arange(num_tastes*num_segments),x_tick_labels)
+    ax_box[1].set_title('Same Taste Fractions')
+    ax_box[1].legend(loc='upper left')
     plt.tight_layout()
-    f_frac.savefig(os.path.join(results_dir,'decode_fracs.png'))
-    f_frac.savefig(os.path.join(results_dir,'decode_fracs.svg'))
-    plt.close(f_frac)
-    plt.figure(f_box)
-    plt.tight_layout()
-    f_box.savefig(os.path.join(results_dir,'decode_box.png'))
-    f_box.savefig(os.path.join(results_dir,'decode_box.svg'))
+    f_box.savefig(os.path.join(results_dir,'is_taste_which_taste_decode_box.png'))
+    f_box.savefig(os.path.join(results_dir,'is_taste_which_taste_decode_box.svg'))
     plt.close(f_box)
     
-    f_box_te, ax_box_te = plt.subplots(nrows = num_tastes, ncols = 2, sharey = True,
-                                   figsize = (4*num_tastes,8))
-    unique_epoch_names = ['Epoch ' + str(e_i) for e_i in unique_epochs]
-    which_taste_epoch_data = [] #num_taste x num seg x num epoch x num animals
+    #Create plots for epoch pair fractions
+    epoch_pairs = list(itertools.combinations(np.arange(max_cp),2))
+    epoch_pairs.extend(list(itertools.combinations(reversed(np.arange(max_cp)),2)))
+    epoch_pairs.extend([(i,i) for i in range(max_cp)])
+    epoch_pairs_labels = [str(ep) for ep in epoch_pairs]
+    f_ep_box, ax_ep_box = plt.subplots(nrows = len(unique_taste_names), \
+                                       ncols = len(unique_segment_names), \
+                                    figsize = (len(unique_segment_names)*3,\
+                                               len(unique_taste_names)*3))
+    f_ep_trend, ax_ep_trend = plt.subplots(nrows = len(unique_taste_names), \
+                                       ncols = len(unique_segment_names), \
+                                    figsize = (len(unique_segment_names)*3,\
+                                               len(unique_taste_names)*3))
+    f_ep_avg, ax_ep_avg = plt.subplots(nrows = len(unique_taste_names), \
+                                       ncols = len(unique_segment_names), \
+                                    figsize = (len(unique_segment_names)*3,\
+                                               len(unique_taste_names)*3))
     for t_i, t_name in enumerate(unique_taste_names):
-        all_seg_data = []
+        all_seg_animal_ep_pair_frac = all_taste_ep_pair_frac[t_name]
         for s_i, s_name in enumerate(unique_segment_names):
-            all_epoch_data = []
-            for e_i in unique_epochs:
-                all_animal_data = []
-                for name_i, name in enumerate(unique_given_names):
-                    is_taste_inds = np.where(np.argmax(dev_decode_data[name]['is_taste'][s_name],1) == 0)[0]
-                    taste_names = dev_decode_data[name]['dig_in_names']
-                    an_t_i = np.where(np.array(taste_names) == t_name)[0]
-                    which_taste_inds = np.where(np.argmax(dev_decode_data[name]['which_taste'][s_name],1) == an_t_i)[0]
-                    is_which_taste_inds = np.intersect1d(is_taste_inds, which_taste_inds)
-                    num_is_which_taste = len(is_which_taste_inds)
-                    decode_data_i = np.squeeze(dev_decode_data[name]['which_epoch'][s_name][is_which_taste_inds,:])
-                    data_argmax = np.argmax(decode_data_i,1)
-                    an_epochs = dev_decode_data[name]['epochs_to_analyze']
-                    an_e_i = np.where(np.array(an_epochs) == e_i)[0]
-                    if (len(an_e_i) > 0):
-                        frac_epoch_decodes = len(np.where(data_argmax == an_e_i)[0])/num_is_which_taste
-                        all_animal_data.append(frac_epoch_decodes)
-                all_epoch_data.append(all_animal_data)
-            all_seg_data.append(all_epoch_data)
-        #Calculate significance between segments by epoch
-        which_taste_epoch_data.append(np.array(all_seg_data))
-    #Averages
-    which_taste_epoch_seg_means = np.nanmean(which_taste_epoch_data,-1) #num_taste x num seg x num epoch
-    which_taste_epoch_seg_stds = np.nanstd(which_taste_epoch_data,-1) #num_taste x num seg x num epoch
-    for t_i, t_name in enumerate(unique_taste_names):
-        taste_box_data = which_taste_epoch_data[t_i]
-        #Plot grouped by segment with epochs next to each other
-        taste_box_data_reshape = []
-        taste_box_data_x_labels = []
-        for s_i in range(num_segments):
-            for e_i in range(num_epochs):
-                taste_box_data_reshape.append(taste_box_data[s_i][e_i,:])
-                taste_box_data_x_labels.append(unique_epoch_names[e_i])
-        box_x_inds = np.arange(len(taste_box_data_reshape))
-        ax_box_te[t_i,0].boxplot(taste_box_data_reshape,positions=box_x_inds)
-        for x_i in box_x_inds:
-            box_x = (np.random.rand(len(box_data))-0.5)/10 + x_i
-            for n_i in range(num_anim):
-                ax_box_te[t_i,0].scatter(box_x[n_i],taste_box_data_reshape[x_i][n_i],alpha=0.2,c=anim_colors[n_i,:])
-        #Add significance bars
-        for s_i in range(num_segments):
-            #Perform epoch pair significance tests
-            s_i_x_start = s_i*num_epochs
-            s_i_x_end = s_i*num_epochs + (num_epochs-1)
-            #Plot segment groups
-            ax_box_te[t_i,0].plot([s_i_x_start,s_i_x_end],[0,0],\
-                                  label=unique_segment_names[s_i],
-                                  c = segment_colors[s_i,:])
+            all_animal_ep_pair_frac = all_seg_animal_ep_pair_frac[s_name]
+            all_ep_trends = np.zeros((len(epoch_pairs),num_anim))
             for ep_i, ep in enumerate(epoch_pairs):
-                e_1 = ep[0]
-                e_2 = ep[1]
-                e_data1 = which_taste_epoch_data[t_i][s_i,e_1,:]
-                e_data2 = which_taste_epoch_data[t_i][s_i,e_2,:]
-                ks_res = ks_2samp(e_data1, e_data2)
-                if ks_res.pvalue < 0.05:
-                    x_1 = s_i_x_start+e_1
-                    x_2 = s_i_x_start+e_2
-                    ax_box_te[t_i,0].plot([x_1,x_2],[1+0.1*ep_i,1+0.1*ep_i],\
-                                          color='k',label='_')
-                    ax_box_te[t_i,0].scatter((x_2-x_1)/2+x_1,1.05+0.1*ep_i,\
-                                      marker='*',color='k',label='_')
-        ax_box_te[0,0].legend(loc='upper left')
-        ax_box_te[t_i,0].set_xticks(box_x_inds,taste_box_data_x_labels,rotation=45)
-        ax_box_te[t_i,0].set_title(t_name + ' segment grouped')
-        #Plot grouped by epoch with segments next to each other
-        taste_box_data_reshape = []
-        taste_box_data_x_labels = []
-        for e_i in range(num_epochs):
-            for s_i in range(num_segments):
-                taste_box_data_reshape.append(taste_box_data[s_i][e_i,:])
-                taste_box_data_x_labels.append(unique_segment_names[s_i])
-        box_x_inds = np.arange(len(taste_box_data_reshape))
-        ax_box_te[t_i,1].boxplot(taste_box_data_reshape,positions=box_x_inds)
-        for x_i in box_x_inds:
-            box_x = (np.random.rand(len(box_data))-0.5)/10 + x_i
+                box_data = np.array(all_animal_ep_pair_frac[str(ep)])
+                all_ep_trends[ep_i,:] = box_data
+                box_x = ep_i + (np.random.rand(len(box_data))-0.5)/10
+                for n_i in range(num_anim):
+                    ax_ep_box[t_i,s_i].scatter(box_x[n_i],box_data[n_i],\
+                                               alpha=0.2,c=anim_colors[n_i,:],\
+                                                   label='_')
+                ax_ep_box[t_i,s_i].boxplot(box_data[~np.isnan(box_data)],positions=[ep_i])
             for n_i in range(num_anim):
-                ax_box_te[t_i,1].scatter(box_x[n_i],taste_box_data_reshape[x_i][n_i],\
-                                         alpha=0.2,c=anim_colors[n_i,:])
-        #Add significance bars
-        for e_i in range(num_epochs):
-            #Perform epoch pair significance tests
-            e_i_x_start = e_i*num_segments
-            e_i_x_end = e_i*num_segments + (num_segments-1)
-            #Plot epoch groups
-            ax_box_te[t_i,1].plot([e_i_x_start,e_i_x_end],[0,0],\
-                                  label=unique_epoch_names[e_i],
-                                  c = epoch_colors[e_i,:])
-            for sp_i, sp in enumerate(seg_pairs):
-                s_1 = sp[0]
-                s_2 = sp[1]
-                e_data1 = which_taste_epoch_data[t_i][s_1,e_i,:]
-                e_data2 = which_taste_epoch_data[t_i][s_2,e_i,:]
-                ks_res = ks_2samp(e_data1, e_data2)
-                if ks_res.pvalue < 0.05:
-                    x_1 = e_i_x_start+s_1
-                    x_2 = e_i_x_end+s_2
-                    ax_box_te[t_i,1].plot([x_1,x_2],[1+0.1*sp_i,1+0.1*sp_i],\
-                                          color='k',label='_')
-                    ax_box_te[t_i,1].scatter((x_2-x_1)/2+x_1,1.05+0.1*sp_i,\
-                                      marker='*',color='k',label='_')
-        ax_box_te[0,1].legend(loc='upper left')
-        ax_box_te[t_i,1].set_xticks(box_x_inds,taste_box_data_x_labels,rotation=45)
-        ax_box_te[t_i,1].set_title(t_name + ' epoch grouped')
-    plt.suptitle('Epoch/Segment Grouped Decode Fractions')
+                ax_ep_trend[t_i,s_i].plot(np.arange(len(epoch_pairs)),\
+                                          all_ep_trends[:,n_i],alpha=0.3,
+                                            c=anim_colors[n_i,:])
+            mean_trend = np.nanmean(all_ep_trends,1)
+            std_trend = np.nanstd(all_ep_trends,1)
+            ax_ep_trend[t_i,s_i].plot(np.arange(len(epoch_pairs)),\
+                                      mean_trend,c='k',label='Mean')
+            ax_ep_trend[t_i,s_i].fill_between(np.arange(len(epoch_pairs)),\
+                                      mean_trend-std_trend,mean_trend+std_trend,\
+                                          color='k',alpha=0.2,label='Std')
+            ax_ep_avg[t_i,s_i].pie(mean_trend,labels=epoch_pairs_labels,\
+                                   autopct='%1.1f%%')
+            ax_ep_box[t_i,s_i].set_xticks(np.arange(len(epoch_pairs)),epoch_pairs_labels,\
+                                          rotation=45)
+            ax_ep_box[t_i,s_i].set_ylabel(t_name + '\nFraction')
+            ax_ep_box[t_i,s_i].set_title(s_name)
+            plt.tight_layout()
+            ax_ep_trend[t_i,s_i].set_xticks(np.arange(len(epoch_pairs)),epoch_pairs_labels,\
+                                          rotation=45)
+            ax_ep_trend[t_i,s_i].set_ylabel(t_name + '\nFraction')
+            ax_ep_trend[t_i,s_i].set_title(s_name)
+            ax_ep_avg[t_i,s_i].set_title(s_name + ' ' + t_name)
+            plt.tight_layout()
+    f_ep_box.savefig(os.path.join(results_dir,'which_epoch_decode_box.png'))
+    f_ep_box.savefig(os.path.join(results_dir,'which_epoch_decode_box.svg'))
+    plt.close(f_ep_box)
+    f_ep_trend.savefig(os.path.join(results_dir,'which_epoch_decode_trend.png'))
+    f_ep_trend.savefig(os.path.join(results_dir,'which_epoch_decode_trend.svg'))
+    plt.close(f_ep_trend)
+    f_ep_avg.savefig(os.path.join(results_dir,'which_epoch_decode_svg_pie.png'))
+    f_ep_avg.savefig(os.path.join(results_dir,'which_epoch_decode_svg_pie.svg'))
+    plt.close(f_ep_avg)
+                
+    #Plot epoch pairs separately with segments compared
+    ep_sqrt = np.ceil(np.sqrt(len(epoch_pairs))).astype('int')
+    ep_ref = np.reshape(np.ceil(np.arange(ep_sqrt**2)).astype('int'),(ep_sqrt,ep_sqrt))
+    f_ep_segcomp, ax_ep_segcomp = plt.subplots(nrows = ep_sqrt, ncols = ep_sqrt, \
+                                    figsize = (ep_sqrt*4,ep_sqrt*4), sharey = True)
+    for ep_i, ep in enumerate(epoch_pairs):
+        ep_index = np.where(ep_ref == ep_i)
+        ep_row = ep_index[0][0]
+        ep_col = ep_index[1][0]
+        ax_ep_segcomp[ep_row,ep_col].set_title(epoch_pairs_labels[ep_i])
+        for t_i, t_name in enumerate(unique_taste_names):
+            all_seg_animal_ep_pair_frac = all_taste_ep_pair_frac[t_name]
+            all_ep_trends = np.zeros((num_segments,num_anim))
+            for s_i, s_name in enumerate(unique_segment_names):
+                all_animal_ep_pair_frac = np.array(all_seg_animal_ep_pair_frac[s_name][str(ep)])
+                all_ep_trends[s_i,:] = all_animal_ep_pair_frac
+            mean_vals = np.nanmean(all_ep_trends,1)
+            std_vals = np.nanstd(all_ep_trends,1)
+            ax_ep_segcomp[ep_row,ep_col].plot(np.arange(num_segments),\
+                                              mean_vals,label=t_name)
+            # ax_ep_segcomp[ep_row,ep_col].fill_between(np.arange(num_segments),\
+            #                                   mean_vals+std_vals,\
+            #                                   mean_vals-std_vals,\
+            #                                   alpha=0.3,label='_')
+        ax_ep_segcomp[ep_row,ep_col].set_xticks(np.arange(num_segments),\
+                                                unique_segment_names)
+    ax_ep_segcomp[0,0].legend(loc='upper left')
+    plt.suptitle('Average Decoding Fractions Across Animals')
     plt.tight_layout()
-    f_box_te.savefig(os.path.join(results_dir,'decode_box_te.png'))
-    f_box_te.savefig(os.path.join(results_dir,'decode_box_te.svg'))
-    plt.close(f_box_te)
-    
+    f_ep_segcomp.savefig(os.path.join(results_dir,'which_epoch_decode_avg.png'))
+    f_ep_segcomp.savefig(os.path.join(results_dir,'which_epoch_decode_avg.svg'))
+    plt.close(f_ep_segcomp)

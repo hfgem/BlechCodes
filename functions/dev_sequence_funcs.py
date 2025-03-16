@@ -1320,10 +1320,6 @@ def decode_deviation_splits_is_taste_which_taste_which_epoch(tastant_fr_dist,
     try:
         dev_decode_is_taste_array = np.load(
             os.path.join(decode_dir,segment_names[s_i_test] + \
-                         '_deviations_is_taste_FOILED.npy')) #REMOVE AFTER DONE
-        
-        dev_decode_is_taste_array = np.load(
-            os.path.join(decode_dir,segment_names[s_i_test] + \
                          '_deviations_is_taste.npy'))
         
         dev_decode_array = np.load(

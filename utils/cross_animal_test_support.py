@@ -192,7 +192,12 @@ unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
 
 #%% plot_dev_split_decode_results()
 
+import functions.compare_datasets_funcs as cdf
+
 num_cond = len(dev_split_decode_data)
 results_dir = dev_split_decode_results_dir
 
 #Insert plot call here
+cdf.cross_dataset_dev_split_decode_frac_plots(dev_split_decode_data, unique_given_names,
+                                            unique_segment_names, unique_taste_names, 
+                                            decode_types, results_dir)

@@ -64,6 +64,10 @@ class run_compare_conditions_analysis():
                 self.import_dev_decode_data()
             except:
                 self.gather_dev_decode_data()
+            try:
+                self.import_dev_split_decode_data()
+            except:
+                self.gather_dev_split_decode_data()
         else:
             print("Please select a storage folder for results.")
             print('Please select the storage folder.')
@@ -78,6 +82,7 @@ class run_compare_conditions_analysis():
             self.gather_dev_null_data()
             self.gather_dev_split_data()
             self.gather_dev_decode_data()
+            self.gather_dev_split_decode_data()
         #Correlation comparisons
         self.find_corr_groupings()
         self.plot_corr_results()
@@ -102,6 +107,9 @@ class run_compare_conditions_analysis():
         #Dev decode results
         self.find_dev_decode_groupings()
         self.plot_dev_decode_results()
+        #Dev split decode results
+        self.find_dev_split_decode_groupings()
+        self.plot_dev_split_decode_results()
 
     def import_corr(self,):
         """Import previously saved correlation data"""
@@ -1336,7 +1344,9 @@ class run_compare_conditions_analysis():
 
         print("Beginning Plots.")
         if num_cond > 1:
-            print("Add plot call here.")
+            cdf.cross_dataset_dev_split_decode_frac_plots(self.dev_split_decode_data, self.unique_given_names,
+                                                        self.unique_segment_names, self.unique_taste_names, 
+                                                        self.decode_types, results_dir)
         else:
             print("Not enough animals for cross-animal dev stat plots.")
             
