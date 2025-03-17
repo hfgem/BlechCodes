@@ -276,41 +276,15 @@ for n_i in range(num_days):
         min_hz_z_pop = min_hz_z_pop_day
 
 import functions.multiday_dev_functions as mdf
-import numpy as np
 
-corr_dir = os.path.join(save_dir,'Correlations')
-if not os.path.isdir(corr_dir):
-    os.mkdir(corr_dir)
-decode_dir = os.path.join(save_dir,'Decodes')
-if not os.path.isdir(decode_dir):
-    os.mkdir(decode_dir)
-    
-#Variables
-num_seg = len(segment_dev_fr_vecs)
-num_neur = len(segment_dev_fr_vecs[0][0])
-num_tastes = len(all_dig_in_names)
+bin_dt = day_vars[0]['bin_dt']
+segments_to_analyze = day_vars[0]['segments_to_analyze']
+segment_times = day_vars[0]['segment_times']
+segment_spike_times = day_vars[0]['segment_spike_times']
 
-#Now go through segments and their deviation events and compare
-for s_i in range(num_seg):
-    seg_name = segment_names_to_analyze[s_i]
-    dev_rast = segment_dev_rasters[s_i]
-    dev_times = segment_dev_times[s_i]
-    dev_fr_vecs = segment_dev_fr_vecs[s_i]
-    dev_fr_vecs_z = segment_dev_fr_vecs_zscore[s_i]
-    
-    #Run correlation analyses
-    mdf.correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
-                                taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
-                                dev_times,dev_fr_vecs,seg_name,corr_dir)
-    mdf.correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
-                                      taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
-                                      max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
-                                      seg_name,corr_dir)
-    # mdf.decode_dev_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_pop,
-    #                            taste_num_deliv,max_num_cp,dev_rast,
-    #                            dev_times,dev_fr_vecs,seg_name,s_i,decode_dir)
-    # mdf.decode_dev_zscore_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
-    #                            taste_num_deliv,max_num_cp,dev_rast,dev_times,
-    #                            dev_fr_vecs_z,seg_name,s_i,decode_dir)
-    
-print("\nDONE!")
+mdf.multiday_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
+                          taste_num_deliv,max_hz_pop,tastant_fr_dist_z_pop,
+                          max_hz_z_pop,min_hz_z_pop,max_num_cp,segment_dev_rasters,
+                          segment_dev_times,segment_dev_fr_vecs,segment_dev_fr_vecs_zscore,
+                          segments_to_analyze, segment_times, segment_spike_times,
+                          bin_dt,segment_names_to_analyze)

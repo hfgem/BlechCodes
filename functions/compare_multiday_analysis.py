@@ -37,7 +37,7 @@ class run_compare_multiday_analysis():
             corr_dict = np.load(corr_dict_path,allow_pickle=True).item()
         except:
             corr_dict = dict()
-            data_names = list(multiday_data_dict.keys())
+            data_names = list(self.multiday_data_dict.keys())
             for nc_i, dn in enumerate(data_names):
                 corr_dict[dn] = dict()
                 data_dir = self.multiday_data_dict[dn]['data_dir']

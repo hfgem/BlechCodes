@@ -251,10 +251,16 @@ class run_multiday_analysis():
         self.max_num_cp = max_num_cp
             
     def multiday_dev_tests(self,):
+        bin_dt = self.day_vars[0]['bin_dt']
+        segments_to_analyze = self.day_vars[0]['segments_to_analyze']
+        segment_times = self.day_vars[0]['segment_times']
+        segment_spike_times = self.day_vars[0]['segment_spike_times']
+        
         mdf.multiday_dev_analysis(self.save_dir,self.all_dig_in_names,self.tastant_fr_dist_pop,
                                   self.taste_num_deliv,self.max_hz_pop,self.tastant_fr_dist_z_pop,
                                   self.max_hz_z_pop,self.min_hz_z_pop,self.max_num_cp,
                                   self.segment_dev_rasters,self.segment_dev_times,
                                   self.segment_dev_fr_vecs,self.segment_dev_fr_vecs_zscore,
-                                  self.segment_names_to_analyze)
+                                  segments_to_analyze, segment_times, segment_spike_times,
+                                  bin_dt,self.segment_names_to_analyze)
         
