@@ -140,8 +140,13 @@ except:
                                 data_concat = np.zeros((num_cp,num_points))
                                 for cp_i in range(num_cp):
                                     data_concat[cp_i,:] = np.array(f_data[nt_i]['data'][cp_i])
-                                corr_dict[dn][ct][seg_name]['all'][taste_name] = data_concat
-                        
+                                corr_dict[dn][ct][seg_name]['all'][taste_name] = dict()
+                                corr_dict[dn][ct][seg_name]['all'][taste_name]['data'] = data_concat
+                                try:
+                                    corr_dict[dn][ct][seg_name]['all'][taste_name]['num_dev'] = f_data[nt_i]['num_dev']
+                                    corr_dict[dn][ct][seg_name]['all'][taste_name]['taste_num_deliv'] = f_data[nt_i]['taste_num_deliv']
+                                except:
+                                    skip_val = 1 #Place holder skip
                         else: #best correlations file
                             f_data = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
                             corr_dict[dn][ct][seg_name]['best'] = f_data
@@ -165,22 +170,22 @@ max_cp = 0
 for name in unique_given_names:
     for corr_name in unique_corr_names:
         seg_names = list(corr_dict[name][corr_name].keys())
-        for s_n in seg_names:
-            if type(corr_dict[name][corr_name][s_n]) == dict:
-                unique_segment_names.extend([s_n])
-        taste_names = np.array(corr_dict[name][corr_name]['tastes'])
-        if len(np.where(taste_names == 'NaCl_1')[0]) > 0: #Stupid on my end - rename so they're all salt_1
-            salt_ind = np.where(taste_names == 'NaCl_1')[0]
-            taste_names[salt_ind] = 'salt_1'
+        taste_names = corr_dict[name][corr_name]['tastes']
+        nacl_ind = [i for i in range(len(taste_names)) if taste_names[i] == 'NaCl_1']
+        if len(nacl_ind) > 0: #Stupid on my end - rename so they're all salt_1
+            taste_names[nacl_ind[0]] = 'salt_1'
             corr_dict[name][corr_name]['tastes'] = list(taste_names)
             np.save(corr_dict_path,corr_dict,allow_pickle=True)
         unique_taste_names.extend(list(taste_names))
-        try:
-            num_cp, _ = np.shape(corr_dict[dn][ct][seg_name]['all'][taste_names[0]])
-            if num_cp > max_cp:
-                max_cp = num_cp
-        except:
-            print("Unable to grab changepoint count.")
+        for s_n in seg_names:
+            if type(corr_dict[name][corr_name][s_n]) == dict:
+                unique_segment_names.extend([s_n])
+            try:
+                num_cp, _ = np.shape(corr_dict[name][corr_name][s_n]['all'][taste_names[0]]['data'])
+                if num_cp > max_cp:
+                    max_cp = num_cp
+            except:
+                print("Unable to grab changepoint count.")
 unique_seg_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i] for i in unique_seg_indices]

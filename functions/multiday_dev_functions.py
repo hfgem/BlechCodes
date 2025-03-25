@@ -57,16 +57,19 @@ def multiday_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
         dev_fr_vecs_z = segment_dev_fr_vecs_zscore[s_i]
         
         #Run correlation analyses
-        # correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
-        #                                   taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
-        #                                   max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
-        #                                   seg_name,corr_dir)
+        correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
+                                    taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
+                                    dev_times,dev_fr_vecs,seg_name,corr_dir)
+        correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
+                                          taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
+                                          max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
+                                          seg_name,corr_dir)
         
         #Run decode analyses
         decode_dev_zscore_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
-                                   taste_num_deliv,max_num_cp,dev_rast,dev_times,bin_dt,
-                                   segments_to_analyze, segment_times, segment_spike_times,
-                                   dev_fr_vecs_z,seg_name,s_i,decode_dir)
+                                    taste_num_deliv,max_num_cp,dev_rast,dev_times,bin_dt,
+                                    segments_to_analyze, segment_times, segment_spike_times,
+                                    dev_fr_vecs_z,seg_name,s_i,decode_dir)
         
         
 def correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
@@ -114,6 +117,8 @@ def correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
             avg_corr_array[:,t_i,e_i] = avg_taste_epoch_corr
             
             corr_dict[t_i]['data'][e_i] = all_corr_vals
+            corr_dict[t_i]['num_dev'] = num_dev
+            corr_dict[t_i]['taste_num'] = taste_num
     
     np.save(os.path.join(fr_dir,seg_name+'_corr_dict.npy'),corr_dict,allow_pickle=True)
     
@@ -179,6 +184,8 @@ def correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_po
             avg_corr_z_array[:,t_i,e_i] = avg_taste_epoch_corr
               
             corr_z_dict[t_i]['data'][e_i] = all_corr_vals
+            corr_z_dict[t_i]['num_dev'] = num_dev
+            corr_z_dict[t_i]['taste_num'] = taste_num
             
     np.save(os.path.join(fr_z_dir,seg_name+'_corr_z_dict.npy'),corr_z_dict,allow_pickle=True)
     

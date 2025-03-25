@@ -30,6 +30,7 @@ class run_compare_conditions_analysis():
     def __init__(self, args):
         self.all_data_dict = args[0]
         self.save_dir = args[1]
+        self.min_best_cutoff = args[2]
         #Import/Load data
         if len(self.save_dir) > 0:
             try:
@@ -242,32 +243,38 @@ class run_compare_conditions_analysis():
             if os.path.isdir(dev_freq_dir) == False:
                 os.mkdir(dev_freq_dir)
             print("\tCalculating Cross-Segment Deviation Frequencies")
-            cdf.cross_dataset_dev_freq(self.corr_data, self.unique_given_names,
-                                             self.unique_corr_names, self.unique_segment_names,
-                                             self.unique_taste_names, dev_freq_dir)
+            cdf.cross_dataset_dev_freq(self.corr_data, self.min_best_cutoff, 
+                                       self.unique_given_names,self.unique_corr_names,
+                                       self.unique_segment_names,
+                                       self.unique_taste_names, dev_freq_dir)
             # ____Correlation Distributions____
+            print("\tCalculating Correlation Cutoff Distributions")
+            cdf.cross_dataset_dev_by_corr_cutoff(self.corr_data, self.min_best_cutoff, 
+                                                 self.unique_given_names, self.unique_corr_names,
+                                                 self.unique_segment_names, 
+                                                 self.unique_taste_names, results_dir)
             cross_segment_dir = os.path.join(
                 results_dir, 'cross_segment_plots')
             if os.path.isdir(cross_segment_dir) == False:
                 os.mkdir(cross_segment_dir)
             print("\tComparing Segments")
-            cdf.cross_segment_diffs(self.corr_data, cross_segment_dir, self.unique_given_names,
+            cdf.cross_segment_diffs(self.corr_data, self.min_best_cutoff, cross_segment_dir, self.unique_given_names,
                                     self.unique_corr_names, self.unique_segment_names, self.unique_taste_names)
-            cdf.combined_corr_by_segment_dist(self.corr_data, cross_segment_dir, self.unique_given_names, 
+            cdf.combined_corr_by_segment_dist(self.corr_data, self.min_best_cutoff, cross_segment_dir, self.unique_given_names, 
                                               self.unique_corr_names,self.unique_segment_names, self.unique_taste_names)
             cross_taste_dir = os.path.join(results_dir, 'cross_taste_plots')
             if os.path.isdir(cross_taste_dir) == False:
                 os.mkdir(cross_taste_dir)
             print("\tComparing Tastes")
-            cdf.cross_taste_diffs(self.corr_data, cross_taste_dir, self.unique_given_names,
+            cdf.cross_taste_diffs(self.corr_data, self.min_best_cutoff, cross_taste_dir, self.unique_given_names,
                                   self.unique_corr_names, self.unique_segment_names, self.unique_taste_names)
-            cdf.combined_corr_by_taste_dist(self.corr_data, cross_taste_dir, self.unique_given_names, 
+            cdf.combined_corr_by_taste_dist(self.corr_data, self.min_best_cutoff,cross_taste_dir, self.unique_given_names, 
                                               self.unique_corr_names,self.unique_segment_names, self.unique_taste_names)
             cross_epoch_dir = os.path.join(results_dir, 'cross_epoch_plots')
             if os.path.isdir(cross_epoch_dir) == False:
                 os.mkdir(cross_epoch_dir)
             print("\tComparing Epochs")
-            cdf.cross_epoch_diffs(self.corr_data, cross_epoch_dir, self.unique_given_names,
+            cdf.cross_epoch_diffs(self.corr_data, self.min_best_cutoff, cross_epoch_dir, self.unique_given_names,
                                   self.unique_corr_names, self.unique_segment_names, self.unique_taste_names)
         else:
             # Cross-Corr: all neur, taste selective, all neuron z-score, and taste selective z-score on same axes

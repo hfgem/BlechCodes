@@ -33,6 +33,7 @@ class run_compare_multiday_analysis():
         
     def gather_corr_data(self,):
         corr_dict_path = os.path.join(self.save_dir,'corr_data_dict.npy')
+        self.corr_dict_path = corr_dict_path
         try:
             corr_dict = np.load(corr_dict_path,allow_pickle=True).item()
         except:
@@ -70,8 +71,13 @@ class run_compare_multiday_analysis():
                                         data_concat = np.zeros((num_cp,num_points))
                                         for cp_i in range(num_cp):
                                             data_concat[cp_i,:] = np.array(f_data[nt_i]['data'][cp_i])
-                                        corr_dict[dn][ct][seg_name]['all'][taste_name] = data_concat
-                                
+                                        corr_dict[dn][ct][seg_name]['all'][taste_name] = dict()
+                                        corr_dict[dn][ct][seg_name]['all'][taste_name]['data'] = data_concat
+                                        try:
+                                            corr_dict[dn][ct][seg_name]['all'][taste_name]['num_dev'] = f_data[nt_i]['num_dev']
+                                            corr_dict[dn][ct][seg_name]['all'][taste_name]['taste_num_deliv'] = f_data[nt_i]['taste_num_deliv']
+                                        except:
+                                            skip_val = 1 #Place holder skip
                                 else: #best correlations file
                                     f_data = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
                                     corr_dict[dn][ct][seg_name]['best'] = f_data
@@ -84,7 +90,7 @@ class run_compare_multiday_analysis():
         #Pull unique correlation analysis names
         unique_corr_names = []
         for name in unique_given_names:
-            unique_corr_names.extend(list(corr_dict[name].keys()))
+            unique_corr_names.extend(list(self.corr_dict[name].keys()))
         unique_corr_indices = np.sort(
             np.unique(unique_corr_names, return_index=True)[1])
         unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
@@ -94,18 +100,23 @@ class run_compare_multiday_analysis():
         max_cp = 0
         for name in unique_given_names:
             for corr_name in unique_corr_names:
-                seg_names = list(corr_dict[name][corr_name].keys())
+                seg_names = list(self.corr_dict[name][corr_name].keys())
+                taste_names = self.corr_dict[name][corr_name]['tastes']
+                nacl_ind = [i for i in range(len(taste_names)) if taste_names[i] == 'NaCl_1']
+                if len(nacl_ind) > 0: #Stupid on my end - rename so they're all salt_1
+                    taste_names[nacl_ind[0]] = 'salt_1'
+                    self.corr_dict[name][corr_name]['tastes'] = list(taste_names)
+                    np.save(self.corr_dict_path,self.corr_dict,allow_pickle=True)
+                unique_taste_names.extend(list(taste_names))
                 for s_n in seg_names:
-                    if type(corr_dict[name][corr_name][s_n]) == dict:
+                    if type(self.corr_dict[name][corr_name][s_n]) == dict:
                         unique_segment_names.extend([s_n])
-                taste_names = corr_dict[name][corr_name]['tastes']
-                unique_taste_names.extend(taste_names)
-                try:
-                    num_cp, _ = np.shape(corr_dict[dn][ct][seg_name]['all'][taste_names[0]])
-                    if num_cp > max_cp:
-                        max_cp = num_cp
-                except:
-                    print("Unable to grab changepoint count.")
+                    try:
+                        num_cp, _ = np.shape(self.corr_dict[name][corr_name][s_n]['all'][taste_names[0]])
+                        if num_cp > max_cp:
+                            max_cp = num_cp
+                    except:
+                        print("Unable to grab changepoint count.")
         unique_seg_indices = np.sort(
             np.unique(unique_segment_names, return_index=True)[1])
         unique_segment_names = [unique_segment_names[i] for i in unique_seg_indices]
