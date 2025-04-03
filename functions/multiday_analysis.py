@@ -26,7 +26,7 @@ import functions.dev_funcs as dev_f
 import functions.hdf5_handling as hf5
 import functions.dependent_decoding_funcs as ddf
 import functions.multiday_dev_functions as mdf
-from tkinter.filedialog import askdirectory
+import functions.multiday_nn_funcs as mnf
 
 
 class run_multiday_analysis():
@@ -251,16 +251,32 @@ class run_multiday_analysis():
         self.max_num_cp = max_num_cp
             
     def multiday_dev_tests(self,):
-        bin_dt = self.day_vars[0]['bin_dt']
-        segments_to_analyze = self.day_vars[0]['segments_to_analyze']
-        segment_times = self.day_vars[0]['segment_times']
-        segment_spike_times = self.day_vars[0]['segment_spike_times']
+        """
+        Runs correlation between deviation events and taste responses as well
+        as probabilistic decoding of deviation events using taste responses. 
+        """
         
         mdf.multiday_dev_analysis(self.save_dir,self.all_dig_in_names,self.tastant_fr_dist_pop,
                                   self.taste_num_deliv,self.max_hz_pop,self.tastant_fr_dist_z_pop,
                                   self.max_hz_z_pop,self.min_hz_z_pop,self.max_num_cp,
                                   self.segment_dev_rasters,self.segment_dev_times,
                                   self.segment_dev_fr_vecs,self.segment_dev_fr_vecs_zscore,
-                                  segments_to_analyze, segment_times, segment_spike_times,
-                                  bin_dt,self.segment_names_to_analyze)
+                                  self.day_vars[0]['segments_to_analyze'],
+                                  self.day_vars[0]['segment_times'], 
+                                  self.day_vars[0]['segment_spike_times'],
+                                  self.day_vars[0]['bin_dt'],self.segment_names_to_analyze)
         
+    def multiday_nn_class(self,):
+        """
+        Runs neural network training/testing on taste responses followed by 
+        classification of deviation events.
+        """
+        mnf.run_nn_pipeline(self.save_dir,self.all_dig_in_names,self.tastant_fr_dist_pop,
+                             self.taste_num_deliv,self.max_hz_pop,self.tastant_fr_dist_z_pop,
+                             self.max_hz_z_pop,self.min_hz_z_pop,self.max_num_cp,
+                             self.segment_dev_rasters,self.segment_dev_times,
+                             self.segment_dev_fr_vecs,self.segment_dev_fr_vecs_zscore,
+                             self.day_vars[0]['segments_to_analyze'],
+                             self.day_vars[0]['segment_times'], 
+                             self.day_vars[0]['segment_spike_times'],
+                             self.day_vars[0]['bin_dt'],self.segment_names_to_analyze)

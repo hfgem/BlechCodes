@@ -10,8 +10,8 @@ Functions to support comparing multiday analysis results for multiple animals.
 
 import os
 import warnings
-import pickle
 import numpy as np
+import functions.compare_multiday_funcs as cmf
 from tkinter.filedialog import askdirectory
 
 current_path = os.path.realpath(__file__)
@@ -25,10 +25,12 @@ class run_compare_multiday_analysis():
     def __init__(self, args):
         self.multiday_data_dict = args[0]
         self.save_dir = args[1]
+        self.verbose = args[2]
         self.gather_corr_data()
         self.find_corr_groupings()
         self.run_corr_analysis()
         self.gather_decode_data()
+        self.find_decode_groupings()
         self.run_decode_analysis()
         
     def gather_corr_data(self,):
@@ -130,12 +132,68 @@ class run_compare_multiday_analysis():
         self.unique_taste_names = unique_taste_names
         self.max_cp = max_cp        
         
-    # def run_corr_analysis(self,):
+    def run_corr_analysis(self,):
+        cmf.compare_corr_data(self.corr_dict, self.multiday_data_dict, self.unique_given_names,
+                              self.unique_corr_names, self.unique_segment_names, 
+                              self.unique_taste_names, self.max_cp, self.save_dir)
         
+    def gather_decode_data(self,):
+        decode_dict_path = os.path.join(self.save_dir,'decode_data_dict.npy')
+        self.decode_dict_path = decode_dict_path
+        try:
+            decode_dict = np.load(decode_dict_path,allow_pickle=True).item()
+        except:
+            decode_dict = dict()
+            data_names = list(self.multiday_data_dict.keys())
+            for nc_i, dn in enumerate(data_names):
+                decode_dict[dn] = dict()
+                data_dir = self.multiday_data_dict[dn]['data_dir']
+                decode_dir = os.path.join(data_dir,'Decodes')
+                decode_types = os.listdir(decode_dir)
+                for dt in decode_types:
+                    decode_dict[dn][dt] = dict()
+                    decode_type_files = os.listdir(os.path.join(decode_dir,dt))
+                    for f in decode_type_files:
+                        if f.split('.')[-1] == 'npy':
+                            f_name = f.split('.')[0]
+                            name_components = f_name.split('_')
+                            #Check if dict has a segment storage started yet and make if not
+                            seg_name = name_components[0]
+                            decode_dict_keys = list(decode_dict[dn][dt].keys())
+                            if len(np.where(np.array(decode_dict_keys) == seg_name)[0]) == 0: #Segment not stored yet
+                                decode_dict[dn][dt][seg_name] = dict()
+                            #Create storage for the type of decode
+                            decode_type = ('_').join(name_components[-2:])
+                            decode_dict[dn][dt][seg_name][decode_type] = \
+                                np.load(os.path.join(decode_dir,dt,f),allow_pickle=True)
+                    #Add storage of taste order info
+                    corr_type_keys = self.corr_dict[dn].keys()
+                    for ctk in corr_type_keys:
+                        try:
+                            decode_dict[dn][dt]['tastes'] = self.corr_dict[dn][ctk]['tastes']
+                        except:
+                            if self.verbose == True:
+                                error = 'No taste info for animal ' + dn + ' corr key ' + str(ctk)
+            np.save(decode_dict_path,decode_dict,allow_pickle=True)
+        self.decode_dict = decode_dict   
         
-    # def gather_decode_data(self,):
+    def find_decode_groupings(self,):
+        num_datasets = len(self.decode_dict)
+        unique_given_names = list(self.decode_dict.keys())
+        #Pull unique decode analysis names
+        unique_decode_names = []
+        for name in unique_given_names:
+            unique_decode_names.extend(list(self.decode_dict[name].keys()))
+        unique_decode_indices = np.sort(
+            np.unique(unique_decode_names, return_index=True)[1])
+        unique_decode_names = [unique_decode_names[i] for i in unique_decode_indices]
         
-    
-    # def run_decode_analysis(self,):
+        self.unique_given_names = unique_given_names
+        self.unique_decode_names = unique_decode_names
         
+    def run_decode_analysis(self,):
+        cmf.compare_decode_data(self.decode_dict, self.multiday_data_dict, self.unique_given_names,
+                              self.unique_decode_names, self.unique_segment_names, 
+                              self.unique_taste_names, self.max_cp, self.save_dir,
+                              self.verbose)
         

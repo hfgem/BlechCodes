@@ -949,3 +949,206 @@ def plot_corr_cutoff_composition_epochs(corr_dict, unique_given_names, unique_co
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_epoch_by_cutoff_day2.png'))
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_epoch_by_cutoff_day2.svg'))
         plt.close(f_count) 
+        
+def compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
+                       unique_decode_names, unique_segment_names, 
+                       unique_taste_names, max_cp, save_dir, verbose):
+    
+    decode_results_save_dir = os.path.join(save_dir,'Decodes')
+    if not os.path.isdir(decode_results_save_dir):
+        os.mkdir(decode_results_save_dir)
+        
+    #Plot cross-animal rates of decodes
+    decode_rates_plots(decode_dict,unique_given_names,unique_decode_names,
+                           unique_segment_names,unique_taste_names,
+                           max_cp,decode_results_save_dir,verbose)
+    
+    
+def decode_rates_plots(decode_dict,unique_given_names,unique_decode_names,
+                       unique_segment_names,unique_taste_names,
+                       max_cp,decode_results_save_dir,verbose=False):
+    
+    colors = ['red','orange','yellow','green','royalblue','purple', \
+              'magenta','brown', 'cyan']
+    num_anim = len(unique_given_names)
+    num_seg = len(unique_segment_names)
+    num_tastes = len(unique_taste_names)
+    unique_segment_names = ['pre-taste','post-taste','sickness'] #manual order override
+    
+    for dt in unique_decode_names:
+        
+        #Is-Taste Decode Results
+        is_taste_rates = [] #num seg x num anim
+        f_box = plt.figure(figsize = (5,5))
+        for s_i, sn in enumerate(unique_segment_names):
+            seg_is_taste_rates = []
+            for gn in unique_given_names:
+                try:
+                    is_taste_data = decode_dict[gn][dt][sn]['is_taste'] #num_dev x 2
+                    num_dev, _ = np.shape(is_taste_data)
+                    is_taste_max = np.argmax(is_taste_data,1)
+                    num_is_taste = len(np.where(np.array(is_taste_max) == 0)[0])
+                    seg_is_taste_rates.append(num_is_taste/num_dev)
+                except:
+                    seg_is_taste_rates.append(np.nan)
+                    errormsg = "Is-Taste data does not exist for " + gn + " " + sn
+                    if verbose == True:
+                        print(errormsg)
+            is_taste_rates.append(seg_is_taste_rates)
+            plt.boxplot(seg_is_taste_rates,positions = [s_i])
+            x_scat = s_i + np.random.rand(num_anim)/10
+            plt.scatter(x_scat,seg_is_taste_rates,color='g',alpha=0.3)
+        plt.xticks(np.arange(num_seg),unique_segment_names)
+        plt.xlabel('Segment')
+        plt.ylim([0,1])
+        plt.ylabel('Fraction of Deviation Events')
+        plt.title('Fraction of Events Decoded as Taste')
+        plt.tight_layout()
+        f_box.savefig(os.path.join(decode_results_save_dir,dt + '_is_taste_rates_box.png'))
+        f_box.savefig(os.path.join(decode_results_save_dir,dt + '_is_taste_rates_box.svg'))
+        plt.close(f_box)
+        
+        f_line = plt.figure(figsize = (5,5))
+        mean_fraction = np.nanmean(np.array(is_taste_rates),1)
+        std_fraction = np.nanstd(np.array(is_taste_rates),1)
+        plt.fill_between(np.arange(num_seg),mean_fraction-std_fraction,\
+                         mean_fraction+std_fraction,color='k',alpha=0.2)
+        plt.plot(mean_fraction,color='k')
+        plt.xticks(np.arange(num_seg),unique_segment_names)
+        plt.xlabel('Segment')
+        plt.ylim([0,1])
+        plt.ylabel('Fraction of Deviation Events')
+        plt.title('Fraction of Events Decoded as Taste')
+        plt.tight_layout()
+        f_line.savefig(os.path.join(decode_results_save_dir,dt + '_is_taste_rates_line.png'))
+        f_line.savefig(os.path.join(decode_results_save_dir,dt + '_is_taste_rates_line.svg'))
+        plt.close(f_line)
+        
+        #Which-Taste Decode Results
+        sqrt_taste = np.ceil(np.sqrt(num_tastes)).astype('int')
+        sqr_taste = sqrt_taste**2
+        not_plot_box = np.setdiff1d(np.arange(sqr_taste),np.arange(num_tastes))
+        taste_ind_ref = np.reshape(np.arange(sqrt_taste**2),(sqrt_taste,sqrt_taste))
+        epoch_x_labels = np.reshape(np.array([np.arange(max_cp) for s_i in range(num_seg)]),(max_cp*num_seg))
+        f_box, ax_box = plt.subplots(nrows = sqrt_taste, ncols = sqrt_taste,\
+                                     figsize = (8,8), sharex = True, sharey = True)
+        f_line, ax_line = plt.subplots(nrows = sqrt_taste, ncols = sqrt_taste,\
+                                     figsize = (8,8), sharex = True, sharey = True)
+        f_box_epoch, ax_box_epoch = plt.subplots(nrows = sqrt_taste, ncols = sqrt_taste,\
+                                     figsize = (8,8), sharex = True)
+        which_taste_rates = dict()
+        for t_i, tn in enumerate(unique_taste_names):
+            t_plot_ind = np.where(taste_ind_ref == t_i)
+            ax_r = t_plot_ind[0][0]
+            ax_c = t_plot_ind[1][0]
+            which_taste_rates[tn] = dict()
+            seg_data = []
+            for s_i, sn in enumerate(unique_segment_names):
+                which_taste_rates[tn][sn] = dict()
+                which_taste_rates[tn][sn]['which_taste'] = []
+                for cp_i in range(max_cp):
+                    which_taste_rates[tn][sn][cp_i] = []
+                for gn in unique_given_names:
+                    try:
+                        gn_tastes = decode_dict[gn][dt]['tastes']
+                        gn_t_i = [i for i in range(len(gn_tastes)) if gn_tastes[i] == tn]
+                        if len(gn_t_i) > 0:
+                            #Which Taste Data
+                            try:
+                                which_taste_data = decode_dict[gn][dt][sn]['which_taste'][:,gn_t_i] #num_dev
+                                num_dev = len(which_taste_data)
+                                gn_dev_inds = np.where(np.array(which_taste_data) == 1)[0]
+                                num_which_taste = len(gn_dev_inds)
+                                which_taste_rates[tn][sn]['which_taste'].append(num_which_taste/num_dev)
+                                try:
+                                    #Which Epoch Data
+                                    which_epoch_data = decode_dict[gn][dt][sn]['which_epoch'][gn_dev_inds,:] #num_gn_dev x num_cp
+                                    which_epoch_counts = np.nansum(np.array(which_epoch_data),0)
+                                    for cp_i in range(len(which_epoch_counts)):
+                                        which_taste_rates[tn][sn][cp_i].append(which_epoch_counts[cp_i]/num_dev)
+                                except:
+                                    for cp_i in range(max_cp):
+                                        which_taste_rates[tn][sn][cp_i].append(np.nan)
+                                    errormsg = "Which-Epoch data does not exist for " + gn + " " + sn + " " + tn
+                                    if verbose == True:
+                                        print(errormsg)
+                            except:
+                                which_taste_rates[tn][sn]['which_taste'].append(np.nan)
+                                errormsg = "Which-Taste data does not exist for " + gn + " " + sn + " " + tn
+                                if verbose == True:
+                                    print(errormsg)
+                    except:
+                        which_taste_rates[tn][sn]['which_taste'].append(np.nan)
+                        for cp_i in range(max_cp):
+                            which_taste_rates[tn][sn][cp_i].append(np.nan)
+                        errormsg = "Missing data for "+ gn + " " + dt
+                        if verbose == True:
+                            print(errormsg)
+                seg_data.append(which_taste_rates[tn][sn]['which_taste'])
+                #Plot Which-Taste Data
+                t_data = which_taste_rates[tn][sn]['which_taste']
+                non_nan_data = np.array(t_data)
+                non_nan_data = non_nan_data[~np.isnan(non_nan_data)]
+                ax_box[ax_r,ax_c].boxplot(non_nan_data,positions=[s_i])
+                x_scat = s_i + np.random.rand(len(t_data))/10
+                ax_box[ax_r,ax_c].scatter(x_scat,t_data,color='g',alpha=0.3)
+                #Plot Which-Epoch Data
+                max_y = 0
+                for cp_i in range(max_cp):
+                    cp_data = which_taste_rates[tn][sn][cp_i]
+                    non_nan_data = np.array(cp_data)
+                    non_nan_data = non_nan_data[~np.isnan(non_nan_data)]
+                    if len(non_nan_data) > 0:
+                        if max(non_nan_data) > max_y:
+                            max_y = max(non_nan_data)
+                        data_x = s_i*max_cp + cp_i
+                        ax_box_epoch[ax_r,ax_c].boxplot(non_nan_data,positions=[data_x])
+                        x_scat = data_x + np.random.rand(len(cp_data))/10
+                        ax_box_epoch[ax_r,ax_c].scatter(x_scat,cp_data,\
+                                                  color='g',alpha=0.3)
+                ax_box_epoch[ax_r,ax_c].plot(np.arange(s_i*max_cp,s_i*max_cp+max_cp),\
+                                             (max_y+0.1*max_y)*np.ones(max_cp),label=sn,
+                                             color = colors[s_i])
+            ax_box[ax_r,ax_c].set_xticks(np.arange(num_seg),unique_segment_names,
+                                         rotation=45)
+            ax_box[ax_r,ax_c].set_title(tn)
+            ax_box_epoch[ax_r,ax_c].set_xticks(np.arange(num_seg*max_cp),epoch_x_labels)
+            ax_box_epoch[ax_r,ax_c].set_title(tn)
+            mean_data = np.nanmean(np.array(seg_data),1)
+            std_data = np.nanstd(np.array(seg_data),1)
+            ax_line[ax_r,ax_c].plot(np.arange(num_seg),mean_data,color='k')
+            ax_line[ax_r,ax_c].fill_between(np.arange(num_seg),mean_data+std_data,\
+                                            mean_data-std_data,color='k',alpha=0.2)
+            ax_line[ax_r,ax_c].set_xticks(np.arange(num_seg),unique_segment_names,
+                                          rotation=45)
+            ax_line[ax_r,ax_c].set_title(tn)
+        ax_box_epoch[0,0].legend()
+        for ax_i in range(sqrt_taste):
+            ax_box[sqrt_taste-1,ax_i].set_xlabel('Segment')
+            ax_line[sqrt_taste-1,ax_i].set_xlabel('Segment')
+            ax_box_epoch[sqrt_taste-1,ax_i].set_xlabel('Segment')
+            ax_box[ax_i,0].set_ylabel('Fraction of Events')
+            ax_line[ax_i,0].set_ylabel('Fraction of Events')
+            ax_box_epoch[ax_i,0].set_ylabel('Fraction of Events')
+        for ax_i in not_plot_box:
+            ax_r, ax_c = np.where(taste_ind_ref == ax_i)
+            ax_box[ax_r[0],ax_c[0]].axis('off')
+            ax_box_epoch[ax_r[0],ax_c[0]].axis('off')
+            ax_line[ax_r[0],ax_c[0]].axis('off')
+        plt.figure(f_box)
+        plt.suptitle(dt + ' Taste Decode Rates')
+        f_box.savefig(os.path.join(decode_results_save_dir,dt + '_which_taste_rates_box.png'))
+        f_box.savefig(os.path.join(decode_results_save_dir,dt + '_which_taste_rates_box.svg'))
+        plt.close(f_box)
+        plt.figure(f_line)
+        plt.suptitle(dt + ' Taste Decode Rates')
+        f_line.savefig(os.path.join(decode_results_save_dir,dt + '_which_taste_rates_line.png'))
+        f_line.savefig(os.path.join(decode_results_save_dir,dt + '_which_taste_rates_line.svg'))
+        plt.close(f_line)
+        plt.figure(f_box_epoch)
+        plt.suptitle(dt + ' Epoch Decode Rates')
+        f_box_epoch.savefig(os.path.join(decode_results_save_dir,dt + '_which_epoch_rates_box.png'))
+        f_box_epoch.savefig(os.path.join(decode_results_save_dir,dt + '_which_epoch_rates_box.svg'))
+        plt.close(f_box_epoch)
+        
+    

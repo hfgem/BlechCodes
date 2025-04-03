@@ -85,6 +85,11 @@ if __name__ == '__main__':
         save_dir = askdirectory()
         np.save(os.path.join(save_dir,'multiday_data_dict.npy'),multiday_data_dict,allow_pickle=True)
 
+    bool_val = bool_input("Would you like error messages printed? ")
     # _____Pass Data to Analysis_____
-    run_compare_multiday_analysis([multiday_data_dict, save_dir])
+    if bool_val == 'y':
+        run_compare_multiday_analysis([multiday_data_dict, save_dir, True])
+    else:
+        run_compare_multiday_analysis([multiday_data_dict, save_dir, False])
+    
 

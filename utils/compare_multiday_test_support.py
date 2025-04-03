@@ -185,7 +185,7 @@ for name in unique_given_names:
                 if num_cp > max_cp:
                     max_cp = num_cp
             except:
-                print("Unable to grab changepoint count.")
+                error = "Unable to grab changepoint count."
 unique_seg_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i] for i in unique_seg_indices]
@@ -201,3 +201,65 @@ import functions.compare_multiday_funcs as cmf
 cmf.compare_corr_data(corr_dict, multiday_data_dict, unique_given_names,
                       unique_corr_names, unique_segment_names, unique_taste_names, 
                       max_cp, save_dir)
+
+#%% gather_decode_data()
+
+verbose = False
+
+decode_dict_path = os.path.join(save_dir,'decode_data_dict.npy')
+try:
+    decode_dict = np.load(decode_dict_path,allow_pickle=True).item()
+except:
+    decode_dict = dict()
+    data_names = list(multiday_data_dict.keys())
+    for nc_i, dn in enumerate(data_names):
+        decode_dict[dn] = dict()
+        data_dir = multiday_data_dict[dn]['data_dir']
+        decode_dir = os.path.join(data_dir,'Decodes')
+        decode_types = os.listdir(decode_dir)
+        for dt in decode_types:
+            decode_dict[dn][dt] = dict()
+            decode_type_files = os.listdir(os.path.join(decode_dir,dt))
+            for f in decode_type_files:
+                if f.split('.')[-1] == 'npy':
+                    f_name = f.split('.')[0]
+                    name_components = f_name.split('_')
+                    #Check if dict has a segment storage started yet and make if not
+                    seg_name = name_components[0]
+                    decode_dict_keys = list(decode_dict[dn][dt].keys())
+                    if len(np.where(np.array(decode_dict_keys) == seg_name)[0]) == 0: #Segment not stored yet
+                        decode_dict[dn][dt][seg_name] = dict()
+                    #Create storage for the type of decode
+                    decode_type = ('_').join(name_components[-2:])
+                    decode_dict[dn][dt][seg_name][decode_type] = \
+                        np.load(os.path.join(decode_dir,dt,f),allow_pickle=True)
+            #Add storage of taste order info
+            corr_type_keys = corr_dict[dn].keys()
+            for ctk in corr_type_keys:
+                try:
+                    decode_dict[dn][dt]['tastes'] = corr_dict[dn][ctk]['tastes']
+                except:
+                    if verbose == True:
+                        error = 'No taste info for animal ' + dn + ' corr key ' + str(ctk)
+            
+    np.save(decode_dict_path,decode_dict,allow_pickle=True)
+
+#%% find_decode_groupings():
+    
+num_datasets = len(decode_dict)
+unique_given_names = list(decode_dict.keys())
+#Pull unique decode analysis names
+unique_decode_names = []
+for name in unique_given_names:
+    unique_decode_names.extend(list(decode_dict[name].keys()))
+unique_decode_indices = np.sort(
+    np.unique(unique_decode_names, return_index=True)[1])
+unique_decode_names = [unique_decode_names[i] for i in unique_decode_indices]
+    
+#%% run_decode_analysis()
+
+import functions.compare_multiday_funcs as cmf
+
+cmf.compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
+                       unique_decode_names, unique_segment_names, 
+                       unique_taste_names, max_cp, save_dir)

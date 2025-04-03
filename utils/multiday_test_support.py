@@ -275,16 +275,16 @@ for n_i in range(num_days):
     if min_hz_z_pop_day < min_hz_z_pop:
         min_hz_z_pop = min_hz_z_pop_day
 
-import functions.multiday_dev_functions as mdf
+#%% 
 
-bin_dt = day_vars[0]['bin_dt']
-segments_to_analyze = day_vars[0]['segments_to_analyze']
-segment_times = day_vars[0]['segment_times']
-segment_spike_times = day_vars[0]['segment_spike_times']
+import functions.multiday_nn_funcs as mnf
 
-mdf.multiday_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
-                          taste_num_deliv,max_hz_pop,tastant_fr_dist_z_pop,
-                          max_hz_z_pop,min_hz_z_pop,max_num_cp,segment_dev_rasters,
-                          segment_dev_times,segment_dev_fr_vecs,segment_dev_fr_vecs_zscore,
-                          segments_to_analyze, segment_times, segment_spike_times,
-                          bin_dt,segment_names_to_analyze)
+mnf.run_nn_pipeline(save_dir,all_dig_in_names,tastant_fr_dist_pop,
+                     taste_num_deliv,max_hz_pop,tastant_fr_dist_z_pop,
+                     max_hz_z_pop,min_hz_z_pop,max_num_cp,
+                     segment_dev_rasters,segment_dev_times,
+                     segment_dev_fr_vecs,segment_dev_fr_vecs_zscore,
+                     day_vars[0]['segments_to_analyze'],
+                     day_vars[0]['segment_times'], 
+                     day_vars[0]['segment_spike_times'],
+                     day_vars[0]['bin_dt'],segment_names_to_analyze)
