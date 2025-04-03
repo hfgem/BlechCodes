@@ -10,7 +10,6 @@ This file contains utility functions to support replay analysis pipeline
 import os
 import json
 import csv
-import easygui
 import glob 
 import shutil
 from tkinter.filedialog import askdirectory

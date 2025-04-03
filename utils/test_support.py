@@ -65,7 +65,7 @@ tastant_spike_times = af.calc_tastant_spike_times(data_dict['segment_times'],dat
 data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
-#%%
+
 
 import functions.decoder_tuning as dt
 import functions.decoding_funcs as df
@@ -146,6 +146,10 @@ segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
                 np.array(segment_times_to_analyze_reshaped),
                 segment_deviations, pre_taste)
 
+print("\tPulling taste rasters")
+tastant_raster_dict = af.taste_response_rasters(num_tastes, num_neur, 
+                           tastant_spike_times, start_dig_in_times, 
+                           pop_taste_cp_raster_inds, pre_taste_dt)
 
 print("\tPulling FR Distributions")
 tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(num_neur, tastant_spike_times,
@@ -160,15 +164,17 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
                                                                                            post_taste_dt, bin_dt, trial_start_frac)
 
 
-#%%
-
 import functions.dev_sequence_funcs as dsf
 
+seq_dir = os.path.join(metadata['dir_name'],'Deviation_Sequence_Analysis/')
+if not os.path.isdir(seq_dir):
+    os.mkdir(seq_dir)
 num_null = 100
 
-# dsf.split_euc_diff(num_neur, segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
-#                    tastant_fr_dist_pop,tastant_fr_dist_z_pop,dig_in_names,segment_names,
-#                    seq_dir,segments_to_analyze, epochs_to_analyze)
-dsf.split_match_calc(num_neur, segment_dev_rasters,segment_zscore_means,segment_zscore_stds,
-                   tastant_fr_dist_pop,tastant_fr_dist_z_pop,dig_in_names,segment_names,
-                   num_null, seq_dir, segments_to_analyze, epochs_to_analyze)
+dsf.split_match_calc(num_neur, segment_dev_rasters,
+                   segment_zscore_means,segment_zscore_stds,
+                   tastant_raster_dict,
+                   tastant_fr_dist_pop,tastant_fr_dist_z_pop,
+                   dig_in_names,segment_names,segment_times,
+                   segment_spike_times,bin_dt,num_null,
+                   seq_dir,segments_to_analyze,epochs_to_analyze)

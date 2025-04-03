@@ -88,4 +88,6 @@ if __name__ == '__main__':
         del nc
 
     # _____Pass Data to Analysis_____
-    run_compare_conditions_analysis([all_data_dict, save_dir])
+    min_best_cutoff = 0.5 #Minimum correlation cutoff to use in the best correlation analyses
+    
+    run_compare_conditions_analysis([all_data_dict, save_dir, min_best_cutoff])

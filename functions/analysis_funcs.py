@@ -329,35 +329,55 @@ def taste_discriminability_test(post_taste_dt, num_tastes, tastant_spike_times,
     return anova_results_all, anova_results_true, peak_epochs, discrim_neur
 
 
-def full_taste_interval_2way_anova(num_tastes, num_neur, tastant_spike_times,
-                                   start_dig_in_times, bin_size, max_time,
-                                   anova_save_dir):
-    """This function runs a 2-way anova on taste responses for 1.5 seconds
-    following taste delivery - binned into 250 ms bins. The goal is to find the
-    significance across tastes, across time, and the interaction term.
-    INPUTS:
-            - 
-            - 
-    OUTPUTS:
-            - 
-    """
-
-    # Pull spike rasters to use in ANOVA
-    taste_fr_data = []
+def taste_response_rasters(num_tastes, num_neur, tastant_spike_times,
+                           start_dig_in_times, cp_raster_inds, pre_taste_dt):
+    """This function pulls the taste response rasters, by epoch, into dicts"""
+    #Set up storage dictionary
+    num_tastes = len(tastant_spike_times)
+    num_cp = np.shape(cp_raster_inds[0])[-1] - 1
+    max_num_deliv = 0  # Find the maximum number of deliveries across tastants
     for t_i in range(num_tastes):
-        t_st = tastant_spike_times[t_i]
-        num_deliv = len(t_st)
-        deliv_rasters = np.zeros((num_deliv, num_neur, max_time+1))
+        num_deliv = len(tastant_spike_times[t_i])
+        if num_deliv > max_num_deliv:
+            max_num_deliv = num_deliv
+    del t_i, num_deliv
+    
+    taste_num_deliv = np.zeros(num_tastes)
+    for t_i in range(num_tastes):
+        num_deliv = len(tastant_spike_times[t_i][:])
+        taste_num_deliv[t_i] = num_deliv
+    del t_i, num_deliv
+    
+    tastant_raster_dict = dict() #Store the rasters by epoch
+    for t_i in range(num_tastes):
+        tastant_raster_dict[t_i] = dict()
+        for d_i in range(max_num_deliv):
+            tastant_raster_dict[t_i][d_i] = dict()
+    
+    for t_i in range(num_tastes):
+        num_deliv = int(taste_num_deliv[t_i])
+        taste_cp = cp_raster_inds[t_i]
         for d_i in range(num_deliv):
-            st_d_i = start_dig_in_times[t_i][d_i]
-            for n_i in range(num_neur):
-                st_n_d_i = (t_st[d_i][n_i] - st_d_i).astype('int')
-                st_n_d_i = st_n_d_i[st_n_d_i >= 0]
-                st_n_d_i = st_n_d_i[st_n_d_i < max_time]
-                deliv_rasters[d_i, n_i, st_n_d_i] = 1
-        taste_fr_data.append(deliv_rasters)
-
-    # Convert spike rasters to firing rate vectors
+            raster_times = tastant_spike_times[t_i][d_i]
+            start_taste_i = start_dig_in_times[t_i][d_i]
+            deliv_cp = taste_cp[d_i, :] - pre_taste_dt
+            for cp_i in range(num_cp):
+                # population changepoints
+                start_epoch = int(deliv_cp[cp_i])
+                end_epoch = int(deliv_cp[cp_i+1])
+                sdi = start_taste_i + start_epoch
+                epoch_len = end_epoch - start_epoch
+                if epoch_len > 0:
+                    td_i_bin = np.zeros((num_neur, epoch_len+1))
+                    for n_i in range(num_neur):
+                        n_i_spike_times = np.array(
+                            raster_times[n_i] - sdi).astype('int')
+                        keep_spike_times = n_i_spike_times[np.where(
+                            (0 <= n_i_spike_times)*(epoch_len >= n_i_spike_times))[0]]
+                        td_i_bin[n_i, keep_spike_times] = 1
+                tastant_raster_dict[t_i][d_i][cp_i] = td_i_bin
+    
+    return tastant_raster_dict
 
 def get_bin_activity(segment_times_reshaped, segment_spike_times, bin_size, 
                      segments_to_analyze = [], no_z = False):

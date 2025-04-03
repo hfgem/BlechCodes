@@ -104,5 +104,4 @@ class run_analysis_steps():
         state_exec_dict[7]['name'] = 'Split Deviation Decoding'
         state_exec_dict[7]['exec'] = 'run_deviation_sequence_analysis([self.metadata,self.data_dict])'
         
-        
         self.state_exec_dict = state_exec_dict

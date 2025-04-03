@@ -16,9 +16,10 @@ import json
 import numpy as np
 
 current_path = os.path.realpath(__file__)
-blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
+blech_codes_path = ('/').join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
+import functions.analysis_funcs as af
 import functions.decoding_funcs as df
 import functions.dev_sequence_funcs as dsf
 import functions.dependent_decoding_funcs as ddf
@@ -38,11 +39,11 @@ class run_deviation_sequence_analysis():
     def gather_variables(self,):
         # Directories
         self.hdf5_dir = self.metadata['hdf5_dir']
-        self.seq_dir = self.metadata['dir_name'] + \
-            'Deviation_Sequence_Analysis/'
+        self.seq_dir = os.path.join(self.metadata['dir_name'],
+            'Deviation_Sequence_Analysis/')
         if os.path.isdir(self.seq_dir) == False:
             os.mkdir(self.seq_dir)
-        self.dev_dir = self.metadata['dir_name'] + 'Deviations/'
+        self.dev_dir = os.path.join(self.metadata['dir_name'],'Deviations')
         # General Params/Variables
         self.num_neur = self.data_dict['num_neur']
         self.pre_taste = self.metadata['params_dict']['pre_taste']
@@ -123,6 +124,12 @@ class run_deviation_sequence_analysis():
         self.segment_zscore_stds = segment_zscore_stds
         
     def pull_fr_dist(self,):
+        print("\tPulling taste rasters")
+        tastant_raster_dict = af.taste_response_rasters(self.num_tastes, self.num_neur, 
+                                   self.tastant_spike_times, self.start_dig_in_times, 
+                                   self.pop_taste_cp_raster_inds, self.pre_taste_dt)
+        self.tastant_raster_dict = tastant_raster_dict
+        
         print("\tPulling FR Distributions")
         tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur, self.tastant_spike_times,
                                                                         	 self.pop_taste_cp_raster_inds, self.bayes_fr_bins,
@@ -151,6 +158,8 @@ class run_deviation_sequence_analysis():
         #                    self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)
         dsf.split_match_calc(self.num_neur, self.segment_dev_rasters,
                            self.segment_zscore_means,self.segment_zscore_stds,
+                           self.tastant_raster_dict,
                            self.tastant_fr_dist_pop,self.tastant_fr_dist_z_pop,
-                           self.dig_in_names,self.segment_names,self.num_null,
+                           self.dig_in_names,self.segment_names,self.segment_times,
+                           self.segment_spike_times,self.bin_dt,self.num_null,
                            self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)
