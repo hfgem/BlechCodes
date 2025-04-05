@@ -11,8 +11,11 @@ in their multi-day correlation and decoding data.
 
 import os
 import warnings
+import csv
 import numpy as np
 import matplotlib.pyplot as plt
+from itertools import combinations
+from scipy.stats import ks_2samp
 
 def compare_corr_data(corr_dict, multiday_data_dict, unique_given_names,
                       unique_corr_names, unique_segment_names, unique_taste_names, 
@@ -23,127 +26,78 @@ def compare_corr_data(corr_dict, multiday_data_dict, unique_given_names,
         os.mkdir(corr_results_save_dir)
         
     #Create corr plots by segment
-    # plot_corr_by_segment(corr_dict, unique_given_names, unique_corr_names,
-    #                          unique_segment_names, unique_taste_names, max_cp,
-    #                          corr_results_save_dir)
+    test_corr_dist_ks_test(corr_dict, unique_given_names, unique_corr_names,
+                             unique_segment_names, unique_taste_names, max_cp,
+                             corr_results_save_dir)
     
-    # plot_corr_cutoff_by_segment(corr_dict, unique_given_names, unique_corr_names,
-    #                          unique_segment_names, unique_taste_names, max_cp,
-    #                          corr_results_save_dir)
+    plot_corr_cutoff_by_segment(corr_dict, unique_given_names, unique_corr_names,
+                              unique_segment_names, unique_taste_names, max_cp,
+                              corr_results_save_dir)
     
     plot_corr_cutoff_composition_tastes(corr_dict, unique_given_names, unique_corr_names,
                               unique_segment_names, unique_taste_names, max_cp,
                               corr_results_save_dir)
     
-    # plot_corr_cutoff_composition_epochs(corr_dict, unique_given_names, unique_corr_names,
-    #                          unique_segment_names, unique_taste_names, max_cp,
-    #                          corr_results_save_dir)
+    plot_corr_cutoff_composition_epochs(corr_dict, unique_given_names, unique_corr_names,
+                              unique_segment_names, unique_taste_names, max_cp,
+                              corr_results_save_dir)
         
-    
-def plot_corr_by_segment(corr_dict, unique_given_names, unique_corr_names,
+           
+def test_corr_dist_ks_test(corr_dict, unique_given_names, unique_corr_names,
                          unique_segment_names, unique_taste_names, max_cp,
-                         plot_save_dir):
-    #Plot joint best taste correlation distributions against each other
-    #in a grid of epoch x segment
+                         plot_save_dir,verbose=False):
+    
+    taste_inds = np.arange(len(unique_taste_names))
+    t_pairs = list(combinations(list(taste_inds),2))
+    
+    #Compare taste distributions against each other
     for corr_name in unique_corr_names:
-        f_best_taste_cdf, ax_best_taste_cdf = plt.subplots(max_cp,len(unique_segment_names),
-                                                 sharex = True, sharey = True, figsize = (8,8))
-        f_best_taste_counts, ax_best_taste_counts = plt.subplots(max_cp,len(unique_segment_names),
-                                                 sharex = True, sharey = True, figsize = (8,8))
-        for s_i, seg_name in enumerate(unique_segment_names):
-            for ep_i in range(max_cp):
-                taste_corrs = []
-                for taste_name in unique_taste_names:
-                    this_taste_corrs = []
-                    for data_name in unique_given_names:
-                        best_data = corr_dict[data_name][corr_name][seg_name]['best']
-                        taste_names_data = corr_dict[data_name][corr_name]['tastes']
-                        taste_name_ind = np.where(np.array(taste_names_data) == taste_name)[0]
-                        if len(taste_name_ind) > 0: #Taste exists in data
-                            best_dev_taste_inds = np.where(best_data[:,0] == taste_name_ind)[0]
-                            best_dev_epoch_inds = np.where(best_data[:,1] == ep_i)[0]
-                            joint_inds = np.intersect1d(best_dev_taste_inds,best_dev_epoch_inds)
-                            this_taste_corrs.extend(list(best_data[joint_inds,2]))
-                    taste_corrs.append(this_taste_corrs)
-                    ax_best_taste_cdf[ep_i,s_i].hist(this_taste_corrs,bins=1000,
-                                                density=True,cumulative=True,
-                                                histtype='step',label=taste_name)
-                best_taste_corr_counts = np.array([len(tc) for tc in taste_corrs])
-                best_taste_corr_percents = np.round(100*best_taste_corr_counts/np.sum(best_taste_corr_counts),2)
-                if (ep_i == 0) and (s_i == 0):
-                    best_taste_corr_labels = [unique_taste_names[t_i] + '\n' + str(best_taste_corr_percents[t_i]) for t_i in range(len(unique_taste_names))]
-                    ax_best_taste_counts[ep_i,s_i].pie(best_taste_corr_counts,labels=best_taste_corr_labels)
-                else:
-                    best_taste_corr_labels = [str(best_taste_corr_percents[t_i]) for t_i in range(len(unique_taste_names))]
-                    ax_best_taste_counts[ep_i,s_i].pie(best_taste_corr_counts,labels=best_taste_corr_labels)
-                if s_i == 0:
-                    ax_best_taste_cdf[ep_i,s_i].set_ylabel('Epoch ' + str(ep_i) + '\nCumulative Density')
-                    ax_best_taste_counts[ep_i,s_i].set_ylabel('Epoch ' + str(ep_i))
-                if ep_i == max_cp-1:
-                    ax_best_taste_cdf[ep_i,s_i].set_xlabel('Pearson Correlation')
-                if ep_i == 0:
-                    ax_best_taste_cdf[ep_i,s_i].set_title(seg_name)
-                    ax_best_taste_counts[ep_i,s_i].set_title(seg_name)
-        ax_best_taste_cdf[0,0].legend(loc='upper left')
-        plt.figure(f_best_taste_cdf.number)
-        plt.suptitle(corr_name + ' Best Corr Distributions')
-        plt.tight_layout()
-        f_best_taste_cdf.savefig(os.path.join(plot_save_dir,corr_name+'_best_corr_joint_cdf.png'))
-        f_best_taste_cdf.savefig(os.path.join(plot_save_dir,corr_name+'_best_corr_joint_cdf.svg'))
-        plt.close(f_best_taste_cdf)
-        plt.figure(f_best_taste_counts.number)
-        plt.suptitle(corr_name + ' Best Corr Distribution Counts')
-        plt.tight_layout()
-        f_best_taste_counts.savefig(os.path.join(plot_save_dir,corr_name+'_best_corr_pie.png'))
-        f_best_taste_counts.savefig(os.path.join(plot_save_dir,corr_name+'_best_corr_pie.svg'))
-        plt.close(f_best_taste_counts)
-        
-    #Create the same plots as above but without epoch separation - combine for tastes
-    for corr_name in unique_corr_names:
-        f_best_taste_cdf, ax_best_taste_cdf = plt.subplots(nrows=1,ncols=len(unique_segment_names),
-                                                 sharex = True, sharey = True, figsize = (8,8))
-        f_best_taste_counts, ax_best_taste_counts = plt.subplots(nrows=1,ncols=len(unique_segment_names),
-                                                 sharex = True, sharey = True, figsize = (8,8))
-        for s_i, seg_name in enumerate(unique_segment_names):
-            taste_corrs = []
-            for taste_name in unique_taste_names:
-                this_taste_corrs = []
-                for data_name in unique_given_names:
-                    best_data = corr_dict[data_name][corr_name][seg_name]['best']
-                    taste_names_data = corr_dict[data_name][corr_name]['tastes']
-                    taste_name_ind = np.where(np.array(taste_names_data) == taste_name)[0]
-                    if len(taste_name_ind) > 0: #Taste exists in data
-                        best_dev_taste_inds = np.where(best_data[:,0] == taste_name_ind)[0]
-                        for ep_i in range(max_cp):
-                            best_dev_epoch_inds = np.where(best_data[:,1] == ep_i)[0]
-                            joint_inds = np.intersect1d(best_dev_taste_inds,best_dev_epoch_inds)
-                            this_taste_corrs.extend(list(best_data[joint_inds,2]))
-                taste_corrs.append(this_taste_corrs)
-                ax_best_taste_cdf[s_i].hist(this_taste_corrs,bins=1000,
-                                                density=True,cumulative=True,
-                                                histtype='step',label=taste_name)
-            best_taste_corr_counts = np.array([len(tc) for tc in taste_corrs])
-            best_taste_corr_percents = np.round(100*best_taste_corr_counts/np.sum(best_taste_corr_counts),2)
-            if s_i == 0:
-                best_taste_corr_labels = [unique_taste_names[t_i] + '\n' + str(best_taste_corr_percents[t_i]) for t_i in range(len(unique_taste_names))]
-                ax_best_taste_counts[s_i].pie(best_taste_corr_counts,labels=best_taste_corr_labels)
-            else:
-                best_taste_corr_labels = [str(best_taste_corr_percents[t_i]) for t_i in range(len(unique_taste_names))]
-                ax_best_taste_counts[s_i].pie(best_taste_corr_counts,labels=best_taste_corr_labels)
-            ax_best_taste_cdf[s_i].set_xlabel('Pearson Correlation')
-        ax_best_taste_cdf[0].legend(loc='upper left')
-        plt.figure(f_best_taste_cdf.number)
-        plt.suptitle(corr_name + ' Best Corr Distributions')
-        plt.tight_layout()
-        f_best_taste_cdf.savefig(os.path.join(plot_save_dir,corr_name+'_best_corr_joint_cdf_all_epochs.png'))
-        f_best_taste_cdf.savefig(os.path.join(plot_save_dir,corr_name+'_best_corr_joint_cdf_all_epochs.svg'))
-        plt.close(f_best_taste_cdf)
-        plt.figure(f_best_taste_counts.number)
-        plt.suptitle(corr_name + ' Best Corr Distribution Counts')
-        plt.tight_layout()
-        f_best_taste_counts.savefig(os.path.join(plot_save_dir,corr_name+'_best_corr_pie_all_epochs.png'))
-        f_best_taste_counts.savefig(os.path.join(plot_save_dir,corr_name+'_best_corr_pie_all_epochs.svg'))
-        plt.close(f_best_taste_counts)
+        for seg_name in unique_segment_names:
+            for cp_i in range(max_cp):
+                all_taste_dist = []
+                for t_i, taste in enumerate(unique_taste_names):
+                    taste_dist = []
+                    for g_n in unique_given_names:
+                        try:
+                            data = corr_dict[g_n][corr_name][seg_name]['all'][taste]['data']
+                            data_cp, num_pts = np.shape(data)
+                            num_dev = corr_dict[g_n][corr_name][seg_name]['all'][taste]['num_dev']
+                            num_deliv = int(num_pts/num_dev)
+                            data_reshape = np.reshape(data,(data_cp,num_deliv,num_dev))
+                            deliv_means = np.squeeze(np.nanmean(data_reshape,1)) #cp x num_dev
+                            if taste == 'none_0':
+                                cp_means = np.nanmean(deliv_means,0) #num_dev
+                                taste_dist.extend(list(cp_means))
+                            else:
+                                taste_dist.extend(list(np.squeeze(deliv_means[cp_i,:])))
+                        except:
+                            errormsg = 'No data for ' + seg_name + ' Epoch ' + \
+                                str(cp_i) + ' ' + taste + ' animal ' + g_n
+                            if verbose == True:
+                                print(errormsg)
+                    all_taste_dist.append(taste_dist)
+                #Now calculate KS-2samp results
+                ks_results = []
+                for tp in t_pairs:
+                    tp_i1 = tp[0]
+                    data_1 = all_taste_dist[tp_i1]
+                    tp_i2 = tp[1]
+                    data_2 = all_taste_dist[tp_i2]
+                    result = ks_2samp(data_1,data_2,alternative='two-sided')
+                    if result[1] <= 0.05:
+                        if np.nanmean(data_1) < np.nanmean(data_2):
+                            ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*<'])
+                        else:
+                            ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*>'])
+                    else:
+                        ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'n.s.'])
+                #Output results to csv
+                csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '.csv'
+                with open(os.path.join(plot_save_dir,csv_save_name),'w',newline='') as file:
+                    writer = csv.writer(file)
+                    for row in ks_results:
+                        writer.writerow(row)
+    
         
 def plot_corr_cutoff_by_segment(corr_dict, unique_given_names, unique_corr_names,
                          unique_segment_names, unique_taste_names, max_cp,
@@ -169,6 +123,7 @@ def plot_corr_cutoff_by_segment(corr_dict, unique_given_names, unique_corr_names
                     corr_cutoff_dict[seg_name][taste][cp_i] = dict()
                     corr_cutoff_dict[seg_name][taste][cp_i]['counts'] = []
                     corr_cutoff_dict[seg_name][taste][cp_i]['num_dev'] = []
+                    corr_cutoff_dict[seg_name][taste][cp_i]['frac'] = []
                 #By animal
                 for g_n in unique_given_names:
                     try:
@@ -178,26 +133,24 @@ def plot_corr_cutoff_by_segment(corr_dict, unique_given_names, unique_corr_names
                         num_deliv = int(num_pts/num_dev)
                         data_reshape = np.reshape(data,(data_cp,num_deliv,num_dev))
                         deliv_means = np.squeeze(np.nanmean(data_reshape,1))
-                        if taste == 'none_0':
-                            cp_means = np.nanmean(deliv_means,0)
-                            corr_cutoff_counts = [len(np.where(cp_means >= cc)[0]) for cc in corr_cutoffs]
-                            for cp_i in range(max_cp):
-                                corr_cutoff_dict[seg_name][taste][cp_i]['counts'].append(corr_cutoff_counts)
-                                corr_cutoff_dict[seg_name][taste][cp_i]['num_dev'].append(num_dev)
-                        else:
-                            for cp_i in range(max_cp):
+                        for cp_i in range(max_cp):
+                            if taste == 'none_0':
+                                cp_means = np.nanmean(deliv_means,0)
+                                corr_cutoff_counts = [len(np.where(cp_means >= cc)[0]) for cc in corr_cutoffs]
+                            else:
                                 corr_cutoff_counts = [len(np.where(deliv_means[cp_i,:] >= cc)[0]) for cc in corr_cutoffs]
-                                corr_cutoff_dict[seg_name][taste][cp_i]['counts'].append(corr_cutoff_counts)
-                                corr_cutoff_dict[seg_name][taste][cp_i]['num_dev'].append(num_dev)
+                            corr_cutoff_dict[seg_name][taste][cp_i]['counts'].append(corr_cutoff_counts)
+                            corr_cutoff_dict[seg_name][taste][cp_i]['num_dev'].append(num_dev)
+                            corr_cutoff_dict[seg_name][taste][cp_i]['frac'].append(list(np.array(corr_cutoff_counts)/num_dev))
                     except:
                         no_data = 1 #holder for missing data for given taste
                 #Total
                 for cp_i in range(max_cp):
-                    data_nansum = np.nansum(np.array(corr_cutoff_dict[seg_name][taste][cp_i]['counts']),0)
-                    data_frac = data_nansum/np.nansum(np.array(corr_cutoff_dict[seg_name][taste][cp_i]['num_dev']))
-                    corr_cutoff_dict[seg_name][taste][cp_i]['total_frac'] = data_frac
+                    data_frac = np.array(corr_cutoff_dict[seg_name][taste][cp_i]['frac'])
+                    avg_frac = np.nanmean(data_frac,0)
+                    corr_cutoff_dict[seg_name][taste][cp_i]['avg_frac'] = avg_frac
         
-        #Plot results comparing tastes
+        #Plot fraction results comparing tastes
         f_cutoff_tastes, ax_cutoff_tastes = plt.subplots(nrows = len(unique_segment_names),\
                                                          ncols = max_cp, figsize=(8,8),\
                                                              sharey = True, sharex = True)
@@ -213,12 +166,15 @@ def plot_corr_cutoff_by_segment(corr_dict, unique_given_names, unique_corr_names
         f_cutoff_tastes_zoom, ax_cutoff_tastes_zoom = plt.subplots(nrows = len(unique_segment_names),\
                                                          ncols = max_cp, figsize=(8,8),\
                                                              sharey = True, sharex = True)
-        above_0_5 = np.where(corr_cutoffs >= 0.5)[0][0]
+        above_0_25 = np.where(corr_cutoffs >= 0.25)[0][0]
+        max_x = 0
         for s_i, seg_name in enumerate(unique_segment_names):
             for cp_i in range(max_cp):
                 for t_i, taste in enumerate(unique_taste_names):
-                    taste_frac = corr_cutoff_dict[seg_name][taste][cp_i]['total_frac']
+                    taste_frac = corr_cutoff_dict[seg_name][taste][cp_i]['avg_frac']
                     frac_0 = corr_cutoffs[np.where(taste_frac == 0)[0]]
+                    if frac_0[0] > max_x:
+                        max_x = frac_0[0]
                     if s_i == len(unique_segment_names)-1:
                         is_last_row = 1
                     else:
@@ -237,7 +193,7 @@ def plot_corr_cutoff_by_segment(corr_dict, unique_given_names, unique_corr_names
                                                 'Correlation Cutoff', 0)
                     #No text zoom plot
                     plot_corr_cutoff_updates(f_cutoff_tastes_zoom, ax_cutoff_tastes_zoom, \
-                                             s_i, cp_i, corr_cutoffs[above_0_5:], taste_frac[above_0_5:], \
+                                             s_i, cp_i, corr_cutoffs[above_0_25:], taste_frac[above_0_25:], \
                                              frac_0[0], colors[t_i], taste, seg_name, \
                                             'Epoch ' + str(cp_i), is_last_row, \
                                                 'Correlation Cutoff', 0)
@@ -255,35 +211,128 @@ def plot_corr_cutoff_by_segment(corr_dict, unique_given_names, unique_corr_names
                                                 'Epoch ' + str(cp_i), is_last_row, \
                                                     'Correlation Cutoff', 0)
         ax_cutoff_tastes[0,0].legend(loc='upper left')
-        plt.suptitle('Multiday Frac Events by Cutoff')
+        plt.suptitle('Multiday Average Frac Events by Cutoff')
         plt.tight_layout()
         f_cutoff_tastes.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes.png'))
         f_cutoff_tastes.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes.svg'))
         plt.close(f_cutoff_tastes)
         ax_cutoff_tastes_day1[0,0].legend(loc='upper left')
-        plt.suptitle('Multiday Frac Events by Cutoff')
+        plt.suptitle('Multiday Average Frac Events by Cutoff')
         plt.tight_layout()
         f_cutoff_tastes_day1.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_day1.png'))
         f_cutoff_tastes_day1.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_day1.svg'))
         plt.close(f_cutoff_tastes_day1)
         ax_cutoff_tastes_day2[0,0].legend(loc='upper left')
-        plt.suptitle('Multiday Frac Events by Cutoff')
+        plt.suptitle('Multiday Average Frac Events by Cutoff')
         plt.tight_layout()
         f_cutoff_tastes_day2.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_day2.png'))
         f_cutoff_tastes_day2.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_day2.svg'))
         plt.close(f_cutoff_tastes_day2)
         ax_cutoff_tastes_notext[0,0].legend(loc='upper left')
-        plt.suptitle('Multiday Frac Events by Cutoff')
+        plt.suptitle('Multiday Average Frac Events by Cutoff')
         plt.tight_layout()
         f_cutoff_tastes_notext.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_notext.png'))
         f_cutoff_tastes_notext.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_notext.svg'))
         plt.close(f_cutoff_tastes_notext)
         ax_cutoff_tastes_zoom[0,0].legend(loc='upper left')
-        ax_cutoff_tastes_zoom[0,0].set_xlim([0.5,1])
-        plt.suptitle('Multiday Frac Events by Cutoff')
+        ax_cutoff_tastes_zoom[0,0].set_xlim([0.25,max_x])
+        plt.suptitle('Multiday Average Frac Events by Cutoff')
         plt.tight_layout()
         f_cutoff_tastes_zoom.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_zoom.png'))
         f_cutoff_tastes_zoom.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_zoom.svg'))
+        plt.close(f_cutoff_tastes_zoom)
+        
+        #Plot count results comparing tastes
+        f_cutoff_tastes, ax_cutoff_tastes = plt.subplots(nrows = len(unique_segment_names),\
+                                                         ncols = max_cp, figsize=(8,8),\
+                                                             sharey = True, sharex = True)
+        f_cutoff_tastes_day1, ax_cutoff_tastes_day1 = plt.subplots(nrows = len(unique_segment_names),\
+                                                         ncols = max_cp, figsize=(8,8),\
+                                                             sharey = True, sharex = True)
+        f_cutoff_tastes_day2, ax_cutoff_tastes_day2 = plt.subplots(nrows = len(unique_segment_names),\
+                                                         ncols = max_cp, figsize=(8,8),\
+                                                             sharey = True, sharex = True)
+        f_cutoff_tastes_notext, ax_cutoff_tastes_notext = plt.subplots(nrows = len(unique_segment_names),\
+                                                         ncols = max_cp, figsize=(8,8),\
+                                                             sharey = True, sharex = True)
+        f_cutoff_tastes_zoom, ax_cutoff_tastes_zoom = plt.subplots(nrows = len(unique_segment_names),\
+                                                         ncols = max_cp, figsize=(8,8),\
+                                                             sharey = True, sharex = True)
+        above_0_25 = np.where(corr_cutoffs >= 0.25)[0][0]
+        max_x = 0
+        for s_i, seg_name in enumerate(unique_segment_names):
+            for cp_i in range(max_cp):
+                for t_i, taste in enumerate(unique_taste_names):
+                    animal_taste_counts = corr_cutoff_dict[seg_name][taste][cp_i]['counts']
+                    total_taste_count = np.nansum(animal_taste_counts,0)
+                    count_0 = corr_cutoffs[np.where(total_taste_count == 0)[0]]
+                    if count_0[0] > max_x:
+                        max_x = count_0[0]
+                    if s_i == len(unique_segment_names)-1:
+                        is_last_row = 1
+                    else:
+                        is_last_row = 0
+                    #Regular plot
+                    plot_corr_cutoff_updates(f_cutoff_tastes, ax_cutoff_tastes, \
+                                             s_i, cp_i, corr_cutoffs, total_taste_count, \
+                                             count_0[0], colors[t_i], taste, seg_name, \
+                                            'Epoch ' + str(cp_i), is_last_row, \
+                                                'Correlation Cutoff', 1)
+                    #No text plot
+                    plot_corr_cutoff_updates(f_cutoff_tastes_notext, ax_cutoff_tastes_notext, \
+                                             s_i, cp_i, corr_cutoffs, total_taste_count, \
+                                             count_0[0], colors[t_i], taste, seg_name, \
+                                            'Epoch ' + str(cp_i), is_last_row, \
+                                                'Correlation Cutoff', 0)
+                    #No text zoom plot
+                    plot_corr_cutoff_updates(f_cutoff_tastes_zoom, ax_cutoff_tastes_zoom, \
+                                             s_i, cp_i, corr_cutoffs[above_0_25:], total_taste_count[above_0_25:], \
+                                             count_0[0], colors[t_i], taste, seg_name, \
+                                            'Epoch ' + str(cp_i), is_last_row, \
+                                                'Correlation Cutoff', 0)
+                    
+                    if int(taste.split('_')[1]) == 0: #Day 1 only
+                        plot_corr_cutoff_updates(f_cutoff_tastes_day1, ax_cutoff_tastes_day1, \
+                                                 s_i, cp_i, corr_cutoffs, total_taste_count, \
+                                                 count_0[0], colors[t_i], taste, seg_name, \
+                                                'Epoch ' + str(cp_i), is_last_row, \
+                                                    'Correlation Cutoff', 0)
+                    else: #Day 2 only
+                        plot_corr_cutoff_updates(f_cutoff_tastes_day2, ax_cutoff_tastes_day2, \
+                                                 s_i, cp_i, corr_cutoffs, total_taste_count, \
+                                                 count_0[0], colors[t_i], taste, seg_name, \
+                                                'Epoch ' + str(cp_i), is_last_row, \
+                                                    'Correlation Cutoff', 0)
+        ax_cutoff_tastes[0,0].legend(loc='upper left')
+        plt.suptitle('Multiday Count Events by Cutoff')
+        plt.tight_layout()
+        f_cutoff_tastes.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_counts.png'))
+        f_cutoff_tastes.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_counts.svg'))
+        plt.close(f_cutoff_tastes)
+        ax_cutoff_tastes_day1[0,0].legend(loc='upper left')
+        plt.suptitle('Multiday Count Events by Cutoff')
+        plt.tight_layout()
+        f_cutoff_tastes_day1.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_counts_day1.png'))
+        f_cutoff_tastes_day1.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_counts_day1.svg'))
+        plt.close(f_cutoff_tastes_day1)
+        ax_cutoff_tastes_day2[0,0].legend(loc='upper left')
+        plt.suptitle('Multiday Count Events by Cutoff')
+        plt.tight_layout()
+        f_cutoff_tastes_day2.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_counts_day2.png'))
+        f_cutoff_tastes_day2.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_counts_day2.svg'))
+        plt.close(f_cutoff_tastes_day2)
+        ax_cutoff_tastes_notext[0,0].legend(loc='upper left')
+        plt.suptitle('Multiday Count Events by Cutoff')
+        plt.tight_layout()
+        f_cutoff_tastes_notext.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_counts_notext.png'))
+        f_cutoff_tastes_notext.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_counts_notext.svg'))
+        plt.close(f_cutoff_tastes_notext)
+        ax_cutoff_tastes_zoom[0,0].legend(loc='upper left')
+        ax_cutoff_tastes_zoom[0,0].set_xlim([0.25,max_x])
+        plt.suptitle('Multiday Count Events by Cutoff')
+        plt.tight_layout()
+        f_cutoff_tastes_zoom.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_counts_zoom.png'))
+        f_cutoff_tastes_zoom.savefig(os.path.join(plot_save_dir,corr_name+'_corr_cutoff_tastes_counts_zoom.svg'))
         plt.close(f_cutoff_tastes_zoom)
         
         #Plot results comparing epochs
@@ -293,7 +342,7 @@ def plot_corr_cutoff_by_segment(corr_dict, unique_given_names, unique_corr_names
         for s_i, seg_name in enumerate(unique_segment_names):
             for t_i, taste in enumerate(unique_taste_names):
                 for cp_i in range(max_cp):
-                    taste_frac = corr_cutoff_dict[seg_name][taste][cp_i]['total_frac']
+                    taste_frac = corr_cutoff_dict[seg_name][taste][cp_i]['avg_frac']
                     frac_0 = corr_cutoffs[np.where(taste_frac == 0)[0]]
                     if s_i == len(unique_segment_names)-1:
                         is_last_row = 1
@@ -316,11 +365,11 @@ def plot_corr_cutoff_updates(fig_name, ax_name, ax_r, ax_c, x_vals, y_vals,
                              is_last_row, x_name, add_text):
     plt.figure(fig_name)
     ax_name[ax_r,ax_c].plot(x_vals,y_vals,color=c_name,label=l_text)
-    ax_name[ax_r,ax_c].axvline(vert_ind,color=c_name,linestyle='dashed',\
-                               alpha=0.3,label='_')
-    if add_text == 1:
-        ax_name[ax_r,ax_c].text(vert_ind,0.5+np.random.rand(1)/10,\
-                                str(np.round(vert_ind,2)),rotation=90)
+    # ax_name[ax_r,ax_c].axvline(vert_ind,color=c_name,linestyle='dashed',\
+    #                            alpha=0.3,label='_')
+    # if add_text == 1:
+    #     ax_name[ax_r,ax_c].text(vert_ind,0.5+np.random.rand(1)/10,\
+    #                             str(np.round(vert_ind,2)),rotation=90)
     if ax_r == 0:
         ax_name[ax_r,ax_c].set_title(col_name)
     if ax_c == 0:
@@ -340,6 +389,8 @@ def plot_corr_cutoff_composition_tastes(corr_dict, unique_given_names, unique_co
     colors = ['red','orange','yellow','green','royalblue','purple', \
               'magenta','brown', 'cyan']
     corr_cutoffs = np.round(np.arange(0,1.01,0.01),2)
+    taste_inds = np.arange(len(unique_taste_names))
+    t_pairs = list(combinations(list(taste_inds),2))
     
     for corr_name in unique_corr_names:
         #Collect cutoff indices            
@@ -429,6 +480,7 @@ def plot_corr_cutoff_composition_tastes(corr_dict, unique_given_names, unique_co
                                             color=colors[t_i])
                     ax_count[s_i, cp_i].plot(corr_cutoffs,taste_counts_dict[taste],label=taste + ' only',
                                             color=colors[t_i])
+                #More plot updates
                 if s_i == 0:
                     ax_frac[s_i, cp_i].set_title('Epoch ' + str(cp_i))
                     ax_count[s_i, cp_i].set_title('Epoch ' + str(cp_i))
@@ -446,7 +498,7 @@ def plot_corr_cutoff_composition_tastes(corr_dict, unique_given_names, unique_co
         plt.tight_layout()
         f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_taste_by_cutoff.png'))
         f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_taste_by_cutoff.svg'))
-        ax_frac[0,0].set_xlim([0.5,1])
+        ax_frac[0,0].set_xlim([0.25,0.8])
         f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_taste_by_cutoff_zoom.png'))
         f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_taste_by_cutoff_zoom.svg'))
         plt.close(f_frac)
@@ -457,7 +509,7 @@ def plot_corr_cutoff_composition_tastes(corr_dict, unique_given_names, unique_co
         plt.tight_layout()
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_taste_by_cutoff.png'))
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_taste_by_cutoff.svg'))
-        ax_count[0,0].set_xlim([0.5,0.8])
+        ax_count[0,0].set_xlim([0.25,0.8])
         ax_count[0,0].set_ylim([0,150])
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_taste_by_cutoff_zoom.png'))
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_taste_by_cutoff_zoom.svg'))
@@ -691,6 +743,9 @@ def plot_corr_cutoff_composition_epochs(corr_dict, unique_given_names, unique_co
     colors = ['red','orange','yellow','green','royalblue','purple', \
               'magenta','brown', 'cyan']
     corr_cutoffs = np.round(np.arange(0,1.01,0.01),2)
+    epoch_inds = np.arange(max_cp)
+    e_pairs = list(combinations(list(epoch_inds),2))
+    
     
     for corr_name in unique_corr_names:
         #Collect cutoff indices            
@@ -786,7 +841,7 @@ def plot_corr_cutoff_composition_epochs(corr_dict, unique_given_names, unique_co
         plt.tight_layout()
         f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_epoch_by_cutoff.png'))
         f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_epoch_by_cutoff.svg'))
-        ax_frac[0,0].set_xlim([0.5,1])
+        ax_frac[0,0].set_xlim([0.25,0.8])
         f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_epoch_by_cutoff_zoom.png'))
         f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_epoch_by_cutoff_zoom.svg'))
         plt.close(f_frac)
@@ -797,7 +852,7 @@ def plot_corr_cutoff_composition_epochs(corr_dict, unique_given_names, unique_co
         plt.tight_layout()
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_epoch_by_cutoff.png'))
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_epoch_by_cutoff.svg'))
-        ax_count[0,0].set_xlim([0.5,1])
+        ax_count[0,0].set_xlim([0.25,0.8])
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_epoch_by_cutoff_zoom.png'))
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_epoch_by_cutoff_zoom.svg'))
         plt.close(f_count) 
@@ -1151,4 +1206,47 @@ def decode_rates_plots(decode_dict,unique_given_names,unique_decode_names,
         f_box_epoch.savefig(os.path.join(decode_results_save_dir,dt + '_which_epoch_rates_box.svg'))
         plt.close(f_box_epoch)
         
-    
+        #Create pie charts of the fraction of events decoded as each taste by epoch
+        f_pie, ax_pie = plt.subplots(nrows = 1, ncols = num_seg,\
+                                     figsize=(15,5))
+        overall_taste_counts = np.zeros(len(unique_taste_names))
+        for s_i, sn in enumerate(unique_segment_names):
+            taste_counts = np.zeros(len(unique_taste_names))
+            for t_i, tn in enumerate(unique_taste_names):
+                for gn in unique_given_names:
+                    try:
+                        gn_tastes = decode_dict[gn][dt]['tastes']
+                        gn_t_i = [i for i in range(len(gn_tastes)) if gn_tastes[i] == tn]
+                        if len(gn_t_i) > 0:
+                            #Which Taste Data
+                            try:
+                                which_taste_data = decode_dict[gn][dt][sn]['which_taste'][:,gn_t_i] #num_dev
+                                num_which_taste = np.nansum(which_taste_data)
+                                taste_counts[t_i] += num_which_taste
+                            except:
+                                errormsg = "Missing data for "+ gn + " " + dt
+                    except:
+                        errormsg = "Missing data for "+ gn + " " + dt
+                        if verbose == True:
+                            print(errormsg)
+            pie_labels = [unique_taste_names[t_i] + ' ' + \
+                                      str(np.round(100*taste_counts[t_i]/np.nansum(taste_counts),2)) \
+                                          for t_i in range(len(unique_taste_names))]
+            ax_pie[s_i].pie(taste_counts,labels=pie_labels,labeldistance=1.1)
+            overall_taste_counts += taste_counts
+            ax_pie[s_i].set_title(sn)
+        plt.suptitle('Percent Decoded Taste by Segment')
+        f_pie.savefig(os.path.join(decode_results_save_dir,dt + '_which_taste_by_seg_pie.png'))
+        f_pie.savefig(os.path.join(decode_results_save_dir,dt + '_which_taste_by_seg_pie.svg'))
+        plt.close(f_pie)
+        
+        f = plt.figure(figsize = (5,5))
+        overall_pie_labels = [unique_taste_names[t_i] + ' ' + \
+                                  str(np.round(100*overall_taste_counts[t_i]/np.nansum(overall_taste_counts),2)) \
+                                      for t_i in range(len(unique_taste_names))]
+        plt.pie(overall_taste_counts,labels=overall_pie_labels,labeldistance=1.1)
+        plt.suptitle('Percent Decoded Taste Overall')
+        plt.tight_layout()
+        f.savefig(os.path.join(decode_results_save_dir,dt + '_which_taste_oveall_pie.png'))
+        f.savefig(os.path.join(decode_results_save_dir,dt + '_which_taste_oveall_pie.svg'))
+        plt.close(f)

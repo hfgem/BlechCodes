@@ -261,5 +261,5 @@ unique_decode_names = [unique_decode_names[i] for i in unique_decode_indices]
 import functions.compare_multiday_funcs as cmf
 
 cmf.compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
-                       unique_decode_names, unique_segment_names, 
-                       unique_taste_names, max_cp, save_dir)
+                        unique_decode_names, unique_segment_names, 
+                        unique_taste_names, max_cp, save_dir)
