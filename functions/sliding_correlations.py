@@ -30,7 +30,7 @@ class run_sliding_correlations():
         self.gather_variables()
         self.calculate_bin_data()
         self.calculate_correlations_all()
-        #self.calculate_correlations_zscore()
+        self.calculate_correlations_zscore()
         
     def gather_variables(self,):
         # Directories
@@ -101,7 +101,7 @@ class run_sliding_correlations():
         neuron_keep_indices = np.ones(np.shape(self.discrim_neur))
         self.neuron_keep_indices = neuron_keep_indices
         
-        df.calculate_vec_correlations_zscore(self.num_neur, self.z_bin, self.bin_fr_vecs_zscore, self.tastant_spike_times,
+        df.calculate_vec_correlations_zscore(self.num_neur, self.z_bin, self.bin_fr_vecs_zscore, self.bin_pop_fr, self.tastant_spike_times,
                                              self.segment_times, self.segment_spike_times, self.start_dig_in_times, self.end_dig_in_times,
                                              self.segment_names, self.dig_in_names, self.pre_taste, self.post_taste, self.pop_taste_cp_raster_inds,
                                              self.corr_dir, self.neuron_keep_indices, self.segments_to_analyze)
