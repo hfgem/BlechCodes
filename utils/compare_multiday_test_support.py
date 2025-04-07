@@ -121,7 +121,13 @@ except:
                     f_name = f.split('.')[0]
                     if f_name == 'all_taste_names':
                         taste_names = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
-                        taste_name_list = [str(tn) for tn in taste_names]
+                        taste_name_list = []
+                        for tn in taste_names:
+                            if tn == 'NaCl_1':
+                                taste_name_list.append('salt_1')
+                            else:
+                                taste_name_list.append(tn)
+                        
                         corr_dict[dn][ct]['tastes'] = taste_name_list
                     else:
                         seg_name = f_name.split('_')[0]
@@ -135,6 +141,8 @@ except:
                             num_tastes = len(f_data)
                             for nt_i in range(num_tastes):
                                 taste_name = f_data[nt_i]['name']
+                                if taste_name == 'NaCl_1':
+                                    taste_name = 'salt_1'
                                 num_cp = len(f_data[nt_i]['data'])
                                 num_points = len(f_data[nt_i]['data'][0])
                                 data_concat = np.zeros((num_cp,num_points))
@@ -171,11 +179,6 @@ for name in unique_given_names:
     for corr_name in unique_corr_names:
         seg_names = list(corr_dict[name][corr_name].keys())
         taste_names = corr_dict[name][corr_name]['tastes']
-        nacl_ind = [i for i in range(len(taste_names)) if taste_names[i] == 'NaCl_1']
-        if len(nacl_ind) > 0: #Stupid on my end - rename so they're all salt_1
-            taste_names[nacl_ind[0]] = 'salt_1'
-            corr_dict[name][corr_name]['tastes'] = list(taste_names)
-            np.save(corr_dict_path,corr_dict,allow_pickle=True)
         unique_taste_names.extend(list(taste_names))
         for s_n in seg_names:
             if type(corr_dict[name][corr_name][s_n]) == dict:
@@ -262,4 +265,4 @@ import functions.compare_multiday_funcs as cmf
 
 cmf.compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
                         unique_decode_names, unique_segment_names, 
-                        unique_taste_names, max_cp, save_dir)
+                        unique_taste_names, max_cp, save_dir, verbose=False)
