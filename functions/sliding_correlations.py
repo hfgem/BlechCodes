@@ -29,7 +29,7 @@ class run_sliding_correlations():
         self.data_dict = args[1]
         self.gather_variables()
         self.calculate_bin_data()
-        self.calculate_correlations_all()
+        # self.calculate_correlations_all()
         self.calculate_correlations_zscore()
         
     def gather_variables(self,):

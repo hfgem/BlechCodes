@@ -65,7 +65,6 @@ tastant_spike_times = af.calc_tastant_spike_times(data_dict['segment_times'],dat
 data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
-#%%
 
 import os
 import numpy as np
@@ -106,13 +105,11 @@ data_group_name = 'taste_discriminability'
 discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
     hdf5_dir, data_group_name, 'discrim_neur'))
 
-#%%
 
 bin_times, bin_pop_fr, bin_fr_vecs, bin_fr_vecs_zscore = af.get_bin_activity(segment_times_reshaped,
                                                             segment_spike_times, bin_size, 
                                                             segments_to_analyze, False)
 
-#%%
 corr_dir = os.path.join(slide_dir,'all_neur_zscore')
 if os.path.isdir(corr_dir) == False:
     os.mkdir(corr_dir)
@@ -133,19 +130,19 @@ corr_slide_stats = df.pull_corr_dev_stats(
     segment_names, dig_in_names, corr_dir, 
     segments_to_analyze, False)
 print("\tPlotting Correlation Statistics")
-dpf.plot_stats(corr_slide_stats, segment_names, dig_in_names, plot_dir,
-               'Correlation', neuron_keep_indices, segments_to_analyze)
-segment_pop_vec_data = dpf.plot_combined_stats(corr_slide_stats, segment_names, dig_in_names,
-                                               plot_dir, 'Correlation', neuron_keep_indices, segments_to_analyze)
+# dpf.plot_stats(corr_slide_stats, segment_names, dig_in_names, plot_dir,
+#                'Correlation', neuron_keep_indices, segments_to_analyze)
+# segment_pop_vec_data = dpf.plot_combined_stats(corr_slide_stats, segment_names, dig_in_names,
+#                                                plot_dir, 'Correlation', neuron_keep_indices, segments_to_analyze)
 
 
 #Correlation calculations and plots
-spf.slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,
+popfr_corr_storage = spf.slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,
                        num_cp,plot_dir,corr_dir,
                        segment_names,dig_in_names,
                        segments_to_analyze)
-#90th-Percentile Correlations and the related pop rates
-spf.top_corr_rate_dist(corr_slide_stats,bin_times,bin_pop_fr,
-                       num_cp,plot_dir,corr_dir,
-                       segment_names,dig_in_names,
-                       segments_to_analyze)
+# #90th-Percentile Correlations and the related pop rates
+# spf.top_corr_rate_dist(corr_slide_stats,bin_times,bin_pop_fr,
+#                        num_cp,plot_dir,corr_dir,
+#                        segment_names,dig_in_names,
+#                        segments_to_analyze)

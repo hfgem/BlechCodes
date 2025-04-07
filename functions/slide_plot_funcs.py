@@ -112,81 +112,81 @@ def slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,sav
         #Save dictionary
         np.save(os.path.join(save_dir,'popfr_corr_storage.npy'),popfr_corr_storage,True)
 
-    #Plot for each epoch and segment the correlation by taste
-    f, ax = plt.subplots(nrows = num_segments, ncols = num_cp, figsize = (4*num_tastes,4*num_segments))
-    for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
-        seg_name = segment_names[s_ind]
-        seg_pop_fr = np.array(bin_pop_fr[s_i])
-        for cp_i in range(num_cp):
-            #Plot individual taste distributions
-            for t_i in range(num_tastes):
-                taste_name = dig_in_names[t_i]
-                st_corr = corr_slide_stats[seg_name][t_i]['pop_vec_data_storage']
-                num_times, num_deliv, num_cp = np.shape(st_corr)
-                popfr_corr_vals = popfr_corr_storage[seg_name][taste_name][:,cp_i].squeeze()
-                ax[s_i,cp_i].boxplot(popfr_corr_vals[~np.isnan(popfr_corr_vals)],positions = [t_i+1])
-                #Calculate if distribution is significantly above 0
-                fifth_percentile = np.percentile(popfr_corr_vals[~np.isnan(popfr_corr_vals)],5)
-                if 0 < fifth_percentile:
-                    ax[s_i,cp_i].scatter(t_i,max_corr_val,marker='*',color='k',s=5)
-            #Plot pairwise significances
-            taste_pairs = list(itertools.combinations(np.arange(num_tastes), 2))
-            sig_max_corr_val = max_corr_val
-            for tp_i in range(len(taste_pairs)):
-                t_0 = taste_pairs[tp_i][0]
-                t_0_name = dig_in_names[t_0]
-                t_1 = taste_pairs[tp_i][1]
-                t_1_name = dig_in_names[t_1]
-                t_0_corr_vals = popfr_corr_storage[seg_name][t_0_name][:,cp_i].squeeze()
-                t_1_corr_vals = popfr_corr_storage[seg_name][t_1_name][:,cp_i].squeeze()
-                stat = ttest_ind(t_0_corr_vals[~np.isnan(t_0_corr_vals)],t_1_corr_vals[~np.isnan(t_1_corr_vals)])
-                if stat[1] < 0.05:
-                    sig_max_corr_val = sig_max_corr_val + 0.05*sig_max_corr_val
-                    ax[s_i,cp_i].plot([t_0+1,t_1+1],[sig_max_corr_val,sig_max_corr_val])
-                    sig_max_corr_val = sig_max_corr_val + 0.05*sig_max_corr_val
-                    ax[s_i,cp_i].scatter(t_0+1 + (t_1-t_0)/2,sig_max_corr_val,marker='*',color='k')
-            ax[s_i,cp_i].set_title(seg_name + ' x Epoch ' + str(cp_i))
-            ax[s_i,cp_i].set_xticklabels(dig_in_names)
-            ax[s_i,cp_i].set_ylabel('Pearson Correlations')
-            ax[s_i,cp_i].set_xlabel('Taste')
-            ax[s_i,cp_i].set_ylim([min_corr_val + 0.2*min_corr_val,max_corr_val + 0.2*max_corr_val])
-            ax[s_i,cp_i].set_ylim([min_corr_val + 0.2*min_corr_val,max_corr_val + 0.2*max_corr_val])
-    #Finish figure and save
-    plt.suptitle('Population Rate x Bin Correlation')
-    plt.tight_layout()
-    f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_tastes.png'))
-    f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_tastes.svg'))
-    plt.close(f)
+    # #Plot for each epoch and segment the correlation by taste
+    # f, ax = plt.subplots(nrows = num_segments, ncols = num_cp, figsize = (4*num_tastes,4*num_segments))
+    # for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
+    #     seg_name = segment_names[s_ind]
+    #     seg_pop_fr = np.array(bin_pop_fr[s_i])
+    #     for cp_i in range(num_cp):
+    #         #Plot individual taste distributions
+    #         for t_i in range(num_tastes):
+    #             taste_name = dig_in_names[t_i]
+    #             st_corr = corr_slide_stats[seg_name][t_i]['pop_vec_data_storage']
+    #             num_times, num_deliv, num_cp = np.shape(st_corr)
+    #             popfr_corr_vals = popfr_corr_storage[seg_name][taste_name][:,cp_i].squeeze()
+    #             ax[s_i,cp_i].boxplot(popfr_corr_vals[~np.isnan(popfr_corr_vals)],positions = [t_i+1])
+    #             #Calculate if distribution is significantly above 0
+    #             fifth_percentile = np.percentile(popfr_corr_vals[~np.isnan(popfr_corr_vals)],5)
+    #             if 0 < fifth_percentile:
+    #                 ax[s_i,cp_i].scatter(t_i,max_corr_val,marker='*',color='k',s=5)
+    #         #Plot pairwise significances
+    #         taste_pairs = list(itertools.combinations(np.arange(num_tastes), 2))
+    #         sig_max_corr_val = max_corr_val
+    #         for tp_i in range(len(taste_pairs)):
+    #             t_0 = taste_pairs[tp_i][0]
+    #             t_0_name = dig_in_names[t_0]
+    #             t_1 = taste_pairs[tp_i][1]
+    #             t_1_name = dig_in_names[t_1]
+    #             t_0_corr_vals = popfr_corr_storage[seg_name][t_0_name][:,cp_i].squeeze()
+    #             t_1_corr_vals = popfr_corr_storage[seg_name][t_1_name][:,cp_i].squeeze()
+    #             stat = ttest_ind(t_0_corr_vals[~np.isnan(t_0_corr_vals)],t_1_corr_vals[~np.isnan(t_1_corr_vals)])
+    #             if stat[1] < 0.05:
+    #                 sig_max_corr_val = sig_max_corr_val + 0.05*sig_max_corr_val
+    #                 ax[s_i,cp_i].plot([t_0+1,t_1+1],[sig_max_corr_val,sig_max_corr_val])
+    #                 sig_max_corr_val = sig_max_corr_val + 0.05*sig_max_corr_val
+    #                 ax[s_i,cp_i].scatter(t_0+1 + (t_1-t_0)/2,sig_max_corr_val,marker='*',color='k')
+    #         ax[s_i,cp_i].set_title(seg_name + ' x Epoch ' + str(cp_i))
+    #         ax[s_i,cp_i].set_xticklabels(dig_in_names)
+    #         ax[s_i,cp_i].set_ylabel('Pearson Correlations')
+    #         ax[s_i,cp_i].set_xlabel('Taste')
+    #         ax[s_i,cp_i].set_ylim([min_corr_val + 0.2*min_corr_val,max_corr_val + 0.2*max_corr_val])
+    #         ax[s_i,cp_i].set_ylim([min_corr_val + 0.2*min_corr_val,max_corr_val + 0.2*max_corr_val])
+    # #Finish figure and save
+    # plt.suptitle('Population Rate x Bin Correlation')
+    # plt.tight_layout()
+    # f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_tastes.png'))
+    # f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_tastes.svg'))
+    # plt.close(f)
     
-    #Plot the distribution means on the same axes as trends but by taste
-    min_mean = 0
-    max_mean = 0
-    f, ax = plt.subplots(ncols=num_tastes,figsize=(4*num_tastes,4))
-    for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
-        seg_name = segment_names[s_ind]
-        seg_pop_fr = np.array(bin_pop_fr[s_i])
-        for t_i in range(num_tastes):
-            taste_name = dig_in_names[t_i]
-            popfr_corr_vals = popfr_corr_storage[seg_name][taste_name] #num_deliv x num_cp
-            mean_vals = np.nanmean(popfr_corr_vals,0)
-            if np.min(mean_vals) < min_mean:
-                min_mean = np.min(mean_vals)
-            if np.max(mean_vals) > max_mean:
-                max_mean = np.max(mean_vals)
-            ax[t_i].plot(np.arange(num_cp),mean_vals,label=seg_name)
-    for t_i in range(num_tastes):
-        ax[t_i].legend(loc='upper left')
-        ax[t_i].axhline(0,alpha=0.2,linestyle='dashed',color='k')
-        ax[t_i].set_ylim([min_mean - np.abs(0.1*min_mean), max_mean + 0.1*max_mean])
-        ax[t_i].set_xticks(np.arange(num_cp))
-        ax[t_i].set_xlabel('Epoch Index')
-        ax[t_i].set_ylabel('Mean Pearson Correlation')
-        ax[t_i].set_title(dig_in_names[t_i])
-    plt.suptitle('Mean Correlation of Population Rate to Bin Taste Correlation')
-    plt.tight_layout()
-    f.savefig(os.path.join(plot_dir,'mean_pop_rate_x_bin_corr_tastes.png'))
-    f.savefig(os.path.join(plot_dir,'mean_pop_rate_x_bin_corr_tastes.svg'))
-    plt.close(f)
+    # #Plot the distribution means on the same axes as trends but by taste
+    # min_mean = 0
+    # max_mean = 0
+    # f, ax = plt.subplots(ncols=num_tastes,figsize=(4*num_tastes,4))
+    # for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
+    #     seg_name = segment_names[s_ind]
+    #     seg_pop_fr = np.array(bin_pop_fr[s_i])
+    #     for t_i in range(num_tastes):
+    #         taste_name = dig_in_names[t_i]
+    #         popfr_corr_vals = popfr_corr_storage[seg_name][taste_name] #num_deliv x num_cp
+    #         mean_vals = np.nanmean(popfr_corr_vals,0)
+    #         if np.min(mean_vals) < min_mean:
+    #             min_mean = np.min(mean_vals)
+    #         if np.max(mean_vals) > max_mean:
+    #             max_mean = np.max(mean_vals)
+    #         ax[t_i].plot(np.arange(num_cp),mean_vals,label=seg_name)
+    # for t_i in range(num_tastes):
+    #     ax[t_i].legend(loc='upper left')
+    #     ax[t_i].axhline(0,alpha=0.2,linestyle='dashed',color='k')
+    #     ax[t_i].set_ylim([min_mean - np.abs(0.1*min_mean), max_mean + 0.1*max_mean])
+    #     ax[t_i].set_xticks(np.arange(num_cp))
+    #     ax[t_i].set_xlabel('Epoch Index')
+    #     ax[t_i].set_ylabel('Mean Pearson Correlation')
+    #     ax[t_i].set_title(dig_in_names[t_i])
+    # plt.suptitle('Mean Correlation of Population Rate to Bin Taste Correlation')
+    # plt.tight_layout()
+    # f.savefig(os.path.join(plot_dir,'mean_pop_rate_x_bin_corr_tastes.png'))
+    # f.savefig(os.path.join(plot_dir,'mean_pop_rate_x_bin_corr_tastes.svg'))
+    # plt.close(f)
     
     return popfr_corr_storage
 
