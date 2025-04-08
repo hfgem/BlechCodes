@@ -447,9 +447,10 @@ def calculate_significant_dev(segment_dev_times, segment_times, dig_in_names,
     return sig_dev, sig_dev_counts
     
 
-def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, tastant_spike_times,
-                                      segment_times, segment_spike_times, start_dig_in_times, end_dig_in_times, segment_names, dig_in_names,
-                                      pre_taste, post_taste, cp, save_dir, neuron_keep_indices=[], segments_to_analyze=[]):
+def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, bin_pop_fr, tastant_spike_times,
+                                      segment_times, segment_spike_times, start_dig_in_times, end_dig_in_times, 
+                                      segment_names, dig_in_names, pre_taste, post_taste, cp, 
+                                      save_dir, neuron_keep_indices=[], segments_to_analyze=[]):
     """This function takes in deviation rasters, tastant delivery spikes, and
     changepoint indices to calculate correlations of each deviation to each 
     changepoint interval"""
@@ -527,20 +528,20 @@ def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, 
         print("\t\tBeginning population vector correlation calcs for segment " + str(s_i))
         # Gather segment data
         seg_vecs = segment_dev_vecs_zscore[s_ind]
+        seg_pop_rate = bin_pop_fr[s_ind]
+        zero_inds = np.where(np.array(seg_pop_rate) == 0)[0]
         num_dev = len(seg_vecs)
+        non_zero_inds = np.setdiff1d(np.arange(num_dev),zero_inds)
         dev_fr_vecs = np.array(seg_vecs)
         for t_i in range(num_tastes):  # Loop through each taste
             # Set storage directory and check if data previously stored
             filename_pop_vec = os.path.join(save_dir, segment_names[s_i] + '_' 
                                             + dig_in_names[t_i] + '_pop_vec.npy')
-            filename_pop_vec_loaded = 0
             try:
                 neuron_pop_vec_corr_storage = np.load(filename_pop_vec)
-                filename_pop_vec_loaded = 1
                 print("\t\t\tVector correlations previously calculated for taste " + str(t_i + 1))
             except:
                 print("\t\t\tVector correlations now being calculated for taste " + str(t_i + 1))
-            if filename_pop_vec_loaded == 0:
                 taste_cp_pop = cp[t_i]
                 taste_spikes = tastant_spike_times[t_i]
                 # Note, num_cp = num_cp+1 with the first value the taste delivery index
@@ -562,6 +563,7 @@ def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, 
                         taste_keep_ind = (np.where(
                             ((neuron_keep_indices[cp_i, :]).astype('int')).flatten())[0]).astype('int')
                     dev_fr_vecs_keep_neur = dev_fr_vecs[:, taste_keep_ind]
+                    dev_fr_vecs_keep_neur = dev_fr_vecs[non_zero_inds, :]
                     # numpy array of num_deliv x total_num_neur
                     cp_deliv_fr_vecs = np.squeeze(
                         taste_deliv_fr_vecs[:, cp_i, taste_keep_ind])
@@ -581,7 +583,7 @@ def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, 
                         cp_dev_mean_sub_vecs)
 
                     # Now pairwise calculate the pearson's correlation coefficients
-                    for dev_i in range(num_dev):
+                    for dev_i, dev_ind in enumerate(non_zero_inds):
                         dev_sub_mat = cp_dev_mean_sub_vecs[dev_i,
                                                            :] * np.ones((num_deliv, total_num_neur))
                         dev_square_mat = cp_dev_mean_sub_vecs_squared[dev_i, :] * np.ones(
@@ -590,9 +592,8 @@ def calculate_vec_correlations_zscore(num_neur, z_bin, segment_dev_vecs_zscore, 
                             dev_sub_mat, cp_deliv_mean_sub_vecs), 1)
                         pearson_denom = np.sqrt(
                             np.sum(dev_square_mat, 1))*np.sqrt(np.sum(cp_deliv_mean_sub_vecs_squared, 1))
-                        neuron_pop_vec_corr_storage[dev_i, :,
+                        neuron_pop_vec_corr_storage[dev_ind, :,
                                                     cp_i] = pearson_num/pearson_denom
-                    np.save(filename_pop_vec, neuron_pop_vec_corr_storage)
                 np.save(filename_pop_vec, neuron_pop_vec_corr_storage)
 
 
