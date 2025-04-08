@@ -31,39 +31,39 @@ def slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,sav
     if os.path.isfile(os.path.join(save_dir,'popfr_corr_storage.npy')):
         popfr_corr_storage = np.load(os.path.join(save_dir,'popfr_corr_storage.npy'),allow_pickle=True).item()
         #Plot
-        f, ax = plt.subplots(nrows = num_segments, ncols = num_tastes, figsize = (4*num_tastes,4*num_segments))
-        for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
-            seg_name = segment_names[s_ind]
-            for t_i in range(num_tastes):
-                taste_name = dig_in_names[t_i]
-                popfr_corr_vals = popfr_corr_storage[seg_name][taste_name]
-                if np.min(popfr_corr_vals) < min_corr_val:
-                    min_corr_val = np.min(popfr_corr_vals)
-                if np.max(popfr_corr_vals) > max_corr_val:
-                    max_corr_val = np.max(popfr_corr_vals)
-                #Plot correlation across time
-                #mean_corr_by_changepoint = np.nanmean(popfr_corr_vals,0)
-                #std_corr_by_changepoint = np.nanstd(popfr_corr_vals,0)
-                #ax[s_i,t_i].plot(np.arange(num_cp),mean_corr_by_changepoint)
-                #ax[s_i,t_i].fill_between(np.arange(num_cp),mean_corr_by_changepoint-std_corr_by_changepoint,mean_corr_by_changepoint+std_corr_by_changepoint,alpha=0.3)
-                for cp_i in range(num_cp):
-                    corr_dataset = popfr_corr_vals[:,cp_i]
-                    ax[s_i,t_i].violinplot(list(corr_dataset[~np.isnan(corr_dataset)]),[cp_i],showmeans=True)
-                ax[s_i,t_i].set_title(seg_name + ' x ' + taste_name)
-                ax[s_i,t_i].set_ylabel('Pearson Correlation')
-                ax[s_i,t_i].set_xlabel('Epoch')
-        for s_i in range(len(segments_to_analyze)):
-            for t_i in range(num_tastes):
-                ax[s_i,t_i].set_ylim([min_corr_val + 0.1*min_corr_val,max_corr_val + 0.1*max_corr_val])
-        #Finish figure and save
-        plt.suptitle('Population Rate x Bin Correlation')
-        plt.tight_layout()
-        f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_epochs.png'))
-        f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_epochs.svg'))
-        plt.close(f)
+        # f, ax = plt.subplots(nrows = num_segments, ncols = num_tastes, figsize = (4*num_tastes,4*num_segments))
+        # for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
+        #     seg_name = segment_names[s_ind]
+        #     for t_i in range(num_tastes):
+        #         taste_name = dig_in_names[t_i]
+        #         popfr_corr_vals = popfr_corr_storage[seg_name][taste_name]
+        #         if np.min(popfr_corr_vals) < min_corr_val:
+        #             min_corr_val = np.min(popfr_corr_vals)
+        #         if np.max(popfr_corr_vals) > max_corr_val:
+        #             max_corr_val = np.max(popfr_corr_vals)
+        #         #Plot correlation across time
+        #         #mean_corr_by_changepoint = np.nanmean(popfr_corr_vals,0)
+        #         #std_corr_by_changepoint = np.nanstd(popfr_corr_vals,0)
+        #         #ax[s_i,t_i].plot(np.arange(num_cp),mean_corr_by_changepoint)
+        #         #ax[s_i,t_i].fill_between(np.arange(num_cp),mean_corr_by_changepoint-std_corr_by_changepoint,mean_corr_by_changepoint+std_corr_by_changepoint,alpha=0.3)
+        #         for cp_i in range(num_cp):
+        #             corr_dataset = popfr_corr_vals[:,cp_i]
+        #             ax[s_i,t_i].violinplot(list(corr_dataset[~np.isnan(corr_dataset)]),[cp_i],showmeans=True)
+        #         ax[s_i,t_i].set_title(seg_name + ' x ' + taste_name)
+        #         ax[s_i,t_i].set_ylabel('Pearson Correlation')
+        #         ax[s_i,t_i].set_xlabel('Epoch')
+        # for s_i in range(len(segments_to_analyze)):
+        #     for t_i in range(num_tastes):
+        #         ax[s_i,t_i].set_ylim([min_corr_val + 0.1*min_corr_val,max_corr_val + 0.1*max_corr_val])
+        # #Finish figure and save
+        # plt.suptitle('Population Rate x Bin Correlation')
+        # plt.tight_layout()
+        # f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_epochs.png'))
+        # f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_epochs.svg'))
+        # plt.close(f)
     else:
         #Plot for each taste and segment the correlation by epoch
-        f, ax = plt.subplots(nrows = num_segments, ncols = num_tastes, figsize = (4*num_tastes,4*num_segments))
+        # f, ax = plt.subplots(nrows = num_segments, ncols = num_tastes, figsize = (4*num_tastes,4*num_segments))
         popfr_corr_storage = dict()
         for s_i, s_ind in tqdm.tqdm(enumerate(segments_to_analyze)):
             seg_name = segment_names[s_ind]
@@ -94,21 +94,21 @@ def slide_corr_vs_rate(corr_slide_stats,bin_times,bin_pop_fr,num_cp,plot_dir,sav
                     min_corr_val = np.min(popfr_corr_vals)
                 if np.max(popfr_corr_vals) > max_corr_val:
                     max_corr_val = np.max(popfr_corr_vals)
-                for cp_i in range(num_cp):
-                    corr_dataset = popfr_corr_vals[:,cp_i]
-                    ax[s_i,t_i].violinplot(list(corr_dataset[~np.isnan(corr_dataset)]),[cp_i],showmeans=True)
-                ax[s_i,t_i].set_title(seg_name + ' x ' + taste_name)
-                ax[s_i,t_i].set_ylabel('Pearson Correlation')
-                ax[s_i,t_i].set_xlabel('Epoch')
-        for s_i in range(len(segments_to_analyze)):
-            for t_i in range(num_tastes):
-                ax[s_i,t_i].set_ylim([min_corr_val + 0.1*min_corr_val,max_corr_val + 0.1*max_corr_val])
+        #         for cp_i in range(num_cp):
+        #             corr_dataset = popfr_corr_vals[:,cp_i]
+        #             ax[s_i,t_i].violinplot(list(corr_dataset[~np.isnan(corr_dataset)]),[cp_i],showmeans=True)
+        #         ax[s_i,t_i].set_title(seg_name + ' x ' + taste_name)
+        #         ax[s_i,t_i].set_ylabel('Pearson Correlation')
+        #         ax[s_i,t_i].set_xlabel('Epoch')
+        # for s_i in range(len(segments_to_analyze)):
+        #     for t_i in range(num_tastes):
+        #         ax[s_i,t_i].set_ylim([min_corr_val + 0.1*min_corr_val,max_corr_val + 0.1*max_corr_val])
         #Finish figure and save
-        plt.suptitle('Population Rate x Bin Correlation')
-        plt.tight_layout()
-        f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_epochs.png'))
-        f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_epochs.svg'))
-        plt.close(f)
+        # plt.suptitle('Population Rate x Bin Correlation')
+        # plt.tight_layout()
+        # f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_epochs.png'))
+        # f.savefig(os.path.join(plot_dir,'pop_rate_x_bin_corr_epochs.svg'))
+        # plt.close(f)
         #Save dictionary
         np.save(os.path.join(save_dir,'popfr_corr_storage.npy'),popfr_corr_storage,True)
 
