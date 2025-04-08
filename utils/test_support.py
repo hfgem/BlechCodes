@@ -90,7 +90,7 @@ segment_spike_times = data_dict['segment_spike_times']
 segment_times = data_dict['segment_times']
 segment_times_reshaped = [
     [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
-# Remember this is 1 less than the number of epochs
+# Remember this is 1 less than the number of epochs so add 1
 num_cp = metadata['params_dict']['num_cp'] + 1
 tastant_spike_times = data_dict['tastant_spike_times']
 start_dig_in_times = data_dict['start_dig_in_times']
@@ -114,7 +114,7 @@ corr_dir = os.path.join(slide_dir,'all_neur_zscore')
 if os.path.isdir(corr_dir) == False:
     os.mkdir(corr_dir)
     
-neuron_keep_indices = np.ones(np.shape(discrim_neur))
+neuron_keep_indices = np.ones((num_cp,num_neur))
 
 df.calculate_vec_correlations_zscore(num_neur, z_bin, bin_fr_vecs_zscore, bin_pop_fr, tastant_spike_times,
                                      segment_times, segment_spike_times, start_dig_in_times, end_dig_in_times,
