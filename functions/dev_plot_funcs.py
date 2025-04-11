@@ -1349,4 +1349,17 @@ def sig_val_plot(sig_dev,segments_to_analyze,segment_names,dig_in_names,save_dir
     f.savefig(os.path.join(save_dir,'sig_dev_corr_hists.svg'))
     plt.close(f)
     
+def plot_dev_dim_reduced(dev_vec, tastant_fr_dist, segment_names, 
+                         dig_in_names, segments_to_analyze, plot_save_dir):
+    """
+    Plot the deviation events in reduced dimensions using an SVM's orthogonal
+    vector and projections.
+    """
+    
+    colors = ['forestgreen','maroon','royalblue','orange','teal','palevioletred',
+              'darkslateblue','red','green','blue']
+    num_tastes = len(dig_in_names)
+    num_dev, num_neur, _ = np.shape(dev_vec)
+    num_cp = len(tastant_fr_dist[0][0])
+    
     
