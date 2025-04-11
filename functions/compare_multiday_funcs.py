@@ -149,8 +149,11 @@ def calc_ind_dicts(corr_dict, unique_given_names, unique_corr_names,
     #Collect unique index counts above a given cutoff for a taste-epoch combination
     taste_epoch_pairs = [] #list of taste-epoch pairs
     for taste in unique_taste_names:
-        for cp_i in range(max_cp):
-            taste_epoch_pairs.append(taste + '-' + str(cp_i))
+        if taste == 'none_0':
+            taste_epoch_pairs.append(taste + '-0')
+        else:
+            for cp_i in range(max_cp):
+                taste_epoch_pairs.append(taste + '-' + str(cp_i))
     unique_corr_dicts = dict() #Collect counts of unique indices across animals for different conditions
     for corr_name in unique_corr_names:
         unique_corr_dicts[corr_name] = dict()
@@ -167,7 +170,7 @@ def calc_ind_dicts(corr_dict, unique_given_names, unique_corr_names,
                     cp_i = int(tep.split('-')[1])
                     for gn_i, gn in enumerate(unique_given_names):
                         try:
-                            anim_tep_inds = all_dev_corr_inds[seg_name][cp_i][taste][gn][cc_i]
+                            anim_tep_inds = np.unique(all_dev_corr_inds[seg_name][cp_i][taste][gn][cc_i])
                             remaining_tep = np.setdiff1d(taste_epoch_pairs,tep)
                             other_tep_inds = []
                             for tep2_i, tep2 in enumerate(remaining_tep):
@@ -569,7 +572,7 @@ def decode_rates_plots(decode_dict,unique_given_names,unique_decode_names,
             plt.scatter(x_scat,seg_is_taste_rates,color='g',alpha=0.3)
         plt.xticks(np.arange(num_seg),unique_segment_names)
         plt.xlabel('Segment')
-        plt.ylim([0,1])
+        #plt.ylim([0,1])
         plt.ylabel('Fraction of Deviation Events')
         plt.title('Fraction of Events Decoded as Taste')
         plt.tight_layout()
@@ -585,7 +588,7 @@ def decode_rates_plots(decode_dict,unique_given_names,unique_decode_names,
         plt.plot(mean_fraction,color='k')
         plt.xticks(np.arange(num_seg),unique_segment_names)
         plt.xlabel('Segment')
-        plt.ylim([0,1])
+        #plt.ylim([0,1])
         plt.ylabel('Fraction of Deviation Events')
         plt.title('Fraction of Events Decoded as Taste')
         plt.tight_layout()
