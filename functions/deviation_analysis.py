@@ -114,9 +114,8 @@ class run_find_deviations():
         print("\tNow pulling true deviation rasters")
         segment_dev_rasters, segment_dev_times, segment_dev_vec, \
             segment_dev_vec_zscore, _, _ = df.create_dev_rasters(num_segments,
-                                                                                                                segment_spike_times,
-                                                                                                                segment_times_reshaped,
-                                                                                                                segment_deviations, z_bin)
+                                            segment_spike_times, segment_times_reshaped,
+                                            segment_deviations, z_bin)
         self.segment_dev_times = segment_dev_times
         self.segment_dev_rasters = segment_dev_rasters
 
@@ -131,6 +130,7 @@ class run_find_deviations():
         min_dev_size = self.metadata['params_dict']['min_dev_size']
         segment_names = [self.data_dict['segment_names'][i]
                          for i in self.segments_to_analyze]
+        dig_in_names = self.data_dict['dig_in_names']
         dev_dir = self.dev_dir
         max_plot = self.metadata['params_dict']['max_plot']
 

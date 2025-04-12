@@ -10,12 +10,15 @@ import os
 import tqdm
 import warnings
 import itertools
+import random
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
-from scipy.stats import ks_2samp, kruskal  # , pearsonr, ttest_ind
+from scipy.stats import ks_2samp, kruskal, pearsonr
 from random import sample
 from itertools import combinations
+from sklearn.decomposition import PCA
+from sklearn import svm
 
 
 def plot_dev_rasters(segment_deviations, segment_spike_times, segment_dev_times,
@@ -1349,4 +1352,154 @@ def sig_val_plot(sig_dev,segments_to_analyze,segment_names,dig_in_names,save_dir
     f.savefig(os.path.join(save_dir,'sig_dev_corr_hists.svg'))
     plt.close(f)
     
+def plot_dev_dim_reduced(dev_vec, tastant_fr_dist, segment_names, 
+                         dig_in_names, segments_to_analyze, 
+                         plot_save_dir):
+    """
+    Plot the deviation events in reduced dimensions
+    """
     
+    colors = ['forestgreen','lime','mediumseagreen','royalblue','navy','blue',
+              'palevioletred','red','maroon']
+    seg_colors = ['darkorange','cyan','magenta']
+    epoch_colors = ['forestgreen','royalblue','maroon']
+    num_neur = len(dev_vec[0][0])
+    num_tastes = len(dig_in_names)
+    num_cp = len(tastant_fr_dist[0][0])
+    X = []
+    y = []
+    for s_ind, s_i in enumerate(segments_to_analyze):
+        #Collect data for SVM
+        seg_dev = dev_vec[s_ind]
+        num_dev = len(seg_dev)
+        X.extend(seg_dev)
+        y.extend(list(s_ind*np.ones(num_dev)))
+        #Perform PCA dim reduction for individual segment devs
+        pca = PCA(2)
+        pca.fit(np.array(seg_dev))
+        transformed_devs = pca.transform(seg_dev)
+        f_pca_tastes, ax_pca_tastes = plt.subplots(ncols = num_cp, \
+                                     sharex = True, sharey = True, \
+                                         figsize=(10,4))
+        f_pca_epochs, ax_pca_epochs = plt.subplots(ncols = num_tastes, \
+                                     sharex = True, sharey = True, \
+                                         figsize=(10,4))
+        for cp_i in range(num_cp):
+            ax_pca_tastes[cp_i].set_title('Epoch ' + str(cp_i))
+        for t_i, taste in enumerate(dig_in_names):
+            ax_pca_epochs[t_i].set_title(taste)
+            ax_pca_epochs[t_i].scatter(transformed_devs[:,0],transformed_devs[:,1],alpha=0.1,\
+                        color='k',label='Deviations')
+            t_data = tastant_fr_dist[t_i]
+            for cp_i in range(num_cp):
+                t_cp_data =np.squeeze(np.array([t_data[t][cp_i] for t in t_data]))
+                t_cp_mean = np.expand_dims(np.nanmean(t_cp_data,0),0)
+                t_transform = pca.transform(t_cp_mean)
+                if t_i == 0:
+                    ax_pca_tastes[cp_i].scatter(transformed_devs[:,0],transformed_devs[:,1],alpha=0.1,\
+                                color='k',label='Deviations')
+                    
+                ax_pca_tastes[cp_i].scatter(t_transform[:,0],t_transform[:,1],alpha=1,\
+                            color=epoch_colors[t_i],label=taste)
+                ax_pca_epochs[t_i].scatter(t_transform[:,0],t_transform[:,1],alpha=1,\
+                            color=epoch_colors[cp_i],label='Epoch ' + str(cp_i))
+        plt.figure(f_pca_epochs)
+        ax_pca_epochs[0].legend(loc='upper left')
+        plt.suptitle(segment_names[s_i])
+        plt.tight_layout()
+        f_pca_epochs.savefig(os.path.join(plot_save_dir,segment_names[s_i] + '_epochs_pca.png'))
+        f_pca_epochs.savefig(os.path.join(plot_save_dir,segment_names[s_i] + '_epochs_pca.svg'))
+        plt.close(f_pca_epochs)
+        plt.figure(f_pca_tastes)
+        ax_pca_tastes[0].legend(loc='upper left')
+        plt.suptitle(segment_names[s_i])
+        plt.tight_layout()
+        f_pca_tastes.savefig(os.path.join(plot_save_dir,segment_names[s_i] + '_tastes_pca.png'))
+        f_pca_tastes.savefig(os.path.join(plot_save_dir,segment_names[s_i] + '_tastes_pca.svg'))
+        plt.close(f_pca_tastes)
+    
+    #Fit SVM to dev
+    #Rescale values using z-scoring
+    X = np.array(X)
+    y = np.array(y)    
+    X_norm = (X - np.expand_dims(np.nanmean(X,1),1))/np.expand_dims(np.nanstd(X,1),1)
+    svm_class = svm.SVC(kernel='linear')
+    svm_class.fit(X_norm,y)
+    w = svm_class.coef_[0] #weights of classifier normal vector
+    w_norm = np.linalg.norm(w)
+    X_projected = w@X_norm.T/w_norm**2
+    #Calculate orthogonal vectors with significantly different distributions for 2D plot
+    sig_u = [] #significant vector storage
+    u_p = [] #p-vals of significance
+    for i in range(100):
+        inds_to_use = random.sample(list(np.arange(num_neur)),2)
+        u = np.zeros(num_neur)
+        u[inds_to_use[0]] = -1*w[inds_to_use[1]]
+        u[inds_to_use[1]] = w[inds_to_use[0]]
+        u_norm = np.linalg.norm(u)
+        u_proj = u@X_norm.T/u_norm**2
+        sp_1_u_proj = u_proj[:num_dev]
+        sp_2_u_proj = u_proj[num_dev:]
+        ks_stats = ks_2samp(sp_1_u_proj,sp_2_u_proj)
+        if ks_stats.pvalue <= 0.05:
+            sig_u.append(u)
+            u_p.append(ks_stats.pvalue)
+    if len(u_p) > 0:
+        min_p = np.argmin(u_p)
+        u = sig_u[min_p]
+        u_norm = np.linalg.norm(u)
+        X_orth_projected = u@X_norm.T/u_norm**2
+        for s_ind, s_i in enumerate(segments_to_analyze):
+            f_svm = plt.figure(figsize=(5,5))
+            s_data = np.where(y == s_ind)[0]
+            plt.scatter(X_projected[s_data],X_orth_projected[s_data],alpha=0.1,\
+                        color='k',label='Deviations')
+            for t_i, taste in enumerate(dig_in_names):
+                t_data = tastant_fr_dist[t_i]
+                if taste == 'none':
+                    none_data = []
+                    for cp_i in range(num_cp):
+                        none_data.extend([t_data[t][cp_i] for t in t_data])
+                    none_data = np.squeeze(np.array(none_data))
+                    t_cp_mean = np.expand_dims(np.nanmean(none_data,0),0)
+                    t_mean_norm = (t_cp_mean - np.nanmean(t_cp_mean))/np.nanstd(t_cp_mean)
+                    t_projected = w@t_mean_norm.T/w_norm**2
+                    t_orth_projected = u@t_mean_norm.T/u_norm**2
+                    plt.scatter(t_projected,t_orth_projected,color=colors[t_i*num_cp + cp_i],
+                                label=taste)
+                else:
+                    for cp_i in range(num_cp):
+                        t_cp_data = np.squeeze(np.array([t_data[t][cp_i] for t in t_data]))
+                        t_cp_mean = np.expand_dims(np.nanmean(t_cp_data,0),0)
+                        t_mean_norm = (t_cp_mean - np.nanmean(t_cp_mean))/np.nanstd(t_cp_mean)
+                        t_projected = w@t_mean_norm.T/w_norm**2
+                        t_orth_projected = u@t_mean_norm.T/u_norm**2
+                        plt.scatter(t_projected,t_orth_projected,color=colors[t_i*num_cp + cp_i],
+                                    label=taste + ' epoch ' + str(cp_i))
+            plt.legend()
+            plt.title(segment_names[s_i])
+            plt.tight_layout()
+            f_svm.savefig(os.path.join(plot_save_dir,segment_names[s_i] + '_svm_proj.png'))
+            f_svm.savefig(os.path.join(plot_save_dir,segment_names[s_i] + '_svm_proj.svg'))
+            plt.close(f_svm)
+        
+    
+def plot_dev_x_dev_corr(dev_vec, segment_names, segments_to_analyze, plot_save_dir):
+    """
+    Plot the distribution of correlations of deviation events to each other
+    compared with average corr of taste responses with each other.
+    """
+    
+    f_corr, ax_corr = plt.subplots(ncols=len(segments_to_analyze),sharex = True,
+                                   sharey = True, figsize=(len(segments_to_analyze)*4,4))
+    for s_ind, s_i in enumerate(segments_to_analyze):
+        seg_dev = dev_vec[s_ind]
+        pair_inds = list(combinations(np.arange(len(seg_dev)),2))
+        corr_vals = []
+        for pi in tqdm.tqdm(pair_inds):
+            corr_vals.append(pearsonr(seg_dev[pi[0]],seg_dev[pi[1]])[0])
+        ax_corr[s_ind].hist(corr_vals)
+        ax_corr[s_ind].set_title(segment_names[s_i])
+    plt.tight_layout()
+    f_corr.savefig(os.path.join(plot_save_dir,'dev_x_dev_corr.svg'))
+    f_corr.savefig(os.path.join(plot_save_dir,'dev_x_dev_corr.png'))
