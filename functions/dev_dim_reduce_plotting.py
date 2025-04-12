@@ -130,6 +130,8 @@ class run_dev_dim_reduce_plots():
         
     def plot_dim_reduced(self,):
         print("Plotting dimensionality-reduced deviation events")
-        dpf.plot_dev_dim_reduced(segment_dev_fr_vecs_zscore, tastant_fr_dist_z_pop,
-                                 segment_names, dig_in_names, segments_to_analyze, 
-                                 plot_save_dir)
+        dpf.plot_dev_dim_reduced(self.segment_dev_fr_vecs_zscore, self.tastant_fr_dist_z_pop,
+                                 self.segment_names, self.dig_in_names, self.segments_to_analyze, 
+                                 self.plot_dir)
+        dpf.plot_dev_x_dev_corr(self.segment_dev_fr_vecs_zscore, self.segment_names, 
+                                self.segments_to_analyze, self.plot_dir)

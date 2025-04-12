@@ -168,4 +168,6 @@ tastant_fr_dist = tastant_fr_dist_z_pop
 
 dpf.plot_dev_dim_reduced(segment_dev_fr_vecs_zscore, tastant_fr_dist_z_pop,
                          segment_names, dig_in_names, segments_to_analyze, 
-                         plot_save_dir)
+                         plot_dir)
+
+dpf.plot_dev_x_dev_corr(dev_vec, segment_names, segments_to_analyze, plot_dir)
