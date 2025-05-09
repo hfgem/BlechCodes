@@ -336,30 +336,39 @@ def cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, unique_given_na
     # Collect fractions by cutoff
     for corr_name in unique_corr_names:
         dev_corr_frac_dict = dict() #Collect fraction of events by corr cutoff by animal
+        dev_corr_rate_dict = dict() #Collect the rate of events by corr cutoff by animal
         dev_corr_total_frac_dict = dict() #Collect total fraction of events by corr cutoff (sum counts across animals and divide by total events across animals)
         dev_corr_ind_dict = dict() #Collect indices of events above corr cutoff for comparison
         for seg_name in unique_segment_names:
             dev_corr_frac_dict[seg_name] = dict()
+            dev_corr_rate_dict[seg_name] = dict()
             dev_corr_total_frac_dict[seg_name] = dict()
             dev_corr_ind_dict[seg_name] = dict()
             for taste in unique_taste_names:
                 dev_corr_frac_dict[seg_name][taste] = dict()
+                dev_corr_rate_dict[seg_name][taste] = dict()
                 dev_corr_total_frac_dict[seg_name][taste] = dict()
                 dev_corr_ind_dict[seg_name][taste] = dict()
                 for cp_i in range(max_epochs):
                     dev_corr_frac_dict[seg_name][taste][cp_i] = []
+                    dev_corr_rate_dict[seg_name][taste][cp_i] = []
                     dev_corr_total_frac_dict[seg_name][taste][cp_i] = []
                     dev_corr_ind_dict[seg_name][taste][cp_i] = []
             
-        for seg_name in unique_segment_names:
+        for s_i, seg_name in enumerate(unique_segment_names):
             for t_i, taste in enumerate(unique_taste_names):
                 try:
                     for cp_i in range(max_epochs):
                         animal_inds = []
                         animal_counts = []
                         animal_all_dev_counts = []
+                        animal_lens = []
                         for g_n in unique_given_names:
                             data = corr_data[g_n]['corr_data'][corr_name][seg_name][taste]['data']
+                            segment_times_reshaped = corr_data[g_n]['segment_times_reshaped']
+                            unique_segments_ind = [i for i in range(len(corr_data[g_n]['segment_names'])) if corr_data[g_n]['segment_names'][i] == seg_name][0]
+                            segment_len_sec = (segment_times_reshaped[unique_segments_ind][1]-segment_times_reshaped[unique_segments_ind][0])/1000
+                            animal_lens.append(segment_len_sec)
                             num_dev, _, _ = np.shape(data)
                             animal_all_dev_counts.append(num_dev)
                             if taste == 'none':
@@ -376,11 +385,15 @@ def cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, unique_given_na
                                 animal_inds.append(corr_cut_inds)
                         animal_counts = np.array(animal_counts)
                         animal_all_dev_counts = np.array(animal_all_dev_counts)
+                        animal_lens = np.array(animal_lens)
                         dev_corr_ind_dict[seg_name][taste][cp_i] = animal_inds
                         dev_corr_frac_dict[seg_name][taste][cp_i] = animal_counts/np.expand_dims(animal_all_dev_counts,1)
+                        dev_corr_rate_dict[seg_name][taste][cp_i] = animal_counts/np.expand_dims(animal_lens,1)
                         dev_corr_total_frac_dict[seg_name][taste][cp_i] = np.sum(animal_counts,0)/np.sum(animal_all_dev_counts)
                 except:
                     print("No data.")
+            
+        #Create rate plots
             
         #Plot tastes against each other
         f_cc_taste, ax_cc_taste = plt.subplots(nrows = len(unique_segment_names),\
@@ -4790,3 +4803,16 @@ def cross_dataset_dev_split_decode_frac_plots(dev_split_decode_data, unique_give
     f_ep_segcomp.savefig(os.path.join(results_dir,'which_epoch_decode_avg.png'))
     f_ep_segcomp.savefig(os.path.join(results_dir,'which_epoch_decode_avg.svg'))
     plt.close(f_ep_segcomp)
+    
+def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names, 
+               max_epochs, unique_taste_names):
+    
+    f_cc_taste_rate, ax_cc_taste_rate = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = max_epochs, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    for s_i, seg_name in enumerate(unique_segment_names):
+        for cp_i in range(max_epochs):
+            taste_inds = []
+            for t_i, taste in enumerate(unique_taste_names):
+                taste_rates = dev_corr_rate_dict[seg_name][taste][cp_i] #num_anim x num_cutoffs
+                

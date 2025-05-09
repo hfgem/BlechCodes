@@ -169,7 +169,11 @@ class run_compare_conditions_analysis():
                                 filename_corr_pop_vec = os.path.join(
                                     result_dir, seg_name + '_' + taste_name + '_pop_vec.npy')
                                 data = np.load(filename_corr_pop_vec)
+                                filename_corr_pop_vec_null_data = os.path.join(
+                                    result_dir, 'null', seg_name + '_' + taste_name + '_pop_vec.npy')
+                                null_data = np.load(filename_corr_pop_vec_null_data)
                                 corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['data'] = data
+                                corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['null_data'] = null_data
                                 num_dev, num_deliv, num_cp = np.shape(data)
                                 corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_dev'] = num_dev
                                 corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_deliv'] = num_deliv
