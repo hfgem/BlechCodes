@@ -139,6 +139,7 @@ for n_i in range(num_datasets):
         [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
     dig_in_names = data_dict['dig_in_names']
     corr_data[data_name]['dig_in_names'] = dig_in_names
+    corr_data[data_name]['num_null'] = metadata['params_dict']['num_null']
     corr_data[data_name]['corr_data'] = dict()
     for nct_i in range(len(num_corr_types)):
         nct = num_corr_types[nct_i]
@@ -216,80 +217,7 @@ unique_taste_names = [unique_taste_names[i]
 
 #%% cross_dataset_dev_by_corr_cutoff - Create rate plots
 
-# Set parameters
-warnings.filterwarnings('ignore')
-colors = ['green','magenta','royalblue','blueviolet','teal','deeppink', \
-          'springgreen','turquoise', 'midnightblue', 'lightskyblue', \
-          'palevioletred', 'darkslateblue']
-corr_cutoffs = np.round(np.arange(0,1.01,0.01),2)
+import functions.compare_datasets_funcs as cdf
 
-corr_cutoff_save = os.path.join(save_dir, 'Corr_Cutoff_Fracs')
-if not os.path.isdir(corr_cutoff_save):
-    os.mkdir(corr_cutoff_save)
-
-# _____Reorganize data by unique correlation type_____
-unique_data_dict, unique_best_data_dict, max_epochs = reorg_data_dict(corr_data, min_best_cutoff,
-                                                unique_corr_names, unique_given_names,
-                                                unique_segment_names,unique_taste_names)
-
-# Collect fractions by cutoff
-for corr_name in unique_corr_names:
-    dev_corr_frac_dict = dict() #Collect fraction of events by corr cutoff by animal
-    dev_corr_rate_dict = dict() #Collect the rate of events by corr cutoff by animal
-    dev_corr_total_frac_dict = dict() #Collect total fraction of events by corr cutoff (sum counts across animals and divide by total events across animals)
-    dev_corr_ind_dict = dict() #Collect indices of events above corr cutoff for comparison
-    for seg_name in unique_segment_names:
-        dev_corr_frac_dict[seg_name] = dict()
-        dev_corr_rate_dict[seg_name] = dict()
-        dev_corr_total_frac_dict[seg_name] = dict()
-        dev_corr_ind_dict[seg_name] = dict()
-        for taste in unique_taste_names:
-            dev_corr_frac_dict[seg_name][taste] = dict()
-            dev_corr_rate_dict[seg_name][taste] = dict()
-            dev_corr_total_frac_dict[seg_name][taste] = dict()
-            dev_corr_ind_dict[seg_name][taste] = dict()
-            for cp_i in range(max_epochs):
-                dev_corr_frac_dict[seg_name][taste][cp_i] = []
-                dev_corr_rate_dict[seg_name][taste][cp_i] = []
-                dev_corr_total_frac_dict[seg_name][taste][cp_i] = []
-                dev_corr_ind_dict[seg_name][taste][cp_i] = []
-    
-    for s_i, seg_name in enumerate(unique_segment_names):
-        for t_i, taste in enumerate(unique_taste_names):
-            try:
-                for cp_i in range(max_epochs):
-                    animal_inds = []
-                    animal_counts = []
-                    animal_all_dev_counts = []
-                    animal_lens = []
-                    for g_n in unique_given_names:
-                        data = corr_data[g_n]['corr_data'][corr_name][seg_name][taste]['data']
-                        null_data = corr_data[g_n]['corr_data'][corr_name][seg_name][taste]['null_data']
-                        segment_times_reshaped = corr_data[g_n]['segment_times_reshaped']
-                        unique_segments_ind = [i for i in range(len(corr_data[g_n]['segment_names'])) if corr_data[g_n]['segment_names'][i] == seg_name][0]
-                        segment_len_sec = (segment_times_reshaped[unique_segments_ind][1]-segment_times_reshaped[unique_segments_ind][0])/1000
-                        animal_lens.append(segment_len_sec)
-                        num_dev, _, _ = np.shape(data)
-                        animal_all_dev_counts.append(num_dev)
-                        if taste == 'none':
-                            taste_corr_vals = np.array([np.nanmean(data[d_i,:,:]) for d_i in range(num_dev)])
-                            null_taste_corr_vals = np.array([np.nanmean(null_data[d_i,:,:]) for d_i in range(np.shape(null_data)[0])])
-                            corr_cut_inds = [np.where(taste_corr_vals >= cc)[0] for cc in corr_cutoffs]
-                            corr_cut_count = [len(cc_i) for cc_i in corr_cut_inds]
-                            animal_counts.append(corr_cut_count)
-                            animal_inds.append(corr_cut_inds)
-                        else:
-                            taste_corr_vals = np.nanmean(data,1) #num dev x num cp
-                            corr_cut_inds = [np.where(taste_corr_vals[:,cp_i] >= cc)[0] for cc in corr_cutoffs]
-                            corr_cut_count = [len(cc_i) for cc_i in corr_cut_inds]
-                            animal_counts.append(corr_cut_count)
-                            animal_inds.append(corr_cut_inds)
-                    animal_counts = np.array(animal_counts)
-                    animal_all_dev_counts = np.array(animal_all_dev_counts)
-                    animal_lens = np.array(animal_lens)
-                    dev_corr_ind_dict[seg_name][taste][cp_i] = animal_inds
-                    dev_corr_frac_dict[seg_name][taste][cp_i] = animal_counts/np.expand_dims(animal_all_dev_counts,1)
-                    dev_corr_rate_dict[seg_name][taste][cp_i] = animal_counts/np.expand_dims(animal_lens,1)
-                    dev_corr_total_frac_dict[seg_name][taste][cp_i] = np.sum(animal_counts,0)/np.sum(animal_all_dev_counts)
-            except:
-                print("No data.")
+cdf.cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, unique_given_names, unique_corr_names,
+                                 unique_segment_names, unique_taste_names, corr_results_dir)
