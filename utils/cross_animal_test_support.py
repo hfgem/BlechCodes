@@ -119,60 +119,60 @@ if len(save_dir) == 0:
 #Gather data
 num_datasets = len(all_data_dict)
 dataset_names = list(all_data_dict.keys())
-corr_data = dict()
-for n_i in range(num_datasets):
-    data_name = dataset_names[n_i]
-    data_dict = all_data_dict[data_name]['data']
-    metadata = all_data_dict[data_name]['metadata']
-    data_save_dir = data_dict['data_path']
-    dev_corr_save_dir = os.path.join(
-        data_save_dir, 'dev_x_taste', 'corr')
-    num_corr_types = os.listdir(dev_corr_save_dir)
-    corr_data[data_name] = dict()
-    corr_data[data_name]['num_neur'] = data_dict['num_neur']
-    segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-    corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
-    corr_data[data_name]['segment_names'] = data_dict['segment_names']
-    segment_times = data_dict['segment_times']
-    num_segments = len(corr_data[data_name]['segment_names'])
-    corr_data[data_name]['segment_times_reshaped'] = [
-        [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
-    dig_in_names = data_dict['dig_in_names']
-    corr_data[data_name]['dig_in_names'] = dig_in_names
-    corr_data[data_name]['num_null'] = metadata['params_dict']['num_null']
-    corr_data[data_name]['corr_data'] = dict()
-    for nct_i in range(len(num_corr_types)):
-        nct = num_corr_types[nct_i]
-        if nct[0] != '.':
-            result_dir = os.path.join(dev_corr_save_dir, nct)
-            corr_data[data_name]['corr_data'][nct] = dict()
-            for s_i in segments_to_analyze:
-                seg_name = corr_data[data_name]['segment_names'][s_i]
-                corr_data[data_name]['corr_data'][nct][seg_name] = dict()
-                filename_best_corr = os.path.join(result_dir,seg_name + '_best_taste_epoch_array.npy')
-                best_data = np.load(filename_best_corr)
-                corr_data[data_name]['corr_data'][nct][seg_name]['best'] = best_data
-                for t_i in range(len(dig_in_names)):
-                    taste_name = dig_in_names[t_i]
-                    corr_data[data_name]['corr_data'][nct][seg_name][taste_name] = dict(
-                    )
-                    try:
-                        filename_corr_pop_vec = os.path.join(
-                            result_dir, seg_name + '_' + taste_name + '_pop_vec.npy')
-                        data = np.load(filename_corr_pop_vec)
-                        filename_corr_pop_vec_null_data = os.path.join(
-                            result_dir, 'null', seg_name + '_' + taste_name + '_pop_vec.npy')
-                        null_data = np.load(filename_corr_pop_vec_null_data)
-                        corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['data'] = data
-                        corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['null_data'] = null_data
-                        num_dev, num_deliv, num_cp = np.shape(data)
-                        corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_dev'] = num_dev
-                        corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_deliv'] = num_deliv
-                        corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_cp'] = num_cp
-                    except:
-                        print("No data in directory " + result_dir)
+# corr_data = dict()
+# for n_i in range(num_datasets):
+#     data_name = dataset_names[n_i]
+#     data_dict = all_data_dict[data_name]['data']
+#     metadata = all_data_dict[data_name]['metadata']
+#     data_save_dir = data_dict['data_path']
+#     dev_corr_save_dir = os.path.join(
+#         data_save_dir, 'dev_x_taste', 'corr')
+#     num_corr_types = os.listdir(dev_corr_save_dir)
+#     corr_data[data_name] = dict()
+#     corr_data[data_name]['num_neur'] = data_dict['num_neur']
+#     segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+#     corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
+#     corr_data[data_name]['segment_names'] = data_dict['segment_names']
+#     segment_times = data_dict['segment_times']
+#     num_segments = len(corr_data[data_name]['segment_names'])
+#     corr_data[data_name]['segment_times_reshaped'] = [
+#         [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+#     dig_in_names = data_dict['dig_in_names']
+#     corr_data[data_name]['dig_in_names'] = dig_in_names
+#     corr_data[data_name]['num_null'] = metadata['params_dict']['num_null']
+#     corr_data[data_name]['corr_data'] = dict()
+#     for nct_i in range(len(num_corr_types)):
+#         nct = num_corr_types[nct_i]
+#         if nct[0] != '.':
+#             result_dir = os.path.join(dev_corr_save_dir, nct)
+#             corr_data[data_name]['corr_data'][nct] = dict()
+#             for s_i in segments_to_analyze:
+#                 seg_name = corr_data[data_name]['segment_names'][s_i]
+#                 corr_data[data_name]['corr_data'][nct][seg_name] = dict()
+#                 filename_best_corr = os.path.join(result_dir,seg_name + '_best_taste_epoch_array.npy')
+#                 best_data = np.load(filename_best_corr)
+#                 corr_data[data_name]['corr_data'][nct][seg_name]['best'] = best_data
+#                 for t_i in range(len(dig_in_names)):
+#                     taste_name = dig_in_names[t_i]
+#                     corr_data[data_name]['corr_data'][nct][seg_name][taste_name] = dict(
+#                     )
+#                     try:
+#                         filename_corr_pop_vec = os.path.join(
+#                             result_dir, seg_name + '_' + taste_name + '_pop_vec.npy')
+#                         data = np.load(filename_corr_pop_vec)
+#                         filename_corr_pop_vec_null_data = os.path.join(
+#                             result_dir, 'null', seg_name + '_' + taste_name + '_pop_vec.npy')
+#                         null_data = np.load(filename_corr_pop_vec_null_data)
+#                         corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['data'] = data
+#                         corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['null_data'] = null_data
+#                         num_dev, num_deliv, num_cp = np.shape(data)
+#                         corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_dev'] = num_dev
+#                         corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_deliv'] = num_deliv
+#                         corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_cp'] = num_cp
+#                     except:
+#                         print("No data in directory " + result_dir)
 dict_save_dir = os.path.join(save_dir, 'corr_data.npy')
-np.save(dict_save_dir,corr_data,allow_pickle=True)
+corr_data = np.load(dict_save_dir,allow_pickle=True).item()
 # Save the combined dataset somewhere...
 # _____Analysis Storage Directory_____
 if not os.path.isdir(os.path.join(save_dir,'Correlations')):
