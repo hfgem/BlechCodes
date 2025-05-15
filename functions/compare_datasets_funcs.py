@@ -376,6 +376,7 @@ def cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, unique_given_na
                             animal_null_counts = []
                             animal_all_dev_counts = []
                             animal_lens = []
+                            null_animal_lens = []
                             for g_n in unique_given_names:
                                 data = corr_data[g_n]['corr_data'][corr_name][seg_name][taste]['data']
                                 null_data = corr_data[g_n]['corr_data'][corr_name][seg_name][taste]['null_data']
@@ -386,6 +387,7 @@ def cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, unique_given_na
                                 animal_lens.append(segment_len_sec)
                                 num_dev, _, _ = np.shape(data)
                                 animal_all_dev_counts.append(num_dev)
+                                null_sample_counts = []
                                 if taste == 'none':
                                     #True values
                                     taste_corr_vals = np.array([np.nanmean(data[d_i,:,:]) for d_i in range(num_dev)])
@@ -393,15 +395,12 @@ def cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, unique_given_na
                                     corr_cut_count = [len(cc_i) for cc_i in corr_cut_inds]
                                     #Null values
                                     null_taste_corr_vals = np.array([np.nanmean(null_data[d_i,:,:]) for d_i in range(np.shape(null_data)[0])])
-                                    null_sample_rates = []
                                     for ns_i in range(num_null_samples): #Bootstrap to find counts
                                         null_sample_vals = random.sample(list(null_taste_corr_vals),num_dev)
                                         avg_null_sample_corr_cut_count = [len(np.where(null_sample_vals >= cc)[0])/num_null for cc in corr_cutoffs]
-                                        null_sample_rates.append(avg_null_sample_corr_cut_count)
-                                    avg_null_corr_cut_count = np.nanmean(np.array(null_sample_rates),0)
+                                        null_sample_counts.append(avg_null_sample_corr_cut_count)
                                     animal_counts.append(corr_cut_count)
                                     animal_inds.append(corr_cut_inds)
-                                    animal_null_counts.append(avg_null_corr_cut_count)
                                 else:
                                     #True values
                                     taste_corr_vals = np.nanmean(data,1) #num dev x num cp
@@ -409,23 +408,23 @@ def cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, unique_given_na
                                     corr_cut_count = [len(cc_i) for cc_i in corr_cut_inds]
                                     #Null values
                                     null_taste_corr_vals = np.nanmean(null_data,1)[:,cp_i] #num null dev
-                                    null_sample_rates = []
                                     for ns_i in range(num_null_samples): #Bootstrap to find counts
                                         null_sample_vals = random.sample(list(null_taste_corr_vals),num_dev)
                                         avg_null_corr_cut_count = [len(np.where(null_sample_vals >= cc)[0])/num_null for cc in corr_cutoffs]
-                                        null_sample_rates.append(avg_null_sample_corr_cut_count)
-                                    avg_null_corr_cut_count = np.nanmean(np.array(null_sample_rates),0)
+                                        null_sample_counts.append(avg_null_corr_cut_count)
                                     animal_counts.append(corr_cut_count)
                                     animal_inds.append(corr_cut_inds)
-                                    animal_null_counts.append(avg_null_corr_cut_count)
+                                animal_null_counts.extend(null_sample_counts)
+                                null_animal_lens.extend(list(segment_len_sec*np.ones(len(null_sample_counts))))
                             animal_counts = np.array(animal_counts)
                             animal_null_counts = np.array(animal_null_counts)
                             animal_all_dev_counts = np.array(animal_all_dev_counts)
                             animal_lens = np.array(animal_lens)
+                            null_animal_lens = np.array(null_animal_lens)
                             dev_corr_ind_dict[seg_name][taste][cp_i] = animal_inds
                             dev_corr_frac_dict[seg_name][taste][cp_i] = animal_counts/np.expand_dims(animal_all_dev_counts,1)
                             dev_corr_rate_dict[seg_name][taste][cp_i]['true'] = animal_counts/np.expand_dims(animal_lens,1)
-                            dev_corr_rate_dict[seg_name][taste][cp_i]['null'] = animal_null_counts/np.expand_dims(animal_lens,1)
+                            dev_corr_rate_dict[seg_name][taste][cp_i]['null'] = animal_null_counts/np.expand_dims(null_animal_lens,1)
                             dev_corr_total_frac_dict[seg_name][taste][cp_i] = np.sum(animal_counts,0)/np.sum(animal_all_dev_counts)
                     except:
                         print("No data.")
@@ -4853,6 +4852,7 @@ def cross_dataset_dev_split_decode_frac_plots(dev_split_decode_data, unique_give
 def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names, 
                max_epochs, unique_taste_names, corr_name, corr_cutoff_save, 
                corr_cutoff_indiv_save):
+    
     #Called from cross_dataset_dev_by_corr_cutoff()
     num_tastes = len(unique_taste_names)
     num_segs = len(unique_segment_names)
@@ -4887,9 +4887,13 @@ def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names,
             none_curve = []
             for t_i, taste in enumerate(unique_taste_names):
                 taste_rates = dev_corr_rate_dict[seg_name][taste][cp_i]['true'] #num_anim x num_cutoffs
+                num_anim, _ = np.shape(taste_rates)
                 null_rates = dev_corr_rate_dict[seg_name][taste][cp_i]['null']
                 indiv_animal_at_cutoff.append(taste_rates[:,cutoff_zoom_ind])
                 taste_mean = np.nanmean(taste_rates,0)
+                taste_std = np.nanstd(taste_rates,0)
+                taste_min = taste_mean - taste_std
+                taste_min[taste_min < 0] = 0
                 if taste == 'none':
                     none_curve.append(taste_mean)
                 else:
@@ -4898,7 +4902,13 @@ def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names,
                     taste_names.append(taste)
                 #Plot individually cutoff curves
                 f_indiv = plt.figure(figsize=(5,5))
-                plt.plot(corr_cutoffs,taste_mean,color='b',alpha=1,label='Animal Avg')
+                for na_i in range(num_anim):
+                    plt.plot(corr_cutoffs,taste_rates[na_i,:],color='b',alpha=0.2,\
+                             label='_')
+                plt.plot(corr_cutoffs,taste_mean,color='b',alpha=1,\
+                         linestyle='dashed',label='Animal Avg')
+                plt.fill_between(corr_cutoffs,taste_min,taste_mean+taste_std,color='b',
+                                 alpha=0.1,label='Null Std')
                 null_mean = np.nanmean(null_rates,0)
                 null_std = np.nanstd(null_rates,0)
                 null_min = null_mean-null_std
@@ -4944,7 +4954,10 @@ def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names,
                                                             label='Null Std')
             #Diff plot
             none_curve = np.array(none_curve).squeeze()
-            ax_cc_null_diffs[s_i,cp_i].plot(corr_cutoffs,np.zeros(len(corr_cutoffs)))
+            ax_cc_null_diffs[s_i,cp_i].plot(corr_cutoffs,np.zeros(len(corr_cutoffs)),\
+                                            color='k',alpha=0.5,linestyle='dashed')
+            ax_cc_null_diffs_zoom[s_i,cp_i].plot(corr_cutoffs,np.zeros(len(corr_cutoffs)),\
+                                            color='k',alpha=0.5,linestyle='dashed')
             for t_i, taste in enumerate(taste_names):
                 ax_cc_null_diffs[s_i,cp_i].plot(corr_cutoffs,\
                                                 np.array(taste_curves[t_i])-none_curve,\
@@ -4971,7 +4984,7 @@ def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names,
                 ax_cc_taste_rate_zoom[s_i,cp_i].set_xlabel('Min. Correlation Cutoff')
                 ax_cc_null_diffs[s_i,cp_i].set_xlabel('Min. Correlation Cutoff')
                 ax_cc_null_diffs_zoom[s_i,cp_i].set_xlabel('Min. Correlation Cutoff')
-            #Animal dist pairwise sig]
+            #Animal dist pairwise sig
             sig_pair = []
             for tp_i, tp in enumerate(taste_pairs):
                 stat = ttest_ind(indiv_animal_at_cutoff[tp[0]],indiv_animal_at_cutoff[tp[1]],\
@@ -5012,6 +5025,7 @@ def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names,
     f_cc_taste_rate.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_rates.svg'))
     plt.close(f_cc_taste_rate)
     ax_cc_taste_rate_zoom[0,0].legend(loc='upper left')
+    ax_cc_taste_rate_zoom[0,0].set_xlim([0.25,1])
     plt.suptitle('Rate by Cutoff')
     plt.tight_layout()
     f_cc_taste_rate_zoom.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_zoom_rates.png'))
