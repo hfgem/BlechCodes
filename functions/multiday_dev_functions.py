@@ -71,6 +71,53 @@ def multiday_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
                                     segments_to_analyze, segment_times, segment_spike_times,
                                     dev_fr_vecs_z,seg_name,s_i,decode_dir)
         
+def multiday_null_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
+                          taste_num_deliv,max_hz_pop,tastant_fr_dist_z_pop,
+                          max_hz_z_pop,min_hz_z_pop,max_num_cp,null_dev_rasters,
+                          null_dev_times,segment_dev_fr_vecs,segment_dev_fr_vecs_zscore,
+                          segments_to_analyze, segment_times, segment_spike_times,
+                          bin_dt,segment_names_to_analyze):
+    """
+    This function serves as the main function which calls all others for 
+    analyses of deviation events from the train day in comparison to taste
+    responses across days.
+    """
+    
+    corr_dir = os.path.join(save_dir,'Correlations')
+    if not os.path.isdir(corr_dir):
+        os.mkdir(corr_dir)
+    decode_dir = os.path.join(save_dir,'Decodes')
+    if not os.path.isdir(decode_dir):
+        os.mkdir(decode_dir)
+        
+    #Variables
+    num_seg = len(segment_dev_fr_vecs)
+    num_neur = len(segment_dev_fr_vecs[0][0])
+    num_tastes = len(all_dig_in_names)
+    
+    #Now go through segments and their deviation events and compare
+    for s_i in range(num_seg):
+        seg_name = segment_names_to_analyze[s_i]
+        dev_rast = segment_dev_rasters[s_i]
+        dev_times = segment_dev_times[s_i]
+        dev_fr_vecs = segment_dev_fr_vecs[s_i]
+        dev_fr_vecs_z = segment_dev_fr_vecs_zscore[s_i]
+        
+        #Run correlation analyses
+        correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
+                                    taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
+                                    dev_times,dev_fr_vecs,seg_name,corr_dir)
+        correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
+                                          taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
+                                          max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
+                                          seg_name,corr_dir)
+        
+        #Run decode analyses
+        decode_dev_zscore_stepwise(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
+                                    taste_num_deliv,max_num_cp,dev_rast,dev_times,bin_dt,
+                                    segments_to_analyze, segment_times, segment_spike_times,
+                                    dev_fr_vecs_z,seg_name,s_i,decode_dir)
+        
         
 def correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
                            taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,

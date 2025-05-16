@@ -210,6 +210,9 @@ def plot_corr_cutoff_tastes(all_corr_dicts, unique_corr_dicts, corr_dict,
         f_count, ax_count = plt.subplots(nrows = len(unique_segment_names),\
                                        ncols = max_cp, figsize=(8,8),\
                                     sharex = True, sharey = True)
+        f_rate, ax_rate = plt.subplots(nrows = len(unique_segment_names),\
+                                       ncols = max_cp, figsize=(8,8),\
+                                    sharex = True, sharey = True)
         max_cc = 0
         zoom_y_count = 0
         zoom_y_frac = 0
