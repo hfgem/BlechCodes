@@ -12,6 +12,7 @@ decodes against multiple days of taste responses.
 import os
 import csv
 import time
+import tqdm
 import itertools
 import random
 import numpy as np
@@ -99,7 +100,8 @@ def multiday_null_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
     num_tastes = len(all_dig_in_names)
     
     #Now go through segments and their deviation events and compare
-    for null_i in range(num_null):
+    print('Correlating Null Deviation Events')
+    for null_i in tqdm.tqdm(range(num_null)):
         null_i_corr_dir = os.path.join(null_corr_dir,'null_' + str(null_i))
         if not os.path.isdir(null_i_corr_dir):
             os.mkdir(null_i_corr_dir)
@@ -118,7 +120,7 @@ def multiday_null_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
             correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
                                               taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
                                               max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
-                                              seg_name,null_i_corr_dir)
+                                              seg_name,null_i_corr_dir,False)
             
             #Run decode analyses
             #NOT TESTED/MODIFIED
@@ -197,7 +199,7 @@ def correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
 def correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
                                   taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
                                   max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
-                                  seg_name,corr_dir):
+                                  seg_name,corr_dir,plot_flag = True):
     
     fr_z_dir = os.path.join(corr_dir,'zscore_fr_corrs')
     if not os.path.isdir(fr_z_dir):
@@ -258,7 +260,8 @@ def correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_po
         np.save(os.path.join(fr_z_dir,'all_taste_names.npy'),all_dig_in_names,allow_pickle=True)
             
     #Now plot
-    plot_corr_dist(fr_z_dir,corr_z_dict,all_dig_in_names,max_num_cp,seg_name)
+    if plot_flag == True:
+        plot_corr_dist(fr_z_dir,corr_z_dict,all_dig_in_names,max_num_cp,seg_name)
     
 def correlate_null_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
                                   taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
