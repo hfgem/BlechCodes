@@ -248,7 +248,7 @@ for null_i in range(day_vars[n_i]['num_null']):
             seg_start = segment_times_to_analyze_reshaped[s_ind][0]
             seg_end = segment_times_to_analyze_reshaped[s_ind][1]
             null_seg_st = []
-            for n_i in range(data_dict[0]['num_neur']):
+            for n_i in keep_neur:
                 seg_spike_inds = np.where(
                     (data[n_i] >= seg_start)*(data[n_i] <= seg_end))[0]
                 null_seg_st.append(
@@ -282,6 +282,49 @@ for null_i in tqdm.tqdm(range(num_null)):
         all_null_deviations.append(null_segment_deviations)
 del null_i, null_segment_deviations, s_i, filepath, json_bytes, json_str, data
 
+#%% pull_taste_fr_dist()
+
+all_dig_in_names = []
+tastant_fr_dist_pop = dict()
+taste_num_deliv = []
+max_hz_pop = 0
+tastant_fr_dist_z_pop = dict()
+max_hz_z_pop = 0
+min_hz_z_pop = np.inf
+max_num_cp = 0
+for n_i in range(num_days):
+    #Collect tastant names
+    day_names = day_vars[n_i]['dig_in_names']
+    day_cp = day_vars[n_i]['num_cp']
+    if day_cp > max_num_cp:
+        max_num_cp = day_cp
+    new_day_names = [dn + '_' + str(n_i) for dn in day_names]
+    all_dig_in_names.extend(new_day_names)
+    #Collect firing rate distribution dictionaries
+    tastant_fr_dist_pop_day, taste_num_deliv_day, max_hz_pop_day = ddf.taste_fr_dist(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
+                                                                    	 day_vars[n_i]['pop_taste_cp_raster_inds'], day_vars[n_i]['bayes_fr_bins'],
+                                                                    	 day_vars[n_i]['start_dig_in_times'], day_vars[n_i]['pre_taste_dt'],
+                                                                    	 day_vars[n_i]['post_taste_dt'], day_vars[n_i]['trial_start_frac'])
+    start_update_ind = len(tastant_fr_dist_pop)
+    for tf_i in range(len(tastant_fr_dist_pop_day)):
+        tastant_fr_dist_pop[tf_i+start_update_ind] = tastant_fr_dist_pop_day[tf_i]
+    taste_num_deliv.extend(list(taste_num_deliv_day))
+    if max_hz_pop_day > max_hz_pop:
+        max_hz_pop = max_hz_pop_day
+    tastant_fr_dist_z_pop_day, _, max_hz_z_pop_day, min_hz_z_pop_day = ddf.taste_fr_dist_zscore(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
+                                                                                        day_vars[n_i]['segment_spike_times'], day_vars[n_i]['segment_names'],
+                                                                                        day_vars[n_i]['segment_times'], day_vars[n_i]['pop_taste_cp_raster_inds'],
+                                                                                        day_vars[n_i]['bayes_fr_bins'], day_vars[n_i]['start_dig_in_times'],
+                                                                                        day_vars[n_i]['pre_taste_dt'], day_vars[n_i]['post_taste_dt'], 
+                                                                                        day_vars[n_i]['bin_dt'], day_vars[n_i]['trial_start_frac'])
+    start_update_ind = len(tastant_fr_dist_z_pop)
+    for tf_i in range(len(tastant_fr_dist_z_pop_day)):
+        tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
+    if max_hz_z_pop_day > max_hz_z_pop:
+        max_hz_z_pop = max_hz_z_pop_day
+    if min_hz_z_pop_day < min_hz_z_pop:
+        min_hz_z_pop = min_hz_z_pop_day
+
 #%% get_null_rasters()
 import functions.dev_funcs as df
 
@@ -298,7 +341,7 @@ null_dev_rasters = []
 null_dev_times = []
 null_segment_dev_fr_vecs = []
 null_segment_dev_fr_vecs_zscore = []
-for null_i in range(1): #tqdm.tqdm(range(num_null)):
+for null_i in tqdm.tqdm(range(num_null)):
     null_segment_deviations = all_null_deviations[null_i]
     null_segment_spike_times = all_null_segment_spike_times[null_i]
     null_segment_dev_rasters_i, null_segment_dev_times_i, null_segment_dev_fr_vecs_i, \
@@ -311,3 +354,17 @@ for null_i in range(1): #tqdm.tqdm(range(num_null)):
     null_segment_dev_fr_vecs.append(null_segment_dev_fr_vecs_i)
     null_segment_dev_fr_vecs_zscore.append(null_segment_dev_fr_vecs_zscore_i)
 
+#%% run analysis
+
+import functions.multiday_dev_functions as mdf
+
+bin_dt = day_vars[0]['bin_dt']
+
+mdf.multiday_null_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
+                          taste_num_deliv,max_hz_pop,tastant_fr_dist_z_pop,
+                          max_hz_z_pop,min_hz_z_pop,max_num_cp,null_dev_rasters,
+                          null_dev_times,null_segment_dev_fr_vecs,
+                          null_segment_dev_fr_vecs_zscore,segments_to_analyze, 
+                          segment_times_to_analyze_reshaped, 
+                          segment_spike_times_to_analyze,
+                          bin_dt,segment_names_to_analyze)

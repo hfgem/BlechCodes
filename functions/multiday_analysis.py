@@ -247,7 +247,7 @@ class run_multiday_analysis():
                     seg_start = segment_times_to_analyze_reshaped[s_ind][0]
                     seg_end = segment_times_to_analyze_reshaped[s_ind][1]
                     null_seg_st = []
-                    for n_i in range(data_dict[0]['num_neur']):
+                    for n_i in range(keep_neur):
                         seg_spike_inds = np.where(
                             (data[n_i] >= seg_start)*(data[n_i] <= seg_end))[0]
                         null_seg_st.append(
