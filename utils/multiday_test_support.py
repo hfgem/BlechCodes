@@ -231,7 +231,7 @@ for s_ind, s_i in enumerate(segments_to_analyze):
 print('\tGetting null distribution spike times')
 # _____Grab null dataset spike times_____
 all_null_segment_spike_times = []
-for null_i in range(day_vars[n_i]['num_null']):
+for null_i in range(num_null):
     null_segment_spike_times = []
     for s_ind, s_i in enumerate(segments_to_analyze):
         seg_null_dir = os.path.join(null_dir,segment_names_to_analyze[s_ind])
@@ -242,8 +242,6 @@ for null_i in range(day_vars[n_i]['num_null']):
                 json_bytes = f.read()
                 json_str = json_bytes.decode('utf-8')
                 data = json.loads(json_str)
-
-            seg_null_dir = os.path.join(null_dir,segment_names_to_analyze[s_ind])
 
             seg_start = segment_times_to_analyze_reshaped[s_ind][0]
             seg_end = segment_times_to_analyze_reshaped[s_ind][1]
