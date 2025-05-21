@@ -10,6 +10,8 @@ Functions to support comparing multiday analysis results for multiple animals.
 
 import os
 import warnings
+import tqdm
+import random
 import numpy as np
 import functions.compare_multiday_funcs as cmf
 from tkinter.filedialog import askdirectory
