@@ -228,7 +228,6 @@ except:
         #Now collect correlations across null datasets into this folder structure
         for cn in unique_corr_names:
             print('\t\tNow collecting null data for ' + cn)
-            num_dev = corr_dict[dn][cn][sn]['all'][tn]['num_dev']
             for nf_i, nf in tqdm.tqdm(enumerate(null_folders)):
                 null_data_folder = os.path.join(null_corr_dir,'null_' + str(nf_i),cn)
                 if os.path.isdir(null_data_folder):
@@ -246,11 +245,15 @@ except:
                                         else:
                                             tn_true = tn
                                         all_cp_data = null_dict[ndk_i]['data']
-                                        try:
-                                            for cp_i in range(max_cp):
-                                                null_corr_dict[dn][sn][tn_true][cn][cp_i].extend(random.sample(all_cp_data[cp_i],num_dev))
-                                        except:
-                                            skip_taste = 1
+                                        num_null_dev = null_dict[ndk_i]['num_dev']
+                                        num_taste_deliv, _ = np.shape(null_dict[ndk_i]['taste_num'])
+                                        for cp_i in range(max_cp):
+                                            try:
+                                                all_cp_data_reshaped = np.reshape(all_cp_data[cp_i],(num_taste_deliv,num_null_dev))
+                                                avg_null_corr = np.nanmean(all_cp_data_reshaped,0) #Average correlation across deliveries
+                                                null_corr_dict[dn][sn][tn_true][cn][cp_i].extend(avg_null_corr)
+                                            except:
+                                                skip_taste = 1
                     
     np.save(null_corr_dict_path,null_corr_dict,allow_pickle=True)   
 
@@ -258,7 +261,7 @@ except:
 
 import functions.compare_multiday_funcs as cmf
 
-cmf.compare_corr_data(corr_dict, multiday_data_dict, unique_given_names,
+cmf.compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_given_names,
                       unique_corr_names, unique_segment_names, unique_taste_names, 
                       max_cp, save_dir)
 

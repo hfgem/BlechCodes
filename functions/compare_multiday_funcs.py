@@ -15,9 +15,9 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
-from scipy.stats import ks_2samp
+from scipy.stats import ks_2samp, ttest_ind
 
-def compare_corr_data(corr_dict, multiday_data_dict, unique_given_names,
+def compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_given_names,
                       unique_corr_names, unique_segment_names, unique_taste_names, 
                       max_cp, save_dir):
     
@@ -29,10 +29,10 @@ def compare_corr_data(corr_dict, multiday_data_dict, unique_given_names,
               'magenta','brown', 'cyan']
     corr_cutoffs = np.round(np.arange(0,1.01,0.01),2)   
         
-    #KS-Test all taste pairs
-    test_corr_dist_ks_test(corr_dict, unique_given_names, unique_corr_names,
-                             unique_segment_names, unique_taste_names, max_cp,
-                             corr_results_save_dir)
+    #Significance Test all taste pairs
+    test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names, 
+                             unique_corr_names, unique_segment_names, 
+                             unique_taste_names, max_cp, corr_results_save_dir)
     
     #Calculate indices unique to each correlation combo
     all_corr_dicts, unique_corr_dicts = calc_ind_dicts(corr_dict, unique_given_names, unique_corr_names,
@@ -52,10 +52,34 @@ def compare_corr_data(corr_dict, multiday_data_dict, unique_given_names,
                             corr_cutoffs, colors, corr_results_save_dir)
         
            
-def test_corr_dist_ks_test(corr_dict, unique_given_names, unique_corr_names,
-                         unique_segment_names, unique_taste_names, max_cp,
-                         plot_save_dir,verbose=False):
+def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names, 
+                            unique_corr_names, unique_segment_names, 
+                            unique_taste_names, max_cp, plot_save_dir, verbose=False):
+    """
+    This function tests pairs of deviation event x taste correlation 
+    distributions against each other and against null data.
+
+    Parameters
+    ----------
+    corr_dict : dictionary of deviation event correlation values for each animal.
+    null_corr_dict : dictionary of null deviation event correlation values for each animal.
+    unique_given_names : list of animal names
+    unique_corr_names : list of correlation type names
+    unique_segment_names : list of segment names
+    unique_taste_names : list of taste names
+    max_cp : maximum number of changepoints across datasets
+    plot_save_dir : directory to save results
+    verbose : boolean, optional, default = False. Provide error message if True.
+
+    Returns
+    -------
+    None.
     
+    Outputs
+    -------
+    .csv files of significance test results
+
+    """
     taste_inds = np.arange(len(unique_taste_names))
     t_pairs = list(combinations(list(taste_inds),2))
     
@@ -87,6 +111,7 @@ def test_corr_dist_ks_test(corr_dict, unique_given_names, unique_corr_names,
                     all_taste_dist.append(taste_dist)
                 #Now calculate KS-2samp results
                 ks_results = []
+                tt_results = []
                 for tp in t_pairs:
                     tp_i1 = tp[0]
                     data_1 = all_taste_dist[tp_i1]
@@ -94,25 +119,133 @@ def test_corr_dist_ks_test(corr_dict, unique_given_names, unique_corr_names,
                     data_2 = all_taste_dist[tp_i2]
                     if len(data_1) > 0:
                         if len(data_2) > 0:
-                            result = ks_2samp(data_1,data_2,alternative='two-sided')
-                            if result[1] <= 0.05:
+                            ks_result = ks_2samp(data_1,data_2,alternative='two-sided')
+                            if ks_result[1] <= 0.05:
                                 if np.nanmean(data_1) < np.nanmean(data_2):
                                     ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*<'])
                                 else:
                                     ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*>'])
                             else:
                                 ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'n.s.'])
+                            tt_result = ttest_ind(data_1,data_2,alternative='two-sided')
+                            if tt_result[1] <= 0.05:
+                                if np.nanmean(data_1) < np.nanmean(data_2):
+                                    tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*<'])
+                                else:
+                                    tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*>'])
+                            else:
+                                tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'n.s.'])
+                            
                 #Output results to csv
-                csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '.csv'
+                csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_ks.csv'
                 with open(os.path.join(plot_save_dir,csv_save_name),'w',newline='') as file:
                     writer = csv.writer(file)
                     for row in ks_results:
                         writer.writerow(row)
-    
+                csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_tt.csv'
+                with open(os.path.join(plot_save_dir,csv_save_name),'w',newline='') as file:
+                    writer = csv.writer(file)
+                    for row in tt_results:
+                        writer.writerow(row)
+                        
+    #Compare taste distributions against null
+    for corr_name in unique_corr_names:
+        for seg_name in unique_segment_names:
+            for cp_i in range(max_cp):
+                ks_results = []
+                tt_results = []
+                for t_i, taste in enumerate(unique_taste_names):
+                    taste_dist = []
+                    null_taste_dist = []
+                    for g_n in unique_given_names:
+                        #Collect true data
+                        try:
+                            data = corr_dict[g_n][corr_name][seg_name]['all'][taste]['data']
+                            data_cp, num_pts = np.shape(data)
+                            num_dev = corr_dict[g_n][corr_name][seg_name]['all'][taste]['num_dev']
+                            num_deliv = int(num_pts/num_dev)
+                            data_reshape = np.reshape(data,(data_cp,num_deliv,num_dev))
+                            deliv_means = np.squeeze(np.nanmean(data_reshape,1)) #cp x num_dev
+                            if taste == 'none_0':
+                                cp_means = np.nanmean(deliv_means,0) #num_dev
+                                taste_dist.extend(list(cp_means))
+                            else:
+                                taste_dist.extend(list(np.squeeze(deliv_means[cp_i,:])))
+                        except:
+                            errormsg = 'No data for ' + seg_name + ' Epoch ' + \
+                                str(cp_i) + ' ' + taste + ' animal ' + g_n
+                            if verbose == True:
+                                print(errormsg)
+                        #Collect null data
+                        try:
+                            null_data = null_corr_dict[g_n][seg_name][taste][corr_name] #already average across deliveries
+                            if taste == 'none_0':
+                                null_cp_data = []
+                                for cp_i_null in range(max_cp):
+                                    null_cp_data.extend(null_data[cp_i_null])
+                            else:
+                                null_cp_data = null_data[cp_i]
+                            null_taste_dist.extend(null_cp_data)
+                        except:
+                            errormsg = 'No null data for ' + seg_name + ' Epoch ' + \
+                                str(cp_i) + ' ' + taste + ' animal ' + g_n
+                            if verbose == True:
+                                print(errormsg)
+                    #Run significance tests
+                    if len(taste_dist) > 0:
+                        if len(null_taste_dist) > 0:
+                            ks_result = ks_2samp(taste_dist,null_taste_dist,alternative='two-sided')
+                            if ks_result[1] <= 0.05:
+                                if np.nanmean(data_1) < np.nanmean(data_2):
+                                    ks_results.append([taste,'*<'])
+                                else:
+                                    ks_results.append([taste,'*>'])
+                            else:
+                                ks_results.append([taste,'n.s.'])
+                            tt_result = ttest_ind(data_1,data_2,alternative='two-sided')
+                            if tt_result[1] <= 0.05:
+                                if np.nanmean(data_1) < np.nanmean(data_2):
+                                    tt_results.append([taste,'*<'])
+                                else:
+                                    tt_results.append([taste,'*>'])
+                            else:
+                                tt_results.append([taste,'n.s.'])
+                            
+                #Output results to csv
+                csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_null_ks.csv'
+                with open(os.path.join(plot_save_dir,csv_save_name),'w',newline='') as file:
+                    writer = csv.writer(file)
+                    for row in ks_results:
+                        writer.writerow(row)
+                csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_null_tt.csv'
+                with open(os.path.join(plot_save_dir,csv_save_name),'w',newline='') as file:
+                    writer = csv.writer(file)
+                    for row in tt_results:
+                        writer.writerow(row)
         
-def calc_ind_dicts(corr_dict, unique_given_names, unique_corr_names,
-                         unique_segment_names, unique_taste_names, max_cp,
-                         corr_cutoffs, verbose=False):
+def calc_ind_dicts(corr_dict, null_corr_dict, unique_given_names, 
+                   unique_corr_names, unique_segment_names, unique_taste_names, 
+                   max_cp, corr_cutoffs, verbose=False):
+    """
+
+    Parameters
+    ----------
+    corr_dict : dictionary of deviation event correlation values for each animal.
+    null_corr_dict : dictionary of null deviation event correlation values for each animal.
+    unique_given_names : list of animal names
+    unique_corr_names : list of correlation type names
+    unique_segment_names : list of segment names
+    unique_taste_names : list of taste names
+    max_cp : maximum number of changepoints across datasets
+    corr_cutoffs : numpy array of correlation cutoff values from 0 to 1
+    verbose : boolean, optional, default = False. Provide error message if True.
+
+    Returns
+    -------
+    all_corr_dicts : dictionary of lists of deviation indices above each cutoff
+
+    """
+    
     #Collect all indices above a cutoff
     all_corr_dicts = dict()
     for corr_name in unique_corr_names:
@@ -145,50 +278,10 @@ def calc_ind_dicts(corr_dict, unique_given_names, unique_corr_names,
                             if verbose == True:
                                 print(errormsg)
         all_corr_dicts[corr_name] = all_dev_corr_inds
-    
-    #Collect unique index counts above a given cutoff for a taste-epoch combination
-    taste_epoch_pairs = [] #list of taste-epoch pairs
-    for taste in unique_taste_names:
-        if taste == 'none_0':
-            taste_epoch_pairs.append(taste + '-0')
-        else:
-            for cp_i in range(max_cp):
-                taste_epoch_pairs.append(taste + '-' + str(cp_i))
-    unique_corr_dicts = dict() #Collect counts of unique indices across animals for different conditions
-    for corr_name in unique_corr_names:
-        unique_corr_dicts[corr_name] = dict()
-        for s_i, seg_name in enumerate(unique_segment_names):
-            unique_corr_dicts[corr_name][seg_name] = dict()
-            for cc_i, cc in enumerate(corr_cutoffs):
-                unique_corr_dicts[corr_name][seg_name][cc_i] = dict()
-                for taste in unique_taste_names:
-                    unique_corr_dicts[corr_name][seg_name][cc_i][taste] = dict()
-                    for cp_i in range(max_cp):
-                        unique_corr_dicts[corr_name][seg_name][cc_i][taste][cp_i] = 0
-                for tep_i, tep in enumerate(taste_epoch_pairs):
-                    taste = tep.split('-')[0]
-                    cp_i = int(tep.split('-')[1])
-                    for gn_i, gn in enumerate(unique_given_names):
-                        try:
-                            anim_tep_inds = np.unique(all_dev_corr_inds[seg_name][cp_i][taste][gn][cc_i])
-                            remaining_tep = np.setdiff1d(taste_epoch_pairs,tep)
-                            other_tep_inds = []
-                            for tep2_i, tep2 in enumerate(remaining_tep):
-                                taste_2 = tep2.split('-')[0]
-                                cp_i_2 = int(tep2.split('-')[1])
-                                try:
-                                    other_tep_inds.extend(all_dev_corr_inds[seg_name][cp_i_2][taste_2][gn][cc_i])
-                                except:
-                                    other_tep_inds.extend([])
-                            other_tep_inds = np.unique(np.array(other_tep_inds))
-                            unique_anim_tep_inds = np.setdiff1d(np.array(anim_tep_inds),np.array(other_tep_inds))
-                        except:
-                            unique_anim_tep_inds = []
-                        unique_corr_dicts[corr_name][seg_name][cc_i][taste][cp_i] += len(unique_anim_tep_inds)
+
+    return all_corr_dicts
         
-    return all_corr_dicts, unique_corr_dicts
-        
-def plot_corr_cutoff_tastes(all_corr_dicts, unique_corr_dicts, corr_dict,
+def plot_corr_cutoff_tastes(all_corr_dicts, corr_dict,
                                         unique_given_names, unique_corr_names,
                                         unique_segment_names, unique_taste_names, 
                                         max_cp, corr_cutoffs, colors, plot_save_dir,
@@ -284,81 +377,7 @@ def plot_corr_cutoff_tastes(all_corr_dicts, unique_corr_dicts, corr_dict,
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_taste_by_cutoff_zoom.svg'))
         plt.close(f_count) 
         
-        
-        #Plot unique indices
-        f_frac, ax_frac = plt.subplots(nrows = len(unique_segment_names),\
-                                       ncols = max_cp, figsize=(8,8),\
-                                    sharex = True, sharey = True)
-        f_count, ax_count = plt.subplots(nrows = len(unique_segment_names),\
-                                       ncols = max_cp, figsize=(8,8),\
-                                    sharex = True, sharey = True)
-        max_cc = 0
-        zoom_y_count = 0
-        zoom_y_frac = 0
-        for s_i, seg_name in enumerate(unique_segment_names):
-            for cp_i in range(max_cp):
-                for t_i, taste in enumerate(non_none_tastes):
-                    num_dev = 0
-                    for gn in unique_given_names:
-                        try:
-                            num_dev += corr_dict[gn][corr_name][seg_name]['all'][taste]['num_dev']
-                        except:
-                            num_dev += 0
-                    unique_counts = np.zeros(len(corr_cutoffs))
-                    for cc_i, cc in enumerate(corr_cutoffs):
-                        unique_counts[cc_i] = unique_corr_dicts[corr_name][seg_name][cc_i][taste][cp_i]
-                    unique_fracs = unique_counts/num_dev
-                    #Plot unique counts and fractions
-                    ax_frac[s_i, cp_i].plot(corr_cutoffs,unique_fracs,label=taste + ' only',
-                                            color=colors[t_i])
-                    ax_count[s_i, cp_i].plot(corr_cutoffs,unique_counts,label=taste + ' only',
-                                            color=colors[t_i])
-                    #Calculate 0 dropoff
-                    count_0 = np.where(unique_counts == 0)[0]
-                    if len(count_0) > 0:
-                        if corr_cutoffs[count_0[0]] > max_cc:
-                            max_cc = corr_cutoffs[count_0[0]]
-                    #Update y lim
-                    if np.nanmax(unique_counts[cc_0_25_ind:]) > zoom_y_count:
-                        zoom_y_count = np.nanmax(unique_counts[cc_0_25_ind:])
-                    if np.nanmax(unique_fracs[cc_0_25_ind]) > zoom_y_frac:
-                        zoom_y_frac = np.nanmax(unique_fracs[cc_0_25_ind])
-                #More plot updates
-                if s_i == 0:
-                    ax_frac[s_i, cp_i].set_title('Epoch ' + str(cp_i))
-                    ax_count[s_i, cp_i].set_title('Epoch ' + str(cp_i))
-                if s_i == len(unique_segment_names)-1:
-                    ax_frac[s_i, cp_i].set_xlabel('Correlation Cutoff')
-                    ax_count[s_i, cp_i].set_xlabel('Correlation Cutoff')
-                if cp_i == 0:
-                    ax_frac[s_i, cp_i].set_ylabel(seg_name + '\nFraction of Events Above Cutoff')
-                    ax_count[s_i, cp_i].set_ylabel(seg_name + '\nNumber of Events Above Cutoff')
-        plt.figure(f_frac)
-        ax_frac[0,0].legend(loc='upper left')
-        ax_frac[0,0].set_xticks(np.arange(0,1.25,0.25))
-        plt.suptitle('Fraction of Events Above Cutoff')
-        plt.tight_layout()
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_taste_by_cutoff.png'))
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_taste_by_cutoff.svg'))
-        ax_frac[0,0].set_xlim([0.25,max_cc])
-        ax_frac[0,0].set_ylim([0,zoom_y_frac])
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_taste_by_cutoff_zoom.png'))
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_taste_by_cutoff_zoom.svg'))
-        plt.close(f_frac)
-        plt.figure(f_count)
-        ax_count[0,0].legend(loc='upper left')
-        ax_count[0,0].set_xticks(np.arange(0,1.25,0.25))
-        plt.suptitle('Number of Events Above Cutoff')
-        plt.tight_layout()
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_taste_by_cutoff.png'))
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_taste_by_cutoff.svg'))
-        ax_count[0,0].set_xlim([0.25,max_cc])
-        ax_count[0,0].set_ylim([0,zoom_y_count])
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_taste_by_cutoff_zoom.png'))
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_taste_by_cutoff_zoom.svg'))
-        plt.close(f_count) 
-        
-def plot_corr_cutoff_epochs(all_corr_dicts, unique_corr_dicts, corr_dict, 
+def plot_corr_cutoff_epochs(all_corr_dicts, corr_dict, 
                                         unique_given_names, unique_corr_names,
                                         unique_segment_names, unique_taste_names, 
                                         max_cp, corr_cutoffs, colors, plot_save_dir,
@@ -449,81 +468,6 @@ def plot_corr_cutoff_epochs(all_corr_dicts, unique_corr_dicts, corr_dict,
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_epoch_by_cutoff_zoom.png'))
         f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_epoch_by_cutoff_zoom.svg'))
         plt.close(f_count) 
-        
-        #Plot unique indices
-        f_frac, ax_frac = plt.subplots(nrows = len(unique_segment_names),\
-                                       ncols = len(non_none_tastes), figsize=(8,8),\
-                                    sharex = True, sharey = True)
-        f_count, ax_count = plt.subplots(nrows = len(unique_segment_names),\
-                                       ncols = len(non_none_tastes), figsize=(8,8),\
-                                    sharex = True, sharey = True)
-        max_cc = 0
-        zoom_y_count = 0
-        zoom_y_frac = 0
-        for s_i, seg_name in enumerate(unique_segment_names):
-            for t_i, taste in enumerate(non_none_tastes):
-                for cp_i in range(max_cp):
-                    num_dev = 0
-                    for gn in unique_given_names:
-                        try:
-                            num_dev += corr_dict[gn][corr_name][seg_name]['all'][taste]['num_dev']
-                        except:
-                            num_dev += 0
-                    unique_counts = np.zeros(len(corr_cutoffs))
-                    for cc_i, cc in enumerate(corr_cutoffs):
-                        unique_counts[cc_i] = unique_corr_dicts[corr_name][seg_name][cc_i][taste][cp_i]
-                    unique_fracs = unique_counts/num_dev
-                    #Plot unique counts and fractions
-                    ax_frac[s_i, t_i].plot(corr_cutoffs,unique_fracs,
-                                           label='Epoch ' + str(cp_i) + ' only',
-                                            color=colors[cp_i])
-                    ax_count[s_i, t_i].plot(corr_cutoffs,unique_counts,
-                                            label='Epoch ' + str(cp_i) + ' only',
-                                            color=colors[cp_i])
-                    #Calculate 0 dropoff
-                    count_0 = np.where(unique_counts == 0)[0]
-                    if len(count_0) > 0:
-                        if corr_cutoffs[count_0[0]] > max_cc:
-                            max_cc = corr_cutoffs[count_0[0]]
-                    #Update y lim
-                    if np.nanmax(unique_counts[cc_0_25_ind:]) > zoom_y_count:
-                        zoom_y_count = np.nanmax(unique_counts[cc_0_25_ind:])
-                    if np.nanmax(unique_fracs[cc_0_25_ind:]) > zoom_y_frac:
-                        zoom_y_frac = np.nanmax(unique_fracs[cc_0_25_ind:])             
-                #More plot updates
-                if s_i == 0:
-                    ax_frac[s_i, t_i].set_title(taste)
-                    ax_count[s_i, t_i].set_title(taste)
-                if s_i == len(unique_segment_names)-1:
-                    ax_frac[s_i, t_i].set_xlabel('Correlation Cutoff')
-                    ax_count[s_i, t_i].set_xlabel('Correlation Cutoff')
-                if cp_i == 0:
-                    ax_frac[s_i, t_i].set_ylabel(seg_name + '\nFraction of Events Above Cutoff')
-                    ax_count[s_i, t_i].set_ylabel(seg_name + '\nNumber of Events Above Cutoff')
-        plt.figure(f_frac)
-        ax_frac[0,0].legend(loc='upper left')
-        ax_frac[0,0].set_xticks(np.arange(0,1.25,0.25))
-        plt.suptitle('Fraction of Events Above Cutoff')
-        plt.tight_layout()
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_epoch_by_cutoff.png'))
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_epoch_by_cutoff.svg'))
-        ax_frac[0,0].set_xlim([0.25,max_cc])
-        ax_frac[0,0].set_ylim([0,zoom_y_frac])
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_epoch_by_cutoff_zoom.png'))
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_unique_epoch_by_cutoff_zoom.svg'))
-        plt.close(f_frac)
-        plt.figure(f_count)
-        ax_count[0,0].legend(loc='upper left')
-        ax_count[0,0].set_xticks(np.arange(0,1.25,0.25))
-        plt.suptitle('Number of Events Above Cutoff')
-        plt.tight_layout()
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_epoch_by_cutoff.png'))
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_epoch_by_cutoff.svg'))
-        ax_count[0,0].set_xlim([0.25,max_cc])
-        ax_count[0,0].set_ylim([0,zoom_y_count])
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_epoch_by_cutoff_zoom.png'))
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_unique_epoch_by_cutoff_zoom.svg'))
-        plt.close(f_count)
         
 def compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
                        unique_decode_names, unique_segment_names, 
