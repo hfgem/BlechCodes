@@ -35,19 +35,19 @@ def compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_give
                              unique_taste_names, max_cp, corr_results_save_dir)
     
     #Calculate indices unique to each correlation combo
-    all_corr_dicts, all_null_corr_dicts = calc_ind_dicts(corr_dict, unique_given_names, unique_corr_names,
-                             unique_segment_names, unique_taste_names, max_cp,
-                             corr_cutoffs)
+    all_corr_dicts, all_null_corr_dicts = calc_ind_dicts(corr_dict, null_corr_dict,
+                                                unique_given_names, unique_corr_names, 
+                                                unique_segment_names, unique_taste_names, 
+                                                max_cp, corr_cutoffs)
     
     #Create plots
     plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict, null_corr_dict,
-                                        unique_given_names, unique_corr_names, 
-                                        unique_segment_names, unique_taste_names, 
-                                        max_cp, corr_cutoffs, colors, 
-                                        corr_results_save_dir)
+                            multiday_data_dict, unique_given_names, unique_corr_names, 
+                            unique_segment_names, unique_taste_names, 
+                            max_cp, corr_cutoffs, colors, corr_results_save_dir)
     
     plot_corr_cutoff_epochs(all_corr_dicts, all_null_corr_dicts, corr_dict, null_corr_dict,
-                            unique_given_names, unique_corr_names, 
+                            multiday_data_dict, unique_given_names, unique_corr_names, 
                             unique_segment_names, unique_taste_names, max_cp, 
                             corr_cutoffs, colors, corr_results_save_dir)
         
@@ -82,6 +82,15 @@ def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names,
     """
     taste_inds = np.arange(len(unique_taste_names))
     t_pairs = list(combinations(list(taste_inds),2))
+    sig_save_dir = os.path.join(plot_save_dir,'Sig_Tests')
+    if not os.path.isdir(sig_save_dir):
+        os.mkdir(sig_save_dir)
+    taste_comp_save_dir = os.path.join(sig_save_dir,'TastexTaste')
+    if not os.path.isdir(taste_comp_save_dir):
+        os.mkdir(taste_comp_save_dir)
+    null_comp_save_dir = os.path.join(sig_save_dir,'TastexNull')
+    if not os.path.isdir(null_comp_save_dir):
+        os.mkdir(null_comp_save_dir)
     
     #Compare taste distributions against each other
     for corr_name in unique_corr_names:
@@ -138,12 +147,12 @@ def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names,
                             
                 #Output results to csv
                 csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_ks.csv'
-                with open(os.path.join(plot_save_dir,csv_save_name),'w',newline='') as file:
+                with open(os.path.join(taste_comp_save_dir,csv_save_name),'w',newline='') as file:
                     writer = csv.writer(file)
                     for row in ks_results:
                         writer.writerow(row)
                 csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_tt.csv'
-                with open(os.path.join(plot_save_dir,csv_save_name),'w',newline='') as file:
+                with open(os.path.join(taste_comp_save_dir,csv_save_name),'w',newline='') as file:
                     writer = csv.writer(file)
                     for row in tt_results:
                         writer.writerow(row)
@@ -213,12 +222,12 @@ def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names,
                             
                 #Output results to csv
                 csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_null_ks.csv'
-                with open(os.path.join(plot_save_dir,csv_save_name),'w',newline='') as file:
+                with open(os.path.join(null_comp_save_dir,csv_save_name),'w',newline='') as file:
                     writer = csv.writer(file)
                     for row in ks_results:
                         writer.writerow(row)
                 csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_null_tt.csv'
-                with open(os.path.join(plot_save_dir,csv_save_name),'w',newline='') as file:
+                with open(os.path.join(null_comp_save_dir,csv_save_name),'w',newline='') as file:
                     writer = csv.writer(file)
                     for row in tt_results:
                         writer.writerow(row)
@@ -310,9 +319,9 @@ def calc_ind_dicts(corr_dict, null_corr_dict, unique_given_names,
     return all_corr_dicts, all_null_corr_dicts
         
 def plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict, 
-                            null_corr_dict, unique_given_names, unique_corr_names,
-                            unique_segment_names, unique_taste_names, max_cp, 
-                            corr_cutoffs, colors, plot_save_dir, verbose = False):
+                            null_corr_dict, multiday_data_dict, unique_given_names, 
+                            unique_corr_names, unique_segment_names, unique_taste_names, 
+                            max_cp, corr_cutoffs, colors, plot_save_dir, verbose = False):
     
     """Plot number of events above correlation cutoff for each taste"""
     
@@ -321,6 +330,11 @@ def plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict,
     cc_0_25_ind = np.where(corr_cutoffs == 0.25)[0][0]
     num_anim = len(unique_given_names)
     num_cutoff = len(corr_cutoffs)
+    num_segs = len(unique_segment_names)
+    num_tastes = len(unique_taste_names)
+    indiv_anim_plot_save_dir = os.path.join(plot_save_dir,'Individual_Animals')
+    if not os.path.isdir(indiv_anim_plot_save_dir):
+        os.mkdir(indiv_anim_plot_save_dir)
     
     for corr_name in unique_corr_names:
         
@@ -330,22 +344,39 @@ def plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict,
         f_rate, ax_rate = plt.subplots(nrows = len(unique_segment_names),\
                                        ncols = max_cp, figsize=(8,8),\
                                     sharex = True, sharey = True)
-        max_cc = 0
+        f_rate_zoom, ax_rate_zoom = plt.subplots(nrows = len(unique_segment_names),\
+                                       ncols = max_cp, figsize=(8,8),\
+                                    sharex = True, sharey = True)
+        f_rate_box, ax_rate_box = plt.subplots(nrows = len(unique_segment_names),\
+                                       ncols = max_cp, figsize=(8,8),\
+                                    sharex = True, sharey = True)
         zoom_y_rate = 0
         for s_i, seg_name in enumerate(unique_segment_names):
+            seg_indiv_dir = os.path.join(indiv_anim_plot_save_dir,seg_name)
+            if not os.path.isdir(seg_indiv_dir):
+                os.mkdir(seg_indiv_dir)
             for cp_i in range(max_cp):
+                cp_indiv_dir = os.path.join(seg_indiv_dir,'Epoch_' + str(cp_i))
+                if not os.path.isdir(cp_indiv_dir):
+                    os.mkdir(cp_indiv_dir)
+                taste_null_rates = []
                 for t_i, taste in enumerate(unique_taste_names):
+                    taste_indiv_dir = os.path.join(cp_indiv_dir,taste)
+                    if not os.path.isdir(taste_indiv_dir):
+                        os.mkdir(taste_indiv_dir)
                     animal_inds = all_dev_corr_inds[seg_name][cp_i][taste]
                     animal_null_inds = all_null_dev_corr_inds[seg_name][cp_i][taste]
                     animal_true_rates = np.zeros((num_anim,num_cutoff))
                     animal_null_rates = np.zeros((num_anim,num_cutoff))
-                    for g_n in unique_given_names:
+                    for gn_i, g_n in enumerate(unique_given_names):
                         #Collect true data
+                        animal_seg_times = multiday_data_dict[g_n]['segment_times']
+                        animal_seg_names = multiday_data_dict[g_n]['segment_names']
+                        a_s_ind = [i for i in range(len(animal_seg_names)) if animal_seg_names[i] == seg_name][0]
+                        seg_len = (animal_seg_times[a_s_ind+1]-animal_seg_times[a_s_ind])*(1/1000) #seconds length
                         try:
-                            num_dev = corr_dict[g_n][corr_name][seg_name]['all'][taste]['num_dev']
                             num_inds = np.array([len(animal_inds[g_n][cc_i]) for cc_i in range(len(corr_cutoffs))])
-                            animal_ind_counts += num_inds
-                            animal_dev_counts += num_dev*np.ones(len(corr_cutoffs))
+                            animal_true_rates[gn_i,:] = num_inds/seg_len
                         except:
                             errormsg = g_n + ' does not have ' + seg_name + \
                                 ' epoch ' + str(cp_i) + ' ' + taste + ' data.'
@@ -353,119 +384,224 @@ def plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict,
                                 print(errormsg)
                         #Collect null data
                         try:
-                            num_null_dev = len(null_corr_dict[g_n][seg_name][taste][corr_name][cp_i])
                             num_null_inds = np.array([len(animal_null_inds[g_n][cc_i]) for cc_i in range(len(corr_cutoffs))])
-                            animal_null_ind_counts += num_null_inds
-                            animal_null_dev_counts += num_null_dev*np.ones(len(corr_cutoffs))
+                            num_null_sets = null_corr_dict[g_n]['num_null']
+                            animal_null_rates[gn_i,:] = num_null_inds/num_null_sets/seg_len
                         except:
                             errormsg = g_n + ' does not have ' + seg_name + \
                                 ' epoch ' + str(cp_i) + ' ' + taste + ' data.'
                             if verbose == True:
                                 print(errormsg)
+                        #Plot individual animal rates in separate folder
+                        f_anim = plt.figure()
+                        plt.title(g_n)
+                        plt.plot(corr_cutoffs, animal_true_rates[gn_i,:], label='True')
+                        plt.plot(corr_cutoffs, animal_null_rates[gn_i,:], label='Null')
+                        plt.ylabel('Rate (Hz)')
+                        plt.xlabel('Pearson Correlation Cutoff')
+                        plt.legend(loc='upper right')
+                        f_anim.savefig(os.path.join(taste_indiv_dir,corr_name+'_'+g_n+'_rate_taste_by_cutoff.png'))
+                        f_anim.savefig(os.path.join(taste_indiv_dir,corr_name+'_'+g_n+'_rate_taste_by_cutoff.svg'))
+                        plt.close(f_anim)
+                        f_anim_zoom = plt.figure()
+                        plt.title(g_n)
+                        plt.plot(corr_cutoffs[cc_0_25_ind:], animal_true_rates[gn_i,cc_0_25_ind:], label='True')
+                        plt.plot(corr_cutoffs[cc_0_25_ind:], animal_null_rates[gn_i,cc_0_25_ind:], label='Null')
+                        plt.ylabel('Rate (Hz)')
+                        plt.xlabel('Pearson Correlation Cutoff')
+                        plt.legend(loc='upper right')
+                        f_anim_zoom.savefig(os.path.join(taste_indiv_dir,corr_name+'_'+g_n+'_rate_taste_by_cutoff_zoom.png'))
+                        f_anim_zoom.savefig(os.path.join(taste_indiv_dir,corr_name+'_'+g_n+'_rate_taste_by_cutoff_zoom.svg'))
+                        plt.close(f_anim_zoom)
+                    #Average rates
+                    anim_true_avg_rate = np.nanmean(animal_true_rates,0)
+                    anim_null_avg_rate = np.nanmean(animal_null_rates,0)
+                    taste_null_rates.append(list(anim_null_avg_rate))
+                    max_25_cutoff = np.max([anim_true_avg_rate[cc_0_25_ind],anim_null_avg_rate[cc_0_25_ind]])
+                    if zoom_y_rate < max_25_cutoff:
+                        zoom_y_rate = max_25_cutoff
+                    ax_rate[s_i,cp_i].plot(corr_cutoffs,anim_true_avg_rate,label=taste)
+                    ax_rate_zoom[s_i,cp_i].plot(corr_cutoffs[cc_0_25_ind:],anim_true_avg_rate[cc_0_25_ind:],label=taste)
+                    #0.25 rates box plot
+                    anim_25_rates = animal_true_rates[:,cc_0_25_ind].flatten()
+                    ax_rate_box[s_i,cp_i].boxplot(list(anim_25_rates),
+                                                  positions=[t_i+1],
+                                                  showmeans=False,showfliers=False)
+                    x_locs = t_i + 1 + 0.1*np.random.randn(num_anim)
+                    ax_rate_box[s_i,cp_i].scatter(x_locs,anim_25_rates,alpha=0.5,color='g')
+                    
+                taste_null_avg_rate = np.nanmean(np.array(taste_null_rates),0)
+                ax_rate[s_i,cp_i].plot(corr_cutoffs,taste_null_avg_rate,label='Null')
+                ax_rate_zoom[s_i,cp_i].plot(corr_cutoffs[cc_0_25_ind:],taste_null_avg_rate[cc_0_25_ind:],label='Null')
+                if s_i == 0:
+                    ax_rate[s_i,cp_i].set_title('Epoch ' + str(cp_i))
+                    ax_rate_zoom[s_i,cp_i].set_title('Epoch ' + str(cp_i))
+                    ax_rate_box[s_i,cp_i].set_title('Epoch ' + str(cp_i))
+                if cp_i == 0:
+                    ax_rate[s_i,cp_i].set_ylabel(seg_name + '\nRate (Hz)')
+                    ax_rate_zoom[s_i,cp_i].set_ylabel(seg_name + '\nRate (Hz)')
+                    ax_rate_box[s_i,cp_i].set_ylabel(seg_name + '\nRate (Hz)')
+                if s_i == num_segs-1:
+                    ax_rate[s_i,cp_i].set_xlabel('Min. Correlation Cutoff')
+                    ax_rate_zoom[s_i,cp_i].set_xlabel('Min. Correlation Cutoff')
+                    ax_rate_box[s_i,cp_i].set_xlabel('Taste')
+                    ax_rate_box[s_i,cp_i].set_xticks(np.arange(num_tastes)+1,unique_taste_names,
+                                                     horizontalalignment='right',rotation = 45)
         plt.figure(f_rate)
-        ax_rate[0,0].legend(loc='upper left')
+        ax_rate[0,0].legend(loc='upper right')
         ax_rate[0,0].set_xticks(np.arange(0,1.25,0.25))
-        plt.suptitle('Fraction of Events Above Cutoff')
+        plt.suptitle('Rate of Events Above Cutoff')
         plt.tight_layout()
         f_rate.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_by_cutoff.png'))
         f_rate.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_by_cutoff.svg'))
-        ax_rate[0,0].set_xlim([0.25,max_cc])
-        ax_rate[0,0].set_ylim([0,zoom_y_rate])
-        f_rate.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_by_cutoff_zoom.png'))
-        f_rate.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_by_cutoff_zoom.svg'))
+        plt.close(f_rate_zoom)
+        plt.figure(f_rate_zoom)
+        ax_rate_zoom[0,0].legend(loc='upper right')
+        ax_rate_zoom[0,0].set_xticks(np.arange(0.25,1.25,0.25))
+        plt.suptitle('Rate of Events Above Zoom Cutoff')
+        plt.tight_layout()
+        f_rate_zoom.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_by_cutoff_zoom.png'))
+        f_rate_zoom.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_by_cutoff_zoom.svg'))
         plt.close(f_rate)
+        plt.figure(f_rate_box)
+        plt.suptitle('Rate of Events Above 0.25 Cutoff')
+        plt.tight_layout()
+        f_rate_box.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_at_cutoff_box.png'))
+        f_rate_box.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_at_cutoff_box.svg'))
+        plt.close(f_rate_box)
         
 def plot_corr_cutoff_epochs(all_corr_dicts, all_null_corr_dicts, corr_dict, null_corr_dict,
-                                        unique_given_names, unique_corr_names,
-                                        unique_segment_names, unique_taste_names, 
-                                        max_cp, corr_cutoffs, colors, plot_save_dir,
-                                        verbose = False):
+                            multiday_data_dict, unique_given_names, unique_corr_names,
+                            unique_segment_names, unique_taste_names, max_cp, 
+                            corr_cutoffs, colors, plot_save_dir, verbose = False):
     
     """Plot number of events above correlation cutoff for each taste that are 
     unique to the taste and unique to a given epoch."""
     warnings.filterwarnings('ignore') 
     non_none_tastes = [taste for taste in unique_taste_names if taste != 'none_0']
     cc_0_25_ind = np.where(corr_cutoffs == 0.25)[0][0]
+    num_anim = len(unique_given_names)
+    num_cutoff = len(corr_cutoffs)
+    num_segs = len(unique_segment_names)
+    num_tastes = len(unique_taste_names)
+    indiv_anim_plot_save_dir = os.path.join(plot_save_dir,'Individual_Animals')
+    if not os.path.isdir(indiv_anim_plot_save_dir):
+        os.mkdir(indiv_anim_plot_save_dir)
     
     for corr_name in unique_corr_names:
         
         #Plot all corr values
         all_dev_corr_inds = all_corr_dicts[corr_name]
-        f_frac, ax_frac = plt.subplots(nrows = len(unique_segment_names),\
-                                       ncols = len(non_none_tastes), figsize=(4*len(non_none_tastes),4*len(unique_segment_names)),\
+        all_null_dev_corr_inds = all_null_corr_dicts[corr_name]
+        f_rate, ax_rate = plt.subplots(nrows = len(unique_segment_names),\
+                                       ncols = len(non_none_tastes), \
+                                    figsize=(4*len(non_none_tastes),4*len(unique_segment_names)),\
                                     sharex = True, sharey = True)
-        f_count, ax_count = plt.subplots(nrows = len(unique_segment_names),\
-                                       ncols = len(non_none_tastes), figsize=(4*len(non_none_tastes),4*len(unique_segment_names)),\
+        f_rate_zoom, ax_rate_zoom = plt.subplots(nrows = len(unique_segment_names),\
+                                       ncols = len(non_none_tastes),\
+                                    figsize=(4*len(non_none_tastes),4*len(unique_segment_names)),\
                                     sharex = True, sharey = True)
-        max_cc = 0
-        zoom_y_count = 0
-        zoom_y_frac = 0
+        f_rate_box, ax_rate_box = plt.subplots(nrows = len(unique_segment_names),\
+                                       ncols = len(non_none_tastes),\
+                                    figsize=(4*len(non_none_tastes),4*len(unique_segment_names)),\
+                                    sharex = True, sharey = True)
+        zoom_y_rate = 0
         for s_i, seg_name in enumerate(unique_segment_names):
+            seg_indiv_dir = os.path.join(indiv_anim_plot_save_dir,seg_name)
+            if not os.path.isdir(seg_indiv_dir):
+                os.mkdir(seg_indiv_dir)
             for t_i, taste in enumerate(non_none_tastes):
+                taste_indiv_dir = os.path.join(seg_indiv_dir,taste)
+                if not os.path.isdir(taste_indiv_dir):
+                    os.mkdir(taste_indiv_dir)
+                epoch_null_rates = []
                 for cp_i in range(max_cp):
+                    cp_indiv_dir = os.path.join(taste_indiv_dir,'Epoch_' + str(cp_i))
+                    if not os.path.isdir(cp_indiv_dir):
+                        os.mkdir(cp_indiv_dir)
                     animal_inds = all_dev_corr_inds[seg_name][cp_i][taste]
-                    animal_ind_counts = np.zeros(len(corr_cutoffs))
-                    animal_dev_counts = np.zeros(len(corr_cutoffs))
-                    for g_n in unique_given_names:
+                    animal_null_inds = all_null_dev_corr_inds[seg_name][cp_i][taste]
+                    animal_true_rates = np.zeros((num_anim,num_cutoff))
+                    animal_null_rates = np.zeros((num_anim,num_cutoff))
+                    for gn_i, g_n in enumerate(unique_given_names):
+                        #Collect true data
+                        animal_seg_times = multiday_data_dict[g_n]['segment_times']
+                        animal_seg_names = multiday_data_dict[g_n]['segment_names']
+                        a_s_ind = [i for i in range(len(animal_seg_names)) if animal_seg_names[i] == seg_name][0]
+                        seg_len = (animal_seg_times[a_s_ind+1]-animal_seg_times[a_s_ind])*(1/1000) #seconds length
                         try:
-                            num_dev = corr_dict[g_n][corr_name][seg_name]['all'][taste]['num_dev']
                             num_inds = np.array([len(animal_inds[g_n][cc_i]) for cc_i in range(len(corr_cutoffs))])
-                            animal_ind_counts = animal_ind_counts + num_inds
-                            animal_dev_counts = animal_dev_counts + num_dev*np.ones(len(corr_cutoffs))
+                            animal_true_rates[gn_i,:] = num_inds/seg_len
                         except:
                             errormsg = g_n + ' does not have ' + seg_name + \
                                 ' epoch ' + str(cp_i) + ' ' + taste + ' data.'
                             if verbose == True:
                                 print(errormsg) 
-                    animal_fracs = animal_ind_counts/animal_dev_counts
-                    #Plot unique counts and fractions
-                    ax_frac[s_i, t_i].plot(corr_cutoffs,animal_fracs,label='Epoch ' + str(cp_i),
-                                            color=colors[cp_i])
-                    ax_count[s_i, t_i].plot(corr_cutoffs,animal_ind_counts,label='Epoch ' + str(cp_i),
-                                            color=colors[cp_i])
-                    #Calculate 0 dropoff
-                    count_0 = np.where(animal_ind_counts == 0)[0]
-                    if len(count_0) > 0:
-                        if corr_cutoffs[count_0[0]] > max_cc:
-                            max_cc = corr_cutoffs[count_0[0]]
-                    #Update zoom y vals
-                    if np.nanmax(animal_ind_counts[cc_0_25_ind:]) > zoom_y_count:
-                        zoom_y_count = np.nanmax(animal_ind_counts[cc_0_25_ind:])
-                    if np.nanmax(animal_fracs[cc_0_25_ind:]) > zoom_y_frac:
-                        zoom_y_frac = np.nanmax(animal_fracs[cc_0_25_ind:])
+                        #Collect null data
+                        try:
+                            num_null_inds = np.array([len(animal_null_inds[g_n][cc_i]) for cc_i in range(len(corr_cutoffs))])
+                            num_null_sets = null_corr_dict[g_n]['num_null']
+                            animal_null_rates[gn_i,:] = num_null_inds/num_null_sets/seg_len
+                        except:
+                            errormsg = g_n + ' does not have ' + seg_name + \
+                                ' epoch ' + str(cp_i) + ' ' + taste + ' data.'
+                            if verbose == True:
+                                print(errormsg)
+                    #Average rates
+                    anim_true_avg_rate = np.nanmean(animal_true_rates,0)
+                    anim_null_avg_rate = np.nanmean(animal_null_rates,0)
+                    epoch_null_rates.append(list(anim_null_avg_rate))
+                    max_25_cutoff = np.max([anim_true_avg_rate[cc_0_25_ind],anim_null_avg_rate[cc_0_25_ind]])
+                    if zoom_y_rate < max_25_cutoff:
+                        zoom_y_rate = max_25_cutoff
+                    ax_rate[s_i,t_i].plot(corr_cutoffs,anim_true_avg_rate,label='Epoch ' + str(cp_i))
+                    ax_rate_zoom[s_i,t_i].plot(corr_cutoffs[cc_0_25_ind:],anim_true_avg_rate[cc_0_25_ind:],label='Epoch ' + str(cp_i))
+                    #0.25 rates box plot
+                    anim_25_rates = animal_true_rates[:,cc_0_25_ind].flatten()
+                    ax_rate_box[s_i,t_i].boxplot(list(anim_25_rates),
+                                                  positions=[cp_i+1],
+                                                  showmeans=False,showfliers=False)
+                    x_locs = cp_i + 1 + 0.1*np.random.randn(num_anim)
+                    ax_rate_box[s_i,t_i].scatter(x_locs,anim_25_rates,alpha=0.5,color='g')
+                epoch_null_avg_rate = np.nanmean(np.array(epoch_null_rates),0)
+                ax_rate[s_i,t_i].plot(corr_cutoffs,epoch_null_avg_rate,label='Null')
+                ax_rate_zoom[s_i,t_i].plot(corr_cutoffs[cc_0_25_ind:],epoch_null_avg_rate[cc_0_25_ind:],label='Null')
                 if s_i == 0:
-                    ax_frac[s_i, t_i].set_title(taste)
-                    ax_count[s_i, t_i].set_title(taste)
+                    ax_rate[s_i, t_i].set_title(taste)
+                    ax_rate_zoom[s_i, t_i].set_title(taste)
+                    ax_rate_box[s_i, t_i].set_title(taste)
                 if s_i == len(unique_segment_names)-1:
-                    ax_frac[s_i, t_i].set_xlabel('Correlation Cutoff')
-                    ax_count[s_i, t_i].set_xlabel('Correlation Cutoff')
-                if cp_i == 0:
-                    ax_frac[s_i, t_i].set_ylabel(seg_name + '\nFraction of Events Above Cutoff')
-                    ax_count[s_i, t_i].set_ylabel(seg_name + '\nNumber of Events Above Cutoff')
-        plt.figure(f_frac)
-        ax_frac[0,0].legend(loc='upper left')
-        ax_frac[0,0].set_xticks(np.arange(0,1.25,0.25))
-        plt.suptitle('Fraction of Events Above Cutoff')
+                    ax_rate[s_i, t_i].set_xlabel('Correlation Cutoff')
+                    ax_rate_zoom[s_i, t_i].set_xlabel('Correlation Cutoff')
+                    ax_rate_box[s_i, t_i].set_xlabel('State')
+                    ax_rate_box[s_i,t_i].set_xticks(np.arange(max_cp)+1)
+                if t_i == 0:
+                    ax_rate[s_i, t_i].set_ylabel(seg_name + '\Rate (Hz)')
+                    ax_rate_zoom[s_i, t_i].set_ylabel(seg_name + '\Rate (Hz)')
+                    ax_rate_box[s_i, t_i].set_ylabel(seg_name + '\Rate (Hz)')
+        plt.figure(f_rate)
+        ax_rate[0,0].legend(loc='upper right')
+        ax_rate[0,0].set_xticks(np.arange(0,1.25,0.25))
+        plt.suptitle('Rate of Events Above Cutoff')
         plt.tight_layout()
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_epoch_by_cutoff.png'))
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_epoch_by_cutoff.svg'))
-        ax_frac[0,0].set_xlim([0.25,max_cc])
-        ax_frac[0,0].set_ylim([0,zoom_y_frac])
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_epoch_by_cutoff_zoom.png'))
-        f_frac.savefig(os.path.join(plot_save_dir,corr_name+'_frac_epoch_by_cutoff_zoom.svg'))
-        plt.close(f_frac)
-        plt.figure(f_count)
-        ax_count[0,0].legend(loc='upper left')
-        ax_count[0,0].set_xticks(np.arange(0,1.25,0.25))
-        plt.suptitle('Number of Events Above Cutoff')
+        f_rate.savefig(os.path.join(plot_save_dir,corr_name+'_rate_epoch_by_cutoff.png'))
+        f_rate.savefig(os.path.join(plot_save_dir,corr_name+'_rate_epoch_by_cutoff.svg'))
+        plt.close(f_rate)
+        plt.figure(f_rate_zoom)
+        ax_rate_zoom[0,0].legend(loc='upper right')
+        ax_rate_zoom[0,0].set_xticks(np.arange(0.25,1.25,0.25))
+        plt.suptitle('Rate of Events Above Cutoff')
         plt.tight_layout()
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_epoch_by_cutoff.png'))
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_epoch_by_cutoff.svg'))
-        ax_count[0,0].set_xlim([0.25,max_cc])
-        ax_count[0,0].set_ylim([0,zoom_y_count])
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_epoch_by_cutoff_zoom.png'))
-        f_count.savefig(os.path.join(plot_save_dir,corr_name+'_num_epoch_by_cutoff_zoom.svg'))
-        plt.close(f_count) 
+        f_rate_zoom.savefig(os.path.join(plot_save_dir,corr_name+'_rate_epoch_by_cutoff_zoom.png'))
+        f_rate_zoom.savefig(os.path.join(plot_save_dir,corr_name+'_rate_epoch_by_cutoff_zoom.svg'))
+        plt.close(f_rate_zoom)
+        plt.figure(f_rate_box)
+        plt.suptitle('Rate of Events Above 0.25 Cutoff')
+        plt.tight_layout()
+        f_rate_box.savefig(os.path.join(plot_save_dir,corr_name+'_rate_epoch_at_cutoff_box.png'))
+        f_rate_box.savefig(os.path.join(plot_save_dir,corr_name+'_rate_epoch_at_cutoff_box.svg'))
+        plt.close(f_rate_box)
+        
         
 def compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
                        unique_decode_names, unique_segment_names, 
