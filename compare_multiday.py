@@ -108,7 +108,7 @@ if __name__ == '__main__':
         save_dir = askdirectory()
         np.save(os.path.join(save_dir,'multiday_data_dict.npy'),multiday_data_dict,allow_pickle=True)
 
-    bool_val = bool_input("Would you like error messages printed? ")
+    bool_val = bool_input("Would you like error messages printed [y/n]? ")
     # _____Pass Data to Analysis_____
     if bool_val == 'y':
         run_compare_multiday_analysis([multiday_data_dict, save_dir, True])

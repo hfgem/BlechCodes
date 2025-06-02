@@ -244,12 +244,12 @@ for name in unique_given_names:
         for s_n in seg_names:
             if type(corr_dict[name][corr_name][s_n]) == dict:
                 unique_segment_names.extend([s_n])
-            try:
-                num_cp, _ = np.shape(corr_dict[name][corr_name][s_n]['all'][taste_names[0]]['data'])
-                if num_cp > max_cp:
-                    max_cp = num_cp
-            except:
-                error = "Unable to grab changepoint count."
+                try:
+                    num_cp, _ = np.shape(corr_dict[name][corr_name][s_n]['all'][taste_names[0]]['data'])
+                    if num_cp > max_cp:
+                        max_cp = num_cp
+                except:
+                    error = "Unable to grab changepoint count."
 unique_seg_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i] for i in unique_seg_indices]
