@@ -661,7 +661,16 @@ def cross_epoch(corr_data,save_dir,unique_given_names,unique_corr_names,\
 				
 	
 def int_input(prompt):
-	#This function asks a user for an integer input
+	"""
+	This function asks a user for an integer input
+	INPUTS:
+		prompt = string containing boolean input prompt
+	RETURNS:
+		int_val = integer value
+	NOTE:
+		This function will continue to prompt the user for an answer until the 
+		answer given is an integer.
+	"""
 	int_loop = 1	
 	while int_loop == 1:
 		response = input(prompt)
@@ -674,7 +683,16 @@ def int_input(prompt):
 	return int_val
 	
 def bool_input(prompt):
-	#This function asks a user for an integer input
+	"""
+	This function asks a user for a boolean input of y/n.
+	INPUTS:
+		prompt = string containing boolean input prompt
+	RETURNS:
+		response = y / n
+	NOTE:
+		This function will continue to prompt the user for an answer until the 
+		answer given is y or n.
+	"""
 	bool_loop = 1	
 	while bool_loop == 1:
 		response = input(prompt).lower()
@@ -685,3 +703,27 @@ def bool_input(prompt):
 	
 	return response			
 				
+def int_list_input(prompt):
+	"""
+	This function asks a user for an integer input
+	INPUTS:
+		prompt = string containing boolean input prompt
+	RETURNS:
+		int_list = list of integer values
+	NOTE:
+		This function will continue to prompt the user for an answer until the 
+		answer given is a list of integers.
+	"""
+	int_loop = 1	
+	while int_loop == 1:
+		response = input(prompt)
+		response_list = response.split(',')
+		try:
+			int_list = []
+			for item in response_list:
+				int_list.append(int(item))
+			int_loop = 0
+		except:
+			print("\tERROR: Incorrect data entry, please input a list of integers.")
+	
+	return int_list

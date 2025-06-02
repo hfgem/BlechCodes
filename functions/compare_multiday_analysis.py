@@ -15,6 +15,7 @@ import random
 import numpy as np
 import functions.compare_multiday_funcs as cmf
 from tkinter.filedialog import askdirectory
+from functions.compare_multiday_funcs import select_analysis_groups
 
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
@@ -99,6 +100,9 @@ class run_compare_multiday_analysis():
         unique_corr_indices = np.sort(
             np.unique(unique_corr_names, return_index=True)[1])
         unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
+        #Select which corr types to use in the analysis
+        unique_corr_names = select_analysis_groups(unique_corr_names)
+        
         #Pull unique segment and taste names and max cp
         unique_segment_names = []
         unique_taste_names = []
@@ -125,9 +129,14 @@ class run_compare_multiday_analysis():
         unique_seg_indices = np.sort(
             np.unique(unique_segment_names, return_index=True)[1])
         unique_segment_names = [unique_segment_names[i] for i in unique_seg_indices]
+        #Select which segments to use in the analysis
+        unique_segment_names = select_analysis_groups(unique_segment_names)
+        
         unique_taste_indices = np.sort(
             np.unique(unique_taste_names, return_index=True)[1])
         unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
+        #Select which tastes to use in the analysis
+        unique_taste_names = select_analysis_groups(unique_taste_names)
             
         self.unique_given_names = unique_given_names
         self.unique_corr_names = unique_corr_names

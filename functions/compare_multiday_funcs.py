@@ -16,6 +16,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
 from scipy.stats import ks_2samp, ttest_ind
+from functions.compare_conditions_funcs import int_list_input
 
 def compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_given_names,
                       unique_corr_names, unique_segment_names, unique_taste_names, 
@@ -45,7 +46,6 @@ def compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_give
                             multiday_data_dict, unique_given_names, unique_corr_names, 
                             unique_segment_names, unique_taste_names, 
                             max_cp, corr_cutoffs, colors, corr_results_save_dir)
-    
     plot_corr_cutoff_epochs(all_corr_dicts, all_null_corr_dicts, corr_dict, null_corr_dict,
                             multiday_data_dict, unique_given_names, unique_corr_names, 
                             unique_segment_names, unique_taste_names, max_cp, 
@@ -454,7 +454,7 @@ def plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict,
         plt.tight_layout()
         f_rate.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_by_cutoff.png'))
         f_rate.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_by_cutoff.svg'))
-        plt.close(f_rate_zoom)
+        plt.close(f_rate)
         plt.figure(f_rate_zoom)
         ax_rate_zoom[0,0].legend(loc='upper right')
         ax_rate_zoom[0,0].set_xticks(np.arange(0.25,1.25,0.25))
@@ -462,7 +462,7 @@ def plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict,
         plt.tight_layout()
         f_rate_zoom.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_by_cutoff_zoom.png'))
         f_rate_zoom.savefig(os.path.join(plot_save_dir,corr_name+'_rate_taste_by_cutoff_zoom.svg'))
-        plt.close(f_rate)
+        plt.close(f_rate_zoom)
         plt.figure(f_rate_box)
         plt.suptitle('Rate of Events Above 0.25 Cutoff')
         plt.tight_layout()
@@ -848,3 +848,26 @@ def decode_rates_plots(decode_dict,unique_given_names,unique_decode_names,
         f.savefig(os.path.join(decode_results_save_dir,dt + '_which_taste_oveall_pie.png'))
         f.savefig(os.path.join(decode_results_save_dir,dt + '_which_taste_oveall_pie.svg'))
         plt.close(f)
+        
+def select_analysis_groups(unique_list):
+    """
+    This function allows the user to select which aspects of the data to use 
+    in the analysis.
+    INPUTS:
+        - unique_list: list of unique aspects available
+    RETURNS:
+        - unique_list: list of unique aspects to use
+    NOTE:
+        - This function will continue to prompt the user for an answer until the 
+		answer given is a list of integers.
+    """
+    
+    unique_prompt = ''
+    for un_i, un in enumerate(unique_list):
+        unique_prompt += str(un_i) + ': ' + un + '\n'
+    unique_prompt += 'Please provide a comma-separate list of indices to ' + \
+        'use in this analysis: '
+    ind_to_keep = int_list_input(unique_prompt)
+    unique_list = [unique_list[i] for i in ind_to_keep]
+    
+    return unique_list

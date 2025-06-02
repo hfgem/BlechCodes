@@ -15,7 +15,7 @@ import tables
 import numpy as np
 from tkinter.filedialog import askdirectory
 from functions.compare_multiday_analysis import run_compare_multiday_analysis
-from functions.compare_conditions_funcs import int_input, bool_input
+from functions.compare_conditions_funcs import int_input, bool_input, int_list_input
 
 # Grab current directory and data directory / metadata
 script_path = os.path.realpath(__file__)
@@ -147,6 +147,7 @@ import tqdm
 import random
 import numpy as np
 from tkinter.filedialog import askdirectory
+from functions.compare_multiday_funcs import select_analysis_groups
 
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
@@ -219,7 +220,6 @@ except:
     np.save(corr_dict_path,corr_dict,allow_pickle=True)   
     
 #%% find_corr_groupings()
-#TODO: add user selection of which to calc/plot
 num_datasets = len(corr_dict)
 unique_given_names = list(corr_dict.keys())
 #Pull unique correlation analysis names
@@ -229,6 +229,9 @@ for name in unique_given_names:
 unique_corr_indices = np.sort(
     np.unique(unique_corr_names, return_index=True)[1])
 unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
+#Select which corr types to use in the analysis
+unique_corr_names = select_analysis_groups(unique_corr_names)
+
 #Pull unique segment and taste names and max cp
 unique_segment_names = []
 unique_taste_names = []
@@ -250,10 +253,16 @@ for name in unique_given_names:
 unique_seg_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i] for i in unique_seg_indices]
+#Select which segments to use in the analysis
+unique_segment_names = select_analysis_groups(unique_segment_names)
+
 unique_taste_indices = np.sort(
     np.unique(unique_taste_names, return_index=True)[1])
 unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
-    
+#Select which tastes to use in the analysis
+unique_taste_names = select_analysis_groups(unique_taste_names)
+  
+
 #%% gather_null_corr_data(self,)
 null_corr_dict_path = os.path.join(save_dir,'null_corr_data_dict.npy')
 try:
