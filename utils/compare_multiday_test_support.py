@@ -15,7 +15,7 @@ import tables
 import numpy as np
 from tkinter.filedialog import askdirectory
 from functions.compare_multiday_analysis import run_compare_multiday_analysis
-from functions.compare_conditions_funcs import int_input, bool_input, int_list_input
+from functions.compare_conditions_funcs import int_input, bool_input
 
 # Grab current directory and data directory / metadata
 script_path = os.path.realpath(__file__)
