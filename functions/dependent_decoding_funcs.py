@@ -283,51 +283,10 @@ def decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times,
     epoch_names = ['Epoch ' + str(e_i) for e_i in range(num_cp)]
        
     #Create null dataset from shuffled rest spikes
-    shuffled_fr_vecs = []
-    segment_spike_times_bin = []
-    seg_means = []
-    seg_stds = []
-    
-    for seg_i, s_i in enumerate(segments_to_analyze):
-        # Get segment variables
-        seg_start = segment_times[s_i]
-        seg_end = segment_times[s_i+1]
-        seg_len = segment_times[s_i+1] - segment_times[s_i]  # in dt = ms
-        # Binerize Segment Spike Times
-        segment_spike_times_s_i = segment_spike_times[s_i]
-        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
-        for n_i in range(num_neur):
-            n_i_spike_times = np.array(
-                segment_spike_times_s_i[n_i] - seg_start).astype('int')
-            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
-        segment_spike_times_bin.append(segment_spike_times_s_i_bin)
-        if z_score == True:
-            # Calculate mean and std of binned segment spikes for z-scoring
-            z_time_bins = np.arange(0,seg_len-bin_dt,bin_dt)
-            seg_fr = np.zeros((num_neur,len(z_time_bins))) #Hz
-            for bdt_i, bdt in enumerate(z_time_bins):
-                seg_fr[:,bdt_i] = np.sum(segment_spike_times_s_i_bin[:,bdt:bdt+bin_dt],1)/(bin_dt/1000)
-            mean_fr = np.nanmean(seg_fr,1)
-            seg_means.append(mean_fr)
-            std_fr = np.nanstd(seg_fr,1)
-            seg_stds.append(std_fr)
-        # Binerize Shuffled Segment Spike Times
-        segment_spike_times_s_i_shuffle = [sample(list(np.arange(seg_len)),len(segment_spike_times[s_i][n_i])) for n_i in range(num_neur)]
-        segment_spike_times_s_i_shuffle_bin = np.zeros((num_neur, seg_len+1))
-        for n_i in range(num_neur):
-            n_i_spike_times = np.array(
-                segment_spike_times_s_i_shuffle[n_i]).astype('int')
-            segment_spike_times_s_i_shuffle_bin[n_i, n_i_spike_times] = 1
-        #Create fr vecs
-        fr_vec_widths = sample(list(np.arange(250,800)),500)
-        fr_vec_starts = sample(list(np.arange(800,seg_len-800)),500)
-        for fr_i, fr_s in enumerate(fr_vec_starts):
-            fr_w = fr_vec_widths[fr_i]
-            fr_vec = np.sum(segment_spike_times_s_i_shuffle_bin[:,fr_s:fr_s+fr_w],1)/(fr_w/1000)
-            if z_score == True:
-                shuffled_fr_vecs.append(list((fr_vec-mean_fr)/std_fr))
-            else:
-                shuffled_fr_vecs.append(list(fr_vec))
+    shuffled_fr_vecs, segment_spike_times_bin, \
+        seg_means, seg_stds = create_null_decode_dataset(segments_to_analyze, \
+                                    segment_times, segment_spike_times, \
+                                    num_neur, bin_dt, z_score)
     
     #Train decoder
     true_taste_train_data = [] #For PCA all combined true taste data
@@ -702,7 +661,8 @@ def decode_deviations_is_taste_which_taste(tastant_fr_dist, segment_spike_times,
     plt.close(f_frac)
         
 def decode_sliding_bins_is_taste_which_taste(tastant_fr_dist, segment_spike_times, dig_in_names, 
-                  segment_times, segment_names, start_dig_in_times, taste_num_deliv,
+                  palatable_dig_inds, segment_times, segment_names, 
+                  start_dig_in_times, taste_num_deliv,
                   segment_dev_times, segment_dev_fr_vecs, bin_dt, 
                   save_dir, z_score = False, epochs_to_analyze=[], segments_to_analyze=[]):
     """Decode taste in sliding bins of rest intervals"""
@@ -714,156 +674,72 @@ def decode_sliding_bins_is_taste_which_taste(tastant_fr_dist, segment_spike_time
     num_neur = len(segment_spike_times[0])
     num_cp = len(tastant_fr_dist[0][0])
     num_segments = len(segment_spike_times)
+    non_none_tastes = [taste for taste in dig_in_names if taste[:4] != 'none']
     
     #Bin size for sliding bin decoding
     half_bin = 25
     bin_size = half_bin*2
     
-    if len(epochs_to_analyze) == 0:
-        epochs_to_analyze = np.arange(num_cp)
+    # if len(epochs_to_analyze) == 0:
+    #     epochs_to_analyze = np.arange(num_cp)
+    epochs_to_analyze = np.array([0,1,2])
     if len(segments_to_analyze) == 0:
         segments_to_analyze = np.arange(num_segments)
+        
+    #Create fr vector grouping instructions: list of epoch,taste pairs
+    group_list, group_names = decode_groupings(epochs_to_analyze,dig_in_names,palatable_dig_inds,non_none_tastes)
         
     seg_names = list(np.array(segment_names)[segments_to_analyze])
     epoch_names = ['Epoch ' + str(e_i) for e_i in range(num_cp)]
         
     #Create null dataset from shuffled rest spikes
-    shuffled_fr_vecs = []
-    segment_spike_times_bin = []
-    seg_means = []
-    seg_stds = []
-    
-    for seg_i, s_i in enumerate(segments_to_analyze):
-        # Get segment variables
-        seg_start = segment_times[s_i]
-        seg_end = segment_times[s_i+1]
-        seg_len = segment_times[s_i+1] - segment_times[s_i]  # in dt = ms
-        # Binerize Segment Spike Times
-        segment_spike_times_s_i = segment_spike_times[s_i]
-        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
-        for n_i in range(num_neur):
-            n_i_spike_times = np.array(
-                segment_spike_times_s_i[n_i] - seg_start).astype('int')
-            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
-        segment_spike_times_bin.append(segment_spike_times_s_i_bin)
-        if z_score == True:
-            # Calculate mean and std of binned segment spikes for z-scoring
-            z_time_bins = np.arange(0,seg_len-bin_dt,bin_dt)
-            seg_fr = np.zeros((num_neur,len(z_time_bins))) #Hz
-            for bdt_i, bdt in enumerate(z_time_bins):
-                seg_fr[:,bdt_i] = np.sum(segment_spike_times_s_i_bin[:,bdt:bdt+bin_dt],1)/(bin_dt/1000)
-            mean_fr = np.nanmean(seg_fr,1)
-            seg_means.append(mean_fr)
-            std_fr = np.nanstd(seg_fr,1)
-            seg_stds.append(std_fr)
-        # Binerize Shuffled Segment Spike Times
-        segment_spike_times_s_i_shuffle = [sample(list(np.arange(seg_len)),len(segment_spike_times[s_i][n_i])) for n_i in range(num_neur)]
-        segment_spike_times_s_i_shuffle_bin = np.zeros((num_neur, seg_len+1))
-        for n_i in range(num_neur):
-            n_i_spike_times = np.array(
-                segment_spike_times_s_i_shuffle[n_i]).astype('int')
-            segment_spike_times_s_i_shuffle_bin[n_i, n_i_spike_times] = 1
-        #Create fr vecs
-        fr_vec_widths = [sample(list(np.arange(50,1000)),1)[0] for i in range(500)]
-        fr_vec_starts = sample(list(np.arange(1000,seg_len-1000)),500)
-        for fr_i, fr_s in enumerate(fr_vec_starts):
-            fr_w = fr_vec_widths[fr_i]
-            fr_vec = np.sum(segment_spike_times_s_i_shuffle_bin[:,fr_s:fr_s+fr_w],1)/(fr_w/1000)
-            if z_score == True:
-                shuffled_fr_vecs.append(list((fr_vec-mean_fr)/std_fr))
-            else:
-                shuffled_fr_vecs.append(list(fr_vec))
+    shuffled_fr_vecs, segment_spike_times_bin, \
+        seg_means, seg_stds = create_null_decode_dataset(segments_to_analyze, \
+                                    segment_times, segment_spike_times, \
+                                    num_neur, bin_dt, z_score)
         
-    #Train decoder
-    true_taste_train_data = [] #For PCA all combined true taste data
-    none_data = []
-    by_taste_train_data = [] #All tastes in separate sub-lists
-    by_taste_by_epoch_train_data = [] #True taste epoch data of size (num tastes - 1) x num epochs
-    for t_i in range(num_tastes):
-        num_deliveries = len(tastant_fr_dist[t_i])
-        train_taste_data = []
-        train_by_epoch_taste_data = []
-        for e_ind, e_i in enumerate(epochs_to_analyze):
-            epoch_taste_data = []
-            for d_i in range(num_deliveries):
+    #Create training groups of firing rate vectors
+    grouped_train_data = [] #Using group_list above, create training groups
+    grouped_train_counts = [] #Number of values in the group
+    for g_i, g_list in enumerate(group_list):
+        group_data_collection = []
+        for (e_i,t_i) in g_list:
+            for d_i in range(taste_num_deliv[t_i]):
                 try:
                     if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
-                        train_taste_data.extend(
-                            list(tastant_fr_dist[t_i][d_i][e_i].T))
-                        epoch_taste_data.extend(
+                        group_data_collection.extend(
                             list(tastant_fr_dist[t_i][d_i][e_i].T))
                     else:
-                        train_taste_data.extend(
-                            list(tastant_fr_dist[t_i][d_i][e_i]))
-                        epoch_taste_data.extend(
+                        group_data_collection.extend(
                             list(tastant_fr_dist[t_i][d_i][e_i]))
                 except:
-                    train_taste_data.extend([])
-            train_by_epoch_taste_data.append(epoch_taste_data)
-        by_taste_by_epoch_train_data.append(train_by_epoch_taste_data)
-        if t_i < num_tastes-1:
-            true_taste_train_data.extend(train_taste_data)
-        else:
-            none_data.extend(train_taste_data)
-            if z_score == True:
-                neur_max = np.expand_dims(np.max(np.abs(np.array(train_taste_data)),0),1)
-                none_data.extend(list((neur_max*np.random.randn(num_neur,100)).T)) #Fully randomized data
-                none_data.extend(list(((neur_max/10)*np.random.randn(num_neur,100)).T)) #Low frequency randomized data
-            else:
-                neur_max = np.expand_dims(np.max(np.array(train_taste_data),0),1)
-                none_data.extend(list((neur_max*np.random.rand(num_neur,100)).T)) #Fully randomized data
-                none_data.extend(list(((neur_max/10)*np.random.rand(num_neur,100)).T)) #Low frequency randomized data
-            none_data.extend(shuffled_fr_vecs)
-        by_taste_train_data.append(train_taste_data)
-    by_taste_counts = np.array([len(by_taste_train_data[t_i]) for t_i in range(num_tastes)])
-    by_taste_prob = by_taste_counts/np.sum(by_taste_counts)
-    by_taste_true_train_data = [by_taste_train_data[t_i] for t_i in range(num_tastes-1)]
-    by_taste_true_counts = np.array([len(by_taste_true_train_data[t_i]) for t_i in range(num_tastes-1)])
-    by_taste_true_prob = by_taste_true_counts/np.sum(by_taste_true_counts)
+                    group_data_collection.extend([])
+        grouped_train_data.append(group_data_collection)
+        grouped_train_counts.append(len(group_data_collection))
         
-    by_taste_epoch_counts = np.array([np.array([len(by_taste_by_epoch_train_data[t_i][e_i]) for e_i in range(len(epochs_to_analyze))]) for t_i in range(num_tastes-1)])
-    by_taste_epoch_prob = by_taste_epoch_counts/np.expand_dims(np.sum(by_taste_epoch_counts,1),1)
-        
-    none_v_true_data = []
-    none_v_true_data.append(true_taste_train_data)
-    none_v_true_data.append(none_data)
-    none_v_true_labels = ['Taste','No Taste']
-    none_v_true_counts = np.array([len(none_v_true_data[i]) for i in range(len(none_v_true_data))])
-    none_v_true_prob = none_v_true_counts/np.sum(none_v_true_counts)
-    
     #Run PCA transform only on non-z-scored data
-    need_pca = 0
-    by_taste_pca_reducers = dict()
-    if np.min(np.array(true_taste_train_data)) >= 0:
-        need_pca = 1
-        #Taste-Based PCA
-        taste_pca = PCA()
-        taste_pca.fit(np.array(true_taste_train_data).T)
-        exp_var = taste_pca.explained_variance_ratio_
-        num_components = np.where(np.cumsum(exp_var) >= 0.9)[0][0]
-        if num_components == 0:
-            num_components = 3
-        pca_reduce_taste = PCA(num_components)
-        pca_reduce_taste.fit(np.array(true_taste_train_data))
+    if z_score == True:
+        pca_reduce_taste = train_taste_PCA(num_tastes,num_neur,epochs_to_analyze,\
+                                           taste_num_deliv,tastant_fr_dist)
     
-    #Run GMM fits to distributions of taste/no-taste
-    none_v_taste_gmm = dict()
-    for t_i in range(2):
-        taste_train_data = np.array(none_v_true_data[t_i])
-        if need_pca == 1:
-            transformed_data = pca_reduce_taste.transform(taste_train_data)
+    #Run GMM fits to distributions of different groups
+    group_gmms = dict()
+    for g_i, g_data in enumerate(grouped_train_data):
+        train_data = np.array(g_data)
+        if z_score == False:
+            transformed_data = pca_reduce_taste.transform(train_data)
         else:
-            transformed_data = taste_train_data
+            transformed_data = train_data
         #Fit GMM
         gm = gmm(n_components=1, n_init=10).fit(
             transformed_data)
-        none_v_taste_gmm[t_i] = gm
+        group_gmms[g_i] = gm
         
     #Run GMM fits to true taste epoch-combined data
     just_taste_gmm = dict()
     for t_i in range(len(by_taste_true_train_data)):
         taste_train_data = np.array(by_taste_true_train_data[t_i])
-        if need_pca == 1:
+        if z_score == False:
             transformed_data = pca_reduce_taste.transform(taste_train_data)
         else:
             transformed_data = taste_train_data
@@ -879,7 +755,7 @@ def decode_sliding_bins_is_taste_which_taste(tastant_fr_dist, segment_spike_time
         taste_epoch_gmm[t_i] = dict()
         for e_ind, e_i in enumerate(epochs_to_analyze):
             epoch_train_data = np.array(taste_epoch_train_data[e_ind])
-            if need_pca == 1:
+            if z_score == False:
                 transformed_data = pca_reduce_taste.transform(epoch_train_data)
             else:
                 transformed_data = epoch_train_data
@@ -951,7 +827,7 @@ def decode_sliding_bins_is_taste_which_taste(tastant_fr_dist, segment_spike_time
             
             #Run through each bin to decode 
             #Converting to list for parallel processing
-            if need_pca == 1:    
+            if zscore == False:    
                 seg_fr_pca = pca_reduce_taste.transform(segment_binned_fr.T)
                 seg_fr_list = list(seg_fr_pca)
             else:
@@ -1199,51 +1075,10 @@ def is_taste_which_taste_accuracy_tests(tastant_fr_dist, segment_spike_times,
     del t_i, num_deliv
     
     #Create null dataset from shuffled rest spikes
-    shuffled_fr_vecs = []
-    segment_spike_times_bin = []
-    seg_means = []
-    seg_stds = []
-    for seg_i, s_i in enumerate(segments_to_analyze):
-        # Get segment variables
-        seg_start = segment_times[s_i]
-        seg_end = segment_times[s_i+1]
-        seg_len = segment_times[s_i+1] - segment_times[s_i]  # in dt = ms
-        # Binerize Segment Spike Times
-        segment_spike_times_s_i = segment_spike_times[s_i]
-        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
-        for n_i in range(num_neur):
-            n_i_spike_times = np.array(
-                segment_spike_times_s_i[n_i] - seg_start).astype('int')
-            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
-        segment_spike_times_bin.append(segment_spike_times_s_i_bin)
-        if z_score == True:
-            # Calculate mean and std of binned segment spikes for z-scoring
-            z_time_bins = np.arange(0,seg_len-bin_dt,bin_dt)
-            seg_fr = np.zeros((num_neur,len(z_time_bins))) #Hz
-            for bdt_i, bdt in enumerate(z_time_bins):
-                seg_fr[:,bdt_i] = np.sum(segment_spike_times_s_i_bin[:,bdt:bdt+bin_dt],1)/(bin_dt/1000)
-            mean_fr = np.nanmean(seg_fr,1)
-            seg_means.append(mean_fr)
-            std_fr = np.nanstd(seg_fr,1)
-            seg_stds.append(std_fr)
-        # Binerize Shuffled Segment Spike Times
-        segment_spike_times_s_i_shuffle = [sample(list(np.arange(seg_len)),len(segment_spike_times[s_i][n_i])) for n_i in range(num_neur)]
-        segment_spike_times_s_i_shuffle_bin = np.zeros((num_neur, seg_len+1))
-        for n_i in range(num_neur):
-            n_i_spike_times = np.array(
-                segment_spike_times_s_i_shuffle[n_i]).astype('int')
-            segment_spike_times_s_i_shuffle_bin[n_i, n_i_spike_times] = 1
-        #Create fr vecs
-        fr_vec_widths = sample(list(np.arange(250,800)),500)
-        fr_vec_starts = sample(list(np.arange(800,seg_len-800)),500)
-        for fr_i, fr_s in enumerate(fr_vec_starts):
-            fr_w = fr_vec_widths[fr_i]
-            fr_vec = np.sum(segment_spike_times_s_i_shuffle_bin[:,fr_s:fr_s+fr_w],1)/(fr_w/1000)
-            if z_score == True:
-                shuffled_fr_vecs.append(list((fr_vec-mean_fr)/std_fr))
-            else:
-                shuffled_fr_vecs.append(list(fr_vec))
-                
+    shuffled_fr_vecs, segment_spike_times_bin, \
+        seg_means, seg_stds = create_null_decode_dataset(segments_to_analyze, \
+                                    segment_times, segment_spike_times, \
+                                    num_neur, bin_dt, z_score)
     #LOO Decoding Tests
     is_taste_decode_success = np.zeros((total_num_deliv,num_cp))
     which_taste_decode_success = np.zeros((total_num_deliv,num_cp))
@@ -1416,3 +1251,202 @@ def is_taste_which_taste_accuracy_tests(tastant_fr_dist, segment_spike_times,
                         
     return is_taste_decode_success, which_taste_decode_success, which_epoch_decode_success
     
+def create_null_decode_dataset(segments_to_analyze, segment_times, segment_spike_times,
+                               num_neur, bin_dt, z_score = False):
+    """
+    This function creates a null dataset of firing rate vectors from shuffled 
+    segment spike times to use in training a decoder.
+
+    Parameters
+    ----------
+    segments_to_analyze : list
+        list of which segment indices to use in analysis.
+    segment_times : list
+        list of start and end times of segments.
+    segment_spike_times : list
+        list of lists containing neuron spike times by segment.
+    num_neur : int
+        number of neurons in dataset.
+    bin_dt : bool
+        bin size in timesteps to use for z-scoring data.
+    z_score : bool, optional
+        boolean indicating whether the data should be z-scored. The default is False.
+
+    Returns
+    -------
+    shuffled_fr_vecs : list
+        firing rate vectors of null dataset by segment.
+    segment_spike_times_bin : list
+        list of boolean arrays containing spike times marked by 1s.
+    seg_means : list
+        list of mean neuron firing rate vectors by segment.
+    seg_stds : list
+        list of std neuron firing rate vectors by segment.
+    """
+    shuffled_fr_vecs = []
+    segment_spike_times_bin = []
+    seg_means = []
+    seg_stds = []
+    for seg_i, s_i in enumerate(segments_to_analyze):
+        # Get segment variables
+        seg_start = segment_times[s_i]
+        seg_end = segment_times[s_i+1]
+        seg_len = segment_times[s_i+1] - segment_times[s_i]  # in dt = ms
+        # Binerize Segment Spike Times
+        segment_spike_times_s_i = segment_spike_times[s_i]
+        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in range(num_neur):
+            n_i_spike_times = np.array(
+                segment_spike_times_s_i[n_i] - seg_start).astype('int')
+            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
+        segment_spike_times_bin.append(segment_spike_times_s_i_bin)
+        if z_score == True:
+            # Calculate mean and std of binned segment spikes for z-scoring
+            z_time_bins = np.arange(0,seg_len-bin_dt,bin_dt)
+            seg_fr = np.zeros((num_neur,len(z_time_bins))) #Hz
+            for bdt_i, bdt in enumerate(z_time_bins):
+                seg_fr[:,bdt_i] = np.sum(segment_spike_times_s_i_bin[:,bdt:bdt+bin_dt],1)/(bin_dt/1000)
+            mean_fr = np.nanmean(seg_fr,1)
+            seg_means.append(mean_fr)
+            std_fr = np.nanstd(seg_fr,1)
+            seg_stds.append(std_fr)
+        # Binerize Shuffled Segment Spike Times
+        segment_spike_times_s_i_shuffle = [sample(list(np.arange(seg_len)),len(segment_spike_times[s_i][n_i])) for n_i in range(num_neur)]
+        segment_spike_times_s_i_shuffle_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in range(num_neur):
+            n_i_spike_times = np.array(
+                segment_spike_times_s_i_shuffle[n_i]).astype('int')
+            segment_spike_times_s_i_shuffle_bin[n_i, n_i_spike_times] = 1
+        #Create fr vecs
+        fr_vec_widths = [sample(list(np.arange(50,1000)),1)[0] for i in range(500)]
+        fr_vec_starts = sample(list(np.arange(1000,seg_len-1000)),500)
+        for fr_i, fr_s in enumerate(fr_vec_starts):
+            fr_w = fr_vec_widths[fr_i]
+            fr_vec = np.sum(segment_spike_times_s_i_shuffle_bin[:,fr_s:fr_s+fr_w],1)/(fr_w/1000)
+            if z_score == True:
+                shuffled_fr_vecs.append(list((fr_vec-mean_fr)/std_fr))
+            else:
+                shuffled_fr_vecs.append(list(fr_vec))
+    
+    return shuffled_fr_vecs, segment_spike_times_bin, seg_means, seg_stds
+
+def decode_groupings(epochs_to_analyze,dig_in_names,palatable_dig_inds,non_none_tastes):
+    """
+    Create fr vector grouping instructions: list of epoch,taste pairs.
+    
+    Parameters
+    ----------
+    epochs_to_analyze: list
+        list of indices of epochs to be analyzed.
+    dig_in_names: list
+        list of strings of taste names
+    palatable_dig_inds: list
+        list of indices of tastes that are palatable
+    non_none_tastes: list of taste names that are not "none"
+    
+    Returns
+    -------
+    group_list: list
+        list of lists containing tuples (e_i,t_i) of which epoch and taste index
+        belongs to a decoding group.
+    group_names: list
+        list of strings naming the decoding groups.
+    """
+    group_list = []
+    group_list_names = []
+    none_group = []
+    palatable_group = []
+    unpalatable_group = []
+    for e_ind, e_i in enumerate(epochs_to_analyze):
+        epoch_group = []
+        epoch_names = []
+        for t_ind, t_name in enumerate(dig_in_names):
+            #First check if this is none
+            if np.setdiff1d([t_name],non_none_tastes).size > 0:
+                none_group.append((e_i,t_ind))
+            #Next check if it should be grouped
+            else:
+                if e_i == 0:
+                    epoch_group.append((e_i, t_ind))
+                    epoch_names.append((e_i, t_name))
+                elif e_i == 1:
+                    group_list.append([(e_i,t_ind)])
+                    group_list_names.append([(e_i,t_name)])
+                else:
+                    #Check if palatable or unpalatable
+                    if (np.intersect1d(palatable_dig_inds,t_ind)).size == 0: #unpalatable
+                        unpalatable_group.append((e_i,t_ind))
+                    else:
+                        palatable_group.append((e_i,t_ind))
+        if len(epoch_group) > 0:
+            group_list.append(epoch_group)
+            group_list_names.append([(e_i,'all')])
+    group_list.append(palatable_group)
+    group_list_names.append(['Palatable'])
+    group_list.append(unpalatable_group)
+    group_list_names.append(['Unpalatable'])
+    group_list.append(none_group)
+    group_list_names.append(['None'])
+    
+    #Prompt the user to name each group
+    group_names = []
+    for gl_i, gl in enumerate(group_list_names):
+        print("\n")
+        print(gl)
+        gl_name = input("How should the above group be colloquially named? ")
+        group_names.append(gl_name)
+    
+    return group_list, group_names
+
+def train_taste_PCA(num_tastes,num_neur, epochs_to_analyze,taste_num_deliv,tastant_fr_dist):
+    """
+    Train a PCA reducer on taste response data.
+
+    Parameters
+    ----------
+    num_tastes : int
+        number of tastes to analyze.
+    num_neur : int
+        number of neurons to analyze.
+    epochs_to_analyze : list
+        list of epoch indices to analyze.
+    taste_num_deliv : list
+        list of number of deliveries by taste.
+    tastant_fr_dist : list
+        list of lists containing firing rate vectors broken down by taste,
+        delivery, and epoch.
+
+    Returns
+    -------
+    pca_reduce_taste : pca model
+        a fit PCA model that can be used in dimensionality reduction.
+
+    """
+    
+    true_taste_train_data = [] #For PCA all combined true taste data
+    for t_i in range(num_tastes):
+        train_taste_data = []
+        for e_ind, e_i in enumerate(epochs_to_analyze):
+            for d_i in range(taste_num_deliv[t_i]):
+                try:
+                    if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
+                        train_taste_data.extend(
+                            list(tastant_fr_dist[t_i][d_i][e_i].T))
+                    else:
+                        train_taste_data.extend(
+                            list(tastant_fr_dist[t_i][d_i][e_i]))
+                except:
+                    train_taste_data.extend([])
+        if t_i < num_tastes-1:
+            true_taste_train_data.extend(train_taste_data)
+    #Taste-Based PCA
+    taste_pca = PCA()
+    taste_pca.fit(np.array(true_taste_train_data).T)
+    exp_var = taste_pca.explained_variance_ratio_
+    num_components = np.where(np.cumsum(exp_var) >= 0.9)[0][0]
+    if num_components == 0:
+        num_components = 3
+    pca_reduce_taste = PCA(num_components)
+    pca_reduce_taste.fit(np.array(true_taste_train_data))
+    
+    return pca_reduce_taste
