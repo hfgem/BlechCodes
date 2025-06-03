@@ -267,6 +267,46 @@ def correlate_null_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist
                                   taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
                                   max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
                                   seg_name,corr_dir):
+    """
+    This function correlates z-scored deviation events pulled out of null 
+    datasets to z-scored taste responses.
+
+    Parameters
+    ----------
+    num_neur : integer
+        Number of neurons in dataset.
+    all_dig_in_names : list of strings
+        Names of all digital inputs in dataset.
+    tastant_fr_dist_z_pop : dictionary
+        Contains organized z-scored taste response firing rate vectors.
+    taste_num_deliv : list if integers
+        Number of deliveries of each tastant.
+    max_hz_z_pop : boolean
+        Maximum population firing rate.
+    min_hz_z_pop : boolean
+        Minimum population firing rate.
+    max_num_cp : integer
+        Maximum number of epochs across datasets.
+    dev_rast :
+        TODO: remove this variable.
+    dev_times : 
+        TODO: remove this variable.
+    dev_fr_vecs_z : list
+        List of deviation firing rate vectors.
+    seg_name : string
+        Name of analyzed segment, for labelling purposes.
+    corr_dir : string
+        Directory to store results.
+
+    Returns
+    -------
+    None.
+    
+    Outputs
+    -------
+    Dictionary of correlation values + plot call.
+
+    """
     
     fr_z_dir = os.path.join(corr_dir,'zscore_fr_corrs')
     if not os.path.isdir(fr_z_dir):

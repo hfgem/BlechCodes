@@ -705,7 +705,7 @@ def bool_input(prompt):
 				
 def int_list_input(prompt):
 	"""
-	This function asks a user for an integer input
+	This function asks a user for a list of integer inputs.
 	INPUTS:
 		prompt = string containing boolean input prompt
 	RETURNS:
