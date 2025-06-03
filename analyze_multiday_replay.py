@@ -21,6 +21,8 @@ from functions.multiday_analysis import run_multiday_analysis
 if __name__ == '__main__':
     
     import multiprocess
+    import time
+    tic = time.time()
     multiprocess.set_start_method('spawn')
     
     # Grab current directory and data directory / metadata
@@ -69,3 +71,6 @@ if __name__ == '__main__':
         
     #Run the multiday analysis
     run_multiday_analysis([metadata,data_dict])
+    toc = time.time()
+    
+    print('Time Elapsed = ' + str(np.round((toc-tic)/60,2)) + ' min')

@@ -11,6 +11,7 @@ Cross-Animal Analysis Test Support: Use to test updates to functions and debug
 #%% Compare Multiday Support
 
 import os
+import tables
 import numpy as np
 from tkinter.filedialog import askdirectory
 from functions.compare_multiday_analysis import run_compare_multiday_analysis
@@ -74,10 +75,32 @@ else:
             
         # Grab colloquial name
         print("Give a more colloquial name to the dataset.")
-        data_name = data_dir.split('/')[-2]
-
+        folder_name = os.path.split(data_dir)[-1]
+        data_name = input("Give a name to the dataset in folder /" + folder_name + "/: ")
         multiday_data_dict[data_name] = dict()
         multiday_data_dict[data_name]['data_dir'] = data_dir
+        
+        # Get day 1 folder
+        folder_containing_data_dir = os.path.split(data_dir)[0]
+        possible_day_1_folders = list(np.setdiff1d(os.listdir(folder_containing_data_dir),[folder_name, '.DS_Store']))
+        folder_prompt = ''
+        for fn_i, fn in enumerate(possible_day_1_folders):
+            folder_prompt += str(fn_i) + ': ' + fn + '\n'
+        folder_prompt += 'Please provide the above index of the day 1 data folder: '
+        day_1_folder_ind = int_input(folder_prompt)
+        day_1_folder = possible_day_1_folders[day_1_folder_ind]
+        
+        # Grab segment lengths from day 1 data
+        day_1_folder_contents = os.listdir(os.path.join(folder_containing_data_dir,day_1_folder))
+        for d1fc in day_1_folder_contents:
+            if d1fc.split('.')[-1] == 'h5':
+                hdf5_path = os.path.join(folder_containing_data_dir,day_1_folder,d1fc)
+        blech_clust_h5 = tables.open_file(hdf5_path, 'r+', title = 'hdf5_file')
+        segment_times = blech_clust_h5.root.experiment_components.segment_times[:]
+        segment_names = [blech_clust_h5.root.experiment_components.segment_names[i].decode('UTF-8') for i in range(len(blech_clust_h5.root.experiment_components.segment_names))]
+        blech_clust_h5.close()
+        multiday_data_dict[data_name]['segment_times'] = segment_times
+        multiday_data_dict[data_name]['segment_names'] = segment_names
         
         del data_dir, data_name
     del nc
@@ -86,13 +109,45 @@ else:
     save_dir = askdirectory()
     np.save(os.path.join(save_dir,'multiday_data_dict.npy'),multiday_data_dict,allow_pickle=True)
 
+#%% Update multiday data dict
+
+for data_name in multiday_data_dict.keys():
+    data_dir = multiday_data_dict[data_name]['data_dir']
+    folder_name = os.path.split(data_dir)[-1]
+    
+    # Get day 1 folder
+    folder_containing_data_dir = os.path.split(data_dir)[0]
+    possible_day_1_folders = list(np.setdiff1d(os.listdir(folder_containing_data_dir),[folder_name, '.DS_Store']))
+    folder_prompt = ''
+    for fn_i, fn in enumerate(possible_day_1_folders):
+        folder_prompt += str(fn_i) + ': ' + fn + '\n'
+    folder_prompt += 'Please provide the above index of the day 1 data folder: '
+    day_1_folder_ind = int_input(folder_prompt)
+    day_1_folder = possible_day_1_folders[day_1_folder_ind]
+    
+    # Grab segment lengths from day 1 data
+    day_1_folder_contents = os.listdir(os.path.join(folder_containing_data_dir,day_1_folder))
+    for d1fc in day_1_folder_contents:
+        if d1fc.split('.')[-1] == 'h5':
+            hdf5_path = os.path.join(folder_containing_data_dir,day_1_folder,d1fc)
+    blech_clust_h5 = tables.open_file(hdf5_path, 'r+', title = 'hdf5_file')
+    segment_times = blech_clust_h5.root.experiment_components.segment_times[:]
+    segment_names = [blech_clust_h5.root.experiment_components.segment_names[i].decode('UTF-8') for i in range(len(blech_clust_h5.root.experiment_components.segment_names))]
+    blech_clust_h5.close()
+    multiday_data_dict[data_name]['segment_times'] = segment_times #times in ms
+    multiday_data_dict[data_name]['segment_names'] = segment_names
+
+np.save(os.path.join(save_dir,'multiday_data_dict.npy'),multiday_data_dict,allow_pickle=True)
+
 #%% imports
 
 import os
 import warnings
-import pickle
+import tqdm
+import random
 import numpy as np
 from tkinter.filedialog import askdirectory
+from functions.compare_multiday_funcs import select_analysis_groups
 
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
@@ -103,6 +158,7 @@ warnings.filterwarnings("ignore")
 #%% gather_corr_data()
 
 corr_dict_path = os.path.join(save_dir,'corr_data_dict.npy')
+#Start with real corr data
 try:
     corr_dict = np.load(corr_dict_path,allow_pickle=True).item()
 except:
@@ -114,54 +170,56 @@ except:
         corr_dir = os.path.join(data_dir,'Correlations')
         corr_types = os.listdir(corr_dir)
         for ct in corr_types:
-            corr_dict[dn][ct] = dict()
-            corr_type_files = os.listdir(os.path.join(corr_dir,ct))
-            for f in corr_type_files:
-                if f.split('.')[-1] == 'npy':
-                    f_name = f.split('.')[0]
-                    if f_name == 'all_taste_names':
-                        taste_names = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
-                        taste_name_list = []
-                        for tn in taste_names:
-                            if tn == 'NaCl_1':
-                                taste_name_list.append('salt_1')
-                            else:
-                                taste_name_list.append(tn)
-                        
-                        corr_dict[dn][ct]['tastes'] = taste_name_list
-                    else:
-                        seg_name = f_name.split('_')[0]
-                        corr_dict_keys = list(corr_dict[dn][ct].keys())
-                        if len(np.where(np.array(corr_dict_keys) == seg_name)[0]) == 0: #Segment not stored yet
-                            corr_dict[dn][ct][seg_name] = dict()
+            if ct == 'Null':
+                skip = 1
+            else: #Regular data
+                corr_dict[dn][ct] = dict()
+                corr_type_files = os.listdir(os.path.join(corr_dir,ct))
+                for f in corr_type_files:
+                    if f.split('.')[-1] == 'npy':
+                        f_name = f.split('.')[0]
+                        if f_name == 'all_taste_names':
+                            taste_names = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
+                            taste_name_list = []
+                            for tn in taste_names:
+                                if tn == 'NaCl_1':
+                                    taste_name_list.append('salt_1')
+                                else:
+                                    taste_name_list.append(tn)
                             
-                        if f_name.split('_')[-1] == 'dict': #Dictionary of all correlation values
-                            f_data = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True).item()
-                            corr_dict[dn][ct][seg_name]['all'] = dict()
-                            num_tastes = len(f_data)
-                            for nt_i in range(num_tastes):
-                                taste_name = f_data[nt_i]['name']
-                                if taste_name == 'NaCl_1':
-                                    taste_name = 'salt_1'
-                                num_cp = len(f_data[nt_i]['data'])
-                                num_points = len(f_data[nt_i]['data'][0])
-                                data_concat = np.zeros((num_cp,num_points))
-                                for cp_i in range(num_cp):
-                                    data_concat[cp_i,:] = np.array(f_data[nt_i]['data'][cp_i])
-                                corr_dict[dn][ct][seg_name]['all'][taste_name] = dict()
-                                corr_dict[dn][ct][seg_name]['all'][taste_name]['data'] = data_concat
-                                try:
-                                    corr_dict[dn][ct][seg_name]['all'][taste_name]['num_dev'] = f_data[nt_i]['num_dev']
-                                    corr_dict[dn][ct][seg_name]['all'][taste_name]['taste_num_deliv'] = f_data[nt_i]['taste_num_deliv']
-                                except:
-                                    skip_val = 1 #Place holder skip
-                        else: #best correlations file
-                            f_data = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
-                            corr_dict[dn][ct][seg_name]['best'] = f_data
+                            corr_dict[dn][ct]['tastes'] = taste_name_list
+                        else:
+                            seg_name = f_name.split('_')[0]
+                            corr_dict_keys = list(corr_dict[dn][ct].keys())
+                            if len(np.where(np.array(corr_dict_keys) == seg_name)[0]) == 0: #Segment not stored yet
+                                corr_dict[dn][ct][seg_name] = dict()
+                                
+                            if f_name.split('_')[-1] == 'dict': #Dictionary of all correlation values
+                                f_data = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True).item()
+                                corr_dict[dn][ct][seg_name]['all'] = dict()
+                                num_tastes = len(f_data)
+                                for nt_i in range(num_tastes):
+                                    taste_name = f_data[nt_i]['name']
+                                    if taste_name == 'NaCl_1':
+                                        taste_name = 'salt_1'
+                                    num_cp = len(f_data[nt_i]['data'])
+                                    num_points = len(f_data[nt_i]['data'][0])
+                                    data_concat = np.zeros((num_cp,num_points))
+                                    for cp_i in range(num_cp):
+                                        data_concat[cp_i,:] = np.array(f_data[nt_i]['data'][cp_i])
+                                    corr_dict[dn][ct][seg_name]['all'][taste_name] = dict()
+                                    corr_dict[dn][ct][seg_name]['all'][taste_name]['data'] = data_concat
+                                    try:
+                                        corr_dict[dn][ct][seg_name]['all'][taste_name]['num_dev'] = f_data[nt_i]['num_dev']
+                                        corr_dict[dn][ct][seg_name]['all'][taste_name]['taste_num_deliv'] = f_data[nt_i]['taste_num_deliv']
+                                    except:
+                                        skip_val = 1 #Place holder skip
+                            else: #best correlations file
+                                f_data = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
+                                corr_dict[dn][ct][seg_name]['best'] = f_data
     np.save(corr_dict_path,corr_dict,allow_pickle=True)   
     
 #%% find_corr_groupings()
-
 num_datasets = len(corr_dict)
 unique_given_names = list(corr_dict.keys())
 #Pull unique correlation analysis names
@@ -171,6 +229,9 @@ for name in unique_given_names:
 unique_corr_indices = np.sort(
     np.unique(unique_corr_names, return_index=True)[1])
 unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
+#Select which corr types to use in the analysis
+unique_corr_names = select_analysis_groups(unique_corr_names)
+
 #Pull unique segment and taste names and max cp
 unique_segment_names = []
 unique_taste_names = []
@@ -183,25 +244,86 @@ for name in unique_given_names:
         for s_n in seg_names:
             if type(corr_dict[name][corr_name][s_n]) == dict:
                 unique_segment_names.extend([s_n])
-            try:
-                num_cp, _ = np.shape(corr_dict[name][corr_name][s_n]['all'][taste_names[0]]['data'])
-                if num_cp > max_cp:
-                    max_cp = num_cp
-            except:
-                error = "Unable to grab changepoint count."
+                try:
+                    num_cp, _ = np.shape(corr_dict[name][corr_name][s_n]['all'][taste_names[0]]['data'])
+                    if num_cp > max_cp:
+                        max_cp = num_cp
+                except:
+                    error = "Unable to grab changepoint count."
 unique_seg_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i] for i in unique_seg_indices]
+#Select which segments to use in the analysis
+unique_segment_names = select_analysis_groups(unique_segment_names)
+
 unique_taste_indices = np.sort(
     np.unique(unique_taste_names, return_index=True)[1])
 unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
+#Select which tastes to use in the analysis
+unique_taste_names = select_analysis_groups(unique_taste_names)
+  
 
-    
+#%% gather_null_corr_data(self,)
+null_corr_dict_path = os.path.join(save_dir,'null_corr_data_dict.npy')
+try:
+    null_corr_dict = np.load(null_corr_dict_path,allow_pickle=True).item()
+except:
+    null_corr_dict = dict()
+    data_names = list(multiday_data_dict.keys())
+    for dn in data_names:
+        print("\tImporting null data for " + dn)
+        null_corr_dict[dn] = dict()
+        data_dir = multiday_data_dict[dn]['data_dir']
+        null_corr_dir = os.path.join(data_dir,'Correlations','Null')
+        null_folders = os.listdir(null_corr_dir)
+        num_null = len(null_folders)
+        null_corr_dict[dn]['num_null'] = num_null
+        #First set up folder structure
+        for sn in unique_segment_names:
+            null_corr_dict[dn][sn] = dict()
+            for tn in unique_taste_names:
+                null_corr_dict[dn][sn][tn] = dict()
+                for cn in unique_corr_names:
+                    null_corr_dict[dn][sn][tn][cn] = dict() 
+                    for cp_i in range(max_cp):
+                        null_corr_dict[dn][sn][tn][cn][cp_i] = [] #Compiled from samples from all null datasets
+        #Now collect correlations across null datasets into this folder structure
+        for cn in unique_corr_names:
+            print('\t\tNow collecting null data for ' + cn)
+            for nf_i, nf in tqdm.tqdm(enumerate(null_folders)):
+                null_data_folder = os.path.join(null_corr_dir,'null_' + str(nf_i),cn)
+                if os.path.isdir(null_data_folder):
+                    null_datasets = os.listdir(null_data_folder)
+                    for sn in unique_segment_names:
+                        for nd_name in null_datasets:
+                            if nd_name.split('_')[0] == sn:
+                                if nd_name.split('_')[-1] == 'dict.npy': #Only save complete correlation datasets
+                                    null_dict = np.load(os.path.join(null_data_folder,\
+                                                             nd_name),allow_pickle=True).item()
+                                    for ndk_i in null_dict.keys():
+                                        tn = null_dict[ndk_i]['name']
+                                        if tn == 'NaCl_1':
+                                            tn_true = 'salt_1'
+                                        else:
+                                            tn_true = tn
+                                        all_cp_data = null_dict[ndk_i]['data']
+                                        num_null_dev = null_dict[ndk_i]['num_dev']
+                                        num_taste_deliv, _ = np.shape(null_dict[ndk_i]['taste_num'])
+                                        for cp_i in range(max_cp):
+                                            try:
+                                                all_cp_data_reshaped = np.reshape(all_cp_data[cp_i],(num_taste_deliv,num_null_dev))
+                                                avg_null_corr = np.nanmean(all_cp_data_reshaped,0) #Average correlation across deliveries
+                                                null_corr_dict[dn][sn][tn_true][cn][cp_i].extend(avg_null_corr)
+                                            except:
+                                                skip_taste = 1
+                    
+    np.save(null_corr_dict_path,null_corr_dict,allow_pickle=True)   
+
 #%% run_corr_analysis()
 
 import functions.compare_multiday_funcs as cmf
 
-cmf.compare_corr_data(corr_dict, multiday_data_dict, unique_given_names,
+cmf.compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_given_names,
                       unique_corr_names, unique_segment_names, unique_taste_names, 
                       max_cp, save_dir)
 

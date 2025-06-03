@@ -12,6 +12,7 @@ in their correlation trends.
 import os
 import warnings
 import itertools
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
@@ -323,10 +324,15 @@ def cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, unique_given_na
               'springgreen','turquoise', 'midnightblue', 'lightskyblue', \
               'palevioletred', 'darkslateblue']
     corr_cutoffs = np.round(np.arange(0,1.01,0.01),2)
+    num_null_samples = 100
     
     corr_cutoff_save = os.path.join(save_dir, 'Corr_Cutoff_Fracs')
     if not os.path.isdir(corr_cutoff_save):
         os.mkdir(corr_cutoff_save)
+        
+    corr_cutoff_indiv_save = os.path.join(corr_cutoff_save, 'Indiv_Combinations')
+    if not os.path.isdir(corr_cutoff_indiv_save):
+        os.mkdir(corr_cutoff_indiv_save)
     
     # _____Reorganize data by unique correlation type_____
     unique_data_dict, unique_best_data_dict, max_epochs = reorg_data_dict(corr_data, min_best_cutoff,
@@ -335,53 +341,105 @@ def cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, unique_given_na
     
     # Collect fractions by cutoff
     for corr_name in unique_corr_names:
-        dev_corr_frac_dict = dict() #Collect fraction of events by corr cutoff by animal
-        dev_corr_total_frac_dict = dict() #Collect total fraction of events by corr cutoff (sum counts across animals and divide by total events across animals)
-        dev_corr_ind_dict = dict() #Collect indices of events above corr cutoff for comparison
-        for seg_name in unique_segment_names:
-            dev_corr_frac_dict[seg_name] = dict()
-            dev_corr_total_frac_dict[seg_name] = dict()
-            dev_corr_ind_dict[seg_name] = dict()
-            for taste in unique_taste_names:
-                dev_corr_frac_dict[seg_name][taste] = dict()
-                dev_corr_total_frac_dict[seg_name][taste] = dict()
-                dev_corr_ind_dict[seg_name][taste] = dict()
-                for cp_i in range(max_epochs):
-                    dev_corr_frac_dict[seg_name][taste][cp_i] = []
-                    dev_corr_total_frac_dict[seg_name][taste][cp_i] = []
-                    dev_corr_ind_dict[seg_name][taste][cp_i] = []
-            
-        for seg_name in unique_segment_names:
-            for t_i, taste in enumerate(unique_taste_names):
-                try:
+        try:
+            dev_corr_ind_dict = np.load(os.path.join(corr_cutoff_save,corr_name+'_dev_corr_ind_dict.npy'),allow_pickle=True).item()
+            dev_corr_frac_dict = np.load(os.path.join(corr_cutoff_save,corr_name+'_dev_corr_frac_dict.npy'),allow_pickle=True).item()
+            dev_corr_rate_dict = np.load(os.path.join(corr_cutoff_save,corr_name+'_dev_corr_rate_dict.npy'),allow_pickle=True).item()
+            dev_corr_total_frac_dict = np.load(os.path.join(corr_cutoff_save,corr_name+'_dev_corr_total_frac_dict.npy'),allow_pickle=True).item()
+        except:
+            dev_corr_frac_dict = dict() #Collect fraction of events by corr cutoff by animal
+            dev_corr_rate_dict = dict() #Collect the rate of events by corr cutoff by animal
+            dev_corr_total_frac_dict = dict() #Collect total fraction of events by corr cutoff (sum counts across animals and divide by total events across animals)
+            dev_corr_ind_dict = dict() #Collect indices of events above corr cutoff for comparison
+            for seg_name in unique_segment_names:
+                dev_corr_frac_dict[seg_name] = dict()
+                dev_corr_rate_dict[seg_name] = dict()
+                dev_corr_total_frac_dict[seg_name] = dict()
+                dev_corr_ind_dict[seg_name] = dict()
+                for taste in unique_taste_names:
+                    dev_corr_frac_dict[seg_name][taste] = dict()
+                    dev_corr_rate_dict[seg_name][taste] = dict()
+                    dev_corr_total_frac_dict[seg_name][taste] = dict()
+                    dev_corr_ind_dict[seg_name][taste] = dict()
                     for cp_i in range(max_epochs):
-                        animal_inds = []
-                        animal_counts = []
-                        animal_all_dev_counts = []
-                        for g_n in unique_given_names:
-                            data = corr_data[g_n]['corr_data'][corr_name][seg_name][taste]['data']
-                            num_dev, _, _ = np.shape(data)
-                            animal_all_dev_counts.append(num_dev)
-                            if taste == 'none':
-                                taste_corr_vals = np.array([np.nanmean(data[d_i,:,:]) for d_i in range(num_dev)])
-                                corr_cut_inds = [np.where(taste_corr_vals >= cc)[0] for cc in corr_cutoffs]
-                                corr_cut_count = [len(cc_i) for cc_i in corr_cut_inds]
-                                animal_counts.append(corr_cut_count)
-                                animal_inds.append(corr_cut_inds)
-                            else:
-                                taste_corr_vals = np.nanmean(data,1) #num dev x num cp
-                                corr_cut_inds = [np.where(taste_corr_vals[:,cp_i] >= cc)[0] for cc in corr_cutoffs]
-                                corr_cut_count = [len(cc_i) for cc_i in corr_cut_inds]
-                                animal_counts.append(corr_cut_count)
-                                animal_inds.append(corr_cut_inds)
-                        animal_counts = np.array(animal_counts)
-                        animal_all_dev_counts = np.array(animal_all_dev_counts)
-                        dev_corr_ind_dict[seg_name][taste][cp_i] = animal_inds
-                        dev_corr_frac_dict[seg_name][taste][cp_i] = animal_counts/np.expand_dims(animal_all_dev_counts,1)
-                        dev_corr_total_frac_dict[seg_name][taste][cp_i] = np.sum(animal_counts,0)/np.sum(animal_all_dev_counts)
-                except:
-                    print("No data.")
+                        dev_corr_frac_dict[seg_name][taste][cp_i] = []
+                        dev_corr_rate_dict[seg_name][taste][cp_i] = dict()
+                        dev_corr_total_frac_dict[seg_name][taste][cp_i] = []
+                        dev_corr_ind_dict[seg_name][taste][cp_i] = []
+                
+            for s_i, seg_name in enumerate(unique_segment_names):
+                for t_i, taste in enumerate(unique_taste_names):
+                    try:
+                        for cp_i in range(max_epochs):
+                            animal_inds = []
+                            animal_counts = []
+                            animal_null_counts = []
+                            animal_all_dev_counts = []
+                            animal_lens = []
+                            null_animal_lens = []
+                            for g_n in unique_given_names:
+                                data = corr_data[g_n]['corr_data'][corr_name][seg_name][taste]['data']
+                                null_data = corr_data[g_n]['corr_data'][corr_name][seg_name][taste]['null_data']
+                                num_null = corr_data[g_n]['num_null']
+                                segment_times_reshaped = corr_data[g_n]['segment_times_reshaped']
+                                unique_segments_ind = [i for i in range(len(corr_data[g_n]['segment_names'])) if corr_data[g_n]['segment_names'][i] == seg_name][0]
+                                segment_len_sec = (segment_times_reshaped[unique_segments_ind][1]-segment_times_reshaped[unique_segments_ind][0])/1000
+                                animal_lens.append(segment_len_sec)
+                                num_dev, _, _ = np.shape(data)
+                                animal_all_dev_counts.append(num_dev)
+                                null_sample_counts = []
+                                if taste == 'none':
+                                    #True values
+                                    taste_corr_vals = np.array([np.nanmean(data[d_i,:,:]) for d_i in range(num_dev)])
+                                    corr_cut_inds = [np.where(taste_corr_vals >= cc)[0] for cc in corr_cutoffs]
+                                    corr_cut_count = [len(cc_i) for cc_i in corr_cut_inds]
+                                    #Null values
+                                    null_taste_corr_vals = np.array([np.nanmean(null_data[d_i,:,:]) for d_i in range(np.shape(null_data)[0])])
+                                    for ns_i in range(num_null_samples): #Bootstrap to find counts
+                                        null_sample_vals = random.sample(list(null_taste_corr_vals),num_dev)
+                                        avg_null_sample_corr_cut_count = [len(np.where(null_sample_vals >= cc)[0])/num_null for cc in corr_cutoffs]
+                                        null_sample_counts.append(avg_null_sample_corr_cut_count)
+                                    animal_counts.append(corr_cut_count)
+                                    animal_inds.append(corr_cut_inds)
+                                else:
+                                    #True values
+                                    taste_corr_vals = np.nanmean(data,1) #num dev x num cp
+                                    corr_cut_inds = [np.where(taste_corr_vals[:,cp_i] >= cc)[0] for cc in corr_cutoffs]
+                                    corr_cut_count = [len(cc_i) for cc_i in corr_cut_inds]
+                                    #Null values
+                                    null_taste_corr_vals = np.nanmean(null_data,1)[:,cp_i] #num null dev
+                                    for ns_i in range(num_null_samples): #Bootstrap to find counts
+                                        null_sample_vals = random.sample(list(null_taste_corr_vals),num_dev)
+                                        avg_null_corr_cut_count = [len(np.where(null_sample_vals >= cc)[0])/num_null for cc in corr_cutoffs]
+                                        null_sample_counts.append(avg_null_corr_cut_count)
+                                    animal_counts.append(corr_cut_count)
+                                    animal_inds.append(corr_cut_inds)
+                                animal_null_counts.extend(null_sample_counts)
+                                null_animal_lens.extend(list(segment_len_sec*np.ones(len(null_sample_counts))))
+                            animal_counts = np.array(animal_counts)
+                            animal_null_counts = np.array(animal_null_counts)
+                            animal_all_dev_counts = np.array(animal_all_dev_counts)
+                            animal_lens = np.array(animal_lens)
+                            null_animal_lens = np.array(null_animal_lens)
+                            dev_corr_ind_dict[seg_name][taste][cp_i] = animal_inds
+                            dev_corr_frac_dict[seg_name][taste][cp_i] = animal_counts/np.expand_dims(animal_all_dev_counts,1)
+                            dev_corr_rate_dict[seg_name][taste][cp_i]['true'] = animal_counts/np.expand_dims(animal_lens,1)
+                            dev_corr_rate_dict[seg_name][taste][cp_i]['null'] = animal_null_counts/np.expand_dims(null_animal_lens,1)
+                            dev_corr_total_frac_dict[seg_name][taste][cp_i] = np.sum(animal_counts,0)/np.sum(animal_all_dev_counts)
+                    except:
+                        print("No data.")
             
+            #Save dicts
+            np.save(os.path.join(corr_cutoff_save,corr_name+'_dev_corr_ind_dict.npy'),dev_corr_ind_dict,allow_pickle=True)
+            np.save(os.path.join(corr_cutoff_save,corr_name+'_dev_corr_frac_dict.npy'),dev_corr_frac_dict,allow_pickle=True)
+            np.save(os.path.join(corr_cutoff_save,corr_name+'_dev_corr_rate_dict.npy'),dev_corr_rate_dict,allow_pickle=True)
+            np.save(os.path.join(corr_cutoff_save,corr_name+'_dev_corr_total_frac_dict.npy'),dev_corr_total_frac_dict,allow_pickle=True)
+            
+        #Create rate plots
+        rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names, 
+                       max_epochs, unique_taste_names, corr_name, corr_cutoff_save, 
+                       corr_cutoff_indiv_save)
+        
         #Plot tastes against each other
         f_cc_taste, ax_cc_taste = plt.subplots(nrows = len(unique_segment_names),\
                                                ncols = max_epochs, sharex = True,\
@@ -4790,3 +4848,207 @@ def cross_dataset_dev_split_decode_frac_plots(dev_split_decode_data, unique_give
     f_ep_segcomp.savefig(os.path.join(results_dir,'which_epoch_decode_avg.png'))
     f_ep_segcomp.savefig(os.path.join(results_dir,'which_epoch_decode_avg.svg'))
     plt.close(f_ep_segcomp)
+    
+def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names, 
+               max_epochs, unique_taste_names, corr_name, corr_cutoff_save, 
+               corr_cutoff_indiv_save):
+    
+    #Called from cross_dataset_dev_by_corr_cutoff()
+    num_tastes = len(unique_taste_names)
+    num_segs = len(unique_segment_names)
+    cmap = colormaps['gist_rainbow']
+    taste_colors = cmap(np.linspace(0, 1, num_tastes))
+    taste_pairs = list(combinations(np.arange(num_tastes), 2))
+    zoom_inds = np.where(corr_cutoffs >= 0.25)[0]
+    cutoff_zoom_ind = zoom_inds[0]
+    
+    f_cc_taste_rate, ax_cc_taste_rate = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = max_epochs, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    f_cc_taste_rate_zoom, ax_cc_taste_rate_zoom = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = max_epochs, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    f_cc_taste_rate_box, ax_cc_taste_rate_box = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = max_epochs, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    f_cc_null_diffs, ax_cc_null_diffs = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = max_epochs, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    f_cc_null_diffs_zoom, ax_cc_null_diffs_zoom = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = max_epochs, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    for s_i, seg_name in enumerate(unique_segment_names):
+        for cp_i in range(max_epochs):
+            all_null_taste_rates = [] #Only for true tastes
+            #Plot individual animal points at cutoff value
+            indiv_animal_at_cutoff = []
+            taste_curves = []
+            taste_names = []
+            none_curve = []
+            for t_i, taste in enumerate(unique_taste_names):
+                taste_rates = dev_corr_rate_dict[seg_name][taste][cp_i]['true'] #num_anim x num_cutoffs
+                num_anim, _ = np.shape(taste_rates)
+                null_rates = dev_corr_rate_dict[seg_name][taste][cp_i]['null']
+                indiv_animal_at_cutoff.append(taste_rates[:,cutoff_zoom_ind])
+                taste_mean = np.nanmean(taste_rates,0)
+                taste_std = np.nanstd(taste_rates,0)
+                taste_min = taste_mean - taste_std
+                taste_min[taste_min < 0] = 0
+                if taste == 'none':
+                    none_curve.append(taste_mean)
+                else:
+                    all_null_taste_rates.extend(list(null_rates))
+                    taste_curves.append(taste_mean)
+                    taste_names.append(taste)
+                #Plot individually cutoff curves
+                f_indiv = plt.figure(figsize=(5,5))
+                for na_i in range(num_anim):
+                    plt.plot(corr_cutoffs,taste_rates[na_i,:],color='b',alpha=0.2,\
+                             label='_')
+                plt.plot(corr_cutoffs,taste_mean,color='b',alpha=1,\
+                         linestyle='dashed',label='Animal Avg')
+                plt.fill_between(corr_cutoffs,taste_min,taste_mean+taste_std,color='b',
+                                 alpha=0.1,label='Null Std')
+                null_mean = np.nanmean(null_rates,0)
+                null_std = np.nanstd(null_rates,0)
+                null_min = null_mean-null_std
+                null_min[null_min < 0] = 0
+                plt.plot(corr_cutoffs,null_mean,color='k',alpha=1,\
+                         linestyle='dashed',label='Null Avg')
+                plt.fill_between(corr_cutoffs,null_min,null_mean+null_std,color='k',
+                                 alpha=0.1,label='Null Std')
+                plt.ylabel('Avg Rate (Hz)')
+                plt.xlabel('Min Correlation Cutoff')
+                plt.legend(loc='upper left')
+                plt.title(seg_name + '\n' + taste + '\nEpoch ' + str(cp_i))
+                plt.tight_layout()
+                f_indiv.savefig(os.path.join(corr_cutoff_indiv_save,corr_name + '_' + seg_name + '_' + taste + '_Epoch_' + str(cp_i) + '_avg_rates.png'))
+                f_indiv.savefig(os.path.join(corr_cutoff_indiv_save,corr_name + '_' + seg_name + '_' + taste + '_Epoch_' + str(cp_i) + '_avg_rates.svg'))
+                plt.close(f_indiv)
+                #Plot in joint plot cutoff curves
+                ax_cc_taste_rate[s_i,cp_i].plot(corr_cutoffs,taste_mean,\
+                                                color=taste_colors[t_i,:],\
+                                                    alpha=1,label=taste)
+                ax_cc_taste_rate_zoom[s_i,cp_i].plot(corr_cutoffs[zoom_inds],\
+                                                     taste_mean[zoom_inds],\
+                                                color=taste_colors[t_i,:],\
+                                                    alpha=1,label=taste)
+            all_null_taste_rates = np.array(all_null_taste_rates)
+            null_mean = np.nanmean(all_null_taste_rates,0)
+            null_std = np.nanstd(all_null_taste_rates,0)
+            null_min = null_mean-null_std
+            null_min[null_min<0] = 0
+            ax_cc_taste_rate[s_i,cp_i].plot(corr_cutoffs,null_mean,\
+                                            color='k',alpha=1,
+                                            linestyle='dashed',label='Null')
+            ax_cc_taste_rate[s_i,cp_i].fill_between(corr_cutoffs,null_min,\
+                                                    null_mean+null_std,color='k',\
+                                                        alpha=0.1,label='Null Std')
+            ax_cc_taste_rate_zoom[s_i,cp_i].plot(corr_cutoffs[zoom_inds],null_mean[zoom_inds],\
+                                            color='k',alpha=1,
+                                            linestyle='dashed',label='Null')
+            ax_cc_taste_rate_zoom[s_i,cp_i].fill_between(corr_cutoffs[zoom_inds],\
+                                                         null_min[zoom_inds],\
+                                                    null_mean[zoom_inds]+null_std[zoom_inds],\
+                                                        color='k',alpha=0.1,\
+                                                            label='Null Std')
+            #Diff plot
+            none_curve = np.array(none_curve).squeeze()
+            ax_cc_null_diffs[s_i,cp_i].plot(corr_cutoffs,np.zeros(len(corr_cutoffs)),\
+                                            color='k',alpha=0.5,linestyle='dashed')
+            ax_cc_null_diffs_zoom[s_i,cp_i].plot(corr_cutoffs,np.zeros(len(corr_cutoffs)),\
+                                            color='k',alpha=0.5,linestyle='dashed')
+            for t_i, taste in enumerate(taste_names):
+                ax_cc_null_diffs[s_i,cp_i].plot(corr_cutoffs,\
+                                                np.array(taste_curves[t_i])-none_curve,\
+                                                color=taste_colors[t_i,:],\
+                                                    alpha=1,label=taste)
+                ax_cc_null_diffs_zoom[s_i,cp_i].plot(corr_cutoffs[zoom_inds],\
+                                                (np.array(taste_curves[t_i])-none_curve)[zoom_inds],\
+                                                color=taste_colors[t_i,:],\
+                                                    alpha=1,label=taste)
+            if s_i == 0:
+                ax_cc_taste_rate[s_i,cp_i].set_title('Epoch ' + str(cp_i))
+                ax_cc_taste_rate_zoom[s_i,cp_i].set_title('Epoch ' + str(cp_i))
+                ax_cc_taste_rate_box[s_i,cp_i].set_title('Epoch ' + str(cp_i))
+                ax_cc_null_diffs[s_i,cp_i].set_title('Epoch ' + str(cp_i))
+                ax_cc_null_diffs_zoom[s_i,cp_i].set_title('Epoch ' + str(cp_i))
+            if cp_i == 0:
+                ax_cc_taste_rate[s_i,cp_i].set_ylabel(seg_name + '\nRate (Hz)')
+                ax_cc_taste_rate_zoom[s_i,cp_i].set_ylabel(seg_name + '\nRate (Hz)')
+                ax_cc_taste_rate_box[s_i,cp_i].set_ylabel(seg_name + '\nRate (Hz)')
+                ax_cc_null_diffs[s_i,cp_i].set_ylabel(seg_name + '\nRate Diff From None(Hz)')
+                ax_cc_null_diffs_zoom[s_i,cp_i].set_ylabel(seg_name + '\nRate Diff From None(Hz)')
+            if s_i == num_segs-1:
+                ax_cc_taste_rate[s_i,cp_i].set_xlabel('Min. Correlation Cutoff')
+                ax_cc_taste_rate_zoom[s_i,cp_i].set_xlabel('Min. Correlation Cutoff')
+                ax_cc_null_diffs[s_i,cp_i].set_xlabel('Min. Correlation Cutoff')
+                ax_cc_null_diffs_zoom[s_i,cp_i].set_xlabel('Min. Correlation Cutoff')
+            #Animal dist pairwise sig
+            sig_pair = []
+            for tp_i, tp in enumerate(taste_pairs):
+                stat = ttest_ind(indiv_animal_at_cutoff[tp[0]],indiv_animal_at_cutoff[tp[1]],\
+                                 equal_var=False,nan_policy='omit')
+                if stat[1]<=0.05:
+                    sig_pair.append(tp)
+            #Combined box plots
+            ax_cc_taste_rate_box[s_i,cp_i].boxplot(indiv_animal_at_cutoff,showmeans=False,showfliers=False)
+            for t_i, taste in enumerate(unique_taste_names):
+                x_locs = t_i + 1 + 0.1*np.random.randn(len(indiv_animal_at_cutoff[t_i]))
+                ax_cc_taste_rate_box[s_i,cp_i].scatter(x_locs,indiv_animal_at_cutoff[t_i],alpha=0.5,color='g')
+            for sp_i, sp in enumerate(sig_pair):
+                ax_cc_taste_rate_box[s_i,cp_i].plot([sp[0]+1,sp[1]+1],[-0.01*(sp_i+1),-0.01*(sp_i+1)],color='k',alpha=0.3)
+                x_sig = (sp[0]+1)+(sp[1]-sp[0])/2
+                ax_cc_taste_rate_box[s_i,cp_i].scatter(x_sig,-0.01*(sp_i+1),marker='*',color='k')
+            ax_cc_taste_rate_box[s_i,cp_i].set_xticks(np.arange(num_tastes) + 1,unique_taste_names)
+            #Indiv animal box plots
+            f_indiv_animal = plt.figure(figsize=(5,5))
+            plt.boxplot(indiv_animal_at_cutoff,showmeans=False,showfliers=False)
+            for t_i, taste in enumerate(unique_taste_names):
+                x_locs = t_i + 1 + 0.1*np.random.randn(len(indiv_animal_at_cutoff[t_i]))
+                plt.scatter(x_locs,indiv_animal_at_cutoff[t_i],alpha=0.5,color='g')
+            for sp_i, sp in enumerate(sig_pair):
+                plt.plot([sp[0]+1,sp[1]+1],[-0.01*(sp_i+1),-0.01*(sp_i+1)],color='k',alpha=0.3)
+                x_sig = (sp[0]+1)+(sp[1]-sp[0])/2
+                plt.scatter(x_sig,-0.01*(sp_i+1),marker='*',color='k')
+            plt.xticks(np.arange(num_tastes) + 1,unique_taste_names)
+            plt.ylabel('Rate (Hz)')
+            plt.title(seg_name + '\nEpoch ' + str(cp_i) + '\nAt Cutoff 0.25')
+            plt.tight_layout()
+            f_indiv_animal.savefig(os.path.join(corr_cutoff_indiv_save,corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + 'indiv_animal_rates.png'))
+            f_indiv_animal.savefig(os.path.join(corr_cutoff_indiv_save,corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + 'indiv_animal_rates.svg'))
+            plt.close(f_indiv_animal)
+    ax_cc_taste_rate[0,0].legend(loc='upper left')
+    plt.suptitle('Rate by Cutoff')
+    plt.tight_layout()
+    f_cc_taste_rate.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_rates.png'))
+    f_cc_taste_rate.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_rates.svg'))
+    plt.close(f_cc_taste_rate)
+    ax_cc_taste_rate_zoom[0,0].legend(loc='upper left')
+    ax_cc_taste_rate_zoom[0,0].set_xlim([0.25,1])
+    plt.suptitle('Rate by Cutoff')
+    plt.tight_layout()
+    f_cc_taste_rate_zoom.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_zoom_rates.png'))
+    f_cc_taste_rate_zoom.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_zoom_rates.svg'))
+    plt.close(f_cc_taste_rate_zoom)
+    plt.figure(f_cc_taste_rate_box)
+    plt.suptitle('Animal Rates at 0.25 Corr')
+    plt.tight_layout()
+    f_cc_taste_rate_box.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_box_rates.png'))
+    f_cc_taste_rate_box.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_box_rates.svg'))
+    plt.close(f_cc_taste_rate_box)
+    plt.figure(f_cc_null_diffs)
+    ax_cc_null_diffs[0,0].legend(loc='upper left')
+    plt.suptitle('Rate Difference from None by Cutoff')
+    plt.tight_layout()
+    f_cc_null_diffs.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_rate_diffs.png'))
+    f_cc_null_diffs.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_rate_diffs.svg'))
+    plt.close(f_cc_null_diffs)
+    plt.figure(f_cc_null_diffs_zoom)
+    ax_cc_null_diffs_zoom[0,0].legend(loc='upper left')
+    plt.suptitle('Rate Difference from None by Cutoff')
+    plt.tight_layout()
+    f_cc_null_diffs_zoom.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_rate_diffs_zoom.png'))
+    f_cc_null_diffs_zoom.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_rate_diffs_zoom.svg'))
+    plt.close(f_cc_null_diffs_zoom)
+    
