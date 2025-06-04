@@ -171,7 +171,7 @@ class run_deviation_dependent_bayes():
         
     def decode_nonzscored(self,):
         print("\tRun non-z-scored data decoder pipeline")
-        decode_dir = self.slide_decode_dir + 'All_Neurons/'
+        decode_dir = os.path.join(self.slide_decode_dir,'All_Neurons_Z_Scored')
         if os.path.isdir(decode_dir) == False:
             os.mkdir(decode_dir)
         self.decode_dir = decode_dir
@@ -187,9 +187,9 @@ class run_deviation_dependent_bayes():
         
         ddf.decoder_accuracy_tests(self.tastant_fr_dist, self.segment_spike_times, 
                         self.dig_in_names, self.segment_times, self.segment_names, 
-                        self.start_dig_in_times, self.taste_num_deliv, self.bin_dt, 
+                        self.start_dig_in_times, self.taste_num_deliv,
                         self.group_list, self.group_names, self.non_none_tastes, 
-                        self.decode_dir, self.z_score, 
+                        self.decode_dir, self.bin_dt, self.z_score, 
                         self.epochs_to_analyze, self.segments_to_analyze)
         
 

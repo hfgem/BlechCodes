@@ -668,7 +668,7 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
                   z_score = False, epochs_to_analyze=[], segments_to_analyze=[]):
     """Decode taste in sliding bins of rest intervals"""
     
-    print('\t\tRunning Sliding Bin Is-Taste-Which-Taste GMM Decoder')
+    print('\t\tRunning Sliding Bin GMM Decoder')
     
     # Variables
     num_tastes = len(start_dig_in_times)
@@ -878,8 +878,8 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
 
 def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times, 
                 dig_in_names, segment_times, segment_names, start_dig_in_times, 
-                taste_num_deliv, bin_dt, group_list, group_names, non_none_tastes, 
-                decode_dir, z_score = False, 
+                taste_num_deliv, group_list, group_names, non_none_tastes, 
+                decode_dir, bin_dt, z_score = False, 
                 epochs_to_analyze=[], segments_to_analyze=[]):
     """
     This function runs decoder accuracy tests via LOO train-test method.
@@ -900,28 +900,26 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
         List of lists with time of tastant delivery start.
     taste_num_deliv : numpy array
         Array of number of total deliveries of each tastant.
-    bin_dt : TYPE
-        DESCRIPTION.
-    group_list : TYPE
-        DESCRIPTION.
-    group_names : TYPE
-        DESCRIPTION.
-    non_none_tastes : TYPE
-        DESCRIPTION.
-    decode_dir : TYPE
-        DESCRIPTION.
-    z_score : TYPE, optional
-        DESCRIPTION. The default is False.
-    epochs_to_analyze : TYPE, optional
-        DESCRIPTION. The default is [].
-    segments_to_analyze : TYPE, optional
-        DESCRIPTION. The default is [].
+    group_list : list
+        List of tuples describing group membership through (epoch, taste) indices.
+    group_names : list
+        List of group names.
+    non_none_tastes : list
+        Taste names that are not none.
+    decode_dir : string
+        String containing directory to save results to.
+    z_score : boolean, optional
+        Whether the data is z-scored or not. The default is False.
+    epochs_to_analyze : list, optional
+        List of which epoch indices to analyze. The default is [].
+    segments_to_analyze : list, optional
+        List of which segment indices to analyze. The default is [].
 
     Returns
     -------
-    None.
-
+    Outputs plots and accuracy results.
     """
+    
     decode_accuracy_save_dir = os.path.join(decode_dir,'Decoder_Accuracy')
     if not os.path.isdir(decode_accuracy_save_dir):
         os.mkdir(decode_accuracy_save_dir)

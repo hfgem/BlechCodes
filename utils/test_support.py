@@ -187,8 +187,8 @@ group_list, group_names = ddf.decode_groupings(epochs_to_analyze,
                                                non_none_tastes)
 
 #%% decoder vars
-print("\tRun non-z-scored data decoder pipeline")
-decode_dir = slide_decode_dir + 'All_Neurons_Z_Scored/'
+print("\tRun z-scored data decoder pipeline")
+decode_dir = os.path.join(slide_decode_dir,'All_Neurons_Z_Scored')
 if os.path.isdir(decode_dir) == False:
     os.mkdir(decode_dir)
 z_score = True
@@ -199,9 +199,9 @@ dev_vecs = segment_dev_fr_vecs_zscore
 print("\t\tRunning decoder accuracy tests.")
 ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times, 
                 dig_in_names, segment_times, segment_names, 
-                start_dig_in_times, taste_num_deliv, bin_dt, 
+                start_dig_in_times, taste_num_deliv, 
                 group_list, group_names, non_none_tastes, 
-                decode_dir, z_score, 
+                decode_dir, bin_dt, z_score, 
                 epochs_to_analyze, segments_to_analyze)
 
 #%% sliding bin decode
