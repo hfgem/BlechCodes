@@ -50,7 +50,7 @@ for var in vars(state_handler):
 	state_dict[var] = getattr(state_handler,var)
 del state_handler
 
-#%% run_analysis_handler
+# run_analysis_handler
 
 import functions.analysis_funcs as af
 
@@ -62,7 +62,7 @@ data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
 
-#%% function imports
+# function imports
 import os
 import tqdm
 import gzip
@@ -79,14 +79,10 @@ import functions.plot_dev_decoding_funcs as pddf
 import functions.dev_funcs as dev_f
 import functions.hdf5_handling as hf5
 
-#%% gather_variables()
+# gather_variables()
 
 # Directories
 hdf5_dir = metadata['hdf5_dir']
-slide_decode_dir = metadata['dir_name'] + \
-    'Sliding_Decoding/'
-if os.path.isdir(slide_decode_dir) == False:
-    os.mkdir(slide_decode_dir)
 bayes_dir = metadata['dir_name'] + \
     'Deviation_Dependent_Decoding/'
 if os.path.isdir(bayes_dir) == False:
@@ -138,7 +134,7 @@ pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
 pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
 num_pt_cp = num_cp + 2
 
-#%% import_deviations()
+# import_deviations()
 
 print("\tNow importing calculated deviations")
 
@@ -165,7 +161,7 @@ segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
                                                         np.array(segment_times_to_analyze_reshaped),
                                                         segment_deviations, pre_taste)
 
-#%% pull_fr_dist()
+# pull_fr_dist()
 
 print("\tPulling FR Distributions")
 tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(num_neur, tastant_spike_times,
@@ -178,7 +174,7 @@ tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_f
                                                                                         	  segment_times, pop_taste_cp_raster_inds,
                                                                                         	  bayes_fr_bins, start_dig_in_times, pre_taste_dt,
                                                                                         	  post_taste_dt, bin_dt, trial_start_frac)
-#%% decode_groups()
+# decode_groups()
 
 non_none_tastes = [taste for taste in dig_in_names if taste[:4] != 'none']
 group_list, group_names = ddf.decode_groupings(epochs_to_analyze,
@@ -186,16 +182,16 @@ group_list, group_names = ddf.decode_groupings(epochs_to_analyze,
                                                palatable_dig_inds,
                                                non_none_tastes)
 
-#%% decoder vars
+# decoder vars
 print("\tRun z-scored data decoder pipeline")
-decode_dir = os.path.join(slide_decode_dir,'All_Neurons_Z_Scored')
+decode_dir = bayes_dir + 'All_Neurons_Z_Scored/'
 if os.path.isdir(decode_dir) == False:
     os.mkdir(decode_dir)
 z_score = True
 tastant_fr_dist = tastant_fr_dist_z_pop
 dev_vecs = segment_dev_fr_vecs_zscore
 
-#%% accuracy test
+# accuracy test
 print("\t\tRunning decoder accuracy tests.")
 ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times, 
                 dig_in_names, segment_times, segment_names, 
@@ -204,37 +200,23 @@ ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
                 decode_dir, bin_dt, z_score, 
                 epochs_to_analyze, segments_to_analyze)
 
-#%% sliding bin decode
+# sliding bin decode
 
 print("\tDecoding sliding bins of rest intervals z-scored.") 
 ddf.decode_sliding_bins(tastant_fr_dist, segment_spike_times, 
                         dig_in_names, palatable_dig_inds,
                         segment_times, segment_names, 
                         start_dig_in_times, taste_num_deliv, 
-                        segment_dev_times, dev_vecs, 
                         bin_dt, group_list, group_names, 
                         non_none_tastes, decode_dir, z_score, 
                         epochs_to_analyze, segments_to_analyze)
 
-#%% decode deviation events
+# decode deviation events
 print("\t\tDecoding deviation events.")
-
-
-
-#%% plot
-
-print("\t\tPlotting Decoded Results")
-
-pddf.plot_is_taste_which_taste_decoded(num_tastes, num_neur, 
-                                       segment_spike_times, tastant_spike_times,
-                                       start_dig_in_times, post_taste_dt, 
-                                       pre_taste_dt, pop_taste_cp_raster_inds, 
-                                       bin_dt, dig_in_names, segment_times,
-                                       segment_names, decode_dir, max_hz_pop,
-                                       segment_dev_times, segment_dev_fr_vecs, 
-                                       segment_dev_fr_vecs_zscore, neuron_count_thresh, 
-                                       seg_e_len_dt, trial_start_frac,
-                                       epochs_to_analyze, segments_to_analyze, 
-                                       decode_prob_cutoff)
+ddf.decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times, dig_in_names, 
+                  segment_times, segment_names, start_dig_in_times, taste_num_deliv,
+                  segment_dev_times, dev_vecs, bin_dt, 
+                  group_list, group_names, non_none_tastes, decode_dir, 
+                  z_score, epochs_to_analyze, segments_to_analyze)
 
 

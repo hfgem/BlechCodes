@@ -23,6 +23,7 @@ from sklearn.mixture import GaussianMixture as gmm
 from sklearn.naive_bayes import GaussianNB
 from sklearn.decomposition import PCA
 import functions.decode_parallel as dp
+import functions.plot_dev_decoding_funcs as pddf
 from sklearn import svm
 from random import sample
 from scipy.stats import pearsonr
@@ -249,14 +250,15 @@ def taste_fr_dist_zscore(num_neur, tastant_spike_times, segment_spike_times,
 
     return tastant_fr_dist, taste_num_deliv, max_hz, min_hz
 
-def decode_deviations(tastant_fr_dist, segment_spike_times, dig_in_names, 
+def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times, dig_in_names, 
                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
-                  segment_dev_times, segment_dev_fr_vecs, bin_dt, 
-                  save_dir, z_score = False, epochs_to_analyze=[], segments_to_analyze=[]):
+                  segment_dev_times, dev_vecs, bin_dt, 
+                  group_list, group_names, non_none_tastes, decode_dir, 
+                  z_score = False, epochs_to_analyze=[], segments_to_analyze=[]):
     """Decode taste from epoch-specific firing rates"""
-    print('\t\tRunning Is-Taste-Which-Taste GMM Decoder')
+    print('\t\tRunning GMM Decoder')
     
-    decode_save_dir = os.path.join(save_dir,'Is_Taste_Which_Taste')
+    decode_save_dir = os.path.join(decode_dir,'GMM_Decoding')
     if not os.path.isdir(decode_save_dir):
         os.mkdir(decode_save_dir)
     
@@ -274,13 +276,13 @@ def decode_deviations(tastant_fr_dist, segment_spike_times, dig_in_names,
     is_taste_colors = cmap(np.linspace(0, 1, 2))
     dev_buffer = 50
     
-    if len(epochs_to_analyze) == 0:
-        epochs_to_analyze = np.arange(num_cp)
+    # if len(epochs_to_analyze) == 0:
+    #     epochs_to_analyze = np.arange(num_cp)
+    epochs_to_analyze = np.array([0,1,2])
     if len(segments_to_analyze) == 0:
         segments_to_analyze = np.arange(num_segments)
         
     seg_names = list(np.array(segment_names)[segments_to_analyze])
-    epoch_names = ['Epoch ' + str(e_i) for e_i in range(num_cp)]
        
     #Create null dataset from shuffled rest spikes
     shuffled_fr_vecs, segment_spike_times_bin, \
@@ -288,130 +290,72 @@ def decode_deviations(tastant_fr_dist, segment_spike_times, dig_in_names,
                                     segment_times, segment_spike_times, \
                                     num_neur, bin_dt, z_score)
     
-    #Train decoder
-    true_taste_train_data = [] #For PCA all combined true taste data
-    none_data = []
-    by_taste_train_data = [] #All tastes in separate sub-lists
-    by_taste_by_epoch_train_data = [] #True taste epoch data of size (num tastes - 1) x num epochs
-    for t_i in range(num_tastes):
-        num_deliveries = len(tastant_fr_dist[t_i])
-        train_taste_data = []
-        train_by_epoch_taste_data = []
-        for e_ind, e_i in enumerate(epochs_to_analyze):
-            epoch_taste_data = []
-            for d_i in range(num_deliveries):
+    #Create training groups of firing rate vectors
+    grouped_train_data = [] #Using group_list above, create training groups
+    grouped_train_counts = [] #Number of values in the group
+    grouped_train_names = []
+    for g_i, g_list in enumerate(group_list):
+        group_data_collection = []
+        for (e_i,t_i) in g_list:
+            for d_i in range(int(taste_num_deliv[t_i])):
                 try:
                     if np.shape(tastant_fr_dist[t_i][d_i][e_i])[0] == num_neur:
-                        train_taste_data.extend(
-                            list(tastant_fr_dist[t_i][d_i][e_i].T))
-                        epoch_taste_data.extend(
+                        group_data_collection.extend(
                             list(tastant_fr_dist[t_i][d_i][e_i].T))
                     else:
-                        train_taste_data.extend(
-                            list(tastant_fr_dist[t_i][d_i][e_i]))
-                        epoch_taste_data.extend(
+                        group_data_collection.extend(
                             list(tastant_fr_dist[t_i][d_i][e_i]))
                 except:
-                    train_taste_data.extend([])
-            train_by_epoch_taste_data.append(epoch_taste_data)
-        by_taste_by_epoch_train_data.append(train_by_epoch_taste_data)
-        if t_i < num_tastes-1:
-            true_taste_train_data.extend(train_taste_data)
-        else:
-            none_data.extend(train_taste_data)
-            if z_score == True:
-                neur_max = np.expand_dims(np.max(np.abs(np.array(train_taste_data)),0),1)
-                none_data.extend(list((neur_max*np.random.randn(num_neur,100)).T)) #Fully randomized data
-                none_data.extend(list(((neur_max/10)*np.random.randn(num_neur,100)).T)) #Low frequency randomized data
-            else:
-                neur_max = np.expand_dims(np.max(np.array(train_taste_data),0),1)
-                none_data.extend(list((neur_max*np.random.rand(num_neur,100)).T)) #Fully randomized data
-                none_data.extend(list(((neur_max/10)*np.random.rand(num_neur,100)).T)) #Low frequency randomized data
-            none_data.extend(shuffled_fr_vecs)
-        by_taste_train_data.append(train_taste_data)
-    by_taste_counts = np.array([len(by_taste_train_data[t_i]) for t_i in range(num_tastes)])
-    by_taste_prob = by_taste_counts/np.sum(by_taste_counts)
-    by_taste_true_train_data = [by_taste_train_data[t_i] for t_i in range(num_tastes-1)]
-    by_taste_true_counts = np.array([len(by_taste_true_train_data[t_i]) for t_i in range(num_tastes-1)])
-    by_taste_true_prob = by_taste_true_counts/np.sum(by_taste_true_counts)
-        
-    by_taste_epoch_counts = np.array([np.array([len(by_taste_by_epoch_train_data[t_i][e_i]) for e_i in range(len(epochs_to_analyze))]) for t_i in range(num_tastes-1)])
-    by_taste_epoch_prob = by_taste_epoch_counts/np.expand_dims(np.sum(by_taste_epoch_counts,1),1)
-        
-    none_v_true_data = []
-    none_v_true_data.append(true_taste_train_data)
-    none_v_true_data.append(none_data)
-    none_v_true_labels = ['Taste','No Taste']
-    none_v_true_counts = np.array([len(none_v_true_data[i]) for i in range(len(none_v_true_data))])
-    none_v_true_prob = none_v_true_counts/np.sum(none_v_true_counts)
+                    group_data_collection.extend([])
+        if len(group_data_collection) > 0:
+            grouped_train_data.append(group_data_collection)
+            grouped_train_counts.append(len(group_data_collection))
+            grouped_train_names.append(group_names[g_i])
+    #Now add the generated null data
+    avg_count = int(np.ceil(np.nanmean(grouped_train_counts)))
+    null_inds_to_use = sample(list(np.arange(len(shuffled_fr_vecs))),avg_count)
+    grouped_train_data.append(np.array(shuffled_fr_vecs)[null_inds_to_use,:])
+    grouped_train_counts.append(avg_count)
+    grouped_train_names.append('Null')
+    group_prob = np.array(grouped_train_counts) / np.sum(np.array(grouped_train_counts)) 
+    num_groups = len(grouped_train_names)
+    
+    #Create categorical NB dataset
+    categorical_train_data = []
+    categorical_train_y = []
+    for g_i, g_data in enumerate(grouped_train_data):
+        categorical_train_data.extend(g_data)
+        categorical_train_y.extend(g_i*np.ones(len(g_data)))
     
     #Run PCA transform only on non-z-scored data
-    need_pca = 0
-    by_taste_pca_reducers = dict()
-    if np.min(np.array(true_taste_train_data)) >= 0:
-        need_pca = 1
-        #Taste-Based PCA
-        taste_pca = PCA()
-        taste_pca.fit(np.array(true_taste_train_data).T)
-        exp_var = taste_pca.explained_variance_ratio_
-        num_components = np.where(np.cumsum(exp_var) >= 0.9)[0][0]
-        if num_components == 0:
-            num_components = 3
-        pca_reduce_taste = PCA(num_components)
-        pca_reduce_taste.fit(np.array(true_taste_train_data))
+    if z_score == True:
+        pca_reduce_taste = train_taste_PCA(num_tastes,num_neur,epochs_to_analyze,\
+                                           taste_num_deliv,tastant_fr_dist)
     
-    #Run GMM fits to distributions of taste/no-taste
-    none_v_taste_gmm = dict()
-    for t_i in range(2):
-        taste_train_data = np.array(none_v_true_data[t_i])
-        if need_pca == 1:
-            transformed_data = pca_reduce_taste.transform(taste_train_data)
+    #Run fits to distributions of different groups
+    group_gmms = dict()
+    for g_i, g_data in enumerate(grouped_train_data):
+        train_data = np.array(g_data)
+        if z_score == False:
+            transformed_data = pca_reduce_taste.transform(train_data)
         else:
-            transformed_data = taste_train_data
+            transformed_data = train_data
         #Fit GMM
         gm = gmm(n_components=1, n_init=10).fit(
             transformed_data)
-        none_v_taste_gmm[t_i] = gm
+        group_gmms[g_i] = gm
         
-    #Run GMM fits to true taste epoch-combined data
-    just_taste_gmm = dict()
-    for t_i in range(len(by_taste_true_train_data)):
-        taste_train_data = np.array(by_taste_true_train_data[t_i])
-        if need_pca == 1:
-            transformed_data = pca_reduce_taste.transform(taste_train_data)
-        else:
-            transformed_data = taste_train_data
-        #Fit GMM
-        gm = gmm(n_components=1, n_init=10).fit(
-            transformed_data)
-        just_taste_gmm[t_i] = gm
-        
-    #Run GMM fits to taste epoch-separated data
-    taste_epoch_gmm = dict()
-    for t_i in range(len(by_taste_by_epoch_train_data)):
-        taste_epoch_train_data = by_taste_by_epoch_train_data[t_i] #dictionary of len = num_cp
-        taste_epoch_gmm[t_i] = dict()
-        for e_ind, e_i in enumerate(epochs_to_analyze):
-            epoch_train_data = np.array(taste_epoch_train_data[e_ind])
-            if need_pca == 1:
-                transformed_data = pca_reduce_taste.transform(epoch_train_data)
-            else:
-                transformed_data = epoch_train_data
-            #Fit GMM
-            gm = gmm(n_components=1, n_init=10).fit(
-                transformed_data)
-            taste_epoch_gmm[t_i][e_ind] = gm
        
-    # If trial_start_frac > 0 use only trials after that threshold
-    #trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
-    
     #Store segment by segment fraction of decodes
-    seg_is_taste_frac = np.nan*np.ones((len(segments_to_analyze),2))
-    seg_which_taste_frac = np.nan*np.ones((len(segments_to_analyze),2))
-    seg_which_epoch_frac = np.nan*np.ones((len(segments_to_analyze),num_cp))
+    seg_decode_counts = np.nan*np.ones((len(segments_to_analyze),num_groups))
+    seg_decode_frac = np.nan*np.ones((len(segments_to_analyze),num_groups))
+    seg_decode_counts_pre = np.nan*np.ones((len(segments_to_analyze),num_groups))
+    seg_decode_frac_pre = np.nan*np.ones((len(segments_to_analyze),num_groups))
+    seg_decode_counts_post = np.nan*np.ones((len(segments_to_analyze),num_groups))
+    seg_decode_frac_post = np.nan*np.ones((len(segments_to_analyze),num_groups))
     
     # Segment-by-segment use deviation rasters and times to zoom in and test
-    #	epoch-specific decoding of tastes. Add decoding of 50 ms on either
+    #	decoding of tastes. Add decoding of 50 ms on either
     #	side of the deviation event as well for context decoding.
     for seg_ind, s_i in enumerate(segments_to_analyze):
         # Create plot save dir
@@ -420,46 +364,33 @@ def decode_deviations(tastant_fr_dist, segment_spike_times, dig_in_names,
         if not os.path.isdir(seg_decode_save_dir):
             os.mkdir(seg_decode_save_dir)
         
+        # Get segment variables
+        seg_start = segment_times[s_i]
+        seg_end = segment_times[s_i+1]
+        seg_len = seg_end - seg_start# in dt = ms
+        seg_dev_fr_mat = np.array(dev_vecs[seg_ind]).T
+        seg_dev_times = segment_dev_times[seg_ind]
+        _, num_dev = np.shape(seg_dev_times)
+        segment_spike_times_s_i_bin = segment_spike_times_bin[seg_ind]
+        if z_score == True:
+            mean_fr = seg_means[seg_ind]
+            std_fr = seg_stds[seg_ind]
+        
         #Import existing data
         try:
-            decode_is_taste_prob_array = np.load(
-                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
-                             '_deviations_is_taste.npy'))
-            pre_dev_decode_is_taste_array = np.load(
-                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
-                             '_pre_deviations_is_taste.npy'))
-            post_dev_decode_is_taste_array = np.load(
-                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
-                             '_post_deviations_is_taste.npy'))
-            decode_which_taste_prob_array = np.load(
-                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
-                             '_deviations_which_taste.npy'))
-            pre_dev_decode_array = np.load(
-                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
-                             '_pre_deviations_which_taste.npy'))
-            post_dev_decode_array = np.load(
-                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
-                             '_post_deviations_which_taste.npy')) 
-            decode_epoch_prob_array = np.load(
-                os.path.join(decode_save_dir,'segment_' + str(s_i) + \
-                             '_deviations_which_epoch.npy'))
+            dev_decode_prob_array = np.load( os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
+                          '_deviation_decodes.npy'))
+            pre_dev_decode_prob_array = np.load(
+                os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
+                             '_pre_deviations_decodes.npy'))
+            post_dev_decode_prob_array = np.load(
+                os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
+                             '_post_deviations_decodes.npy'))
                 
             print('\t\t\t\tSegment ' + str(s_i) + ' Previously Decoded')
         except:
             print('\t\t\t\tDecoding Segment ' + str(s_i) + ' Deviations')
             tic = time.time()
-            
-            seg_dev_fr_mat = np.array(segment_dev_fr_vecs[seg_ind]).T
-            seg_dev_times = segment_dev_times[seg_ind]
-            _, num_dev = np.shape(seg_dev_times)
-            segment_spike_times_s_i_bin = segment_spike_times_bin[seg_ind]
-            if z_score == True:
-                mean_fr = seg_means[seg_ind]
-                std_fr = seg_stds[seg_ind]
-            
-            decode_is_taste_prob_array = np.nan*np.ones((num_dev,2)) #deviation x is taste
-            decode_which_taste_prob_array = np.nan*np.ones((num_dev,num_tastes-1)) #deviation x which taste
-            decode_epoch_prob_array = np.nan*np.ones((num_dev,num_cp)) #deviation x epoch
             
             #Run through each deviation event to decode 
             
@@ -490,7 +421,7 @@ def decode_deviations(tastant_fr_dist, segment_spike_times, dig_in_names,
             post_dev_fr_mat = np.array(post_dev_fr_mat)
             
             #Converting to list for parallel processing
-            if need_pca == 1:    
+            if z_score == False:    
                 dev_fr_pca = pca_reduce_taste.transform(seg_dev_fr_mat.T)
                 list_dev_fr = list(dev_fr_pca)
                 pre_dev_fr_pca = pca_reduce_taste.transform(pre_dev_fr_mat)
@@ -506,169 +437,99 @@ def decode_deviations(tastant_fr_dist, segment_spike_times, dig_in_names,
             # Pass inputs to parallel computation on probabilities
             tic = time.time()
             #Deviation Bins
-            inputs = zip(list_dev_fr, itertools.repeat(len(none_v_taste_gmm)),
-                          itertools.repeat(none_v_taste_gmm), itertools.repeat(none_v_true_prob))
+            inputs = zip(list_dev_fr, itertools.repeat(len(group_gmms)),
+                          itertools.repeat(group_gmms), itertools.repeat(group_prob))
             pool = Pool(4)
-            dev_decode_is_taste_prob = pool.map(
+            dev_decode_taste_prob = pool.map(
                 dp.segment_taste_decode_dependent_parallelized, inputs)
             pool.close()
-            decode_is_taste_prob_array = np.squeeze(np.array(dev_decode_is_taste_prob)) #num_dev x 2
-            dev_is_taste_argmax = np.squeeze(np.argmax(decode_is_taste_prob_array,1)) #num_dev length indices
-            dev_is_taste_inds = np.where(dev_is_taste_argmax == 0)[0]
+            dev_decode_prob_array = np.squeeze(np.array(dev_decode_taste_prob)) #num_dev x num_groups
+             
             #Pre-Deviation Bins
-            inputs = zip(list_pre_dev_fr, itertools.repeat(len(none_v_taste_gmm)),
-                          itertools.repeat(none_v_taste_gmm), itertools.repeat(none_v_true_prob))
+            inputs = zip(list_pre_dev_fr, itertools.repeat(len(group_gmms)),
+                          itertools.repeat(group_gmms), itertools.repeat(group_prob))
             pool = Pool(4)
             pre_dev_decode_is_taste_prob = pool.map(
                 dp.segment_taste_decode_dependent_parallelized, inputs)
             pool.close()
-            pre_dev_decode_is_taste_array = np.squeeze(np.array(pre_dev_decode_is_taste_prob)) #num_dev x 2
+            pre_dev_decode_prob_array = np.squeeze(np.array(pre_dev_decode_is_taste_prob)) #num_dev x num_groups
+            
             #Post-Deviation Bins
-            inputs = zip(list_post_dev_fr, itertools.repeat(len(none_v_taste_gmm)),
-                          itertools.repeat(none_v_taste_gmm), itertools.repeat(none_v_true_prob))
+            inputs = zip(list_post_dev_fr, itertools.repeat(len(group_gmms)),
+                          itertools.repeat(group_gmms), itertools.repeat(group_prob))
             pool = Pool(4)
             post_dev_decode_is_taste_prob = pool.map(
                 dp.segment_taste_decode_dependent_parallelized, inputs)
             pool.close()
-            post_dev_decode_is_taste_array = np.squeeze(np.array(post_dev_decode_is_taste_prob)) #num_dev x 2
+            post_dev_decode_prob_array = np.squeeze(np.array(post_dev_decode_is_taste_prob)) #num_dev x num_groups
             
             # Save decoding probabilities
-            np.save(os.path.join(decode_save_dir,'segment_' +
-                    str(s_i) + '_deviations_is_taste.npy'), decode_is_taste_prob_array)
-            np.save(os.path.join(decode_save_dir,'segment_' +
-                    str(s_i) + '_pre_deviations_is_taste.npy'), pre_dev_decode_is_taste_array)
-            np.save(os.path.join(decode_save_dir,'segment_' +
-                    str(s_i) + '_post_deviations_is_taste.npy'), post_dev_decode_is_taste_array)
-            
-            #Now determine which taste
-            if len(dev_is_taste_inds) > 0: #at least some devs decoded as fully taste
-                
-                #Deviation Bins
-                inputs = zip(list_dev_fr, itertools.repeat(len(just_taste_gmm)),
-                              itertools.repeat(just_taste_gmm), itertools.repeat(by_taste_true_prob))
-                pool = Pool(4)
-                dev_decode_prob = pool.map(
-                    dp.segment_taste_decode_dependent_parallelized, inputs)
-                pool.close()
-                dev_decode_array = np.squeeze(np.array(dev_decode_prob)) #num_devx2
-                decode_which_taste_prob_array[dev_is_taste_inds,:] = dev_decode_array[dev_is_taste_inds,:]
-                dev_which_taste_argmax_array = np.argmax(dev_decode_array,1)
-                
-                #Pre-Deviation Bins
-                inputs = zip(list_pre_dev_fr, itertools.repeat(len(just_taste_gmm)),
-                              itertools.repeat(just_taste_gmm), itertools.repeat(by_taste_true_prob))
-                pool = Pool(4)
-                pre_dev_decode_prob = pool.map(
-                    dp.segment_taste_decode_dependent_parallelized, inputs)
-                pool.close()
-                pre_dev_decode_array = np.squeeze(np.array(pre_dev_decode_prob)) #num_devx2
-                #Post-Deviation Bins
-                inputs = zip(list_post_dev_fr, itertools.repeat(len(just_taste_gmm)),
-                              itertools.repeat(just_taste_gmm), itertools.repeat(by_taste_true_prob))
-                pool = Pool(4)
-                post_dev_decode_prob = pool.map(
-                    dp.segment_taste_decode_dependent_parallelized, inputs)
-                pool.close()
-                post_dev_decode_array = np.squeeze(np.array(post_dev_decode_prob)) #num_devx2
-                
-                # Save decoding probabilities
-                np.save(os.path.join(decode_save_dir,'segment_' +
-                        str(s_i) + '_deviations_which_taste.npy'), dev_decode_array)
-                np.save(os.path.join(decode_save_dir,'segment_' +
-                        str(s_i) + '_pre_deviations_which_taste.npy'), pre_dev_decode_array)
-                np.save(os.path.join(decode_save_dir,'segment_' +
-                        str(s_i) + '_post_deviations_which_taste.npy'), post_dev_decode_array)
-                
-                #Now determine which epoch for those that are decoded as taste
-                dev_taste_list = []
-                num_gmm = []
-                same_taste_epoch_gmm = []
-                prob_list = []
-                for dev_ind, dev_i in enumerate(dev_is_taste_inds):
-                    dev_taste_list.append(list_dev_fr[dev_i])
-                    num_gmm.extend([len(taste_epoch_gmm[dev_which_taste_argmax_array[dev_ind]])])
-                    same_taste_epoch_gmm.append(taste_epoch_gmm[dev_which_taste_argmax_array[dev_ind]])
-                    prob_list.append(by_taste_epoch_prob[dev_which_taste_argmax_array[dev_ind],:])
-                    
-                #Now determine which epoch of that taste
-                inputs = zip(dev_taste_list, num_gmm, same_taste_epoch_gmm, prob_list)
-                pool = Pool(4)
-                dev_decode_epoch_prob = pool.map(
-                    dp.segment_taste_decode_dependent_parallelized, inputs)
-                pool.close()
-                decode_epoch_prob_array[dev_is_taste_inds,:] = np.squeeze(np.array(dev_decode_epoch_prob)) #num dev x 3
-                np.save(os.path.join(decode_save_dir,'segment_' + str(s_i) + \
-                                 '_deviations_which_epoch.npy'),decode_epoch_prob_array)
+            np.save( os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
+                          '_deviation_decodes.npy'),dev_decode_prob_array)
+            np.save(os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
+                             '_pre_deviations_decodes.npy'), \
+                    pre_dev_decode_prob_array)
+            np.save(os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
+                             '_post_deviations_decodes.npy'),post_dev_decode_prob_array)
                 
             toc = time.time()
             print('\t\t\t\t\tTime to decode = ' +
                   str(np.round((toc-tic)/60, 2)) + ' (min)')
         
-        #Create plots
-        num_dev,_ = np.shape(decode_is_taste_prob_array)
-        decode_is_taste_argmax = np.squeeze(np.argmax(decode_is_taste_prob_array,1))
-        is_taste_inds = np.where(decode_is_taste_argmax == 0)[0]
-        seg_is_taste_frac[seg_ind,:] = [len(is_taste_inds)/num_dev,1-len(is_taste_inds)/num_dev]
-        if len(is_taste_inds) > 0:
-            decode_which_taste_argmax = np.squeeze(np.argmax(decode_which_taste_prob_array[is_taste_inds,:],1))
-            decode_which_epoch_argmax = np.squeeze(np.argmax(decode_epoch_prob_array[is_taste_inds,:],1))
-            #Calculate fraction of taste decodes for this segment
-            decode_which_taste_frac = []
-            for t_i in range(num_tastes-1):
-                taste_dev_vec = np.zeros(num_dev)
-                taste_inds = is_taste_inds[np.where(decode_which_taste_argmax == t_i)[0]]
-                decode_which_taste_frac.append(len(taste_inds)/len(is_taste_inds))
-            seg_which_taste_frac[seg_ind,:] = np.array(decode_which_taste_frac)
-            #Calculate fraction of epoch decodes for this segment
-            decode_which_epoch_frac = []
-            for e_i in range(num_cp):
-                epoch_bin_vec = np.zeros(num_dev)
-                epoch_inds = is_taste_inds[np.where(decode_which_epoch_argmax == e_i)[0]]
-                epoch_bin_vec[epoch_inds] = 1
-                decode_which_epoch_frac.append(len(epoch_inds)/len(is_taste_inds))
-            seg_which_epoch_frac[seg_ind,:] = np.array(decode_which_epoch_frac)
-            
-    #Plot fractions of decodes by segment in line graphs
-    f_frac, ax_frac = plt.subplots(nrows = 3, sharey = True, figsize = (4,8))
-    #Frac is-taste
-    ax_frac[0].set_ylim([-0.1,1.1])
-    ax_frac[0].axhline(0.5,linestyle='dashed',c='k',alpha=0.2,label='_')
-    for s_ind, s_i in enumerate(segments_to_analyze):
-        ax_frac[0].plot(np.arange(2),seg_is_taste_frac[s_ind,:],
-                        label=seg_names[s_ind])
-    ax_frac[0].set_xticks(np.arange(2),['Taste','No Taste'])
-    ax_frac[0].legend(loc='upper left')
-    ax_frac[0].set_title('Is Taste Decode Fractions')
-    #Frac which-taste
-    ax_frac[1].axhline(1/(num_tastes-1),linestyle='dashed',c='k',alpha=0.2,label='_')
-    for s_ind, s_i in enumerate(segments_to_analyze):
-        ax_frac[1].plot(np.arange(num_tastes-1),seg_which_taste_frac[s_ind,:],
-                        label=seg_names[s_ind])
-    ax_frac[1].set_xticks(np.arange(num_tastes-1),dig_in_names[:-1])
-    ax_frac[1].legend(loc='upper left')
-    ax_frac[1].set_title('Which Taste Decode Fractions')
-    #Frac which-epoch
-    ax_frac[2].axhline(1/num_cp,linestyle='dashed',c='k',alpha=0.2,label='_')
-    for s_ind, s_i in enumerate(segments_to_analyze):
-        ax_frac[2].plot(np.arange(num_cp),seg_which_epoch_frac[s_ind,:],
-                        label=seg_names[s_ind])
-    ax_frac[2].set_xticks(np.arange(num_cp),epoch_names)
-    ax_frac[2].legend(loc='upper left')
-    ax_frac[2].set_title('Which Epoch Decode Fractions')
-    plt.tight_layout()
-    f_frac.savefig(os.path.join(decode_save_dir,'frac_decode_plot.png'))
-    f_frac.savefig(os.path.join(decode_save_dir,'frac_decode_plot.svg'))
-    plt.close(f_frac)
+        #Store segment fraction of decodes
+        dev_group_argmax = np.squeeze(np.argmax(dev_decode_prob_array,1)) #num_dev length indices
+        hist_vals = np.histogram(dev_group_argmax,bins=np.arange(num_groups+1))
+        seg_decode_counts[seg_ind,:] = hist_vals[0]
+        seg_decode_frac[seg_ind,:] = hist_vals[0]/num_dev
         
+        pre_dev_group_argmax = np.squeeze(np.argmax(pre_dev_decode_prob_array,1)) #num_dev length indices
+        pre_hist_vals = np.histogram(pre_dev_group_argmax,bins=np.arange(num_groups+1))
+        seg_decode_counts_pre[seg_ind,:] = pre_hist_vals[0]
+        seg_decode_frac_pre[seg_ind,:] = pre_hist_vals[0]/num_dev
+        
+        post_dev_group_argmax = np.squeeze(np.argmax(post_dev_decode_prob_array,1)) #num_dev length indices
+        post_hist_vals = np.histogram(post_dev_group_argmax,bins=np.arange(num_groups+1))
+        seg_decode_counts_post[seg_ind,:] = post_hist_vals[0]
+        seg_decode_frac_post[seg_ind,:] = post_hist_vals[0]/num_dev
+        
+    #Create trend plots
+    pddf.plot_decode_trends(num_groups, grouped_train_names, segments_to_analyze,
+                           seg_decode_frac, seg_decode_counts, seg_names, 
+                           decode_save_dir)
+    pre_save_dir = os.path.join(decode_save_dir,'pre_dev')
+    if not os.path.isdir(pre_save_dir):
+        os.mkdir(pre_save_dir)
+    pddf.plot_decode_trends(num_groups, grouped_train_names, segments_to_analyze,
+                           seg_decode_frac_pre, seg_decode_counts_pre, 
+                           seg_names, pre_save_dir)
+    
+    
+    post_save_dir = os.path.join(decode_save_dir,'post_dev')
+    if not os.path.isdir(post_save_dir):
+        os.mkdir(post_save_dir)
+    pddf.plot_decode_trends(num_groups, grouped_train_names, segments_to_analyze,
+                           seg_decode_frac_post, seg_decode_counts_post, 
+                           seg_names, post_save_dir)
+    
+    #Create individual decode plots
+    pddf.plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times, 
+                     dig_in_names, segment_times, segment_names, start_dig_in_times, 
+                     taste_num_deliv, segment_dev_times, dev_vecs, bin_dt, 
+                     num_groups, grouped_train_names, grouped_train_data, 
+                     non_none_tastes, decode_save_dir, 
+                     z_score, epochs_to_analyze, segments_to_analyze)
+    
 def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names, 
                   palatable_dig_inds, segment_times, segment_names, 
                   start_dig_in_times, taste_num_deliv,
-                  segment_dev_times, segment_dev_fr_vecs, bin_dt, 
-                  group_list, group_names, non_none_tastes, decode_dir, 
+                  bin_dt, group_list, group_names, non_none_tastes, decode_dir, 
                   z_score = False, epochs_to_analyze=[], segments_to_analyze=[]):
     """Decode taste in sliding bins of rest intervals"""
     
     print('\t\tRunning Sliding Bin GMM Decoder')
+    decode_save_dir = os.path.join(decode_dir,'Sliding_Decoding')
+    if not os.path.isdir(decode_save_dir):
+        os.mkdir(decode_save_dir)
     
     # Variables
     num_tastes = len(start_dig_in_times)
@@ -746,12 +607,13 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
     seg_group_rate_corr = np.nan*np.ones((len(segments_to_analyze),num_groups))
     
     #Store segment by segment fraction of decodes
+    seg_group_counts = np.nan*np.ones((len(segments_to_analyze),num_groups))
     seg_group_frac = np.nan*np.ones((len(segments_to_analyze),num_groups))
         
     #Run through each segment and decode bins of activity
     for seg_ind, s_i in enumerate(segments_to_analyze):
         # Create segment save dir
-        seg_decode_save_dir = os.path.join(decode_dir,
+        seg_decode_save_dir = os.path.join(decode_save_dir,
             'segment_' + str(s_i) + '/')
         if not os.path.isdir(seg_decode_save_dir):
             os.mkdir(seg_decode_save_dir)
@@ -816,7 +678,8 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
         group_argmax = np.squeeze(np.argmax(decode_group_prob_array,1)) #num_dev length indices
         
         #Save decode fractions
-        hist_vals = np.histogram(group_argmax,bins=num_groups)
+        hist_vals = np.histogram(group_argmax,bins=np.arange(num_groups+1))
+        seg_group_counts[seg_ind,:] = hist_vals[0]
         seg_group_frac[seg_ind,:] = hist_vals[0]/np.nansum(hist_vals[0])
         
         #Save correlation to pop rate
@@ -840,13 +703,13 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
         plt.close(f)
                     
     #Save cross-segment data
-    np.save(os.path.join(decode_dir,'seg_group_rate_corr.npy'), seg_group_rate_corr, allow_pickle=True) 
-    np.save(os.path.join(decode_dir,'seg_group_frac.npy'), seg_group_frac, allow_pickle=True) 
+    np.save(os.path.join(decode_save_dir,'seg_group_rate_corr.npy'), seg_group_rate_corr, allow_pickle=True) 
+    np.save(os.path.join(decode_save_dir,'seg_group_frac.npy'), seg_group_frac, allow_pickle=True) 
     
     #PLOTS
     #Plot decode trends
-    plot_decode_trends(num_groups, grouped_train_names, segments_to_analyze,
-                           seg_group_frac, seg_names, decode_dir)
+    pddf.plot_decode_trends(num_groups, grouped_train_names, segments_to_analyze,
+                           seg_group_frac, seg_group_counts, seg_names, decode_save_dir)
     
     #Plot population rate correlation results
     f_box_corr = plt.figure(figsize=(5,5))
@@ -872,8 +735,8 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
     plt.ylim([min_y+0.1*min_y,max_y+0.1*max_y])
     plt.title('Group Decoding x Population Rate Correlation')
     plt.tight_layout()
-    f_box_corr.savefig(os.path.join(decode_dir,'seg_group_rate_corr.png'))
-    f_box_corr.savefig(os.path.join(decode_dir,'seg_group_rate_corr.svg'))
+    f_box_corr.savefig(os.path.join(decode_save_dir,'seg_group_rate_corr.png'))
+    f_box_corr.savefig(os.path.join(decode_save_dir,'seg_group_rate_corr.svg'))
     plt.close(f_box_corr)
 
 def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times, 
@@ -929,6 +792,8 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
     num_neur = len(segment_spike_times[0])
     # num_cp = len(tastant_fr_dist[0][0])
     num_segments = len(segment_spike_times)
+    num_groups = len(group_names) + 1
+    group_names.append('Null Data')
     # if len(epochs_to_analyze) == 0:
     #     epochs_to_analyze = np.arange(num_cp)
     epochs_to_analyze = np.array([0,1,2])
@@ -942,34 +807,59 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
                                     segment_times, segment_spike_times, \
                                     num_neur, bin_dt, z_score)
     
-    #Store taste x delivery x epoch decoding success rates
-    decode_success_bool = dict()
-    for t_i in range(num_tastes):
-        decode_success_bool[t_i] = np.zeros((int(taste_num_deliv[t_i]),num_cp))
-    
     #Create a LOO list
     total_num_deliv = int(np.sum(taste_num_deliv))
+    total_loo = total_num_deliv*num_cp
     loo_taste_index = []
     loo_deliv_index = []
+    loo_epoch_index = []
+    loo_category = []
     for t_i in range(num_tastes):  # Only perform on actual tastes
-        num_deliv = int(taste_num_deliv[t_i])
-        loo_taste_index.extend(list((t_i*np.ones(num_deliv)).astype('int')))
-        loo_deliv_index.extend(list((np.arange(num_deliv)).astype('int')))
-    del t_i, num_deliv
+        for d_i in range(int(taste_num_deliv[t_i])):
+            for e_i in range(num_cp):
+                loo_taste_index.append(t_i)
+                loo_deliv_index.append(d_i)
+                loo_epoch_index.append(e_i)
+                test_group_ind = -1
+                for g_i, g_list in enumerate(group_list):
+                    for g_e, g_t in g_list:
+                        if (g_e == e_i) and (g_t == t_i):
+                            test_group_ind = g_i
+                loo_category.append(test_group_ind)
+    del t_i, d_i, e_i, g_i
+    loo_category = np.array(loo_category)
     
-    tic = time.time()
-    for loo_i in tqdm.tqdm(range(total_num_deliv)):
-        loo_t_i = loo_taste_index[loo_i]
-        loo_d_i = loo_deliv_index[loo_i]
-        for loo_e_i, loo_e in enumerate(epochs_to_analyze):
-            
-            test_data = [np.squeeze(tastant_fr_dist[loo_t_i][loo_d_i][loo_e])]
-            
-            test_group_ind = -1
-            for g_i, g_list in enumerate(group_list):
-                for g_e, g_t in g_list:
-                    if (g_e == loo_e) and (g_t == loo_t_i):
-                        test_group_ind = g_i
+    try:
+        gm_decoder_accuracy_dict = np.load(os.path.join(decode_accuracy_save_dir,'gm_decoder_accuracy_dict.npy'),\
+                allow_pickle=True).item()
+        gm_decode_probabilities = np.load(os.path.join(decode_accuracy_save_dir,'gm_decode_probabilities.npy'),\
+                allow_pickle=True).item()
+        nb_decoder_accuracy_dict = np.load(os.path.join(decode_accuracy_save_dir,'nb_decoder_accuracy_dict.npy'),\
+                allow_pickle=True).item()
+        nb_decode_predictions = np.load(os.path.join(decode_accuracy_save_dir,'nb_decode_predictions.npy'),\
+                allow_pickle=True).item()
+    except:
+        #Store taste x delivery x epoch decoding success rates
+        gm_decoder_accuracy_dict = dict()
+        for t_i in range(num_tastes):
+            gm_decoder_accuracy_dict[t_i] = np.zeros((int(taste_num_deliv[t_i]),num_cp))
+        gm_decode_probabilities = dict()
+        for t_i in range(num_tastes):
+            gm_decode_probabilities[t_i] = np.zeros((int(taste_num_deliv[t_i]),num_cp,num_groups))
+        nb_decoder_accuracy_dict = dict()
+        for t_i in range(num_tastes):
+            nb_decoder_accuracy_dict[t_i] = np.zeros((int(taste_num_deliv[t_i]),num_cp))
+        nb_decode_predictions = dict()
+        for t_i in range(num_tastes):
+            nb_decode_predictions[t_i] = np.zeros((int(taste_num_deliv[t_i]),num_cp,num_groups))
+        
+        tic = time.time()
+        for loo_i in tqdm.tqdm(range(total_loo)):
+            loo_t_i = loo_taste_index[loo_i]
+            loo_d_i = loo_deliv_index[loo_i]
+            loo_e_i = loo_epoch_index[loo_i]
+            loo_g_i = loo_category[loo_i]
+            test_data = [np.squeeze(tastant_fr_dist[loo_t_i][loo_d_i][loo_e_i])]
             
             #Create training groups of firing rate vectors
             grouped_train_data = [] #Using group_list above, create training groups
@@ -980,7 +870,7 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
                 for (e_i,t_i) in g_list:
                     for d_i in range(int(taste_num_deliv[t_i])):
                         #Skip the loo value
-                        if (e_i == loo_e) and (t_i == loo_t_i) and (d_i == loo_d_i):
+                        if (e_i == loo_e_i) and (t_i == loo_t_i) and (d_i == loo_d_i):
                             group_data_collection.extend([])
                         else:
                             try:
@@ -1005,6 +895,15 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
             group_prob = np.array(grouped_train_counts) / np.sum(np.array(grouped_train_counts)) 
             num_groups = len(grouped_train_names)
             
+            #Create categorical NB dataset
+            categorical_train_data = []
+            categorical_train_y = []
+            for g_i, g_data in enumerate(grouped_train_data):
+                categorical_train_data.extend(g_data)
+                categorical_train_y.extend(g_i*np.ones(len(g_data)))
+            categorical_train_data = np.array(categorical_train_data)
+            categorical_train_y = np.array(categorical_train_y)
+            
             #Run PCA transform only on non-z-scored data
             if z_score == True:
                 pca_reduce_taste = train_taste_PCA(num_tastes,num_neur,epochs_to_analyze,\
@@ -1022,63 +921,166 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
                 gm = gmm(n_components=1, n_init=10).fit(
                     transformed_data)
                 group_gmms[g_i] = gm
+            #Fit NB
+            nb = GaussianNB()
+            nb.fit(categorical_train_data, categorical_train_y)
                     
             #Run decoders on the taste response
+            #GMM
             inputs = zip(test_data, itertools.repeat(len(group_gmms)),
                           itertools.repeat(group_gmms), itertools.repeat(group_prob))
             pool = Pool(4)
             dev_decode_is_taste_prob = pool.map(
                 dp.segment_taste_decode_dependent_parallelized, inputs)
             pool.close()
+            gm_decode_probabilities[loo_t_i][loo_d_i,loo_e_i,:] = np.squeeze(np.array(dev_decode_is_taste_prob))
             decode_argmax = np.argmax(np.array(dev_decode_is_taste_prob[0]))
-            if decode_argmax == test_group_ind:
-                decode_success_bool[loo_t_i][loo_d_i,loo_e_i] = 1
-    toc = time.time()
-    print('\tTime to run decode accuracy tests = ' +
-                  str(np.round((toc-tic)/60, 2)) + ' (min)')
-    np.save(os.path.join(decode_accuracy_save_dir,'decoder_accuracy_dict.npy'),\
-            decode_success_bool,allow_pickle=True)
-        
+            
+            if loo_t_i == num_tastes-1: #No taste control
+                if (decode_argmax == loo_g_i) or (decode_argmax == num_groups-1):
+                    gm_decoder_accuracy_dict[loo_t_i][loo_d_i,loo_e_i] = 1
+            else:
+                if decode_argmax == loo_g_i:
+                    gm_decoder_accuracy_dict[loo_t_i][loo_d_i,loo_e_i] = 1
+            #NB
+            nb_argmax = int(nb.predict(test_data))
+            nb_decode_predictions[loo_t_i][loo_d_i,loo_e_i][nb_argmax] = 1
+            if loo_t_i == num_tastes-1: #No taste control
+                if (nb_argmax == loo_g_i) or (nb_argmax == num_groups-1):
+                    nb_decoder_accuracy_dict[loo_t_i][loo_d_i,loo_e_i] = 1
+            else:
+                if nb_argmax == loo_g_i:
+                    nb_decoder_accuracy_dict[loo_t_i][loo_d_i,loo_e_i] = 1
+        toc = time.time()
+        print('\tTime to run decode accuracy tests = ' +
+                      str(np.round((toc-tic)/60, 2)) + ' (min)')
+        np.save(os.path.join(decode_accuracy_save_dir,'gm_decoder_accuracy_dict.npy'),\
+                gm_decoder_accuracy_dict,allow_pickle=True)
+        np.save(os.path.join(decode_accuracy_save_dir,'gm_decode_probabilities.npy'),\
+                gm_decode_probabilities,allow_pickle=True)
+        np.save(os.path.join(decode_accuracy_save_dir,'nb_decoder_accuracy_dict.npy'),\
+                nb_decoder_accuracy_dict,allow_pickle=True)
+        np.save(os.path.join(decode_accuracy_save_dir,'nb_decode_predictions.npy'),\
+                nb_decode_predictions,allow_pickle=True)
+    
     #PLOTS
     chance_rate = 100/num_groups
     
     #Overall Taste Accuracy
-    decode_success_rates_taste = []
+    gm_decode_success_rates_taste = []
+    nb_decode_success_rates_taste = []
     for t_i in range(num_tastes):
-        decode_success_rates_taste.append(100*np.sum(decode_success_bool[t_i])/(taste_num_deliv[t_i]*num_cp))
+        gm_decode_success_rates_taste.append(100*np.sum(gm_decoder_accuracy_dict[t_i])/(taste_num_deliv[t_i]*num_cp))
+        nb_decode_success_rates_taste.append(100*np.sum(nb_decoder_accuracy_dict[t_i])/(taste_num_deliv[t_i]*num_cp))
     f_bar = plt.figure(figsize=(5,5))
     plt.axhline(chance_rate,linestyle='dashed',alpha=0.2,color='k')
-    plt.bar(np.arange(num_tastes),decode_success_rates_taste)
+    plt.bar(np.arange(num_tastes),gm_decode_success_rates_taste)
     plt.xticks(np.arange(num_tastes),dig_in_names,rotation=45)
     plt.xlabel('Taste')
     plt.ylabel('Percent Accurately Decoded')
     plt.title('Overall Taste Accuracy')
     plt.tight_layout()
-    f_bar.savefig(os.path.join(decode_accuracy_save_dir,'overall_taste_accuracy.png'))
-    f_bar.savefig(os.path.join(decode_accuracy_save_dir,'overall_taste_accuracy.svg'))
+    f_bar.savefig(os.path.join(decode_accuracy_save_dir,'gm_overall_taste_accuracy.png'))
+    f_bar.savefig(os.path.join(decode_accuracy_save_dir,'gm_overall_taste_accuracy.svg'))
+    plt.close(f_bar)
+    f_bar = plt.figure(figsize=(5,5))
+    plt.axhline(chance_rate,linestyle='dashed',alpha=0.2,color='k')
+    plt.bar(np.arange(num_tastes),nb_decode_success_rates_taste)
+    plt.xticks(np.arange(num_tastes),dig_in_names,rotation=45)
+    plt.xlabel('Taste')
+    plt.ylabel('Percent Accurately Decoded')
+    plt.title('Overall Taste Accuracy')
+    plt.tight_layout()
+    f_bar.savefig(os.path.join(decode_accuracy_save_dir,'nb_overall_taste_accuracy.png'))
+    f_bar.savefig(os.path.join(decode_accuracy_save_dir,'nb_overall_taste_accuracy.svg'))
     plt.close(f_bar)
     
     #Accuracy by Epoch
-    decode_success_rates_epoch = []
+    gm_decode_success_rates_epoch = []
+    nb_decode_success_rates_epoch = []
     for e_ind, e_i in enumerate(epochs_to_analyze):
-        taste_epoch_rates = []
+        gm_taste_epoch_rates = []
+        nb_taste_epoch_rates = []
         for t_i in range(num_tastes):
-            taste_epoch_rates.append(100*np.sum(decode_success_bool[t_i][:,e_ind])/(taste_num_deliv[t_i]))
-        decode_success_rates_epoch.append(taste_epoch_rates)
-    decode_success_rates_epoch = np.array(decode_success_rates_epoch)
+            gm_taste_epoch_rates.append(100*np.sum(gm_decoder_accuracy_dict[t_i][:,e_ind])/(taste_num_deliv[t_i]))
+            nb_taste_epoch_rates.append(100*np.sum(nb_decoder_accuracy_dict[t_i][:,e_ind])/(taste_num_deliv[t_i]))
+        gm_decode_success_rates_epoch.append(gm_taste_epoch_rates)
+        nb_decode_success_rates_epoch.append(nb_taste_epoch_rates)
+    gm_decode_success_rates_epoch = np.array(gm_decode_success_rates_epoch)
+    nb_decode_success_rates_epoch = np.array(nb_decode_success_rates_epoch)
     f_epoch = plt.figure(figsize=(5,5))
     plt.axhline(chance_rate,linestyle='dashed',alpha=0.2,color='k')
     for t_i, t_name in enumerate(dig_in_names):
-        plt.plot(decode_success_rates_epoch[:,t_i],label=t_name)
+        plt.plot(gm_decode_success_rates_epoch[:,t_i],label=t_name)
     plt.legend(loc='upper left')
     plt.xticks(np.arange(num_cp),epochs_to_analyze)
     plt.xlabel('Epoch')
     plt.ylabel('Percent Accurately Decoded')
     plt.title('By Epoch Taste Accuracy')
     plt.tight_layout()
-    f_epoch.savefig(os.path.join(decode_accuracy_save_dir,'by_epoch_taste_accuracy.png'))
-    f_epoch.savefig(os.path.join(decode_accuracy_save_dir,'by_epoch_taste_accuracy.svg'))
+    f_epoch.savefig(os.path.join(decode_accuracy_save_dir,'gm_by_epoch_taste_accuracy.png'))
+    f_epoch.savefig(os.path.join(decode_accuracy_save_dir,'gm_by_epoch_taste_accuracy.svg'))
     plt.close(f_epoch)
+    f_epoch = plt.figure(figsize=(5,5))
+    plt.axhline(chance_rate,linestyle='dashed',alpha=0.2,color='k')
+    for t_i, t_name in enumerate(dig_in_names):
+        plt.plot(nb_decode_success_rates_epoch[:,t_i],label=t_name)
+    plt.legend(loc='upper left')
+    plt.xticks(np.arange(num_cp),epochs_to_analyze)
+    plt.xlabel('Epoch')
+    plt.ylabel('Percent Accurately Decoded')
+    plt.title('By Epoch Taste Accuracy')
+    plt.tight_layout()
+    f_epoch.savefig(os.path.join(decode_accuracy_save_dir,'nb_by_epoch_taste_accuracy.png'))
+    f_epoch.savefig(os.path.join(decode_accuracy_save_dir,'nb_by_epoch_taste_accuracy.svg'))
+    plt.close(f_epoch)
+    
+    #Accuracy breakdown by group
+    grid_side = np.ceil(np.sqrt(num_groups)).astype('int')
+    grid_inds = np.reshape(np.arange(grid_side**2),(grid_side,grid_side))
+    f_breakdown_gm, ax_breakdown_gm = plt.subplots(nrows = grid_side, \
+                                                   ncols = grid_side, \
+                                                       figsize=(8,8))
+    f_breakdown_nb, ax_breakdown_nb = plt.subplots(nrows = grid_side, \
+                                                   ncols = grid_side, \
+                                                       figsize=(8,8))
+    for gn_i, gn in enumerate(group_names[:-1]):
+        r_i, c_i = np.where(grid_inds == gn_i)
+        loo_category_inds = np.where(loo_category == gn_i)[0]
+        gm_loo_category_classifications = []
+        nb_loo_category_classifications = []
+        for loo_i in loo_category_inds:
+            loo_t_i = loo_taste_index[loo_i]
+            loo_d_i = loo_deliv_index[loo_i]
+            loo_e_i = loo_epoch_index[loo_i]
+            gm_loo_category_classifications.append(np.argmax(gm_decode_probabilities[loo_t_i][loo_d_i,loo_e_i]))
+            nb_loo_category_classifications.append(np.argmax(nb_decode_predictions[loo_t_i][loo_d_i,loo_e_i]))
+        ax_breakdown_gm[r_i[0],c_i[0]].hist(gm_loo_category_classifications,bins = np.arange(num_groups+1))
+        ax_breakdown_gm[r_i[0],c_i[0]].set_xticks(np.arange(num_groups)+0.5,\
+                                                  group_names,\
+                                                      ha="right", rotation=45)
+        ax_breakdown_gm[r_i[0],c_i[0]].set_title(gn)
+        ax_breakdown_nb[r_i[0],c_i[0]].hist(nb_loo_category_classifications,bins = np.arange(num_groups+1))
+        ax_breakdown_nb[r_i[0],c_i[0]].set_xticks(np.arange(num_groups)+0.5,\
+                                                  group_names,\
+                                                      ha="right", rotation=45)
+        ax_breakdown_nb[r_i[0],c_i[0]].set_title(gn)
+    for gn_i in np.setdiff1d(np.arange(grid_side**2).astype('int'),np.arange(num_groups-1).astype('int')):
+        r_i, c_i = np.where(grid_inds == gn_i)
+        ax_breakdown_gm[r_i[0],c_i[0]].remove()
+        ax_breakdown_nb[r_i[0],c_i[0]].remove()
+    plt.figure(f_breakdown_gm)
+    plt.suptitle('GMM by-group breakdown')
+    plt.tight_layout()
+    f_breakdown_gm.savefig(os.path.join(decode_accuracy_save_dir,'gm_by_group_decodes.png'))
+    f_breakdown_gm.savefig(os.path.join(decode_accuracy_save_dir,'gm_by_group_decodes.svg'))
+    plt.close(f_breakdown_gm)
+    plt.figure(f_breakdown_nb)
+    plt.suptitle('NB by-group breakdown')
+    plt.tight_layout()
+    f_breakdown_nb.savefig(os.path.join(decode_accuracy_save_dir,'nb_by_group_decodes.png'))
+    f_breakdown_nb.savefig(os.path.join(decode_accuracy_save_dir,'nb_by_group_decodes.svg'))
+    plt.close(f_breakdown_nb)
     
 def create_null_decode_dataset(segments_to_analyze, segment_times, segment_spike_times,
                                num_neur, bin_dt, z_score = False):
@@ -1183,6 +1185,7 @@ def decode_groupings(epochs_to_analyze,dig_in_names,palatable_dig_inds,non_none_
     """
     group_list = []
     group_list_names = []
+    group_names = []
     none_group = []
     palatable_group = []
     unpalatable_group = []
@@ -1201,6 +1204,7 @@ def decode_groupings(epochs_to_analyze,dig_in_names,palatable_dig_inds,non_none_
                 elif e_i == 1:
                     group_list.append([(e_i,t_ind)])
                     group_list_names.append([(e_i,t_name)])
+                    group_names.append(t_name.capitalize() + ' Identity')
                 else:
                     #Check if palatable or unpalatable
                     if (np.intersect1d(palatable_dig_inds,t_name)).size == 0: #unpalatable
@@ -1210,22 +1214,25 @@ def decode_groupings(epochs_to_analyze,dig_in_names,palatable_dig_inds,non_none_
         if len(epoch_group) > 0:
             group_list.append(epoch_group)
             group_list_names.append([(e_i,'all')])
+            group_names.append('Presence')
     group_list.append(palatable_group)
     group_list_names.append(['Palatable'])
+    group_names.append('Palatable Palatability')
     group_list.append(unpalatable_group)
     group_list_names.append(['Unpalatable'])
+    group_names.append('Unpalatable Palatability')
     group_list.append(none_group)
     group_list_names.append(['None'])
+    group_names.append('No Taste Control')
     
-    #Prompt the user to name each group
-    group_names = []
-    for gl_i, gl in enumerate(group_list_names):
-        print("\n")
-        print(gl)
-        gl_name = input("How should the above group be colloquially named? ")
-        group_names.append(gl_name)
+    final_group_list = []
+    final_group_names = []
+    for g_i in range(len(group_list)):
+        if len(group_list[g_i]) > 0:
+            final_group_list.append(group_list[g_i])
+            final_group_names.append(group_names[g_i])
     
-    return group_list, group_names
+    return final_group_list, final_group_names
 
 def train_taste_PCA(num_tastes,num_neur, epochs_to_analyze,taste_num_deliv,tastant_fr_dist):
     """
@@ -1279,71 +1286,3 @@ def train_taste_PCA(num_tastes,num_neur, epochs_to_analyze,taste_num_deliv,tasta
     pca_reduce_taste.fit(np.array(true_taste_train_data))
     
     return pca_reduce_taste
-
-def plot_decode_trends(num_groups, grouped_train_names, segments_to_analyze,
-                       seg_group_frac, seg_names, decode_dir):
-    """
-    This function generates plots of decoding rates
-
-    Parameters
-    ----------
-    num_groups : int
-        Number of decode groups in dataset.
-    grouped_train_names : list
-        List of strings of the group names.
-    segments_to_analyze : list
-        List of segment indices to analyze.
-    seg_group_frac : numpy array
-        Array of size len(segments_to_analyze) x num_groups containing fraction
-        of decodes of each group within the segment.
-    seg_names : list
-        List of segment names.
-    decode_dir : string
-        Directory to save results.
-
-    Returns
-    -------
-    Plots stored to directory 'decode_dir'.
-
-    """
-    #Plot decode fraction trends
-    f_trends, ax_trends = plt.subplots(nrows = 1, ncols = num_groups, \
-                                       sharex = True, figsize = (num_groups*4,4))
-    for g_ind, g_name in enumerate(grouped_train_names):
-        ax_trends[g_ind].plot(np.arange(len(segments_to_analyze)),seg_group_frac[:,g_ind])
-        ax_trends[g_ind].set_xticks(np.arange(len(segments_to_analyze)),seg_names)
-        ax_trends[g_ind].set_xlabel('Segment')
-        ax_trends[g_ind].set_ylabel('Decode Fraction')
-        ax_trends[g_ind].set_title(g_name)
-    plt.suptitle('Decoding Fraction Across Segments')
-    plt.tight_layout()
-    f_trends.savefig(os.path.join(decode_dir,'seg_group_frac_trends.png'))
-    f_trends.savefig(os.path.join(decode_dir,'seg_group_frac_trends.svg'))
-    plt.close(f_trends)
-    
-    f_trends_combined = plt.figure(figsize=(5,5))
-    for g_ind, g_name in enumerate(grouped_train_names):
-        plt.plot(np.arange(len(segments_to_analyze)),seg_group_frac[:,g_ind],\
-                 label=g_name)
-    plt.legend(loc='upper left')
-    plt.xticks(np.arange(len(segments_to_analyze)),seg_names)
-    plt.xlabel('Segment')
-    plt.ylabel('Decode Fraction')
-    plt.suptitle('Decoding Fraction Across Segments')
-    plt.tight_layout()
-    f_trends_combined.savefig(os.path.join(decode_dir,'seg_group_frac_trends_combined.png'))
-    f_trends_combined.savefig(os.path.join(decode_dir,'seg_group_frac_trends_combined.svg'))
-    plt.close(f_trends_combined)
-    
-    f_trends_pie, ax_trends_pie = plt.subplots(nrows = 1, ncols = len(segments_to_analyze), \
-                                       figsize = (len(segments_to_analyze)*4,4))
-    for s_ind, s_i in enumerate(segments_to_analyze):
-        pie_labels = [g_name + '\n' + str(np.round(100*seg_group_frac[s_ind,g_i],2)) + \
-                      '%' for g_i, g_name in enumerate(grouped_train_names)]
-        ax_trends_pie[s_ind].pie(seg_group_frac[s_ind,:],labels=pie_labels)
-        ax_trends_pie[s_ind].set_title(seg_names[s_ind])
-    plt.title('Decode Fractions by Segment')
-    plt.tight_layout()
-    f_trends_pie.savefig(os.path.join(decode_dir,'seg_group_frac_trends_pie.png'))
-    f_trends_pie.savefig(os.path.join(decode_dir,'seg_group_frac_trends_pie.svg'))
-    plt.close(f_trends_pie)
