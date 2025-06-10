@@ -13,6 +13,7 @@ import csv
 import glob 
 import shutil
 from tkinter.filedialog import askdirectory
+from utils.input_funcs import bool_input
 
 class import_metadata():
 	
@@ -65,7 +66,7 @@ class import_metadata():
 					print('At this time, please edit the params as desired for analysis of your dataset.')
 					print('You can find the params file at:')
 					print(self.params_file_path)
-					val = self.bool_input('When finished with the params file, type Y/y: ')
+					val = bool_input('When finished with the params file, type Y/y: ')
 					if val == 'n':
 						print('Why are you responding then?? Exiting program.')
 						quit()
@@ -83,7 +84,7 @@ class import_metadata():
 			if len(file_list) > 1:
 				file_found = 0
 				for f_i in range(len(file_list)):
-					is_file = self.bool_input('Is ' + file_list[f_i] + ' the correct info file? ')
+					is_file = bool_input('Is ' + file_list[f_i] + ' the correct info file? ')
 					if is_file == 'y':
 						self.info_file_path = file_list[f_i]
 						file_found = 1
@@ -97,20 +98,6 @@ class import_metadata():
 	def load_info(self,):
 		with open(self.info_file_path, 'r') as info_file:
 			self.info_dict = json.load(info_file)
-			
-	def bool_input(self,prompt):
-		#This function asks a user for an integer input
-		bool_loop = 1	
-		while bool_loop == 1:
-			print("Respond with Y/y/N/n:")
-			response = input(prompt)
-			if (response.lower() != 'y')*(response.lower() != 'n'):
-				print("\tERROR: Incorrect data entry, only give Y/y/N/n.")
-			else:
-				bool_val = response.lower()
-				bool_loop = 0
-		
-		return bool_val
 		
 class state_tracker():
 	
@@ -159,5 +146,3 @@ class state_tracker():
 			except:
 				print("Please try again. Incorrect entry.")
 		self.cont_choice = keep_going
-	
-	

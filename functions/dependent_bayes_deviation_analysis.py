@@ -19,8 +19,7 @@ import numpy as np
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
-
-import functions.decoding_funcs as df
+from utils.input_funcs import *
 import functions.dependent_decoding_funcs as ddf
 import functions.plot_dev_decoding_funcs as pddf
 import functions.dev_funcs as dev_f
@@ -34,16 +33,13 @@ class run_deviation_dependent_bayes():
         self.gather_variables()
         self.import_deviations()
         self.pull_fr_dist()
-        # self.decode_all_neurons()
-        self.decode_all_neurons_zscore()
+        self.decode_groups()
+        self.decode_zscored()
+        #self.decode_nonzscored()
 
     def gather_variables(self,):
         # Directories
         self.hdf5_dir = self.metadata['hdf5_dir']
-        self.slide_decode_dir = self.metadata['dir_name'] + \
-            'Sliding_Decoding/'
-        if os.path.isdir(self.slide_decode_dir) == False:
-            os.mkdir(self.slide_decode_dir)
         self.bayes_dir = self.metadata['dir_name'] + \
             'Deviation_Dependent_Decoding/'
         if os.path.isdir(self.bayes_dir) == False:
@@ -69,6 +65,9 @@ class run_deviation_dependent_bayes():
         self.start_dig_in_times = self.data_dict['start_dig_in_times']
         self.end_dig_in_times = self.data_dict['end_dig_in_times']
         self.dig_in_names = self.data_dict['dig_in_names']
+        #Ask for user input on which dig-ins are palatable
+        print("\nUSER INPUT REQUESTED: Mark which tastants are palatable.\n")
+        self.palatable_dig_inds = select_analysis_groups(self.dig_in_names)
         self.num_tastes = len(self.dig_in_names)
         self.min_dev_size = self.metadata['params_dict']['min_dev_size']
         # Decoding Params/Variables
@@ -91,19 +90,6 @@ class run_deviation_dependent_bayes():
             self.hdf5_dir, 'changepoint_data', 'pop_taste_cp_raster_inds')
         self.pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
         num_pt_cp = self.num_cp + 2
-        # Import taste selectivity data
-        # try:
-        #     select_neur = hf5.pull_data_from_hdf5(
-        #         self.hdf5_dir, 'taste_selectivity', 'taste_select_neur_epoch_bin')[0]
-        #     self.select_neur = select_neur
-        # except:
-        #     print("\tNo taste selectivity data found. Skipping.")
-        # # Import discriminability data
-        # peak_epochs = np.squeeze(hf5.pull_data_from_hdf5(
-        #     self.hdf5_dir, 'taste_discriminability', 'peak_epochs'))
-        # discrim_neur = np.squeeze(hf5.pull_data_from_hdf5(
-        #     self.hdf5_dir, 'taste_discriminability', 'discrim_neur'))
-        # self.discrim_neur = discrim_neur
 
     def import_deviations(self,):
         print("\tNow importing calculated deviations")
@@ -153,84 +139,80 @@ class run_deviation_dependent_bayes():
         self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
         self.max_hz_z_pop = max_hz_z_pop
         self.min_hz_z_pop = min_hz_z_pop
+        
+    def decode_groups(self,):
+        print("Determine decoding groups")
+        #Create fr vector grouping instructions: list of epoch,taste pairs
+        non_none_tastes = [taste for taste in dig_in_names if taste[:4] != 'none']
+        self.non_none_tastes = non_none_tastes
+        group_list, group_names = ddf.decode_groupings(self.epochs_to_analyze,
+                                                       self.dig_in_names,
+                                                       self.palatable_dig_inds,
+                                                       self.non_none_tastes)
+        self.group_list = group_list
+        self.group_names = group_names
+        
+    def decode_zscored(self,):
+        print("\tRun z-scored data decoder pipeline")
+        self.decode_dir = self.bayes_dir + 'All_Neurons_Z_Scored/'
+        if os.path.isdir(self.decode_dir) == False:
+            os.mkdir(self.decode_dir)
+        self.z_score = True
+        self.tastant_fr_dist = self.tastant_fr_dist_z_pop
+        self.dev_vecs = self.segment_dev_fr_vecs_zscore
+        #Decoder accuracy tests
+        self.decoder_accuracy_tests()
+        #Sliding decoding
+        self.decode_sliding_bin()
+        #Deviation decoding
+        self.decode_dev()
+        
+    def decode_nonzscored(self,):
+        print("\tRun non-z-scored data decoder pipeline")
+        self.decode_dir = self.bayes_dir + 'All_Neurons/'
+        if os.path.isdir(self.decode_dir) == False:
+            os.mkdir(self.decode_dir)
+        self.z_score = False
+        self.tastant_fr_dist = self.tastant_fr_dist_pop
+        self.dev_vecs = self.segment_dev_fr_vecs
+        #Decoder accuracy tests
+        self.decoder_accuracy_tests()
+        #Sliding decoding
+        self.decode_sliding_bin()
+        #Deviation decoding
+        self.decode_dev()
+        
+    def decoder_accuracy_tests(self,):
+        print("\t\tRunning decoder accuracy tests.")
+        
+        ddf.decoder_accuracy_tests(self.tastant_fr_dist, self.segment_spike_times, 
+                        self.dig_in_names, self.segment_times, self.segment_names, 
+                        self.start_dig_in_times, self.taste_num_deliv,
+                        self.group_list, self.group_names, self.non_none_tastes, 
+                        self.decode_dir, self.bin_dt, self.z_score, 
+                        self.epochs_to_analyze, self.segments_to_analyze)
+        
 
-    # def decode_all_neurons(self,):
-    #     print("\tDecoding all neurons")
-    #     all_neur_dir = self.bayes_dir + 'All_Neurons/'
-    #     if os.path.isdir(all_neur_dir) == False:
-    #         os.mkdir(all_neur_dir)
-            
-    #     taste_select_neur = np.ones(np.shape(self.discrim_neur))
-    #     self.taste_select_neur = taste_select_neur
-        
-        
-    #     decode_dir = all_neur_dir + 'GMM_Decoding/'
-    #     if os.path.isdir(decode_dir) == False:
-    #         os.mkdir(decode_dir)
-    #     self.decode_dir = decode_dir
-        
-    #     ddf.decode_deviations_is_taste_which_taste(self.tastant_fr_dist_pop, self.segment_spike_times,
-    #                                  self.dig_in_names, self.segment_times, 
-    #                                  self.segment_names, self.start_dig_in_times, 
-    #                                  self.taste_num_deliv, self.segment_dev_times,
-    #                                  self.segment_dev_fr_vecs, self.bin_dt, 
-    #                                  self.decode_dir, False, 
-    #                                  self.epochs_to_analyze, self.segments_to_analyze)
+    def decode_sliding_bin(self,):
+        print("\t\tDecoding sliding bins of rest intervals.")
 
-    #     self.plot_decoded_data()
-
-    def decode_sliding_bin_zscore(self,):
-        print("\tDecoding sliding bins of rest intervals z-scored.")
-
-        decode_dir = self.slide_decode_dir + 'All_Neurons_Z_Scored/'
-        if os.path.isdir(decode_dir) == False:
-            os.mkdir(decode_dir)
-            
+        ddf.decode_sliding_bins(self.tastant_fr_dist, self.segment_spike_times, 
+                                self.dig_in_names, self.palatable_dig_inds,
+                                self.segment_times, self.segment_names, 
+                                self.start_dig_in_times, self.taste_num_deliv, 
+                                self.bin_dt, self.group_list, self.group_names, 
+                                self.non_none_tastes, self.decode_dir, self.z_score, 
+                                self.epochs_to_analyze, self.segments_to_analyze)
         
-        ddf.decode_sliding_bins_is_taste_which_taste(self.tastant_fr_dist_z_pop, 
-                          self.segment_spike_times, self.dig_in_names, self.segment_times, 
-                          self.segment_names, self.start_dig_in_times, self.taste_num_deliv,
-                          self.segment_dev_times, self.segment_dev_fr_vecs_zscore, self.bin_dt, 
-                          decode_dir, True, self.epochs_to_analyze, self.segments_to_analyze)
+    def decode_dev(self,):
+        print("\t\tDecoding deviation events.")
         
-    def decode_all_neurons_zscore(self,):
-        print("\tDecoding all z-scored neurons")
-        all_neur_z_dir = self.bayes_dir + 'All_Neurons_Z_Scored/'
-        if os.path.isdir(all_neur_z_dir) == False:
-            os.mkdir(all_neur_z_dir)
-            
-        # taste_select_neur = np.ones(np.shape(self.discrim_neur))
-        # self.taste_select_neur = taste_select_neur
-        
-        
-        decode_dir = all_neur_z_dir + 'GMM_Decoding/'
-        if os.path.isdir(decode_dir) == False:
-            os.mkdir(decode_dir)
-        self.decode_dir = decode_dir
-        
-        ddf.decode_deviations_is_taste_which_taste(self.tastant_fr_dist_z_pop, self.segment_spike_times,
-                                     self.dig_in_names, self.segment_times, 
-                                     self.segment_names, self.start_dig_in_times, 
-                                     self.taste_num_deliv, self.segment_dev_times,
-                                     self.segment_dev_fr_vecs_zscore, self.bin_dt, 
-                                     self.decode_dir, True, 
-                                     self.epochs_to_analyze, self.segments_to_analyze)
-
-        self.plot_decoded_data()
-
-
-    def plot_decoded_data(self,):
-        print("\t\tPlotting Decoded Results")
-        
-        pddf.plot_is_taste_which_taste_decoded(self.num_tastes, self.num_neur, 
-                                               self.segment_spike_times, self.tastant_spike_times,
-                                               self.start_dig_in_times, self.post_taste_dt, 
-                                               self.pre_taste_dt, self.pop_taste_cp_raster_inds, 
-                                               self.bin_dt, self.dig_in_names, self.segment_times,
-                                               self.segment_names, self.decode_dir, self.max_hz_pop,
-                                               self.segment_dev_times, self.segment_dev_fr_vecs, 
-                                               self.segment_dev_fr_vecs_zscore, self.neuron_count_thresh, 
-                                               self.seg_e_len_dt, self.trial_start_frac,
-                                               self.epochs_to_analyze, self.segments_to_analyze, 
-                                               self.decode_prob_cutoff)
+        ddf.decode_deviations(self.tastant_fr_dist, self.tastant_spike_times,
+                              self.segment_spike_times, self.dig_in_names, 
+                              self.segment_times, self.segment_names, 
+                              self.start_dig_in_times, self.taste_num_deliv, 
+                              self.segment_dev_times, self.dev_vecs, 
+                              self.bin_dt, self.group_list, self.group_names, 
+                              self.non_none_tastes, self.decode_dir, self.z_score, 
+                              self.epochs_to_analyze, self.segments_to_analyze)
     
