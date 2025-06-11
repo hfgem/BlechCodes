@@ -40,11 +40,11 @@ class run_deviation_dependent_bayes():
     def gather_variables(self,):
         # Directories
         self.hdf5_dir = self.metadata['hdf5_dir']
-        self.bayes_dir = self.metadata['dir_name'] + \
-            'Deviation_Dependent_Decoding/'
+        self.bayes_dir = os.path.join(self.metadata['dir_name'],\
+                                      'Deviation_Dependent_Decoding')
         if os.path.isdir(self.bayes_dir) == False:
             os.mkdir(self.bayes_dir)
-        self.dev_dir = self.metadata['dir_name'] + 'Deviations/'
+        self.dev_dir = os.path.join(self.metadata['dir_name'],'Deviations')
         # General Params/Variables
         self.num_neur = self.data_dict['num_neur']
         self.pre_taste = self.metadata['params_dict']['pre_taste']
@@ -102,8 +102,8 @@ class run_deviation_dependent_bayes():
         
         segment_deviations = []
         for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
-            filepath = self.dev_dir + \
-                segment_names_to_analyze[s_i] + '/deviations.json'
+            filepath = os.path.join(self.dev_dir,
+                segment_names_to_analyze[s_i],'deviations.json')
             with gzip.GzipFile(filepath, mode="r") as f:
                 json_bytes = f.read()
                 json_str = json_bytes.decode('utf-8')
@@ -154,7 +154,7 @@ class run_deviation_dependent_bayes():
         
     def decode_zscored(self,):
         print("\tRun z-scored data decoder pipeline")
-        self.decode_dir = self.bayes_dir + 'All_Neurons_Z_Scored/'
+        self.decode_dir = os.path.join(self.bayes_dir,'All_Neurons_Z_Scored')
         if os.path.isdir(self.decode_dir) == False:
             os.mkdir(self.decode_dir)
         self.z_score = True
@@ -169,7 +169,7 @@ class run_deviation_dependent_bayes():
         
     def decode_nonzscored(self,):
         print("\tRun non-z-scored data decoder pipeline")
-        self.decode_dir = self.bayes_dir + 'All_Neurons/'
+        self.decode_dir = os.path.join(self.bayes_dir,'All_Neurons')
         if os.path.isdir(self.decode_dir) == False:
             os.mkdir(self.decode_dir)
         self.z_score = False
