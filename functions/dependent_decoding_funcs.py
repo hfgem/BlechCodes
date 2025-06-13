@@ -1311,9 +1311,9 @@ def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,palatable_dig_i
     group_list_names = []
     group_names = []
     none_group = []
-    palatability_group = []
-    # palatable_group = []
-    # unpalatable_group = []
+    # palatability_group = []
+    palatable_group = []
+    unpalatable_group = []
     
     #Day 1 data: combine presence, separate identity, separate palatability
     for e_ind, e_i in enumerate(epochs_to_analyze):
@@ -1335,12 +1335,12 @@ def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,palatable_dig_i
                         group_names.append((t_name.split('_')[0]).capitalize() +' Identity')
                     #Separate palatability data
                     if e_i == 2:
-                        palatability_group.append((e_i,t_ind))
+                        # palatability_group.append((e_i,t_ind))
                         #Check if palatable or unpalatable
-                        # if (np.intersect1d(palatable_dig_inds,t_name)).size == 0: #unpalatable
-                        #     unpalatable_group.append((e_i,t_ind))
-                        # else:
-                        #     palatable_group.append((e_i,t_ind))
+                        if (np.intersect1d(palatable_dig_inds,t_name)).size == 0: #unpalatable
+                            unpalatable_group.append((e_i,t_ind))
+                        else:
+                            palatable_group.append((e_i,t_ind))
             else: #Day 2+ taste
                 if np.intersect1d(dig_in_later_day_unique,t_name.split('_')[0]).size > 0: #Unique to next day taste
                     if e_i == 1:
@@ -1351,26 +1351,25 @@ def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,palatable_dig_i
                     #Separate palatability data
                     if e_i == 2:
                         if np.setdiff1d([t_name],non_none_tastes).size == 0: #Not none
-                            palatability_group.append((e_i,t_ind))
+                            # palatability_group.append((e_i,t_ind))
                             #Check if palatable or unpalatable
-                            # if (np.intersect1d(palatable_dig_inds,t_name)).size == 0: #unpalatable
-                            #     unpalatable_group.append((e_i,t_ind))
-                            # else:
-                            #     palatable_group.append((e_i,t_ind))
+                            if (np.intersect1d(palatable_dig_inds,t_name)).size == 0: #unpalatable
+                                unpalatable_group.append((e_i,t_ind))
+                            else:
+                                palatable_group.append((e_i,t_ind))
         if len(epoch_group) > 0:
             group_list.append(epoch_group)
             group_list_names.append([(e_i,'all')])
             group_names.append('Presence')
-    # group_list.append(palatable_group)
-    # group_list_names.append(['Palatable'])
-    # group_names.append('Palatable Palatability')
-    # group_list.append(unpalatable_group)
-    # group_list_names.append(['Unpalatable'])
-    # group_names.append('Unpalatable Palatability')
-    if len(palatability_group) > 0:
-        group_list.append(palatability_group)
-        group_list_names.append(['Palatability'])
-        group_names.append('Palatability')
+    group_list.append(palatable_group)
+    group_list_names.append(['Palatable'])
+    group_names.append('Palatable Palatability')
+    group_list.append(unpalatable_group)
+    group_list_names.append(['Unpalatable'])
+    group_names.append('Unpalatable Palatability')
+    # group_list.append(palatability_group)
+    # group_list_names.append(['Palatability'])
+    # group_names.append('Palatability')
     group_list.append(none_group)
     group_list_names.append(['None'])
     group_names.append('No Taste Control')
