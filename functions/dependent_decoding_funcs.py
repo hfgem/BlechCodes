@@ -256,7 +256,7 @@ def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times,
                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
                   segment_dev_times, dev_vecs, bin_dt, 
                   group_list, group_names, non_none_tastes, decode_dir, 
-                  z_score = False, epochs_to_analyze=[], segments_to_analyze=[]):
+                  z_score = False, segments_to_analyze=[]):
     """Decode taste from epoch-specific firing rates"""
     print('\t\tRunning NB Decoder')
     
@@ -267,20 +267,16 @@ def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times,
     # Variables
     num_tastes = len(start_dig_in_times)
     num_neur = len(segment_spike_times[0])
-    num_cp = len(tastant_fr_dist[0][0])
     num_segments = len(segment_spike_times)
-    #p_taste = taste_num_deliv/np.sum(taste_num_deliv)  # P(taste)
-    cmap = colormaps['cividis']
-    epoch_colors = cmap(np.linspace(0, 1, num_cp))
-    cmap = colormaps['gist_rainbow']
-    taste_colors = cmap(np.linspace(0, 1, num_tastes))
-    cmap = colormaps['seismic']
-    is_taste_colors = cmap(np.linspace(0, 1, 2))
+    if not group_names[-1] == 'Null Data':
+        num_groups = len(group_names) + 1
+        group_names.append('Null Data')
+    else:
+        num_groups = len(group_names)
+    cmap = colormaps['jet']
+    group_colors = cmap(np.linspace(0, 1, num_groups))
     dev_buffer = 50
     
-    # if len(epochs_to_analyze) == 0:
-    #     epochs_to_analyze = np.arange(num_cp)
-    epochs_to_analyze = np.array([0,1,2])
     if len(segments_to_analyze) == 0:
         segments_to_analyze = np.arange(num_segments)
         
@@ -325,7 +321,6 @@ def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times,
     grouped_train_data.append(np.array(shuffled_fr_vecs)[null_inds_to_use,:])
     grouped_train_counts.append(avg_count)
     grouped_train_names.append('Null')
-    group_prob = np.array(grouped_train_counts) / np.sum(np.array(grouped_train_counts)) 
     num_groups = len(grouped_train_names)
     
     #Create categorical NB dataset
@@ -333,7 +328,52 @@ def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times,
     categorical_train_y = []
     for g_i, g_data in enumerate(grouped_train_data):
         categorical_train_data.extend(g_data)
-        categorical_train_y.extend(g_i*np.ones(len(g_data)))
+        categorical_train_y.extend(g_i*np.ones(len(g_data)).astype('int'))
+    categorical_train_data = np.array(categorical_train_data)
+    categorical_train_y = np.array(categorical_train_y)
+    
+    #Plot PCA-reduced training data
+    #PCA
+    pca_reduce_plot = PCA(2)
+    pca_data = pca_reduce_plot.fit_transform(np.array(categorical_train_data))
+    f_pca, ax_pca = plt.subplots(nrows = 1, ncols = 2, 
+                                 sharex = True, sharey = True,
+                                 figsize=(10,5))
+    for g_i, g_name in enumerate(grouped_train_names):
+        group_where = np.where(categorical_train_y == g_i)[0]
+        if len(group_where) > 0:
+            ax_pca[0].scatter(pca_data[group_where,0],pca_data[group_where,1],\
+                        color = group_colors[g_i,:],\
+                        alpha=0.5,label=g_name)
+    ax_pca[0].set_title('Individual Responses')
+    for g_i, g_name in enumerate(grouped_train_names):
+        group_where = np.where(categorical_train_y == g_i)[0]
+        if len(group_where) > 0:
+            mean_x = np.nanmean(pca_data[group_where,0])
+            x_std = np.nanstd(pca_data[group_where,0])
+            mean_y = np.nanmean(pca_data[group_where,1])
+            y_std = np.nanstd(pca_data[group_where,1])
+            m, c = np.polyfit(pca_data[group_where,0], pca_data[group_where,1], 1)
+            angle = np.degrees(np.arctan(m))
+            oval = patches.Ellipse(
+                    (mean_x, mean_y),
+                    2*x_std,
+                    2*y_std,
+                    angle,
+                    facecolor=group_colors[g_i,:],
+                    alpha=0.3
+                    )
+            ax_pca[1].add_patch(oval)
+            ax_pca[1].scatter(mean_x,mean_y,\
+                        color = group_colors[g_i,:],\
+                        alpha=1,label=g_name)
+    ax_pca[1].set_title('Average Locations')
+    ax_pca[1].legend(loc='lower right')
+    plt.suptitle('PCA Projection of Training Groups')
+    plt.tight_layout()
+    f_pca.savefig(os.path.join(decode_save_dir,'pca_data_distribution.png'))
+    f_pca.savefig(os.path.join(decode_save_dir,'pca_data_distribution.svg'))
+    plt.close(f_pca)
     
     #Run PCA transform only on non-z-scored data
     if z_score == True:
@@ -445,35 +485,6 @@ def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times,
             #Post-dev categorical
             post_dev_decode_prob_array = nb.predict(list_post_dev_fr)
             
-            # # Pass inputs to parallel computation on probabilities
-            # tic = time.time()
-            # #Deviation Bins
-            # inputs = zip(list_dev_fr, itertools.repeat(len(group_gmms)),
-            #               itertools.repeat(group_gmms), itertools.repeat(group_prob))
-            # pool = Pool(4)
-            # dev_decode_taste_prob = pool.map(
-            #     dp.segment_taste_decode_dependent_parallelized, inputs)
-            # pool.close()
-            # dev_decode_prob_array = np.squeeze(np.array(dev_decode_taste_prob)) #num_dev x num_groups
-             
-            # #Pre-Deviation Bins
-            # inputs = zip(list_pre_dev_fr, itertools.repeat(len(group_gmms)),
-            #               itertools.repeat(group_gmms), itertools.repeat(group_prob))
-            # pool = Pool(4)
-            # pre_dev_decode_is_taste_prob = pool.map(
-            #     dp.segment_taste_decode_dependent_parallelized, inputs)
-            # pool.close()
-            # pre_dev_decode_prob_array = np.squeeze(np.array(pre_dev_decode_is_taste_prob)) #num_dev x num_groups
-            
-            # #Post-Deviation Bins
-            # inputs = zip(list_post_dev_fr, itertools.repeat(len(group_gmms)),
-            #               itertools.repeat(group_gmms), itertools.repeat(group_prob))
-            # pool = Pool(4)
-            # post_dev_decode_is_taste_prob = pool.map(
-            #     dp.segment_taste_decode_dependent_parallelized, inputs)
-            # pool.close()
-            # post_dev_decode_prob_array = np.squeeze(np.array(post_dev_decode_is_taste_prob)) #num_dev x num_groups
-            
             # Save decoding probabilities
             np.save( os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
                           '_deviation_decodes.npy'),dev_decode_prob_array)
@@ -528,13 +539,11 @@ def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times,
     #                  z_score, epochs_to_analyze, segments_to_analyze)
     
 def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names, 
-                  palatable_dig_inds, segment_times, segment_names, 
-                  start_dig_in_times, taste_num_deliv,
+                  segment_times, segment_names, start_dig_in_times, taste_num_deliv,
                   bin_dt, group_list, group_names, non_none_tastes, decode_dir, 
-                  z_score = False, epochs_to_analyze=[], segments_to_analyze=[]):
-    """Decode taste in sliding bins of rest intervals"""
+                  z_score = False, segments_to_analyze=[]):
     
-    print('\t\tRunning Sliding Bin GMM Decoder')
+    print('\t\tRunning Sliding Bin NB Decoder')
     decode_save_dir = os.path.join(decode_dir,'Sliding_Decoding')
     if not os.path.isdir(decode_save_dir):
         os.mkdir(decode_save_dir)
@@ -542,21 +551,31 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
     # Variables
     num_tastes = len(start_dig_in_times)
     num_neur = len(segment_spike_times[0])
-    # num_cp = len(tastant_fr_dist[0][0])
     num_segments = len(segment_spike_times)
+    if not group_names[-1] == 'Null Data':
+        num_groups = len(group_names) + 1
+        group_names.append('Null Data')
+    else:
+        num_groups = len(group_names)
+    cmap = colormaps['jet']
+    group_colors = cmap(np.linspace(0, 1, num_groups))
+    dev_buffer = 50
     
     #Bin size for sliding bin decoding
     half_bin = 25
     bin_size = half_bin*2
     
-    # if len(epochs_to_analyze) == 0:
-    #     epochs_to_analyze = np.arange(num_cp)
-    epochs_to_analyze = np.array([0,1,2])
     if len(segments_to_analyze) == 0:
         segments_to_analyze = np.arange(num_segments)
         
     seg_names = list(np.array(segment_names)[segments_to_analyze])
         
+    #Grab all taste-epoch pairs in the training groups for testing
+    taste_epoch_pairs = []
+    for gl_i, gl in enumerate(group_list):
+        for gp_i, gp in enumerate(gl):
+            taste_epoch_pairs.append([gp[1],gp[0]])
+    
     #Create null dataset from shuffled rest spikes
     shuffled_fr_vecs, segment_spike_times_bin, \
         seg_means, seg_stds = create_null_decode_dataset(segments_to_analyze, \
@@ -590,26 +609,27 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
     grouped_train_data.append(np.array(shuffled_fr_vecs)[null_inds_to_use,:])
     grouped_train_counts.append(avg_count)
     grouped_train_names.append('Null')
-    group_prob = np.array(grouped_train_counts) / np.sum(np.array(grouped_train_counts)) 
     num_groups = len(grouped_train_names)
+    
+    #Create categorical NB dataset
+    categorical_train_data = []
+    categorical_train_y = []
+    for g_i, g_data in enumerate(grouped_train_data):
+        categorical_train_data.extend(g_data)
+        categorical_train_y.extend(g_i*np.ones(len(g_data)))
     
     #Run PCA transform only on non-z-scored data
     if z_score == True:
-        pca_reduce_taste = train_taste_PCA(num_tastes,num_neur,epochs_to_analyze,\
+        train_data = categorical_train_data
+    else:
+        pca_reduce_taste = train_taste_PCA(num_neur,taste_epoch_pairs,\
+                                           non_none_tastes,dig_in_names,
                                            taste_num_deliv,tastant_fr_dist)
-    
-    #Run GMM fits to distributions of different groups
-    group_gmms = dict()
-    for g_i, g_data in enumerate(grouped_train_data):
-        train_data = np.array(g_data)
-        if z_score == False:
-            transformed_data = pca_reduce_taste.transform(train_data)
-        else:
-            transformed_data = train_data
-        #Fit GMM
-        gm = gmm(n_components=1, n_init=10).fit(
-            transformed_data)
-        group_gmms[g_i] = gm
+        train_data = pca_reduce_taste.transform(categorical_train_data)
+   
+    #Fit NB
+    nb = GaussianNB()
+    nb.fit(train_data, categorical_train_y) 
     
     #Store segment by segment correlation between pop rate and decode group
     seg_group_rate_corr = np.nan*np.ones((len(segments_to_analyze),num_groups))
@@ -617,6 +637,8 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
     #Store segment by segment fraction of decodes
     seg_group_counts = np.nan*np.ones((len(segments_to_analyze),num_groups))
     seg_group_frac = np.nan*np.ones((len(segments_to_analyze),num_groups))
+    
+    seg_lengths = []
         
     #Run through each segment and decode bins of activity
     for seg_ind, s_i in enumerate(segments_to_analyze):
@@ -630,6 +652,7 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
         seg_start = segment_times[s_i]
         seg_end = segment_times[s_i+1]
         seg_len = seg_end - seg_start# in dt = ms
+        seg_lengths.append(seg_len/1000)
         segment_spike_times_s_i_bin = segment_spike_times_bin[seg_ind]
         if z_score == True:
             mean_fr = seg_means[seg_ind]
@@ -652,7 +675,7 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
         
         # Grab neuron firing rates in sliding bins
         try:
-            decode_group_prob_array = np.load(
+            seg_decode_argmax_array = np.load(
                 os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
                              '_sliding_group.npy'))
         except:
@@ -668,31 +691,22 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
                 seg_fr_list = list(segment_binned_fr.T)
             
             # Pass inputs to parallel computation on probabilities
-            inputs = zip(seg_fr_list, itertools.repeat(len(group_gmms)),
-                          itertools.repeat(group_gmms), itertools.repeat(group_prob))
-            pool = Pool(4)
-            decode_group_prob = pool.map(
-                dp.segment_taste_decode_dependent_parallelized, inputs)
-            pool.close()
-            decode_group_prob_array = np.squeeze(np.array(decode_group_prob)) #num_bin x num_groups
-                
+            seg_decode_argmax_array = nb.predict(seg_fr_list)
             np.save(os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
-                                 '_sliding_group.npy'),decode_group_prob_array)
+                                 '_sliding_group.npy'),seg_decode_argmax_array)
             
             toc = time.time()
             print('\t\t\t\t\tTime to decode = ' +
                   str(np.round((toc-tic)/60, 2)) + ' (min)')
         
-        group_argmax = np.squeeze(np.argmax(decode_group_prob_array,1)) #num_dev length indices
-        
         #Save decode fractions
-        hist_vals = np.histogram(group_argmax,bins=np.arange(num_groups+1))
+        hist_vals = np.histogram(seg_decode_argmax_array,bins=np.arange(num_groups+1))
         seg_group_counts[seg_ind,:] = hist_vals[0]
         seg_group_frac[seg_ind,:] = hist_vals[0]/np.nansum(hist_vals[0])
         
         #Save correlation to pop rate
         for g_ind in range(num_groups):
-            ga_i = np.where(group_argmax == g_ind)[0]
+            ga_i = np.where(seg_decode_argmax_array == g_ind)[0]
             bin_group = np.zeros(num_bin)
             bin_group[ga_i] = 1
             pcorr = pearsonr(bin_group,segment_binned_pop_fr)
@@ -700,8 +714,10 @@ def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names,
             
         #Save a histogram of group decodes
         f = plt.figure(figsize=(5,5))
-        plt.hist(group_argmax)
+        hist_vals = np.histogram(seg_decode_argmax_array,bins=np.arange(num_groups+1))
+        plt.bar(np.arange(num_groups),hist_vals[0]/(seg_len/1000))
         plt.xticks(np.arange(num_groups),grouped_train_names,rotation=45)
+        plt.ylabel('Bin Decode Rate (Hz)')
         plt.title('Segment ' + str(s_i) + ' group decode counts')
         plt.tight_layout()
         f.savefig(os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
@@ -799,10 +815,9 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
     num_tastes = len(dig_in_names)
     num_neur = len(segment_spike_times[0])
     num_segments = len(segment_spike_times)
-    num_groups = len(group_names) + 1
-    group_names.append('Null Data')
-    # if len(epochs_to_analyze) == 0:
-    #     epochs_to_analyze = np.arange(num_cp)
+    if not group_names[-1] == 'Null Data':
+        num_groups = len(group_names) + 1
+        group_names.append('Null Data')
     epochs_to_analyze = np.array([0,1,2])
     if len(segments_to_analyze) == 0:
         segments_to_analyze = np.arange(num_segments)

@@ -311,7 +311,13 @@ ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
                 decode_dir, bin_dt, z_score, 
                 epochs_to_analyze, segments_to_analyze)
 
-#%% decode deviations
+# decode_sliding_bins()
+ddf.decode_sliding_bins(tastant_fr_dist, segment_spike_times, all_dig_in_names, 
+                  segment_times, segment_names, start_dig_in_times, taste_num_deliv,
+                  bin_dt, group_list, group_names, non_none_tastes, decode_dir, 
+                  z_score, segments_to_analyze)
+
+# decode_deviations()
 ddf.decode_deviations(tastant_fr_dist, tastant_spike_times,
                       segment_spike_times, all_dig_in_names, 
                       segment_times, segment_names, 
@@ -319,4 +325,4 @@ ddf.decode_deviations(tastant_fr_dist, tastant_spike_times,
                       segment_dev_times, dev_vecs, 
                       bin_dt, group_list, group_names, 
                       non_none_tastes, decode_dir, z_score, 
-                      epochs_to_analyze, segments_to_analyze)
+                      segments_to_analyze)
