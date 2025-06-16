@@ -224,7 +224,6 @@ class run_multiday_analysis():
         
         #Ask for user input on which dig-ins are palatable
         print("\nUSER INPUT REQUESTED: Mark which tastants are palatable.\n")
-        self.palatable_dig_inds = select_analysis_groups(self.all_dig_in_names)
         self.tastant_fr_dist_pop = tastant_fr_dist_pop
         self.taste_num_deliv = taste_num_deliv
         self.max_hz_pop = max_hz_pop
@@ -440,12 +439,12 @@ class run_multiday_analysis():
         self.z_score = True
         self.tastant_fr_dist = self.tastant_fr_dist_z_pop
         self.dev_vecs = self.segment_dev_fr_vecs_zscore
-        self.segment_times = day_vars[0]['segment_times']
-        self.segment_names = day_vars[0]['segment_names']
-        self.start_dig_in_times = day_vars[0]['start_dig_in_times']
-        self.bin_dt = day_vars[0]['bin_dt']
-        self.epochs_to_analyze = day_vars[0]['epochs_to_analyze']
-        self. segments_to_analyze = day_vars[0]['segments_to_analyze']
+        self.segment_times = self.day_vars[0]['segment_times']
+        self.segment_names = self.day_vars[0]['segment_names']
+        self.start_dig_in_times = self.day_vars[0]['start_dig_in_times']
+        self.bin_dt = self.day_vars[0]['bin_dt']
+        self.epochs_to_analyze = self.day_vars[0]['epochs_to_analyze']
+        self.segments_to_analyze = self.day_vars[0]['segments_to_analyze']
         self.decode_dev()
         
     def decode_nonzscored(self,):
@@ -456,17 +455,30 @@ class run_multiday_analysis():
         self.z_score = False
         self.tastant_fr_dist = self.tastant_fr_dist_pop
         self.dev_vecs = self.segment_dev_fr_vecs
-        self.segment_times = day_vars[0]['segment_times']
-        self.segment_names = day_vars[0]['segment_names']
-        self.start_dig_in_times = day_vars[0]['start_dig_in_times']
-        self.bin_dt = day_vars[0]['bin_dt']
-        self.epochs_to_analyze = day_vars[0]['epochs_to_analyze']
-        self. segments_to_analyze = day_vars[0]['segments_to_analyze']
+        self.segment_times = self.day_vars[0]['segment_times']
+        self.segment_names = self.day_vars[0]['segment_names']
+        self.start_dig_in_times = self.day_vars[0]['start_dig_in_times']
+        self.bin_dt = self.day_vars[0]['bin_dt']
+        self.epochs_to_analyze = self.day_vars[0]['epochs_to_analyze']
+        self. segments_to_analyze = self.day_vars[0]['segments_to_analyze']
         self.decode_dev()
     
     def decode_dev(self,):
         print("\t\tDecoding deviation events.")
+        ddf.decoder_accuracy_tests(self.tastant_fr_dist, self.segment_spike_times, 
+                        self.all_dig_in_names, self.segment_times, self.segment_names, 
+                        self.start_dig_in_times, self.taste_num_deliv,
+                        self.group_list, self.group_names, self.non_none_tastes, 
+                        self.decode_dir, self.bin_dt, self.z_score, 
+                        self.epochs_to_analyze, self.segments_to_analyze)
         
+        ddf.decode_sliding_bins(self.tastant_fr_dist, self.segment_spike_times, 
+                                self.all_dig_in_names, self.segment_times, 
+                                self.segment_names, self.start_dig_in_times, 
+                                self.taste_num_deliv, self.bin_dt, self.group_list, 
+                                self.group_names, self.non_none_tastes, self.decode_dir, 
+                                self.z_score, self.segments_to_analyze)
+
         ddf.decode_deviations(self.tastant_fr_dist, self.tastant_spike_times,
                               self.segment_spike_times, self.all_dig_in_names, 
                               self.segment_times, self.segment_names, 

@@ -81,7 +81,7 @@ def plot_decode_trends(num_groups, grouped_train_names, segments_to_analyze,
                       '%' for g_i, g_name in enumerate(grouped_train_names)]
         ax_trends_pie[s_ind].pie(seg_decode_frac[s_ind,:],labels=pie_labels)
         ax_trends_pie[s_ind].set_title(seg_names[s_ind])
-    plt.title('Decode Fractions by Segment')
+    plt.suptitle('Decode Fractions by Segment')
     plt.tight_layout()
     f_trends_pie.savefig(os.path.join(decode_dir,'seg_group_frac_trends_pie.png'))
     f_trends_pie.savefig(os.path.join(decode_dir,'seg_group_frac_trends_pie.svg'))

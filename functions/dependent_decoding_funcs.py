@@ -1336,7 +1336,6 @@ def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,palatable_dig_i
     identity_group = []
     palatability_group = []
     
-    #Day 1 data: combine presence, separate identity, separate palatability
     for e_ind, e_i in enumerate(epochs_to_analyze):
         epoch_group = []
         epoch_names = []
