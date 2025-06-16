@@ -245,7 +245,8 @@ for n_i in range(num_days):
 
 #Ask for user input on which dig-ins are palatable
 print("\nUSER INPUT REQUESTED: Mark which tastants are palatable.\n")
-palatable_dig_inds = select_analysis_groups(all_dig_in_names)
+#palatable_dig_inds = select_analysis_groups(all_dig_in_names)
+palatable_dig_inds = []
 
 # import_deviations()
 
@@ -310,7 +311,7 @@ ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
                 decode_dir, bin_dt, z_score, 
                 epochs_to_analyze, segments_to_analyze)
 
-# decode deviations
+#%% decode deviations
 ddf.decode_deviations(tastant_fr_dist, tastant_spike_times,
                       segment_spike_times, all_dig_in_names, 
                       segment_times, segment_names, 

@@ -1027,11 +1027,11 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
                                                    non_none_tastes,dig_in_names,
                                                    taste_num_deliv,tastant_fr_dist)
                 train_data = pca_reduce_taste.transform(categorical_train_data)
-            
+                
             #Fit NB
             nb = GaussianNB()
             nb.fit(train_data, categorical_train_y)
-                    
+            
             #Run decoder on the taste response
             #NB
             nb_argmax = int(nb.predict(test_data))
@@ -1040,8 +1040,9 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
                 if (nb_argmax == loo_g_i) or (nb_argmax == num_groups-1):
                     nb_decoder_accuracy_dict[str(loo_t_i) + ',' + str(loo_e_i)][loo_d_i] = 1
             else:
-                if nb_argmax == loo_g_i:
-                    nb_decoder_accuracy_dict[str(loo_t_i) + ',' + str(loo_e_i)][loo_d_i] = 1
+                if nb_argmax == loo_g_i: #Correct group decoded
+                    nb_decoder_accuracy_dict[str(loo_t_i) + ',' + str(loo_e_i)][loo_d_i] = 1                
+                
         toc = time.time()
         print('\tTime to run decode accuracy tests = ' +
                       str(np.round((toc-tic)/60, 2)) + ' (min)')
@@ -1064,6 +1065,7 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
     plt.axhline(chance_rate,linestyle='dashed',alpha=0.2,color='k')
     plt.bar(np.arange(num_tastes),nb_decode_success_rates_taste)
     plt.xticks(np.arange(num_tastes),dig_in_names,rotation=45)
+    plt.ylim([0,100])
     plt.xlabel('Taste')
     plt.ylabel('Percent Accurately Decoded')
     plt.title('Overall Taste Accuracy')
@@ -1077,18 +1079,21 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
     nb_decode_success_counts_epoch = np.zeros((len(unique_tastes),len(epochs_to_analyze)))
     nb_decode_total_counts_epoch = np.zeros((len(unique_tastes),len(epochs_to_analyze)))
     for t_i, e_i in taste_epoch_pairs:
-        nb_decode_success_counts_epoch[t_i,e_i] += np.sum(nb_decoder_accuracy_dict[str(t_i) + ',' + str(e_i)])
-        nb_decode_total_counts_epoch[t_i,e_i] += taste_num_deliv[t_i]
+        t_i_ind = np.where(unique_tastes == t_i)[0]
+        nb_decode_success_counts_epoch[t_i_ind,e_i] += np.sum(nb_decoder_accuracy_dict[str(t_i) + ',' + str(e_i)])
+        nb_decode_total_counts_epoch[t_i_ind,e_i] += taste_num_deliv[t_i]
     nb_decode_success_rates_epoch = 100*(nb_decode_success_counts_epoch/nb_decode_total_counts_epoch)
     nb_decode_success_rates_epoch = np.array(nb_decode_success_rates_epoch)
     f_epoch = plt.figure(figsize=(5,5))
     plt.axhline(chance_rate,linestyle='dashed',alpha=0.2,color='k')
     for t_i in unique_tastes:
+        t_i_ind = np.where(unique_tastes == t_i)[0]
         t_name = dig_in_names[t_i]
-        plt.scatter(np.arange(len(epochs_to_analyze)), nb_decode_success_rates_epoch[t_i,:],label=t_name,
+        plt.scatter(np.arange(len(epochs_to_analyze)), nb_decode_success_rates_epoch[t_i_ind,:],label=t_name,
                         color=taste_colors[t_i,:])
     plt.legend(loc='upper left')
     plt.xticks(np.arange(num_cp),epochs_to_analyze)
+    plt.ylim([0,100])
     plt.xlabel('Epoch')
     plt.ylabel('Percent Accurately Decoded')
     plt.title('By Epoch Taste Accuracy')
@@ -1102,7 +1107,8 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
     grid_inds = np.reshape(np.arange(grid_side**2),(grid_side,grid_side))
     f_breakdown_nb, ax_breakdown_nb = plt.subplots(nrows = grid_side, \
                                                    ncols = grid_side, \
-                                                       figsize=(10,10))
+                                                   sharey = True, \
+                                                   figsize=(10,10))
     for gn_i, gn in enumerate(group_names[:-1]):
         r_i, c_i = np.where(grid_inds == gn_i)
         loo_category_inds = np.where(loo_category == gn_i)[0]
@@ -1120,6 +1126,7 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
     for gn_i in np.setdiff1d(np.arange(grid_side**2).astype('int'),np.arange(num_groups-1).astype('int')):
         r_i, c_i = np.where(grid_inds == gn_i)
         ax_breakdown_nb[r_i[0],c_i[0]].remove()
+    ax_breakdown_nb[0,0].set_ylim([0,100])
     plt.figure(f_breakdown_nb)
     plt.suptitle('NB by-group breakdown')
     plt.tight_layout()
@@ -1311,9 +1318,8 @@ def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,palatable_dig_i
     group_list_names = []
     group_names = []
     none_group = []
-    # palatability_group = []
-    palatable_group = []
-    unpalatable_group = []
+    identity_group = []
+    palatability_group = []
     
     #Day 1 data: combine presence, separate identity, separate palatability
     for e_ind, e_i in enumerate(epochs_to_analyze):
@@ -1330,46 +1336,24 @@ def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,palatable_dig_i
                         epoch_names.append((e_i, t_name))
                     #Separate identity data
                     if e_i == 1:
-                        group_list.append([(e_i,t_ind)])
-                        group_list_names.append([(e_i,t_name)])
-                        group_names.append((t_name.split('_')[0]).capitalize() +' Identity')
+                        identity_group.append((e_i, t_ind))
                     #Separate palatability data
                     if e_i == 2:
-                        # palatability_group.append((e_i,t_ind))
-                        #Check if palatable or unpalatable
-                        if (np.intersect1d(palatable_dig_inds,t_name)).size == 0: #unpalatable
-                            unpalatable_group.append((e_i,t_ind))
-                        else:
-                            palatable_group.append((e_i,t_ind))
+                        palatability_group.append((e_i,t_ind))
             else: #Day 2+ taste
                 if np.intersect1d(dig_in_later_day_unique,t_name.split('_')[0]).size > 0: #Unique to next day taste
                     if e_i == 1:
-                        group_list.append([(e_i,t_ind)])
-                        group_list_names.append([(e_i,t_name)])
-                        group_names.append((t_name.split('_')[0]).capitalize() +' Identity')
-                else:
-                    #Separate palatability data
-                    if e_i == 2:
-                        if np.setdiff1d([t_name],non_none_tastes).size == 0: #Not none
-                            # palatability_group.append((e_i,t_ind))
-                            #Check if palatable or unpalatable
-                            if (np.intersect1d(palatable_dig_inds,t_name)).size == 0: #unpalatable
-                                unpalatable_group.append((e_i,t_ind))
-                            else:
-                                palatable_group.append((e_i,t_ind))
+                        identity_group.append((e_i, t_ind))
         if len(epoch_group) > 0:
             group_list.append(epoch_group)
             group_list_names.append([(e_i,'all')])
             group_names.append('Presence')
-    group_list.append(palatable_group)
-    group_list_names.append(['Palatable'])
-    group_names.append('Palatable Palatability')
-    group_list.append(unpalatable_group)
-    group_list_names.append(['Unpalatable'])
-    group_names.append('Unpalatable Palatability')
-    # group_list.append(palatability_group)
-    # group_list_names.append(['Palatability'])
-    # group_names.append('Palatability')
+    group_list.append(identity_group)
+    group_list_names.append(['Identity'])
+    group_names.append('Identity')
+    group_list.append(palatability_group)
+    group_list_names.append(['Palatability'])
+    group_names.append('Palatability')
     group_list.append(none_group)
     group_list_names.append(['None'])
     group_names.append('No Taste Control')
