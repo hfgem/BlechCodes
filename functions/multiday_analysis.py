@@ -460,7 +460,7 @@ class run_multiday_analysis():
         self.start_dig_in_times = self.day_vars[0]['start_dig_in_times']
         self.bin_dt = self.day_vars[0]['bin_dt']
         self.epochs_to_analyze = self.day_vars[0]['epochs_to_analyze']
-        self. segments_to_analyze = self.day_vars[0]['segments_to_analyze']
+        self.segments_to_analyze = self.day_vars[0]['segments_to_analyze']
         self.decode_dev()
     
     def decode_dev(self,):
