@@ -20,6 +20,7 @@ current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
+from utils.input_funcs import *
 from functions.blech_held_units_funcs import *
 import functions.analysis_funcs as af
 import functions.dev_funcs as dev_f
@@ -38,11 +39,14 @@ class run_multiday_analysis():
         self.num_days = len(self.data_dict)
         self.create_save_dir()
         self.gather_variables()
-        #self.import_deviations()
+        self.pull_taste_fr_dist()
+        #Regular deviation analyses first
+        self.import_deviations()
+        self.decode_groups()
+        self.multiday_dev_tests()
+        #Null deviation analyses next
         self.import_null_deviations()
         self.get_null_rasters()
-        self.pull_taste_fr_dist()
-        #self.multiday_dev_tests()
         self.multiday_null_dev_tests()
         
     def create_save_dir(self,):
@@ -72,6 +76,10 @@ class run_multiday_analysis():
         self.save_dir = os.path.join(root_path,joint_name)
         if not os.path.isdir(self.save_dir):
             os.mkdir(self.save_dir)
+        self.bayes_dir = os.path.join(self.save_dir,\
+                                      'Deviation_Dependent_Decoding')
+        if os.path.isdir(self.bayes_dir) == False:
+            os.mkdir(self.bayes_dir)
         
     def gather_variables(self,):
         #For each day store the relevant variables/parameters
@@ -169,6 +177,61 @@ class run_multiday_analysis():
             
         return keep_segment_spike_times, keep_tastant_spike_times
     
+    def pull_taste_fr_dist(self,):
+        day_vars = self.day_vars
+        
+        #Here we need to combine tastes across days and pull the distributions for all of them
+        all_dig_in_names = []
+        tastant_fr_dist_pop = dict()
+        taste_num_deliv = []
+        max_hz_pop = 0
+        tastant_fr_dist_z_pop = dict()
+        max_hz_z_pop = 0
+        min_hz_z_pop = np.inf
+        max_num_cp = 0
+        for n_i in range(self.num_days):
+            #Collect tastant names
+            day_names = self.day_vars[n_i]['dig_in_names']
+            day_cp = self.day_vars[n_i]['num_cp']
+            if day_cp > max_num_cp:
+                max_num_cp = day_cp
+            new_day_names = [dn + '_' + str(n_i) for dn in day_names]
+            all_dig_in_names.extend(new_day_names)
+            #Collect firing rate distribution dictionaries
+            tastant_fr_dist_pop_day, taste_num_deliv_day, max_hz_pop_day = ddf.taste_fr_dist(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
+                                                                            	 day_vars[n_i]['pop_taste_cp_raster_inds'], day_vars[n_i]['bayes_fr_bins'],
+                                                                            	 day_vars[n_i]['start_dig_in_times'], day_vars[n_i]['pre_taste_dt'],
+                                                                            	 day_vars[n_i]['post_taste_dt'], day_vars[n_i]['trial_start_frac'])
+            start_update_ind = len(tastant_fr_dist_pop)
+            for tf_i in range(len(tastant_fr_dist_pop_day)):
+                tastant_fr_dist_pop[tf_i+start_update_ind] = tastant_fr_dist_pop_day[tf_i]
+            taste_num_deliv.extend(list(taste_num_deliv_day))
+            if max_hz_pop_day > max_hz_pop:
+                max_hz_pop = max_hz_pop_day
+            tastant_fr_dist_z_pop_day, _, max_hz_z_pop_day, min_hz_z_pop_day = ddf.taste_fr_dist_zscore(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
+                                                                                                day_vars[n_i]['segment_spike_times'], day_vars[n_i]['segment_names'],
+                                                                                                day_vars[n_i]['segment_times'], day_vars[n_i]['pop_taste_cp_raster_inds'],
+                                                                                                day_vars[n_i]['bayes_fr_bins'], day_vars[n_i]['start_dig_in_times'],
+                                                                                                day_vars[n_i]['pre_taste_dt'], day_vars[n_i]['post_taste_dt'], 
+                                                                                                day_vars[n_i]['bin_dt'], day_vars[n_i]['trial_start_frac'])
+            start_update_ind = len(tastant_fr_dist_z_pop)
+            for tf_i in range(len(tastant_fr_dist_z_pop_day)):
+                tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
+            if max_hz_z_pop_day > max_hz_z_pop:
+                max_hz_z_pop = max_hz_z_pop_day
+            if min_hz_z_pop_day < min_hz_z_pop:
+                min_hz_z_pop = min_hz_z_pop_day
+        
+        #Ask for user input on which dig-ins are palatable
+        print("\nUSER INPUT REQUESTED: Mark which tastants are palatable.\n")
+        self.tastant_fr_dist_pop = tastant_fr_dist_pop
+        self.taste_num_deliv = taste_num_deliv
+        self.max_hz_pop = max_hz_pop
+        self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
+        self.max_hz_z_pop = max_hz_z_pop
+        self.min_hz_z_pop = min_hz_z_pop
+        self.max_num_cp = max_num_cp
+     
     def import_deviations(self,):
         print("\tNow importing calculated deviations for first day")
         
@@ -319,60 +382,19 @@ class run_multiday_analysis():
         self.null_segment_dev_fr_vecs = null_segment_dev_fr_vecs
         self.null_segment_dev_fr_vecs_zscore = null_segment_dev_fr_vecs_zscore
         
-    def pull_taste_fr_dist(self,):
-        day_vars = self.day_vars
+           
+    def decode_groups(self,):
+        print("Determine decoding groups")
+        #Create fr vector grouping instructions: list of epoch,taste pairs
+        non_none_tastes = [taste for taste in self.all_dig_in_names if taste[:4] != 'none']
+        self.non_none_tastes = non_none_tastes
+        group_list, group_names = ddf.decode_groupings(self.day_vars[0]['epochs_to_analyze'],
+                                                       self.all_dig_in_names,
+                                                       self.palatable_dig_inds,
+                                                       self.non_none_tastes)
+        self.group_list = group_list
+        self.group_names = group_names
         
-        #Here we need to combine tastes across days and pull the distributions for all of them
-        all_dig_in_names = []
-        tastant_fr_dist_pop = dict()
-        taste_num_deliv = []
-        max_hz_pop = 0
-        tastant_fr_dist_z_pop = dict()
-        max_hz_z_pop = 0
-        min_hz_z_pop = np.inf
-        max_num_cp = 0
-        for n_i in range(self.num_days):
-            #Collect tastant names
-            day_names = self.day_vars[n_i]['dig_in_names']
-            day_cp = self.day_vars[n_i]['num_cp']
-            if day_cp > max_num_cp:
-                max_num_cp = day_cp
-            new_day_names = [dn + '_' + str(n_i) for dn in day_names]
-            all_dig_in_names.extend(new_day_names)
-            #Collect firing rate distribution dictionaries
-            tastant_fr_dist_pop_day, taste_num_deliv_day, max_hz_pop_day = ddf.taste_fr_dist(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
-                                                                            	 day_vars[n_i]['pop_taste_cp_raster_inds'], day_vars[n_i]['bayes_fr_bins'],
-                                                                            	 day_vars[n_i]['start_dig_in_times'], day_vars[n_i]['pre_taste_dt'],
-                                                                            	 day_vars[n_i]['post_taste_dt'], day_vars[n_i]['trial_start_frac'])
-            start_update_ind = len(tastant_fr_dist_pop)
-            for tf_i in range(len(tastant_fr_dist_pop_day)):
-                tastant_fr_dist_pop[tf_i+start_update_ind] = tastant_fr_dist_pop_day[tf_i]
-            taste_num_deliv.extend(list(taste_num_deliv_day))
-            if max_hz_pop_day > max_hz_pop:
-                max_hz_pop = max_hz_pop_day
-            tastant_fr_dist_z_pop_day, _, max_hz_z_pop_day, min_hz_z_pop_day = ddf.taste_fr_dist_zscore(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
-                                                                                                day_vars[n_i]['segment_spike_times'], day_vars[n_i]['segment_names'],
-                                                                                                day_vars[n_i]['segment_times'], day_vars[n_i]['pop_taste_cp_raster_inds'],
-                                                                                                day_vars[n_i]['bayes_fr_bins'], day_vars[n_i]['start_dig_in_times'],
-                                                                                                day_vars[n_i]['pre_taste_dt'], day_vars[n_i]['post_taste_dt'], 
-                                                                                                day_vars[n_i]['bin_dt'], day_vars[n_i]['trial_start_frac'])
-            start_update_ind = len(tastant_fr_dist_z_pop)
-            for tf_i in range(len(tastant_fr_dist_z_pop_day)):
-                tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
-            if max_hz_z_pop_day > max_hz_z_pop:
-                max_hz_z_pop = max_hz_z_pop_day
-            if min_hz_z_pop_day < min_hz_z_pop:
-                min_hz_z_pop = min_hz_z_pop_day
-                
-        self.all_dig_in_names = all_dig_in_names
-        self.tastant_fr_dist_pop = tastant_fr_dist_pop
-        self.taste_num_deliv = taste_num_deliv
-        self.max_hz_pop = max_hz_pop
-        self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
-        self.max_hz_z_pop = max_hz_z_pop
-        self.min_hz_z_pop = min_hz_z_pop
-        self.max_num_cp = max_num_cp
-            
     def multiday_dev_tests(self,):
         """
         Runs correlation between deviation events and taste responses as well
@@ -388,7 +410,6 @@ class run_multiday_analysis():
                                   self.day_vars[0]['segment_times'], 
                                   self.day_vars[0]['segment_spike_times'],
                                   self.day_vars[0]['bin_dt'],self.segment_names_to_analyze)
-        
     def multiday_null_dev_tests(self,):
         """
         Runs correlation between deviation events and taste responses as well
@@ -408,6 +429,64 @@ class run_multiday_analysis():
                                   segment_spike_times_to_analyze,
                                   self.day_vars[0]['bin_dt'],segment_names_to_analyze)
         
+    def decode_zscored(self,):
+        """
+        Runs decoding of zscored data
+        """
+        self.decode_dir = os.path.join(self.bayes_dir,'All_Neurons_Z_Scored')
+        if os.path.isdir(self.decode_dir) == False:
+            os.mkdir(self.decode_dir)
+        self.z_score = True
+        self.tastant_fr_dist = self.tastant_fr_dist_z_pop
+        self.dev_vecs = self.segment_dev_fr_vecs_zscore
+        self.segment_times = self.day_vars[0]['segment_times']
+        self.segment_names = self.day_vars[0]['segment_names']
+        self.start_dig_in_times = self.day_vars[0]['start_dig_in_times']
+        self.bin_dt = self.day_vars[0]['bin_dt']
+        self.epochs_to_analyze = self.day_vars[0]['epochs_to_analyze']
+        self.segments_to_analyze = self.day_vars[0]['segments_to_analyze']
+        self.decode_dev()
+        
+    def decode_nonzscored(self,):
+        print("\tRun non-z-scored data decoder pipeline")
+        self.decode_dir = os.path.join(self.bayes_dir,'All_Neurons')
+        if os.path.isdir(self.decode_dir) == False:
+            os.mkdir(self.decode_dir)
+        self.z_score = False
+        self.tastant_fr_dist = self.tastant_fr_dist_pop
+        self.dev_vecs = self.segment_dev_fr_vecs
+        self.segment_times = self.day_vars[0]['segment_times']
+        self.segment_names = self.day_vars[0]['segment_names']
+        self.start_dig_in_times = self.day_vars[0]['start_dig_in_times']
+        self.bin_dt = self.day_vars[0]['bin_dt']
+        self.epochs_to_analyze = self.day_vars[0]['epochs_to_analyze']
+        self.segments_to_analyze = self.day_vars[0]['segments_to_analyze']
+        self.decode_dev()
+    
+    def decode_dev(self,):
+        print("\t\tDecoding deviation events.")
+        ddf.decoder_accuracy_tests(self.tastant_fr_dist, self.segment_spike_times, 
+                        self.all_dig_in_names, self.segment_times, self.segment_names, 
+                        self.start_dig_in_times, self.taste_num_deliv,
+                        self.group_list, self.group_names, self.non_none_tastes, 
+                        self.decode_dir, self.bin_dt, self.z_score, 
+                        self.epochs_to_analyze, self.segments_to_analyze)
+        
+        ddf.decode_sliding_bins(self.tastant_fr_dist, self.segment_spike_times, 
+                                self.all_dig_in_names, self.segment_times, 
+                                self.segment_names, self.start_dig_in_times, 
+                                self.taste_num_deliv, self.bin_dt, self.group_list, 
+                                self.group_names, self.non_none_tastes, self.decode_dir, 
+                                self.z_score, self.segments_to_analyze)
+
+        ddf.decode_deviations(self.tastant_fr_dist, self.tastant_spike_times,
+                              self.segment_spike_times, self.all_dig_in_names, 
+                              self.segment_times, self.segment_names, 
+                              self.start_dig_in_times, self.taste_num_deliv, 
+                              self.segment_dev_times, self.dev_vecs, 
+                              self.bin_dt, self.group_list, self.group_names, 
+                              self.non_none_tastes, self.decode_dir, self.z_score, 
+                              self.epochs_to_analyze, self.segments_to_analyze)
         
     # def multiday_nn_class(self,):
     #     """

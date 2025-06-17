@@ -83,11 +83,10 @@ import functions.hdf5_handling as hf5
 
 # Directories
 hdf5_dir = metadata['hdf5_dir']
-bayes_dir = metadata['dir_name'] + \
-    'Deviation_Dependent_Decoding/'
+bayes_dir = os.path.join(metadata['dir_name'],'Deviation_Dependent_Decoding')
 if os.path.isdir(bayes_dir) == False:
     os.mkdir(bayes_dir)
-dev_dir = metadata['dir_name'] + 'Deviations/'
+dev_dir = os.path.join(metadata['dir_name'],'Deviations')
 # General Params/Variables
 num_neur = data_dict['num_neur']
 pre_taste = metadata['params_dict']['pre_taste']
@@ -200,7 +199,7 @@ ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
                 decode_dir, bin_dt, z_score, 
                 epochs_to_analyze, segments_to_analyze)
 
-# sliding bin decode
+#%% sliding bin decode
 
 print("\tDecoding sliding bins of rest intervals z-scored.") 
 ddf.decode_sliding_bins(tastant_fr_dist, segment_spike_times, 
