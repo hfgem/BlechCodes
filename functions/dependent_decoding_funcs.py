@@ -531,12 +531,12 @@ def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times,
                            seg_names, post_save_dir)
     
     #Create individual decode plots
-    # pddf.plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times, 
-    #                  dig_in_names, segment_times, segment_names, start_dig_in_times, 
-    #                  taste_num_deliv, segment_dev_times, dev_vecs, bin_dt, 
-    #                  num_groups, grouped_train_names, grouped_train_data, 
-    #                  non_none_tastes, decode_save_dir, 
-    #                  z_score, epochs_to_analyze, segments_to_analyze)
+    pddf.plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times, 
+                      dig_in_names, segment_times, segment_names, start_dig_in_times, 
+                      taste_num_deliv, segment_dev_times, dev_vecs, bin_dt, 
+                      num_groups, grouped_train_names, grouped_train_data, 
+                      non_none_tastes, decode_save_dir, 
+                      z_score, segments_to_analyze = segments_to_analyze)
     
 def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names, 
                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
@@ -818,6 +818,8 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
     if not group_names[-1] == 'Null Data':
         num_groups = len(group_names) + 1
         group_names.append('Null Data')
+    else:
+        num_groups = len(group_names)
     epochs_to_analyze = np.array([0,1,2])
     if len(segments_to_analyze) == 0:
         segments_to_analyze = np.arange(num_segments)
@@ -1133,7 +1135,8 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
             loo_d_i = loo_deliv_index[loo_i]
             loo_e_i = loo_epoch_index[loo_i]
             nb_loo_category_classifications.append(np.argmax(nb_decode_predictions[str(loo_t_i) + ',' + str(loo_e_i)][loo_d_i,:]))
-        ax_breakdown_nb[r_i[0],c_i[0]].hist(nb_loo_category_classifications,bins = np.arange(num_groups+1))
+        hist_vals = np.histogram(nb_loo_category_classifications,bins = np.arange(num_groups+1))
+        ax_breakdown_nb[r_i[0],c_i[0]].bar(np.arange(num_groups),100*hist_vals[0]/np.nansum(hist_vals[0]))
         ax_breakdown_nb[r_i[0],c_i[0]].set_xticks(np.arange(num_groups)+0.5,\
                                                   group_names,\
                                                       ha="right", rotation=45)
@@ -1142,6 +1145,7 @@ def decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
         r_i, c_i = np.where(grid_inds == gn_i)
         ax_breakdown_nb[r_i[0],c_i[0]].remove()
     ax_breakdown_nb[0,0].set_ylim([0,100])
+    ax_breakdown_nb[0,0].set_ylabel('Percent Decoded')
     plt.figure(f_breakdown_nb)
     plt.suptitle('NB by-group breakdown')
     plt.tight_layout()

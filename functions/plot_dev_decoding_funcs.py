@@ -202,12 +202,12 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
         print('\t\t\tPlotting Decoding for Segment ' + str(s_i))
         seg_decode_save_dir = os.path.join(decode_save_dir,
             'segment_' + str(s_i) + '/')
-        dev_decode_prob_array = np.load( os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
+        dev_decode_prob_argmax = np.load( os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
                       '_deviation_decodes.npy'))
-        pre_dev_decode_prob_array = np.load(
+        pre_dev_decode_prob_argmax = np.load(
             os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
                          '_pre_deviations_decodes.npy'))
-        post_dev_decode_prob_array = np.load(
+        post_dev_decode_prob_argmax = np.load(
             os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
                          '_post_deviations_decodes.npy'))
 
@@ -216,7 +216,7 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
         if not os.path.isdir(seg_plot_save):
             os.mkdir(seg_plot_save)
         
-        num_dev, _ = np.shape(dev_decode_prob_array)
+        num_dev = len(dev_decode_prob_argmax)
         plot_inds = np.sort(random.sample(list(np.arange(num_dev)),50))
         
         seg_start = segment_times[s_i]
@@ -243,13 +243,11 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
         std_fr[std_fr == 0] = 1
         
         #Calculate the number of deviation events decoded for each group
-        dev_decode_stats[seg_ind]['decode_probabilities'] = dev_decode_prob_array
-        group_decoded = np.argmax(dev_decode_prob_array,1)
         group_decoded_bin = np.zeros((num_groups,num_dev))
         group_decoded_start_times = []
         group_decoded_end_times = []
         for g_i in range(num_groups):
-            group_decoded_ind = np.where(group_decoded == g_i)[0]
+            group_decoded_ind = np.where(dev_decode_prob_argmax == g_i)[0]
             group_decoded_bin[g_i,group_decoded_ind] = 1
             group_decoded_start_times.append(list(segment_dev_times[seg_ind][0,group_decoded_ind]))
             group_decoded_end_times.append(list(segment_dev_times[seg_ind][1,group_decoded_ind]))
@@ -259,10 +257,9 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
         dev_group_corrs = np.zeros((num_groups,num_dev))
         for dev_i in range(num_dev):
             #Collect deviation decoding probabilities
-            dev_prob_decoded = dev_decode_prob_array[dev_i,:]
-            pre_dev_prob_decoded = pre_dev_decode_prob_array[dev_i,:]
-            post_dev_prob_decoded = post_dev_decode_prob_array[dev_i,:]
-            decoded_group_ind = group_decoded[dev_i]
+            pre_dev_decoded_ind = pre_dev_decode_prob_argmax[dev_i]
+            post_dev_decoded_ind = post_dev_decode_prob_argmax[dev_i]
+            decoded_group_ind = dev_decode_prob_argmax[dev_i]
             
             #Collect deviation times
             dev_times = segment_dev_times[seg_ind][:,dev_i]
@@ -277,7 +274,7 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
             raster_x_ticks = np.linspace(0,d_plot_len-1,10).astype('int')
             raster_x_tick_labels = decode_x_vals[raster_x_ticks]
             
-            #Collect spike times for raster plot and firing rate plotå
+            #Collect spike times for raster plot and firing rate plots
             plot_spike_bin = segment_spike_times_s_i_bin[:,pre_dev_time:post_dev_time]
             plot_spike_times = [np.where(plot_spike_bin[n_i,:] == 1)[0] for n_i in range(num_neur)]
             firing_rate_vec = np.zeros(d_plot_len)
@@ -293,9 +290,9 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
             
             #Reshape decoding probabilities for plotting
             decoding_array = np.zeros((num_groups,d_plot_len))
-            decoding_array[:,0:dev_buffer] = np.expand_dims(pre_dev_prob_decoded,1)*np.ones((num_groups,dev_buffer))
-            decoding_array[:,dev_buffer:dev_buffer + dev_len] = np.expand_dims(dev_prob_decoded,1)*np.ones((num_groups,dev_len))
-            decoding_array[:,-dev_buffer:] = np.expand_dims(post_dev_prob_decoded,1)*np.ones((num_groups,dev_buffer))
+            decoding_array[pre_dev_decoded_ind,0:dev_buffer] = 1
+            decoding_array[decoded_group_ind,dev_buffer:dev_buffer + dev_len] = 1
+            decoding_array[post_dev_decoded_ind,-dev_buffer:] = 1
             
             #Calculate correlation to mean taste responses
             corr_dev_event = np.array([pearsonr(all_group_fr_vecs_mean[g_i], dev_fr_vec)[
@@ -307,8 +304,8 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
                     np.round(corr_dev_event[g_i], 2)) for g_i in range(num_groups)]
                 
                 #Start Figure
-                f, ax = plt.subplots(nrows=5, ncols=2, figsize=(
-                    10, 10), gridspec_kw=dict(height_ratios=[1, 1, 1, 2, 2]))
+                f, ax = plt.subplots(nrows=4, ncols=2, figsize=(
+                    10, 10), gridspec_kw=dict(height_ratios=[1, 1, 2, 2]))
                 gs = ax[0, 0].get_gridspec()
                 # Decoding probabilities
                 ax[0, 0].remove()
@@ -352,35 +349,32 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
                 ax[1, 1].set_ylabel('FR (Hz)')
                 ax[1, 1].set_xlabel('Time from Deviation (ms)')
                 # Decoded Firing Rates
-                ax[2, 0].remove()
-                ax[2, 1].remove()
-                axfr = f.add_subplot(gs[2, 0:2])
-                img = axfr.imshow(np.expand_dims(dev_fr_vec, 0))
-                axfr.set_xlabel('Neuron Index')
-                axfr.set_yticks(ticks=[])
-                #plt.colorbar(img, location='bottom',orientation='horizontal',label='Firing Rate (Hz)',panchor=(0.9,0.5),ax=ax[2,0])
-                axfr.set_title('Event FR')
+                img = ax[2, 0].imshow(np.expand_dims(dev_fr_vec, 0))
+                ax[2, 0].set_xlabel('Neuron Index')
+                ax[2, 0].set_yticks(ticks=[])
+                plt.colorbar(img, ax=ax[2,0], location='bottom', \
+                             orientation='horizontal',label='Firing Rate (Hz)', \
+                                 panchor=(0.9,0.5))
+                ax[2, 0].set_title('Event FR')
                 # Taste Firing Rates
                 # vmax=np.max([taste_fr_vecs_max_hz,d_fr_vec_max_hz]))
-                ax[3, 0].remove()
-                ax[3, 1].remove()
-                axtfr = f.add_subplot(gs[3, 0:2])
-                img = axtfr.imshow(np.expand_dims(
+                img = ax[3, 0].imshow(np.expand_dims(
                     all_group_fr_vecs_mean[decoded_group_ind], 0))
-                axtfr.set_xlabel('Neuron Index')
-                axtfr.set_yticks(ticks=[])
-                plt.colorbar(
-                    img, ax=axtfr, location='bottom', orientation='horizontal', label='Firing Rate (Hz)', panchor=(0.9, 0.5))
-                axtfr.set_title('Avg. Taste Resp. FR')
+                ax[3, 0].set_xlabel('Neuron Index')
+                ax[3, 0].set_yticks(ticks=[])
+                plt.colorbar(img, ax=ax[3, 0], location='bottom', \
+                             orientation='horizontal', label='Firing Rate (Hz)', \
+                                 panchor=(0.9, 0.5))
+                ax[3, 0].set_title('Avg. Taste Resp. FR')
                 # Decoded Firing Rates x Average Firing Rates
                 max_lim = np.max([np.max(dev_fr_vec), np.max(all_group_fr_vecs_mean[decoded_group_ind])])
-                ax[4, 0].plot([0, max_lim], [0, max_lim],
+                ax[2, 1].plot([0, max_lim], [0, max_lim],
                               alpha=0.5, linestyle='dashed')
-                ax[4, 0].scatter(all_group_fr_vecs_mean[decoded_group_ind], dev_fr_vec)
-                ax[4, 0].set_xlabel('Average Group FR')
-                ax[4, 0].set_ylabel('Dev FR')
-                ax[4, 0].set_title('Firing Rate Similarity')
-                ax[4, 1].remove()
+                ax[2, 1].scatter(all_group_fr_vecs_mean[decoded_group_ind], dev_fr_vec)
+                ax[2, 1].set_xlabel('Average Group FR')
+                ax[2, 1].set_ylabel('Dev FR')
+                ax[2, 1].set_title('Firing Rate Similarity')
+                ax[3, 1].remove()
                 # Final Cleanup
                 plt.suptitle(corr_title, wrap=True)
                 plt.tight_layout()
