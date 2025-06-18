@@ -392,6 +392,12 @@ class run_multiday_analysis():
                                                        self.all_dig_in_names,
                                                        self.palatable_dig_inds,
                                                        self.non_none_tastes)
+        #Save the group information for cross-animal use 
+        group_dict = dict()
+        for gn_i, gn in enumerate(group_names):
+            group_dict[gn] = group_list[gn_i]
+        np.save(os.path.join(self.bayes_dir,'group_dict.npy'),group_dict,allow_pickle=True)
+
         self.group_list = group_list
         self.group_names = group_names
         

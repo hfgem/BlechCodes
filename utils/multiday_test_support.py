@@ -284,6 +284,12 @@ group_list, group_names = ddf.multiday_decode_groupings(day_vars[0]['epochs_to_a
                                                palatable_dig_inds,
                                                non_none_tastes)
 
+#Save the group information for cross-animal use 
+group_dict = dict()
+for gn_i, gn in enumerate(group_names):
+    group_dict[gn] = group_list[gn_i]
+np.save(os.path.join(bayes_dir,'group_dict.npy'),group_dict,allow_pickle=True)
+
 # decode_zscored()
 
 decode_dir = os.path.join(bayes_dir,'All_Neurons_Z_Scored')
