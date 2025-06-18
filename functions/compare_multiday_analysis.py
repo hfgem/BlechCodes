@@ -231,24 +231,64 @@ class run_compare_multiday_analysis():
             for nc_i, dn in enumerate(data_names):
                 decode_dict[dn] = dict()
                 data_dir = self.multiday_data_dict[dn]['data_dir']
-                decode_dir = os.path.join(data_dir,'Decodes')
-                decode_types = os.listdir(decode_dir)
+                seg_names = self.multiday_data_dict[dn]['segment_names']
+                seg_inds_to_use = []
+                for sn in self.unique_segment_names:
+                    s_ind = [s_i for s_i in range(len(seg_names)) if seg_names[s_i] == sn][0]
+                    seg_inds_to_use.append(s_ind)
+                seg_inds_to_use = np.sort(seg_inds_to_use)
+                decode_dir = os.path.join(data_dir,'Deviation_Dependent_Decoding')
+                group_dict = np.load(os.path.join(decode_dir,'group_dict.npy'),allow_pickle=True).item()
+                decode_dict[dn]['group_dict'] = group_dict
+                decode_types = os.listdir(decode_dir) #All_Neurons_Z_Scored
                 for dt in decode_types:
-                    decode_dict[dn][dt] = dict()
-                    decode_type_files = os.listdir(os.path.join(decode_dir,dt))
-                    for f in decode_type_files:
-                        if f.split('.')[-1] == 'npy':
-                            f_name = f.split('.')[0]
-                            name_components = f_name.split('_')
-                            #Check if dict has a segment storage started yet and make if not
-                            seg_name = name_components[0]
-                            decode_dict_keys = list(decode_dict[dn][dt].keys())
-                            if len(np.where(np.array(decode_dict_keys) == seg_name)[0]) == 0: #Segment not stored yet
-                                decode_dict[dn][dt][seg_name] = dict()
-                            #Create storage for the type of decode
-                            decode_type = ('_').join(name_components[-2:])
-                            decode_dict[dn][dt][seg_name][decode_type] = \
-                                np.load(os.path.join(decode_dir,dt,f),allow_pickle=True)
+                    if not len(dt.split('.')) > 1:
+                        decode_dict[dn][dt] = dict()
+                        decode_type_files = os.listdir(os.path.join(decode_dir,dt))
+                        for f in decode_type_files:
+                            #Accuracy data
+                            if f == 'Decoder_Accuracy':
+                                decode_dict[dn][dt][f] = dict()
+                                try:
+                                    nb_decode_predictions = np.load(os.path.join(decode_dir,dt,\
+                                                                                 f,'nb_decode_predictions.npy'),\
+                                                                                 allow_pickle=True).item()
+                                    decode_dict[dn][dt][f]['nb_decode_predictions'] = nb_decode_predictions
+                                    nb_decoder_accuracy_dict = np.load(os.path.join(decode_dir,dt,\
+                                                                                 f,'nb_decoder_accuracy_dict.npy'),\
+                                                                                 allow_pickle=True).item()
+                                    decode_dict[dn][dt][f]['nb_decoder_accuracy_dict'] = nb_decoder_accuracy_dict
+                                except:
+                                    if self.verbose == True:
+                                        print("Missing decoder accuracy data.")
+                            #Deviation decoding data
+                            elif f == 'NB_Decoding':
+                                decode_dict[dn][dt][f] = dict()
+                                try:
+                                    for s_ind in seg_inds_to_use:
+                                        seg_decodes = np.load(os.path.join(decode_dir,dt,\
+                                                                           f,'segment_' + str(s_ind),\
+                                                                            'segment_' + str(s_ind) + '_deviation_decodes.npy'),\
+                                                                                     allow_pickle=True)
+                                        decode_dict[dn][dt][f]['segment_' + str(s_ind)] = seg_decodes
+                                except:
+                                    if self.verbose == True:
+                                        print("Missing deviation decode data.")
+                            #Sliding decoding data
+                            elif f == 'Sliding_Decoding':
+                                decode_dict[dn][dt][f] = dict()
+                                try:
+                                    seg_group_frac = np.load(os.path.join(decode_dir,dt,\
+                                                                       f,'seg_group_frac.npy'),\
+                                                                                 allow_pickle=True)
+                                    decode_dict[dn][dt][f]['seg_group_frac'] = seg_group_frac
+                                    seg_group_rate_corr = np.load(os.path.join(decode_dir,dt,\
+                                                                       f,'seg_group_rate_corr.npy'),\
+                                                                                 allow_pickle=True)
+                                    decode_dict[dn][dt][f]['seg_group_rate_corr'] = seg_group_rate_corr
+                                except:
+                                    if self.verbose == True:
+                                        print("Missing deviation decode data.")
                     #Add storage of taste order info
                     corr_type_keys = self.corr_dict[dn].keys()
                     for ctk in corr_type_keys:
