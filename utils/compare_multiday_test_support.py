@@ -319,17 +319,18 @@ except:
 num_datasets = len(decode_dict)
 unique_given_names = list(decode_dict.keys())
 #Pull unique decode analysis names
-unique_decode_names = []
-for name in unique_given_names:
-    unique_decode_names.extend(list(decode_dict[name].keys()))
-unique_decode_indices = np.sort(
-    np.unique(unique_decode_names, return_index=True)[1])
-unique_decode_names = [unique_decode_names[i] for i in unique_decode_indices]
-    
+unique_decode_names = ['All_Neurons_Z_Scored']
+unique_decode_groups = []
+for dn_i, dn in enumerate(list(multiday_data_dict.keys())):
+    dn_group_names = list(decode_dict[dn]['group_dict'].keys())
+    unique_decode_groups.extend(dn_group_names)
+unique_decode_group_indices = np.sort(np.unique(unique_decode_groups,return_index=True)[1])
+unique_decode_groups = np.array(unique_decode_groups)[unique_decode_group_indices]
+
 #%% run_decode_analysis()
 
 import functions.compare_multiday_funcs as cmf
 
 cmf.compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
-                        unique_decode_names, unique_segment_names, 
-                        unique_taste_names, max_cp, save_dir, verbose=False)
+                        unique_decode_names, unique_decode_groups, unique_segment_names, 
+                        unique_taste_names, max_cp, save_dir, False)
