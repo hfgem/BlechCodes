@@ -230,6 +230,61 @@ unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
 #Select which tastes to use in the analysis
 unique_taste_names = select_analysis_groups(unique_taste_names)
 
+#%% gather_null_corr_data()
+print("Collecting null correlation data")
+null_corr_dict_path = os.path.join(save_dir,'null_corr_data_dict.npy')
+try:
+    null_corr_dict = np.load(null_corr_dict_path,allow_pickle=True).item()
+except:
+    null_corr_dict = dict()
+    data_names = list(multiday_data_dict.keys())
+    for dn in data_names:
+        print("\tImporting null data for " + dn)
+        null_corr_dict[dn] = dict()
+        data_dir = multiday_data_dict[dn]['data_dir']
+        null_corr_dir = os.path.join(data_dir,'Correlations','Null')
+        null_folders = os.listdir(null_corr_dir)
+        num_null = len(null_folders)
+        null_corr_dict[dn]['num_null'] = num_null
+        #First set up folder structure
+        for sn in unique_segment_names:
+            null_corr_dict[dn][sn] = dict()
+            for tn in unique_taste_names:
+                null_corr_dict[dn][sn][tn] = dict()
+                for cn in unique_corr_names:
+                    null_corr_dict[dn][sn][tn][cn] = dict() 
+                    for cp_i in range(max_cp):
+                        null_corr_dict[dn][sn][tn][cn][cp_i] = [] #Compiled from samples from all null datasets
+        #Now collect correlations across null datasets into this folder structure
+        for cn in unique_corr_names:
+            print('\t\tNow collecting null data for ' + cn)
+            for nf_i, nf in tqdm.tqdm(enumerate(null_folders)):
+                null_data_folder = os.path.join(null_corr_dir,'null_' + str(nf_i),cn)
+                if os.path.isdir(null_data_folder):
+                    null_datasets = os.listdir(null_data_folder)
+                    for sn in unique_segment_names:
+                        for nd_name in null_datasets:
+                            if nd_name.split('_')[0] == sn:
+                                if nd_name.split('_')[-1] == 'dict.npy': #Only save complete correlation datasets
+                                    null_dict = np.load(os.path.join(null_data_folder,\
+                                                             nd_name),allow_pickle=True).item()
+                                    for ndk_i in null_dict.keys():
+                                        tn = null_dict[ndk_i]['name']
+                                        if tn == 'NaCl_1':
+                                            tn_true = 'salt_1'
+                                        else:
+                                            tn_true = tn
+                                        all_cp_data = null_dict[ndk_i]['data']
+                                        num_null_dev = null_dict[ndk_i]['num_dev']
+                                        num_taste_deliv, _ = np.shape(null_dict[ndk_i]['taste_num'])
+                                        for cp_i in range(max_cp):
+                                            try:
+                                                all_cp_data_reshaped = np.reshape(all_cp_data[cp_i],(num_taste_deliv,num_null_dev))
+                                                avg_null_corr = np.nanmean(all_cp_data_reshaped,0) #Average correlation across deliveries
+                                                null_corr_dict[dn][sn][tn_true][cn][cp_i].extend(avg_null_corr)
+                                            except:
+                                                skip_taste = 1
+    np.save(null_corr_dict_path,null_corr_dict,allow_pickle=True) 
 
 #%% gather_decode_data()
 
@@ -251,12 +306,12 @@ except:
             seg_inds_to_use.append(s_ind)
         seg_inds_to_use = np.sort(seg_inds_to_use)
         decode_dir = os.path.join(data_dir,'Deviation_Dependent_Decoding')
-        group_dict = np.load(os.path.join(decode_dir,'group_dict.npy'),allow_pickle=True).item()
-        decode_dict[dn]['group_dict'] = group_dict
-        decode_types = os.listdir(decode_dir) #All_Neurons_Z_Scored
+        decode_types = os.listdir(decode_dir)
         for dt in decode_types:
             if not len(dt.split('.')) > 1:
                 decode_dict[dn][dt] = dict()
+                group_dict = np.load(os.path.join(decode_dir,dt,'group_dict.npy'),allow_pickle=True).item()
+                decode_dict[dn][dt]['group_dict'] = group_dict
                 decode_type_files = os.listdir(os.path.join(decode_dir,dt))
                 #Points of interest are: Decoder_Accuracy, NB_Decoding, and Sliding_Decoding
                 for f in decode_type_files:
@@ -319,13 +374,21 @@ except:
 num_datasets = len(decode_dict)
 unique_given_names = list(decode_dict.keys())
 #Pull unique decode analysis names
-unique_decode_names = ['All_Neurons_Z_Scored']
-unique_decode_groups = []
-for dn_i, dn in enumerate(list(multiday_data_dict.keys())):
-    dn_group_names = list(decode_dict[dn]['group_dict'].keys())
-    unique_decode_groups.extend(dn_group_names)
-unique_decode_group_indices = np.sort(np.unique(unique_decode_groups,return_index=True)[1])
-unique_decode_groups = np.array(unique_decode_groups)[unique_decode_group_indices]
+unique_decode_names = []
+for gn_i, gn in enumerate(unique_given_names):
+    decode_types = list(decode_dict[gn].keys())
+    unique_decode_names.extend(decode_types)
+unique_decode_name_indices = np.sort(np.unique(unique_decode_names,return_index=True)[1])
+unique_decode_names = np.array(unique_decode_names)[unique_decode_name_indices]
+#Split unique decode groups by decode type
+unique_decode_groups = dict()
+for dt in unique_decode_names:
+    unique_decode_groups[dt] = []
+    for gn_i, gn in enumerate(unique_given_names):
+        dn_group_names = list(decode_dict[gn][dt]['group_dict'].keys())
+        unique_decode_groups[dt].extend(dn_group_names)
+    unique_decode_group_indices = np.sort(np.unique(unique_decode_groups[dt],return_index=True)[1])
+    unique_decode_groups[dt] = np.array(unique_decode_groups[dt])[unique_decode_group_indices]
 
 #%% run_decode_analysis()
 

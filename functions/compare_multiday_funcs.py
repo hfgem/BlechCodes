@@ -141,19 +141,19 @@ def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names,
                                 ks_result = ks_2samp(data_1,data_2,alternative='two-sided')
                                 if ks_result[1] <= 0.05:
                                     if np.nanmean(data_1) < np.nanmean(data_2):
-                                        ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*<'])
+                                        ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*<',ks_result[1]])
                                     else:
-                                        ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*>'])
+                                        ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*>',ks_result[1]])
                                 else:
-                                    ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'n.s.'])
+                                    ks_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'n.s.',ks_result[1]])
                                 tt_result = ttest_ind(data_1,data_2,alternative='two-sided')
                                 if tt_result[1] <= 0.05:
                                     if np.nanmean(data_1) < np.nanmean(data_2):
-                                        tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*<'])
+                                        tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*<',tt_result[1]])
                                     else:
-                                        tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*>'])
+                                        tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*>',tt_result[1]])
                                 else:
-                                    tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'n.s.'])
+                                    tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'n.s.',tt_result[1]])
                                 
                     #Output results to csv
                     csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_ks.csv'
@@ -226,19 +226,19 @@ def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names,
                                 ks_result = ks_2samp(taste_dist,null_taste_dist,alternative='two-sided')
                                 if ks_result[1] <= 0.05:
                                     if np.nanmean(taste_dist) < np.nanmean(null_taste_dist):
-                                        ks_results.append([taste,'*<'])
+                                        ks_results.append([taste,'*<',ks_result[1]])
                                     else:
-                                        ks_results.append([taste,'*>'])
+                                        ks_results.append([taste,'*>',ks_result[1]])
                                 else:
-                                    ks_results.append([taste,'n.s.'])
+                                    ks_results.append([taste,'n.s.',ks_result[1]])
                                 tt_result = ttest_ind(taste_dist,null_taste_dist,alternative='two-sided')
                                 if tt_result[1] <= 0.05:
                                     if np.nanmean(taste_dist) < np.nanmean(null_taste_dist):
-                                        tt_results.append([taste,'*<'])
+                                        tt_results.append([taste,'*<',tt_result[1]])
                                     else:
-                                        tt_results.append([taste,'*>'])
+                                        tt_results.append([taste,'*>',tt_result[1]])
                                 else:
-                                    tt_results.append([taste,'n.s.'])
+                                    tt_results.append([taste,'n.s.',tt_result[1]])
                                 
                     #Output results to csv
                     csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_null_ks.csv'
@@ -664,8 +664,8 @@ def compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
                            decode_results_save_dir,verbose)
     
     
-def decode_rates_plots(decode_dict, unique_given_names, unique_decode_names,
-                       unique_decode_groups, unique_segment_names,
+def decode_rates_plots(decode_dict, multiday_data_dict, unique_given_names, 
+                       unique_decode_names, unique_decode_groups, unique_segment_names,
                        unique_taste_names, max_cp, decode_results_save_dir,
                        verbose=False):
     
@@ -674,18 +674,38 @@ def decode_rates_plots(decode_dict, unique_given_names, unique_decode_names,
     num_anim = len(unique_given_names)
     num_seg = len(unique_segment_names)
     num_tastes = len(unique_taste_names)
-    num_groups = len(unique_decode_groups)
     unique_segment_names = ['pre-taste','post-taste','sickness'] #manual order override
     for dt in unique_decode_names:
         
+        dt_decode_groups = unique_decode_groups[dt]
+        num_groups = len(unique_decode_groups[dt])
+        
         #Decoder Accuracy
-        accuracy_rates = np.zeros((num_anim,num_groups))
-        for gn_i, gn in enumerate(unique_given_names):
-            gn_decode_groups = list(decode_dict[gn]['group_dict'].keys())
-            num_groups = len(gn_decode_groups)
-            for dg_i, dg in enumerate(unique_decode_groups):
-                group_ind = [i for i in range(len(gn_decode_groups)) if gn_decode_groups[i] == dg][0]
-                group_indices = decode_dict[gn]['group_dict'][dg]
+        plot_decoder_accuracy_stats(num_anim, num_groups, unique_given_names, \
+                                        dt_decode_groups, decode_dict, dt, \
+                                            decode_results_save_dir)
+        
+        #Deviation Decodes
+        plot_deviation_decode_stats(unique_segment_names,unique_given_names,dt_decode_groups,\
+                                        multiday_data_dict,decode_dict,dt,decode_results_save_dir)
+        
+        #Sliding Bin Decodes
+        
+
+def plot_decoder_accuracy_stats(num_anim, num_groups, unique_given_names, \
+                                dt_decode_groups, decode_dict, dt, \
+                                    decode_results_save_dir):
+    """
+    This function plots accuracy stats a few different ways.
+
+    """
+    #Overall accuracy rates
+    accuracy_rates = np.zeros((num_anim,num_groups))
+    for gn_i, gn in enumerate(unique_given_names):
+        for dg_i, dg in enumerate(dt_decode_groups):
+            try:
+                group_ind = [i for i in range(len(dt_decode_groups)) if dt_decode_groups[i] == dg][0]
+                group_indices = decode_dict[gn][dt]['group_dict'][dt_decode_groups[group_ind]]
                 try:
                     decode_predictions = decode_dict[gn][dt]['Decoder_Accuracy']['nb_decode_predictions']
                     group_counts = 0
@@ -700,35 +720,194 @@ def decode_rates_plots(decode_dict, unique_given_names, unique_decode_names,
                     accuracy_rates[gn_i,dg_i] = group_counts/group_totals
                 except:
                     accuracy_rates[gn_i,dg_i] = np.nan
-        accuracy_means = np.nanmean(accuracy_rates,0)
-        f_accuracy = plt.figure(figsize=(10,10))
-        plt.axhline(100/(num_groups+1),linestyle='dashed',alpha=0.5,color='k')
-        plt.boxplot(100*accuracy_rates,showmeans=True)
-        for g_i in range(num_groups):
-            plt.text(g_i+1,100*accuracy_means[g_i],\
-                     str(np.round(100*accuracy_means[g_i],2)),\
-                         va='top',ha='left')
-        plt.xticks(np.arange(1,num_groups+1),unique_decode_groups)
-        plt.title('Cross-Animal Decoder Accuracy')
-        f_accuracy.savefig(os.path.join(decode_results_save_dir,'decoder_accuracy_box.png'))
-        f_accuracy.savefig(os.path.join(decode_results_save_dir,'decoder_accuracy_box.svg'))
-        
-        #Deviation Decodes
-        
-        
-        #Sliding Bin Decodes
-        
-
-def plot_group_rates():
-    """
-    This function plots rates of events across animals a few different ways.
-
-    Returns
-    -------
-    None.
-
-    """
+            except:
+                accuracy_rates[gn_i,dg_i] = np.nan
+    accuracy_means = np.nanmean(accuracy_rates,0)
+    f_accuracy = plt.figure(figsize=(10,10))
+    plt.axhline(100/(num_groups+1),linestyle='dashed',alpha=0.5,color='k')
+    plt.boxplot(100*accuracy_rates,labels=dt_decode_groups,showmeans=True)
+    for g_i in range(num_groups):
+        plt.text(g_i+1,100*accuracy_means[g_i],\
+                 str(np.round(100*accuracy_means[g_i],2)),\
+                     va='top',ha='left')
+    plt.xticks(rotation=45)
+    plt.title(dt + '\nCross-Animal Decoder Accuracy')
+    f_accuracy.savefig(os.path.join(decode_results_save_dir,dt+'_decoder_accuracy_box.png'))
+    f_accuracy.savefig(os.path.join(decode_results_save_dir,dt+'_decoder_accuracy_box.svg'))
+    plt.close(f_accuracy)
     
+    #Histograms of accuracy confusion
+    accuracy_confusion_rates = np.zeros((num_groups,num_anim,num_groups))
+    for gn_i, gn in enumerate(unique_given_names):
+        for dg1_i, dg1 in enumerate(dt_decode_groups): #Group we're testing the decode rates for
+            gn_decode_groups = []
+            for dg_i, dg_val in enumerate(dt_decode_groups):
+                if dg_val.split('_')[0] == 'Nacl': #To handle the salt vs nacl issue
+                    dg_val = 'Salt_' + dg_val.split('_')[1]
+                    gn_decode_groups.append(dg_val)
+                else:
+                    gn_decode_groups.append(dg_val)
+            decode_predictions = decode_dict[gn][dt]['Decoder_Accuracy']['nb_decode_predictions']
+            group_ind = [i for i in range(len(gn_decode_groups)) if gn_decode_groups[i] == dg1][0]
+            group_indices = decode_dict[gn][dt]['group_dict'][dt_decode_groups[group_ind]]
+            for gi in group_indices:
+                group_predictions = decode_predictions[str(gi[1])+','+str(gi[0])]
+                group_predictions_join_null = group_predictions[:,:-1]
+                group_predictions_join_null[:,-1] += group_predictions[:,-1]
+                accuracy_confusion_rates[dg1_i,gn_i,:] = np.nansum(group_predictions_join_null,0)
+    accuracy_sums = np.nansum(accuracy_confusion_rates,1)
+    totals = (np.nansum(accuracy_sums,1)*np.ones(np.shape(accuracy_sums))).T
+    accuracy_fracs = accuracy_sums/totals
+    f_accuracy_matrix = plt.figure(figsize=(8,8))
+    plt.imshow(accuracy_fracs)
+    plt.colorbar()
+    plt.xticks(np.arange(num_groups),dt_decode_groups,rotation=45)
+    plt.xlabel('Decoder Readouts')
+    plt.yticks(np.arange(num_groups),dt_decode_groups,rotation=45)
+    plt.ylabel('Ground Truth')
+    plt.title('Confusion Matrix')
+    plt.tight_layout()
+    f_accuracy_matrix.savefig(os.path.join(decode_results_save_dir,dt+'_decoder_confusion_matrix.png'))
+    f_accuracy_matrix.savefig(os.path.join(decode_results_save_dir,dt+'_decoder_confusion_matrix.svg'))
+    plt.close(f_accuracy_matrix)
+
+def plot_deviation_decode_stats(unique_segment_names,unique_given_names,dt_decode_groups,\
+                                multiday_data_dict,decode_dict,dt,decode_results_save_dir):
+    """
+    This function plots deviation decode stats a few different ways.
+
+    """
+    #All events how they're decoded
+    num_seg = len(unique_segment_names)
+    num_anim = len(unique_given_names)
+    num_groups = len(dt_decode_groups)
+    dev_decode_counts = np.zeros((num_seg,num_anim,num_groups))
+    for seg_i, seg_name in enumerate(unique_segment_names):
+        for gn_i, gn in enumerate(unique_given_names):
+            seg_index = [i for i in range(len(multiday_data_dict[gn]['segment_names'])) if multiday_data_dict[gn]['segment_names'][i] == seg_name][0]
+            anim_decode_groups = list(decode_dict[gn][dt]['group_dict'].keys())
+            anim_decode_data = decode_dict[gn][dt]['NB_Decoding']['segment_' + str(seg_index)]
+            for dg_i, dg in enumerate(dt_decode_groups):
+                try:
+                    anim_dg_ind = [i for i in range(len(anim_decode_groups)) if anim_decode_groups[i] == dg][0]
+                    if len(np.shape(anim_decode_data))>1:
+                        argmax_decode_data = np.argmax(anim_decode_data,1)
+                        num_decoded = len(np.where(argmax_decode_data == anim_dg_ind)[0])
+                    else:
+                        num_decoded = len(np.where(anim_decode_data == anim_dg_ind)[0])
+                    dev_decode_counts[seg_i,gn_i,dg_i] = num_decoded
+                except:
+                    dev_decode_counts[seg_i,gn_i,dg_i] = np.nan
+    dev_counts = np.nansum(dev_decode_counts,2)
+    dev_decode_fracs = np.zeros(np.shape(dev_decode_counts))
+    for seg_i in range(len(unique_segment_names)):
+        dev_decode_fracs[seg_i,:,:] = np.squeeze(dev_decode_counts[seg_i,:,:])/(dev_counts[seg_i,:]*np.ones((num_groups,num_anim))).T
+    #By animal fraction plots
+    f_decode_frac, ax_decode_frac = plt.subplots(ncols = len(unique_segment_names),\
+                                 sharex = True, sharey = True, figsize=(12,4))
+    for seg_i, seg_name in enumerate(unique_segment_names):
+        data = np.squeeze(dev_decode_fracs[seg_i,:,:])
+        data_mean = np.nanmean(data,0)
+        ax_decode_frac[seg_i].boxplot(data,labels=dt_decode_groups,showmeans=True)
+        for dc_i in range(len(dt_decode_groups)):
+            ax_decode_frac[seg_i].text(dc_i+1+0.05,data_mean[dc_i]+0.05,\
+                                       str(np.round(data_mean[dc_i],2)),\
+                                           ha = 'left', va = 'top')
+        ax_decode_frac[seg_i].set_xticks(np.arange(len(dt_decode_groups))+1,\
+                                         dt_decode_groups,rotation=45)
+        ax_decode_frac[seg_i].set_ylabel('Fraction of Deviation Events')
+        ax_decode_frac[seg_i].set_title(seg_name)
+    ax_decode_frac[0].set_ylim([0,1])
+    plt.suptitle('Deviation Decode Fractions')
+    plt.tight_layout()
+    f_decode_frac.savefig(os.path.join(decode_results_save_dir,dt+'_by_animal_dev_decode_rates.png'))
+    f_decode_frac.savefig(os.path.join(decode_results_save_dir,dt+'_by_animal_dev_decode_rates.svg'))
+    plt.close(f_decode_frac)
+    #Total counts pies
+    f_decode_pie, ax_decode_pie = plt.subplots(ncols = len(unique_segment_names),\
+                                 sharex = True, sharey = True, figsize=(12,4))
+    for seg_i, seg_name in enumerate(unique_segment_names):
+        data = np.squeeze(dev_decode_counts[seg_i,:,:])
+        data_sum = np.nansum(data,0)
+        data_percents = np.round(100*data_sum/np.nansum(data_sum),2)
+        data_labels = [dt_decode_groups[i] + '\n' + str(data_percents[i]) + '%' for i in range(num_groups)]
+        explode = [0.1*i for i in range(len(dt_decode_groups))]
+        ax_decode_pie[seg_i].pie(data_sum,explode=explode,\
+                                 labeldistance=1.1,labels=data_labels)
+        ax_decode_frac[seg_i].set_title(seg_name)
+    plt.suptitle('Across Animals Percent of Deviation Events Decoded As...')
+    plt.tight_layout()
+    f_decode_pie.savefig(os.path.join(decode_results_save_dir,dt+'_cross_animal_dev_decode_rates_pie.png'))
+    f_decode_pie.savefig(os.path.join(decode_results_save_dir,dt+'_cross_animal_dev_decode_rates_pie.svg'))
+    plt.close(f_decode_pie)
+    
+    #Only high probability decode events how they're decoded
+    cutoff = 0.75
+    num_seg = len(unique_segment_names)
+    num_anim = len(unique_given_names)
+    num_groups = len(dt_decode_groups)
+    dev_decode_counts = np.zeros((num_seg,num_anim,num_groups))
+    for seg_i, seg_name in enumerate(unique_segment_names):
+        for gn_i, gn in enumerate(unique_given_names):
+            seg_index = [i for i in range(len(multiday_data_dict[gn]['segment_names'])) if multiday_data_dict[gn]['segment_names'][i] == seg_name][0]
+            anim_decode_groups = list(decode_dict[gn][dt]['group_dict'].keys())
+            anim_decode_data = decode_dict[gn][dt]['NB_Decoding']['segment_' + str(seg_index)]
+            for dg_i, dg in enumerate(dt_decode_groups):
+                try:
+                    anim_dg_ind = [i for i in range(len(anim_decode_groups)) if anim_decode_groups[i] == dg][0]
+                    if len(np.shape(anim_decode_data))>1:
+                        argmax_decode_data = np.argmax(anim_decode_data,1)
+                        where_decoded = np.where(argmax_decode_data == anim_dg_ind)[0]
+                        decode_vals = np.array([anim_decode_data[wd_i,anim_dg_ind] for wd_i in where_decoded])
+                        num_decoded = len(np.where(decode_vals >= cutoff)[0])
+                    else:
+                        num_decoded = np.nan
+                    dev_decode_counts[seg_i,gn_i,dg_i] = num_decoded
+                except:
+                    dev_decode_counts[seg_i,gn_i,dg_i] = np.nan
+    dev_counts = np.nansum(dev_decode_counts,2)
+    dev_decode_fracs = np.zeros(np.shape(dev_decode_counts))
+    for seg_i in range(len(unique_segment_names)):
+        dev_decode_fracs[seg_i,:,:] = np.squeeze(dev_decode_counts[seg_i,:,:])/(dev_counts[seg_i,:]*np.ones((num_groups,num_anim))).T
+    #By animal fraction plots
+    f_decode_frac, ax_decode_frac = plt.subplots(ncols = len(unique_segment_names),\
+                                 sharex = True, sharey = True, figsize=(12,4))
+    for seg_i, seg_name in enumerate(unique_segment_names):
+        data = np.squeeze(dev_decode_fracs[seg_i,:,:])
+        data_mean = np.nanmean(data,0)
+        ax_decode_frac[seg_i].boxplot(data,labels=dt_decode_groups,showmeans=True)
+        for dc_i in range(len(dt_decode_groups)):
+            ax_decode_frac[seg_i].text(dc_i+1+0.05,data_mean[dc_i]+0.05,\
+                                       str(np.round(data_mean[dc_i],2)),\
+                                           ha = 'left', va = 'top')
+        ax_decode_frac[seg_i].set_xticks(np.arange(len(dt_decode_groups))+1,\
+                                         dt_decode_groups,rotation=45)
+        ax_decode_frac[seg_i].set_ylabel('Fraction of Deviation Events')
+        ax_decode_frac[seg_i].set_title(seg_name)
+    ax_decode_frac[0].set_ylim([0,1])
+    plt.suptitle('Strong Deviation Decode Fractions')
+    plt.tight_layout()
+    f_decode_frac.savefig(os.path.join(decode_results_save_dir,dt+'_by_animal_dev_decode_rates_above_cutoff.png'))
+    f_decode_frac.savefig(os.path.join(decode_results_save_dir,dt+'_by_animal_dev_decode_rates_above_cutoff.svg'))
+    plt.close(f_decode_frac)
+    
+    #Total counts pies
+    f_decode_pie, ax_decode_pie = plt.subplots(ncols = len(unique_segment_names),\
+                                 sharex = True, sharey = True, figsize=(12,4))
+    for seg_i, seg_name in enumerate(unique_segment_names):
+        data = np.squeeze(dev_decode_counts[seg_i,:,:])
+        data_sum = np.nansum(data,0)
+        data_percents = np.round(100*data_sum/np.nansum(data_sum),2)
+        data_labels = [dt_decode_groups[i] + '\n' + str(data_percents[i]) + '%' for i in range(num_groups)]
+        explode = [0.1*i for i in range(len(dt_decode_groups))]
+        ax_decode_pie[seg_i].pie(data_sum,explode=explode,\
+                                 labeldistance=1.1,labels=data_labels)
+        ax_decode_frac[seg_i].set_title(seg_name)
+    plt.suptitle('Across Animals Percent of Deviation Events Strongly Decoded As...')
+    plt.tight_layout()
+    f_decode_pie.savefig(os.path.join(decode_results_save_dir,dt+'_cross_animal_dev_decode_rates_pie_above_cutoff.png'))
+    f_decode_pie.savefig(os.path.join(decode_results_save_dir,dt+'_cross_animal_dev_decode_rates_pie_above_cutoff.svg'))
+    plt.close(f_decode_pie)
         
 def select_analysis_groups(unique_list):
     """
