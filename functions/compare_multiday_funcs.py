@@ -15,7 +15,7 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
-from scipy.stats import ks_2samp, ttest_ind
+from scipy.stats import ks_2samp, ttest_ind, anderson, f_oneway
 from functions.compare_conditions_funcs import int_input, bool_input, int_list_input
 
 def compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_given_names,
@@ -658,10 +658,9 @@ def compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
         os.mkdir(decode_results_save_dir)
         
     #Plot cross-animal rates of decodes
-    decode_rates_plots(decode_dict,unique_given_names,unique_decode_names,
-                           unique_decode_groups, unique_segment_names,
-                           unique_taste_names, max_cp,
-                           decode_results_save_dir,verbose)
+    decode_rates_plots(decode_dict,multiday_data_dict,unique_given_names,\
+                       unique_decode_names,unique_decode_groups,unique_segment_names,\
+                           unique_taste_names, max_cp,decode_results_save_dir,verbose)
     
     
 def decode_rates_plots(decode_dict, multiday_data_dict, unique_given_names, 
@@ -807,106 +806,67 @@ def plot_deviation_decode_stats(unique_segment_names,unique_given_names,dt_decod
                                  sharex = True, sharey = True, figsize=(12,4))
     for seg_i, seg_name in enumerate(unique_segment_names):
         data = np.squeeze(dev_decode_fracs[seg_i,:,:])
+        #Perform stat test of normality
+        group_norm = np.nan*np.ones(num_groups)
+        for g_i in range(num_groups):
+            data_norm = anderson(data[:,g_i].squeeze(), dist='norm')
+            critical_level_ind = np.where(data_norm.statistic > data_norm.critical_values)[0]
+            if (len(critical_level_ind) > 0) and (critical_level_ind[-1] >= 2):
+                group_norm[g_i] = 0
+            else: #Normally distributed
+                group_norm[g_i] = 1
+        not_norm = np.where(group_norm == 0)[0]
+        #Perform ANOVA
+        anova_inputs = []
+        for g_i in range(num_groups):
+            anova_inputs.append(data[:,g_i])
+        _, anova_p_value = f_oneway(*anova_inputs)
         data_mean = np.nanmean(data,0)
-        ax_decode_frac[seg_i].boxplot(data,labels=dt_decode_groups,showmeans=True)
-        for dc_i in range(len(dt_decode_groups)):
-            ax_decode_frac[seg_i].text(dc_i+1+0.05,data_mean[dc_i]+0.05,\
-                                       str(np.round(data_mean[dc_i],2)),\
-                                           ha = 'left', va = 'top')
+        #Plot
+        ax_decode_frac[seg_i].boxplot(data,labels=dt_decode_groups)
+        for dc_i in not_norm:
+            ax_decode_frac[seg_i].text(dc_i+1,1.05,'* AD',ha = 'left',va = 'top')
         ax_decode_frac[seg_i].set_xticks(np.arange(len(dt_decode_groups))+1,\
                                          dt_decode_groups,rotation=45)
-        ax_decode_frac[seg_i].set_ylabel('Fraction of Deviation Events')
-        ax_decode_frac[seg_i].set_title(seg_name)
-    ax_decode_frac[0].set_ylim([0,1])
+        if anova_p_value <= 0.05:
+            ax_decode_frac[seg_i].set_title(seg_name + '\n*ANOVA')
+        else:
+            ax_decode_frac[seg_i].set_title(seg_name)
+    ax_decode_frac[0].set_ylim([-0.1,1.1])
+    ax_decode_frac[0].set_ylabel('Fraction of Deviation Events')
     plt.suptitle('Deviation Decode Fractions')
     plt.tight_layout()
     f_decode_frac.savefig(os.path.join(decode_results_save_dir,dt+'_by_animal_dev_decode_rates.png'))
     f_decode_frac.savefig(os.path.join(decode_results_save_dir,dt+'_by_animal_dev_decode_rates.svg'))
     plt.close(f_decode_frac)
-    #Total counts pies
+    
+    #Outlier removed mean pies
     f_decode_pie, ax_decode_pie = plt.subplots(ncols = len(unique_segment_names),\
                                  sharex = True, sharey = True, figsize=(12,4))
     for seg_i, seg_name in enumerate(unique_segment_names):
         data = np.squeeze(dev_decode_counts[seg_i,:,:])
-        data_sum = np.nansum(data,0)
-        data_percents = np.round(100*data_sum/np.nansum(data_sum),2)
-        data_labels = [dt_decode_groups[i] + '\n' + str(data_percents[i]) + '%' for i in range(num_groups)]
+        #Calculate data outliers and remove
+        no_outlier_data = np.nan*np.ones(np.shape(data))
+        data_counts = np.zeros(num_groups).astype('int')
+        for g_i in range(num_groups):
+            group_data = data[:,g_i]
+            z_scores = np.abs((group_data - np.nanmean(group_data))/np.nanstd(group_data))
+            outlier_inds = np.where(z_scores >= 2)[0]
+            keep_inds = np.setdiff1d(np.arange(num_anim),outlier_inds)
+            no_outlier_data[keep_inds,g_i] = data[keep_inds,g_i]
+            data_counts[g_i] = len(keep_inds)
+        data_mean = np.nanmean(no_outlier_data,0)
+        data_percents = np.round(100*data_mean/np.nansum(data_mean),2)
+        data_labels = [dt_decode_groups[i] + '\n' + str(data_percents[i]) + '%' + \
+                       '\nn=' + str(data_counts[i]) for i in range(num_groups)]
         explode = [0.1*i for i in range(len(dt_decode_groups))]
-        ax_decode_pie[seg_i].pie(data_sum,explode=explode,\
-                                 labeldistance=1.1,labels=data_labels)
+        ax_decode_pie[seg_i].pie(data_mean,explode=explode,\
+                                  labeldistance=1.15,labels=data_labels)
         ax_decode_frac[seg_i].set_title(seg_name)
-    plt.suptitle('Across Animals Percent of Deviation Events Decoded As...')
+    plt.suptitle('Across Animals Outlier-Removed Mean Decode Percents')
     plt.tight_layout()
-    f_decode_pie.savefig(os.path.join(decode_results_save_dir,dt+'_cross_animal_dev_decode_rates_pie.png'))
-    f_decode_pie.savefig(os.path.join(decode_results_save_dir,dt+'_cross_animal_dev_decode_rates_pie.svg'))
-    plt.close(f_decode_pie)
-    
-    #Only high probability decode events how they're decoded
-    cutoff = 0.75
-    num_seg = len(unique_segment_names)
-    num_anim = len(unique_given_names)
-    num_groups = len(dt_decode_groups)
-    dev_decode_counts = np.zeros((num_seg,num_anim,num_groups))
-    for seg_i, seg_name in enumerate(unique_segment_names):
-        for gn_i, gn in enumerate(unique_given_names):
-            seg_index = [i for i in range(len(multiday_data_dict[gn]['segment_names'])) if multiday_data_dict[gn]['segment_names'][i] == seg_name][0]
-            anim_decode_groups = list(decode_dict[gn][dt]['group_dict'].keys())
-            anim_decode_data = decode_dict[gn][dt]['NB_Decoding']['segment_' + str(seg_index)]
-            for dg_i, dg in enumerate(dt_decode_groups):
-                try:
-                    anim_dg_ind = [i for i in range(len(anim_decode_groups)) if anim_decode_groups[i] == dg][0]
-                    if len(np.shape(anim_decode_data))>1:
-                        argmax_decode_data = np.argmax(anim_decode_data,1)
-                        where_decoded = np.where(argmax_decode_data == anim_dg_ind)[0]
-                        decode_vals = np.array([anim_decode_data[wd_i,anim_dg_ind] for wd_i in where_decoded])
-                        num_decoded = len(np.where(decode_vals >= cutoff)[0])
-                    else:
-                        num_decoded = np.nan
-                    dev_decode_counts[seg_i,gn_i,dg_i] = num_decoded
-                except:
-                    dev_decode_counts[seg_i,gn_i,dg_i] = np.nan
-    dev_counts = np.nansum(dev_decode_counts,2)
-    dev_decode_fracs = np.zeros(np.shape(dev_decode_counts))
-    for seg_i in range(len(unique_segment_names)):
-        dev_decode_fracs[seg_i,:,:] = np.squeeze(dev_decode_counts[seg_i,:,:])/(dev_counts[seg_i,:]*np.ones((num_groups,num_anim))).T
-    #By animal fraction plots
-    f_decode_frac, ax_decode_frac = plt.subplots(ncols = len(unique_segment_names),\
-                                 sharex = True, sharey = True, figsize=(12,4))
-    for seg_i, seg_name in enumerate(unique_segment_names):
-        data = np.squeeze(dev_decode_fracs[seg_i,:,:])
-        data_mean = np.nanmean(data,0)
-        ax_decode_frac[seg_i].boxplot(data,labels=dt_decode_groups,showmeans=True)
-        for dc_i in range(len(dt_decode_groups)):
-            ax_decode_frac[seg_i].text(dc_i+1+0.05,data_mean[dc_i]+0.05,\
-                                       str(np.round(data_mean[dc_i],2)),\
-                                           ha = 'left', va = 'top')
-        ax_decode_frac[seg_i].set_xticks(np.arange(len(dt_decode_groups))+1,\
-                                         dt_decode_groups,rotation=45)
-        ax_decode_frac[seg_i].set_ylabel('Fraction of Deviation Events')
-        ax_decode_frac[seg_i].set_title(seg_name)
-    ax_decode_frac[0].set_ylim([0,1])
-    plt.suptitle('Strong Deviation Decode Fractions')
-    plt.tight_layout()
-    f_decode_frac.savefig(os.path.join(decode_results_save_dir,dt+'_by_animal_dev_decode_rates_above_cutoff.png'))
-    f_decode_frac.savefig(os.path.join(decode_results_save_dir,dt+'_by_animal_dev_decode_rates_above_cutoff.svg'))
-    plt.close(f_decode_frac)
-    
-    #Total counts pies
-    f_decode_pie, ax_decode_pie = plt.subplots(ncols = len(unique_segment_names),\
-                                 sharex = True, sharey = True, figsize=(12,4))
-    for seg_i, seg_name in enumerate(unique_segment_names):
-        data = np.squeeze(dev_decode_counts[seg_i,:,:])
-        data_sum = np.nansum(data,0)
-        data_percents = np.round(100*data_sum/np.nansum(data_sum),2)
-        data_labels = [dt_decode_groups[i] + '\n' + str(data_percents[i]) + '%' for i in range(num_groups)]
-        explode = [0.1*i for i in range(len(dt_decode_groups))]
-        ax_decode_pie[seg_i].pie(data_sum,explode=explode,\
-                                 labeldistance=1.1,labels=data_labels)
-        ax_decode_frac[seg_i].set_title(seg_name)
-    plt.suptitle('Across Animals Percent of Deviation Events Strongly Decoded As...')
-    plt.tight_layout()
-    f_decode_pie.savefig(os.path.join(decode_results_save_dir,dt+'_cross_animal_dev_decode_rates_pie_above_cutoff.png'))
-    f_decode_pie.savefig(os.path.join(decode_results_save_dir,dt+'_cross_animal_dev_decode_rates_pie_above_cutoff.svg'))
+    f_decode_pie.savefig(os.path.join(decode_results_save_dir,dt+'_no_outlier_dev_decode_rates_pie.png'))
+    f_decode_pie.savefig(os.path.join(decode_results_save_dir,dt+'_no_outlier_dev_decode_rates_pie.svg'))
     plt.close(f_decode_pie)
         
 def select_analysis_groups(unique_list):
