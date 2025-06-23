@@ -534,12 +534,12 @@ def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times,
                            seg_names, post_save_dir)
     
     #Create individual decode plots
-    # pddf.plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times, 
-    #                   dig_in_names, segment_times, segment_names, start_dig_in_times, 
-    #                   taste_num_deliv, segment_dev_times, dev_vecs, bin_dt, 
-    #                   num_groups, grouped_train_names, grouped_train_data, 
-    #                   non_none_tastes, decode_save_dir, 
-    #                   z_score, segments_to_analyze = segments_to_analyze)
+    pddf.plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times, 
+                      dig_in_names, segment_times, segment_names, start_dig_in_times, 
+                      taste_num_deliv, segment_dev_times, dev_vecs, bin_dt, 
+                      num_groups, grouped_train_names, grouped_train_data, 
+                      non_none_tastes, decode_save_dir, 
+                      z_score, segments_to_analyze = segments_to_analyze)
     
 def decode_sliding_bins(tastant_fr_dist, segment_spike_times, dig_in_names, 
                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,

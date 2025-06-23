@@ -279,18 +279,18 @@ print("Determine decoding groups")
 #Create fr vector grouping instructions: list of epoch,taste pairs
 non_none_tastes = [taste for taste in all_dig_in_names if taste[:4] != 'none']
 non_none_tastes = non_none_tastes
-group_list, group_names = ddf.multiday_decode_groupings(day_vars[0]['epochs_to_analyze'],
+# group_list, group_names = ddf.multiday_decode_groupings(day_vars[0]['epochs_to_analyze'],
+#                                                 all_dig_in_names,
+#                                                 palatable_dig_inds,
+#                                                 non_none_tastes)
+group_list, group_names = ddf.multiday_decode_groupings_split_identity(day_vars[0]['epochs_to_analyze'],
                                                 all_dig_in_names,
                                                 palatable_dig_inds,
                                                 non_none_tastes)
-# group_list, group_names = ddf.multiday_decode_groupings_split_identity(day_vars[0]['epochs_to_analyze'],
-#                                                all_dig_in_names,
-#                                                palatable_dig_inds,
-#                                                non_none_tastes)
 
 # decode_zscored()
 
-decode_dir = os.path.join(bayes_dir,'All_Neurons_Z_Scored') #All_Neurons_Z_Scored #split_identity_test
+decode_dir = os.path.join(bayes_dir,'split_identity_test') #All_Neurons_Z_Scored #split_identity_test
 if os.path.isdir(decode_dir) == False:
     os.mkdir(decode_dir)
 
