@@ -16,10 +16,9 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
-from scipy.stats import ks_2samp, ttest_ind, mannwhitneyu, percentileofscore
+from scipy.stats import ks_2samp, ttest_ind, mannwhitneyu, percentileofscore, f_oneway
 from scipy.signal import savgol_filter
 from matplotlib import colormaps
-
 
 def cross_dataset_dev_freq(corr_data, min_best_cutoff, unique_given_names, unique_corr_names,
                                  unique_segment_names, unique_taste_names, save_dir):
@@ -2060,18 +2059,21 @@ def combined_corr_by_segment_dist(corr_data, min_best_cutoff, save_dir, unique_g
                         pdf_best_bins = min(200,max(int(best_vals/50),20))
                         cdf_data = np.array(corr_storage[combo_3][seg])
                         nonnan_data = cdf_data[~np.isnan(cdf_data)]
-                        ax_cdf[i_3].ecdf(nonnan_data,label=seg,color=colors[s_i])
-                        # ax_cdf[i_3].hist(corr_storage[combo_3][seg],bins=cdf_bins,histtype='step',\
-                        #          density=True,cumulative=True,label=seg,color=colors[s_i])
+                        min_x = np.nanmin(nonnan_data)
+                        max_x = np.nanmax(nonnan_data)
+                        cdf_x = np.linspace(min_x,max_x,1000)
+                        cdf_vals = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                        ax_cdf[i_3].plot(cdf_x,cdf_vals,label=seg,color=colors[s_i])
                         ax_pdf[i_3].hist(corr_storage[combo_3][seg],bins=pdf_bins,histtype='step',\
                                  density=True,cumulative=False,label=seg,color=colors[s_i])
                         cdf_data = np.array(best_corr_storage[combo_3][seg])
                         nonnan_data = cdf_data[~np.isnan(cdf_data)]
-                        ax_cdf_best[i_3].ecdf(nonnan_data,\
+                        min_x = np.nanmin(nonnan_data)
+                        max_x = np.nanmax(nonnan_data)
+                        cdf_x = np.linspace(min_x,max_x,1000)
+                        cdf_vals = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                        ax_cdf_best[i_3].plot(cdf_x,cdf_vals,\
                                               label=seg,color=colors[s_i])
-                        # ax_cdf_best[i_3].hist(best_corr_storage[combo_3][seg],\
-                        #         bins=cdf_best_bins,histtype='step',\
-                        #             density=True,cumulative=True,label=seg,color=colors[s_i])
                         ax_pdf_best[i_3].hist(best_corr_storage[combo_3][seg],\
                                 bins=pdf_best_bins,histtype='step',\
                                     density=True,cumulative=False,label=seg,color=colors[s_i])
@@ -2310,19 +2312,22 @@ def combined_corr_by_taste_dist(corr_data, min_best_cutoff, save_dir, unique_giv
                             pdf_best_bins = min(200,max(int(best_vals/50),20))
                             cdf_data = np.array(corr_storage[combo_3][taste_name])
                             nonnan_data = cdf_data[~np.isnan(cdf_data)]
-                            ax_cdf[i_3].ecdf(nonnan_data,\
+                            min_x = np.nanmin(nonnan_data)
+                            max_x = np.nanmax(nonnan_data)
+                            cdf_x = np.linspace(min_x,max_x,1000)
+                            cdf_vals = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                            ax_cdf[i_3].plot(cdf_x,cdf_vals,\
                                              label=taste_name,color=colors[t_i])
-                            # ax_cdf[i_3].hist(corr_storage[combo_3][taste_name],bins=cdf_bins,histtype='step',\
-                            #          density=True,cumulative=True,label=taste_name,color=colors[t_i])
                             ax_pdf[i_3].hist(corr_storage[combo_3][taste_name],bins=pdf_bins,histtype='step',\
                                      density=True,cumulative=False,label=taste_name,color=colors[t_i])
                             cdf_data = np.array(best_corr_storage[combo_3][taste_name])
                             nonnan_data = cdf_data[~np.isnan(cdf_data)]
-                            ax_cdf_best[i_3].ecdf(nonnan_data,\
+                            min_x = np.nanmin(nonnan_data)
+                            max_x = np.nanmax(nonnan_data)
+                            cdf_x = np.linspace(min_x,max_x,1000)
+                            cdf_vals = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                            ax_cdf_best[i_3].plot(cdf_x,cdf_vals,\
                                                   label=taste_name,color=colors[t_i])
-                            # ax_cdf_best[i_3].hist(best_corr_storage[combo_3][taste_name],\
-                            #         bins=cdf_best_bins,histtype='step',\
-                            #             density=True,cumulative=True,label=taste_name,color=colors[t_i])
                             ax_pdf_best[i_3].hist(best_corr_storage[combo_3][taste_name],\
                                     bins=pdf_best_bins,histtype='step',\
                                         density=True,cumulative=False,label=taste_name,color=colors[t_i])
@@ -2555,19 +2560,22 @@ def combined_corr_by_epoch_dist(corr_data, min_best_cutoff, save_dir, unique_giv
                         pdf_best_bins = min(200,max(int(best_vals/50),20))
                         cdf_data = np.array(corr_storage[combo_3][ep])
                         nonnan_data = cdf_data[~np.isnan(cdf_data)]
-                        ax_cdf[i_3].ecdf(nonnan_data,label=epoch_name,\
+                        min_x = np.nanmin(nonnan_data)
+                        max_x = np.nanmax(nonnan_data)
+                        cdf_x = np.linspace(min_x,max_x,1000)
+                        cdf_vals = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                        ax_cdf[i_3].plot(cdf_x,cdf_vals,label=epoch_name,\
                                          color=colors[e_i])
-                        # ax_cdf[i_3].hist(corr_storage[combo_3][ep],bins=cdf_bins,histtype='step',\
-                        #          density=True,cumulative=True,label=epoch_name,color=colors[e_i])
                         ax_pdf[i_3].hist(corr_storage[combo_3][ep],bins=pdf_bins,histtype='step',\
                                  density=True,cumulative=False,label=epoch_name,color=colors[e_i])
                         cdf_data = np.array(best_corr_storage[combo_3][ep])
                         nonnan_data = cdf_data[~np.isnan(cdf_data)]
-                        ax_cdf_best[i_3].ecdf(cdf_data,\
+                        min_x = np.nanmin(nonnan_data)
+                        max_x = np.nanmax(nonnan_data)
+                        cdf_x = np.linspace(min_x,max_x,1000)
+                        cdf_vals = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                        ax_cdf_best[i_3].plot(cdf_x,cdf_vals,\
                                               label=epoch_name,color=colors[e_i])
-                        # ax_cdf_best[i_3].hist(best_corr_storage[combo_3][ep],\
-                        #         bins=cdf_best_bins,histtype='step',\
-                        #             density=True,cumulative=True,label=epoch_name,color=colors[e_i])
                         ax_pdf_best[i_3].hist(best_corr_storage[combo_3][ep],\
                                 bins=pdf_best_bins,histtype='step',\
                                     density=True,cumulative=False,label=epoch_name,color=colors[e_i])
@@ -3466,6 +3474,54 @@ def cross_dataset_dev_stats_plots(dev_stats_data, unique_given_names,
     colors = ['green','royalblue','blueviolet','teal','deeppink', \
               'springgreen','turquoise', 'midnightblue', 'lightskyblue', \
               'palevioletred', 'darkslateblue']
+    
+    plot_side = np.ceil(np.sqrt(len(unique_dev_stats_names))).astype('int')
+    plot_inds = np.reshape(np.arange(plot_side**2),(plot_side,plot_side))
+    seg_pairs = list(combinations(np.arange(len(unique_segment_names)),2))
+    f_stats, ax_stats = plt.subplots(nrows=plot_side,ncols=plot_side,
+                                     figsize=(8,8),sharex=True)
+    for ds_i, ds in enumerate(unique_dev_stats_names):
+        ds_name = (' ').join(ds.split('_')[:-1])
+        ax_r, ax_c = np.where(plot_inds == ds_i)
+        all_animal_stats = np.zeros((len(unique_given_names),len(unique_segment_names)))
+        for gn_i, gn in enumerate(unique_given_names):
+            seg_means = np.zeros(len(unique_segment_names))
+            for s_i, sn in enumerate(unique_segment_names):
+                all_animal_stats[gn_i,s_i] = np.nanmean(dev_stats_data[gn]['dev_stats'][ds][sn])
+        ax_stats[ax_r[0],ax_c[0]].boxplot(all_animal_stats)
+        for s_i in range(len(unique_segment_names)):
+            scat_x = s_i+1+np.random.randn(len(unique_given_names))/10
+            ax_stats[ax_r[0],ax_c[0]].scatter(scat_x,all_animal_stats[:,s_i],\
+                                              color='g',alpha=0.3)
+        ax_stats[ax_r[0],ax_c[0]].set_xticks(np.arange(len(unique_segment_names))+1,unique_segment_names,\
+                                 rotation=45)
+        ax_stats[ax_r[0],ax_c[0]].set_ylabel(ds_name)
+        max_y = np.nanmax(all_animal_stats)
+        #ANOVA test
+        result = f_oneway(*list(all_animal_stats.T))
+        if result.pvalue <= 0.05:
+            ax_stats[ax_r[0],ax_c[0]].set_title(ds_name + ' *ANOVA')
+        else:
+            ax_stats[ax_r[0],ax_c[0]].set_title(ds_name)
+        #Pairwise TTest
+        for sp_0, sp_1 in seg_pairs:
+            result = ttest_ind(all_animal_stats[:,sp_0],all_animal_stats[:,sp_1])
+            if result.pvalue <= 0.05:
+                max_y += max_y*0.1
+                plt.plot([sp_0+1,sp_1+1],[max_y,max_y])
+                max_y += max_y*0.1
+                plt.text(1+sp_0+(sp_1-sp_0)/2,max_y,'*TT')
+            result = ks_2samp(all_animal_stats[:,sp_0],all_animal_stats[:,sp_1])
+            if result.pvalue <= 0.05:
+                max_y += max_y*0.1
+                plt.plot([sp_0+1,sp_1+1],[max_y,max_y])
+                max_y += max_y*0.1
+                plt.text(1+sp_0+(sp_1-sp_0)/2,max_y,'*KS')
+    plt.tight_layout()
+    f_stats.savefig(os.path.join(results_dir,'overview_boxplots.png'))
+    f_stats.savefig(os.path.join(results_dir,'overview_boxplots.svg'))
+  
+    #By-stat distributions
     for dev_stat in unique_dev_stats_names:
         max_val = 0
         max_mean = 0
@@ -3476,8 +3532,14 @@ def cross_dataset_dev_stats_plots(dev_stats_data, unique_given_names,
             seg_animal_means = []
             for name in unique_given_names:
                 dataset = dev_stats_data[name]['dev_stats'][dev_stat][seg_name]
-                combined_seg_results.extend(list(dataset))
-                seg_animal_means.extend([np.nanmean(dataset)])
+                try:
+                    num_vals = len(dataset)
+                    combined_seg_results.extend(list(dataset))
+                    seg_animal_means.extend([np.nanmean(dataset)])
+                except:
+                    if (dataset.dtype == float) or (dataset.dtype == int):
+                        combined_seg_results.extend([dataset])
+                        seg_animal_means.extend([dataset])
             if max(np.array(combined_seg_results)) > max_val:
                 max_val = max(np.array(combined_seg_results))
             if max(np.array(seg_animal_means)) > max_mean:
@@ -3492,10 +3554,12 @@ def cross_dataset_dev_stats_plots(dev_stats_data, unique_given_names,
         for s_i, seg_name in enumerate(unique_segment_names):
             cdf_data = np.array(combined_animal_results[s_i])
             nonnan_data = cdf_data[~np.isnan(cdf_data)]
-            ax[0].ecdf(nonnan_data,label=seg_name,color=colors[s_i])
-            # ax[0].hist(combined_animal_results[s_i],bins=min([1000,max_val]),histtype='step',\
-            #          density=True,cumulative=True,label=seg_name,color=colors[s_i])
-            ax[1].hist(combined_animal_results[s_i],bins=max_val,histtype='step',\
+            min_x = np.nanmin(nonnan_data)
+            max_x = np.nanmax(nonnan_data)
+            cdf_x = np.linspace(min_x,max_x,1000)
+            cdf_vals = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+            ax[0].plot(cdf_x,cdf_vals,label=seg_name,color=colors[s_i])
+            ax[1].hist(nonnan_data,bins=max_val,histtype='step',\
                      density=True,label='seg_name',color=colors[s_i])
             data_mean = np.nanmean(combined_animal_results[s_i])
             ax[1].axvline(data_mean,color=colors[s_i],\
@@ -3799,9 +3863,12 @@ def cross_dataset_dev_split_corr_plots(dev_split_corr_data, unique_given_names,
                 t_data.append(t_data_combined)
             #Plot cmf
             for td_i, td in enumerate(t_data):
-                ax_e_seg[ep_i,s_i].ecdf(td[~np.isnan(td)],label=unique_taste_names[td_i])
-                # ax_e_seg[ep_i,s_i].hist(td,density=True,cumulative=True,bins=1000,
-                #                         histtype='step',label=unique_taste_names[td_i])
+                nonnan_data = td[~np.isnan(td)]
+                min_data = np.nanmin(nonnan_data)
+                max_data = np.nanmax(nonnan_data)
+                cdf_x_vals = np.linspace(min_data,max_data,1000)
+                cdf_y_vals = [len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x_vals]
+                ax_e_seg[ep_i,s_i].plot(cdf_x_vals,cdf_y_vals,label=unique_taste_names[td_i])
             if (ep_i == 0)*(s_i == 0):
                 ax_e_seg[ep_i,s_i].legend(loc='upper left')
             if ep_i == 0:
@@ -3851,7 +3918,12 @@ def cross_dataset_dev_split_corr_plots(dev_split_corr_data, unique_given_names,
                 s_data.append(s_data_combined)
             #Plot cmf
             for sd_i, sd in enumerate(s_data):
-                ax_e_taste[ep_i,t_i].ecdf(sd[~np.isnan(sd)],label=unique_segment_names[sd_i])
+                nonnan_data = sd[~np.isnan(sd)]
+                min_x = np.nanmin(nonnan_data)
+                max_x = np.nanmax(nonnan_data)
+                cdf_x = np.linspace(min_x,max_x,1000)
+                cdf_y = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                ax_e_taste[ep_i,t_i].plot(cdf_x,cdf_y,label=unique_segment_names[sd_i])
                 # ax_e_taste[ep_i,t_i].hist(sd,density=True,cumulative=True,bins=1000,
                 #                         histtype='step',label=unique_segment_names[sd_i])
             if (ep_i == 0)*(t_i == 0):
@@ -3902,9 +3974,12 @@ def cross_dataset_dev_split_corr_plots(dev_split_corr_data, unique_given_names,
                 e_data.append(e_data_combined)
             #Plot cmf
             for ed_i, ed in enumerate(e_data):
-                ax_seg_taste[s_i,t_i].ecdf(ed[~np.isnan(ed)],label=unique_epoch_pairs[ed_i])
-                # ax_seg_taste[s_i,t_i].hist(ed,density=True,cumulative=True,bins=1000,
-                #                         histtype='step',label=unique_epoch_pairs[ed_i])
+                nonnan_data = ed[~np.isnan(ed)]
+                min_x = np.nanmin(nonnan_data)
+                max_x = np.nanmax(nonnan_data)
+                cdf_x = np.linspace(min_x,max_x,1000)
+                cdf_y = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                ax_seg_taste[s_i,t_i].plot(cdf_x,cdf_y,label=unique_epoch_pairs[ed_i])
             if (s_i == 0)*(t_i == 0):
                 ax_seg_taste[s_i,t_i].legend(loc='upper left')
             if s_i == 0:
@@ -3972,9 +4047,12 @@ def cross_dataset_dev_split_best_corr_plots(dev_split_corr_data, unique_given_na
                 t_data.append(t_data_combined)
             #Plot cmf
             for td_i, td in enumerate(t_data):
-                ax_e_seg[ep_i,s_i].ecdf(td[~np.isnan(td)],label=unique_taste_names[td_i])
-                # ax_e_seg[ep_i,s_i].hist(td,density=True,cumulative=True,bins=1000,
-                #                         histtype='step',label=unique_taste_names[td_i])
+                nonnan_data = td[~np.isnan(td)]
+                min_x = np.nanmin(nonnan_data)
+                max_x = np.nanmax(nonnan_data)
+                cdf_x = np.linspace(min_x,max_x,1000)
+                cdf_y = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                ax_e_seg[ep_i,s_i].plot(cdf_x,cdf_y,label=unique_taste_names[td_i])
             if (ep_i == 0)*(s_i == 0):
                 ax_e_seg[ep_i,s_i].legend(loc='upper left')
             if ep_i == 0:
@@ -4026,9 +4104,12 @@ def cross_dataset_dev_split_best_corr_plots(dev_split_corr_data, unique_given_na
                 s_data.append(s_data_combined)
             #Plot cmf
             for sd_i, sd in enumerate(s_data):
-                ax_e_taste[ep_i,t_i].ecdf(sd[~np.isnan(sd)],label=unique_segment_names[sd_i])
-                # ax_e_taste[ep_i,t_i].hist(sd,density=True,cumulative=True,bins=1000,
-                #                         histtype='step',label=unique_segment_names[sd_i])
+                nonnan_data = sd[~np.isnan(sd)]
+                min_x = np.nanmin(nonnan_data)
+                max_x = np.nanmax(nonnan_data)
+                cdf_x = np.linspace(min_x,max_x,1000)
+                cdf_y = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                ax_e_taste[ep_i,t_i].plot(cdf_x,cdf_y,label=unique_segment_names[sd_i])
             if (ep_i == 0)*(t_i == 0):
                 ax_e_taste[ep_i,t_i].legend(loc='upper left')
             if ep_i == 0:
@@ -4079,9 +4160,12 @@ def cross_dataset_dev_split_best_corr_plots(dev_split_corr_data, unique_given_na
                 e_data.append(e_data_combined)
             #Plot cmf
             for ed_i, ed in enumerate(e_data):
-                ax_seg_taste[s_i,t_i].ecdf(ed[~np.isnan(ed)],label=unique_epoch_pairs[ed_i])
-                # ax_seg_taste[s_i,t_i].hist(ed,density=True,cumulative=True,bins=1000,
-                #                         histtype='step',label=unique_epoch_pairs[ed_i])
+                nonnan_data = ed[~np.isnan(ed)]
+                min_x = np.nanmin(nonnan_data)
+                max_x = np.nanmax(nonnan_data)
+                cdf_x = np.linspace(min_x,max_x,1000)
+                cdf_y = np.array([len(np.where(nonnan_data <= i)[0])/len(nonnan_data) for i in cdf_x])
+                ax_seg_taste[s_i,t_i].plot(cdf_x,cdf_y,label=unique_epoch_pairs[ed_i])
             if (s_i == 0)*(t_i == 0):
                 ax_seg_taste[s_i,t_i].legend(loc='upper left')
             if s_i == 0:

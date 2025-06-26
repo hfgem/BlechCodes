@@ -113,111 +113,164 @@ if len(save_dir) == 0:
     save_dir = askdirectory()
     np.save(os.path.join(save_dir,'all_data_dict.npy'),\
             all_data_dict,allow_pickle=True)
+
+#%% segment stats
+
+from functions.cross_animal_seg_stats import seg_stat_collection
+
+unique_given_names, unique_segment_names, pop_rates, isis, cvs = seg_stat_collection(all_data_dict)
         
-#%% correlation plots updates to rates
+seg_stat_save_dir = os.path.join(save_dir,'seg_stats')
+if not os.path.isdir(seg_stat_save_dir):
+    os.mkdir(seg_stat_save_dir)
 
-#Gather data
-num_datasets = len(all_data_dict)
-dataset_names = list(all_data_dict.keys())
-# corr_data = dict()
-# for n_i in range(num_datasets):
-#     data_name = dataset_names[n_i]
-#     data_dict = all_data_dict[data_name]['data']
-#     metadata = all_data_dict[data_name]['metadata']
-#     data_save_dir = data_dict['data_path']
-#     dev_corr_save_dir = os.path.join(
-#         data_save_dir, 'dev_x_taste', 'corr')
-#     num_corr_types = os.listdir(dev_corr_save_dir)
-#     corr_data[data_name] = dict()
-#     corr_data[data_name]['num_neur'] = data_dict['num_neur']
-#     segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-#     corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
-#     corr_data[data_name]['segment_names'] = data_dict['segment_names']
-#     segment_times = data_dict['segment_times']
-#     num_segments = len(corr_data[data_name]['segment_names'])
-#     corr_data[data_name]['segment_times_reshaped'] = [
-#         [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
-#     dig_in_names = data_dict['dig_in_names']
-#     corr_data[data_name]['dig_in_names'] = dig_in_names
-#     corr_data[data_name]['num_null'] = metadata['params_dict']['num_null']
-#     corr_data[data_name]['corr_data'] = dict()
-#     for nct_i in range(len(num_corr_types)):
-#         nct = num_corr_types[nct_i]
-#         if nct[0] != '.':
-#             result_dir = os.path.join(dev_corr_save_dir, nct)
-#             corr_data[data_name]['corr_data'][nct] = dict()
-#             for s_i in segments_to_analyze:
-#                 seg_name = corr_data[data_name]['segment_names'][s_i]
-#                 corr_data[data_name]['corr_data'][nct][seg_name] = dict()
-#                 filename_best_corr = os.path.join(result_dir,seg_name + '_best_taste_epoch_array.npy')
-#                 best_data = np.load(filename_best_corr)
-#                 corr_data[data_name]['corr_data'][nct][seg_name]['best'] = best_data
-#                 for t_i in range(len(dig_in_names)):
-#                     taste_name = dig_in_names[t_i]
-#                     corr_data[data_name]['corr_data'][nct][seg_name][taste_name] = dict(
-#                     )
-#                     try:
-#                         filename_corr_pop_vec = os.path.join(
-#                             result_dir, seg_name + '_' + taste_name + '_pop_vec.npy')
-#                         data = np.load(filename_corr_pop_vec)
-#                         filename_corr_pop_vec_null_data = os.path.join(
-#                             result_dir, 'null', seg_name + '_' + taste_name + '_pop_vec.npy')
-#                         null_data = np.load(filename_corr_pop_vec_null_data)
-#                         corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['data'] = data
-#                         corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['null_data'] = null_data
-#                         num_dev, num_deliv, num_cp = np.shape(data)
-#                         corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_dev'] = num_dev
-#                         corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_deliv'] = num_deliv
-#                         corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_cp'] = num_cp
-#                     except:
-#                         print("No data in directory " + result_dir)
-dict_save_dir = os.path.join(save_dir, 'corr_data.npy')
-corr_data = np.load(dict_save_dir,allow_pickle=True).item()
-# Save the combined dataset somewhere...
-# _____Analysis Storage Directory_____
-if not os.path.isdir(os.path.join(save_dir,'Correlations')):
-    os.mkdir(os.path.join(save_dir,'Correlations'))
-corr_results_dir = os.path.join(save_dir,'Correlations')
 
-#Pull unique info
-unique_given_names = list(corr_data.keys())
+#%% dev stats import
+
+try:
+    dict_save_dir = os.path.join(save_dir, 'dev_stats_data.npy')
+    dev_stats_data = np.load(dict_save_dir,allow_pickle=True).item()
+    dev_stats_data = dev_stats_data
+    if not os.path.isdir(os.path.join(save_dir,'Dev_Stats')):
+        os.mkdir(os.path.join(save_dir,'Dev_Stats'))
+    dev_stats_results_dir = os.path.join(save_dir,'Dev_Stats')
+except:
+    num_datasets = len(all_data_dict)
+    dataset_names = list(all_data_dict.keys())
+    dev_stats_data = dict()
+    for n_i in range(num_datasets):
+        data_name = dataset_names[n_i]
+        data_dict = all_data_dict[data_name]['data']
+        metadata = all_data_dict[data_name]['metadata']
+        data_save_dir = data_dict['data_path']
+        
+        dev_stats_save_dir = os.path.join(
+            data_save_dir, 'Deviations')
+        dev_dir_files = os.listdir(dev_stats_save_dir)
+        dev_dict_dirs = []
+        for dev_f in dev_dir_files:
+            if dev_f[-4:] == '.npy':
+                dev_dict_dirs.append(dev_f)
+        dev_stats_data[data_name] = dict()
+        dev_stats_data[data_name]['num_neur'] = data_dict['num_neur']
+        segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+        dev_stats_data[data_name]['segments_to_analyze'] = segments_to_analyze
+        dev_stats_data[data_name]['segment_names'] = data_dict['segment_names']
+        segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
+        segment_times = data_dict['segment_times']
+        num_segments = len(dev_stats_data[data_name]['segment_names'])
+        dev_stats_data[data_name]['segment_times_reshaped'] = [
+            [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+        dig_in_names = data_dict['dig_in_names']
+        dev_stats_data[data_name]['dig_in_names'] = dig_in_names
+        dev_stats_data[data_name]['dev_stats'] = dict()
+        for stat_i in range(len(dev_dict_dirs)):
+            stat_dir_name = dev_dict_dirs[stat_i]
+            stat_name = stat_dir_name.split('.')[0]
+            result_dir = os.path.join(dev_stats_save_dir, stat_dir_name)
+            result_dict = np.load(result_dir,allow_pickle=True).item()
+            dev_stats_data[data_name]['dev_stats'][stat_name] = dict()
+            for s_i, s_name in enumerate(segment_names_to_analyze):
+                dev_stats_data[data_name]['dev_stats'][stat_name][s_name] = result_dict[s_i]
+        dev_stats_data[data_name]['dev_stats']['dev_freq_dict'] = dict()
+        for s_i, s_ind in enumerate(segments_to_analyze):
+            seg_len = dev_stats_data[data_name]['segment_times_reshaped'][s_ind]
+            seg_len_s = (seg_len[1] - seg_len[0])/1000
+            seg_name = segment_names_to_analyze[s_i]
+            dev_freq = len(dev_stats_data[data_name]['dev_stats'][stat_name][seg_name])/seg_len_s
+            dev_stats_data[data_name]['dev_stats']['dev_freq_dict'][seg_name] = dev_freq
+        
+    dev_stats_data = dev_stats_data
+    dict_save_dir = os.path.join(save_dir, 'dev_stats_data.npy')
+    np.save(dict_save_dir,dev_stats_data,allow_pickle=True)
+    # _____Analysis Storage Directory_____
+    if not os.path.isdir(os.path.join(save_dir,'Dev_Stats')):
+        os.mkdir(os.path.join(save_dir,'Dev_Stats'))
+    dev_stats_results_dir = os.path.join(save_dir,'Dev_Stats')
+
+#%%
+verbose = False
+unique_given_names = list(dev_stats_data.keys())
 unique_given_indices = np.sort(
     np.unique(unique_given_names, return_index=True)[1])
 unique_given_names = [unique_given_names[i]
                       for i in unique_given_indices]
-unique_corr_names = []
+unique_dev_stats_names = []
 for name in unique_given_names:
-    unique_corr_names.extend(list(corr_data[name]['corr_data'].keys()))
-unique_corr_names = np.array(unique_corr_names)
-unique_corr_indices = np.sort(
-    np.unique(unique_corr_names, return_index=True)[1])
-unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
+    unique_dev_stats_names.extend(list(dev_stats_data[name]['dev_stats'].keys()))
+unique_dev_stats_names = np.array(unique_dev_stats_names)
+unique_dev_stats_indices = np.sort(
+    np.unique(unique_dev_stats_names, return_index=True)[1])
+unique_dev_stats_names = [unique_dev_stats_names[i] for i in unique_dev_stats_indices]
 unique_segment_names = []
-unique_taste_names = []
 for name in unique_given_names:
-    for corr_name in unique_corr_names:
+    for dev_stat_name in unique_dev_stats_names:
         try:
             seg_names = list(
-                corr_data[name]['corr_data'][corr_name].keys())
+                dev_stats_data[name]['dev_stats'][dev_stat_name].keys())
             unique_segment_names.extend(seg_names)
-            for seg_name in seg_names:
-                taste_names = list(np.setdiff1d(list(
-                    corr_data[name]['corr_data'][corr_name][seg_name].keys()),['best']))
-                unique_taste_names.extend(taste_names)
         except:
-            print(name + " does not have correlation data for " + corr_name)
+            if verbose == True:
+                print(name + " does not have segment name data for " + dev_stat_name)
 unique_segment_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i]
                         for i in unique_segment_indices]
-unique_taste_indices = np.sort(
-    np.unique(unique_taste_names, return_index=True)[1])
-unique_taste_names = [unique_taste_names[i]
-                      for i in unique_taste_indices]
 
-#%% cross_dataset_dev_by_corr_cutoff - Create rate plots
+#%%
 
-import functions.compare_datasets_funcs as cdf
+cdf.cross_dataset_dev_stats_plots(dev_stats_data, unique_given_names, 
+                                  unique_dev_stats_names, 
+                                  unique_segment_names, 
+                                  dev_stats_results_dir)
 
-cdf.cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, unique_given_names, unique_corr_names,
-                                 unique_segment_names, unique_taste_names, corr_results_dir)
+#%% basic stats plot
+import matplotlib.pyplot as plt
+from scipy.stats import f_oneway, ttest_ind, ks_2samp
+from itertools import combinations
+
+plot_side = np.ceil(np.sqrt(len(unique_dev_stats_names))).astype('int')
+plot_inds = np.reshape(np.arange(plot_side**2),(plot_side,plot_side))
+seg_pairs = list(combinations(np.arange(len(unique_segment_names)),2))
+f_stats, ax_stats = plt.subplots(nrows=plot_side,ncols=plot_side,
+                                 figsize=(8,8),sharex=True)
+for ds_i, ds in enumerate(unique_dev_stats_names):
+    ds_name = (' ').join(ds.split('_')[:-1])
+    ax_r, ax_c = np.where(plot_inds == ds_i)
+    all_animal_stats = np.zeros((len(unique_given_names),len(unique_segment_names)))
+    for gn_i, gn in enumerate(unique_given_names):
+        seg_means = np.zeros(len(unique_segment_names))
+        for s_i, sn in enumerate(unique_segment_names):
+            all_animal_stats[gn_i,s_i] = np.nanmean(dev_stats_data[gn]['dev_stats'][ds][sn])
+    ax_stats[ax_r[0],ax_c[0]].boxplot(all_animal_stats)
+    for s_i in range(len(unique_segment_names)):
+        scat_x = s_i+1+np.random.randn(len(unique_given_names))/10
+        ax_stats[ax_r[0],ax_c[0]].scatter(scat_x,all_animal_stats[:,s_i],\
+                                          color='g',alpha=0.3)
+    ax_stats[ax_r[0],ax_c[0]].set_xticks(np.arange(len(unique_segment_names))+1,unique_segment_names,\
+                             rotation=45)
+    ax_stats[ax_r[0],ax_c[0]].set_ylabel(ds_name)
+    max_y = np.nanmax(all_animal_stats)
+    #ANOVA test
+    result = f_oneway(*list(all_animal_stats.T))
+    if result.pvalue <= 0.05:
+        ax_stats[ax_r[0],ax_c[0]].set_title(ds_name + ' *ANOVA')
+    else:
+        ax_stats[ax_r[0],ax_c[0]].set_title(ds_name)
+    #Pairwise TTest
+    for sp_0, sp_1 in seg_pairs:
+        result = ttest_ind(all_animal_stats[:,sp_0],all_animal_stats[:,sp_1])
+        if result.pvalue <= 0.05:
+            max_y += max_y*0.1
+            plt.plot([sp_0+1,sp_1+1],[max_y,max_y])
+            max_y += max_y*0.1
+            plt.text(1+sp_0+(sp_1-sp_0)/2,max_y,'*TT')
+        result = ks_2samp(all_animal_stats[:,sp_0],all_animal_stats[:,sp_1])
+        if result.pvalue <= 0.05:
+            max_y += max_y*0.1
+            plt.plot([sp_0+1,sp_1+1],[max_y,max_y])
+            max_y += max_y*0.1
+            plt.text(1+sp_0+(sp_1-sp_0)/2,max_y,'*KS')
+plt.tight_layout()
+f_stats.savefig(os.path.join(dev_stats_results_dir,'overview_boxplots.png'))
+f_stats.savefig(os.path.join(dev_stats_results_dir,'overview_boxplots.svg'))

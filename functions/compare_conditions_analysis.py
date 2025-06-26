@@ -639,7 +639,7 @@ class run_compare_conditions_analysis():
            print("Not enough animals for segment comparison.")
            
     def import_dev_stats(self,):
-        """Import previously saved correlation data"""
+        """Import previously saved dev stats data"""
         dict_save_dir = os.path.join(self.save_dir, 'dev_stats_data.npy')
         dev_stats_data = np.load(dict_save_dir,allow_pickle=True).item()
         self.dev_stats_data = dev_stats_data
@@ -690,7 +690,14 @@ class run_compare_conditions_analysis():
                 dev_stats_data[data_name]['dev_stats'][stat_name] = dict()
                 for s_i, s_name in enumerate(segment_names_to_analyze):
                     dev_stats_data[data_name]['dev_stats'][stat_name][s_name] = result_dict[s_i]
-                    
+            dev_stats_data[data_name]['dev_stats']['dev_freq_data'] = np.zeros(len(segment_names_to_analyze))
+            for s_i, s_ind in enumerate(segments_to_analyze):
+                seg_len = dev_stats_data[data_name]['segment_times_reshaped'][s_ind]
+                seg_len_s = (seg_len[1] - seg_len[0])/1000
+                seg_name = segment_names_to_analyze[s_i]
+                dev_freq = len(dev_stats_data[data_name]['dev_stats'][stat_name][seg_name])/seg_len_s
+                dev_stats_data[data_name]['dev_stats']['dev_freq_data'][s_i] = dev_freq
+            
         self.dev_stats_data = dev_stats_data
         dict_save_dir = os.path.join(self.save_dir, 'dev_stats_data.npy')
         np.save(dict_save_dir,dev_stats_data,allow_pickle=True)
