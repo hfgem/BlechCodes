@@ -44,10 +44,12 @@ def seg_stat_collection(all_data_dict):
     all_segment_names = []
     bin_size = 100 #ms
     skip_size = 25 #ms
+    neur_rates = dict()
     pop_rates = dict()
     isis = dict()
     cvs = dict()
     for gn in tqdm.tqdm(unique_given_names):
+        neur_rates[gn] = dict()
         pop_rates[gn] = dict()
         isis[gn] = dict()
         cvs[gn] = dict()
@@ -57,8 +59,8 @@ def seg_stat_collection(all_data_dict):
         segment_times = data['segment_times']
         spike_times = data['spike_times']
         num_neur = len(spike_times)
-        num_seg = len(segment_times)
         for s_i, s_name in enumerate(segment_names):
+            neur_rates[gn][s_name] = dict()
             isis[gn][s_name] = dict()
             cvs[gn][s_name] = np.zeros(num_neur)
             #Segment times in ms
@@ -71,6 +73,8 @@ def seg_stat_collection(all_data_dict):
                 n_spikes = np.sort(spike_times[n_i]) #neuron spike times in ms
                 n_seg_spike_times = (n_spikes[np.where((n_spikes < s_end)*(s_start <= n_spikes))[0]]).astype('int') - int(s_start)
                 spike_rast[n_i,n_seg_spike_times] = 1
+                #Calculate neuron binned firing rates
+                neur_rates[gn][s_name][n_i] = np.array([np.sum(spike_rast[n_i,i:i+bin_size])/(bin_size/1000) for i in np.arange(0,s_len-bin_size,skip_size)])
                 #Calculate neuron firing stats
                 n_isis = np.diff(n_seg_spike_times)
                 isi_zscore = (n_isis - np.nanmean(n_isis))/np.nanstd(n_isis)
@@ -93,23 +97,141 @@ def seg_stat_collection(all_data_dict):
     unique_segment_names = [all_segment_names[i]
                           for i in unique_segment_indices]
     
-    return unique_given_names, unique_segment_names, pop_rates, isis, cvs
+    return unique_given_names, unique_segment_names, neur_rates, pop_rates, isis, cvs
 
-def seg_stat_analysis(unique_given_names, unique_segment_names, pop_rates, \
-                      isis, cvs, seg_stat_save_dir):
+def seg_stat_analysis(unique_given_names, unique_segment_names, neur_rates, \
+                      pop_rates, isis, cvs, segments_to_analyze, seg_stat_save_dir):
     
+    neur_rate_analysis_plots(unique_given_names,unique_segment_names,\
+                                neur_rates,segments_to_analyze,seg_stat_save_dir)
     
     pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
-                                pop_rates,seg_stat_save_dir)
+                                pop_rates,segments_to_analyze,seg_stat_save_dir)
         
     isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
-                                isis,cvs,seg_stat_save_dir)
+                                isis,cvs,segments_to_analyze,seg_stat_save_dir)
         
+def neur_rate_analysis_plots(unique_given_names,unique_segment_names,\
+                            neur_rates,segments_to_analyze,seg_stat_save_dir):
+    """
+    Conduct significance tests and plot neuron firing rate distributions
+    across animals and segments.
+
+    Parameters
+    ----------
+    unique_given_names : list
+        List of unique animal names.
+    unique_segment_names : list
+        List of unique segment names across animals.
+    neur_rates : dict
+        Dictionary containing neuron rate calculations for each 
+        animal and segment and neuron.
+    seg_stat_save_dir : str
+        Save path.
+
+    Returns
+    -------
+    None.
     
+    Outputs
+    -------
+    Within animal neuron rate ANOVA results across segments to .csv file.
+    Violin plot of across animal neuron rates and stds of rates by segment.
+
+    """
+    num_anim = len(unique_given_names)
+    cmap = colormaps['gist_rainbow']
+    anim_colors = cmap(np.linspace(0, 1, num_anim))
+    num_seg = len(unique_segment_names)
     
+    #Collect neuron rate significance and CV
+    mean_sig_table = [['Animal Name','ANOVA p', 'Mean Order']]
+    seg_cv_table = np.zeros((num_anim,num_seg))
+    all_anim_means = []
+    all_anim_stds = []
+    for gn_i, gn in enumerate(unique_given_names):
+        #Collect segment data for animal
+        combined_seg_means = []
+        all_seg_means = []
+        all_seg_stds = []
+        for s_i in segments_to_analyze:
+            seg_name = unique_segment_names[s_i]
+            data = neur_rates[gn][seg_name]
+            num_neur = len(data)
+            neur_means = np.zeros(num_neur)
+            neur_stds = np.zeros(num_neur)
+            for n_i in range(num_neur):
+                neur_means[n_i] = np.nanmean(data[n_i])
+                neur_stds[n_i] = np.nanstd(data[n_i])
+            all_seg_means.append(list(neur_means))
+            combined_seg_means.append(np.nanmean(neur_means))
+            all_seg_stds.append(list(neur_stds))
+        all_anim_means.append(all_seg_means)
+        all_anim_stds.append(all_seg_stds)
+        #Test significant differences
+        anim_sig = [gn]
+        result = f_oneway(*(all_seg_means))
+        anim_sig.append(result.pvalue)
+        mean_ascend = np.argsort(combined_seg_means)
+        mean_text = unique_segment_names[segments_to_analyze[0]]
+        for s_ind in mean_ascend[1:]:
+            mean_text += ' < ' + unique_segment_names[segments_to_analyze[s_ind]]
+        anim_sig.append(mean_text)
+        mean_sig_table.append(anim_sig)
+    #Save significance results
+    with open(os.path.join(seg_stat_save_dir,'seg_neur_mean_rate_dist_sig.csv'), 'w', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        csv_writer.writerows(mean_sig_table)
+        
+    #Plot neuron rates
+    f_neur_fr_std = plt.figure(figsize=(5,5))
+    joint_seg_stds = []
+    for s_ind, s_i in enumerate(segments_to_analyze):
+        seg_name = unique_segment_names[s_i]
+        seg_stds = []
+        for gn_i, gn in enumerate(unique_given_names):
+            seg_stds.extend(list(all_anim_stds[gn_i][s_ind]))
+        joint_seg_stds.append(seg_stds)
+    plt.violinplot(joint_seg_stds,showmedians=True)
+    result = f_oneway(*(joint_seg_stds))
+    if result.pvalue < 0.05:
+        plt.title('Neuron std(Firing Rate) Distributions\nANOVA p<0.05')
+    else:
+        plt.title('Neuron std(Firing Rate) Distributions\nANOVA n.s.')
+    plt.xticks(np.arange(len(segments_to_analyze))+1,np.array(unique_segment_names)[segments_to_analyze])
+    plt.xlabel('Segment')
+    plt.ylabel('100 ms Bin Neuron std(Firing Rate) (Hz)')
+    
+    plt.tight_layout()
+    f_neur_fr_std.savefig(os.path.join(seg_stat_save_dir,'neur_std_rate_violinplots.png'))
+    f_neur_fr_std.savefig(os.path.join(seg_stat_save_dir,'neur_std_rate_violinplots.svg'))
+    plt.close(f_neur_fr_std)
+    
+    #Plot neuron std(rates)
+    f_neur_fr = plt.figure(figsize=(5,5))
+    joint_seg_means = []
+    for s_ind, s_i in enumerate(segments_to_analyze):
+        seg_name = unique_segment_names[s_i]
+        seg_means = []
+        for gn_i, gn in enumerate(unique_given_names):
+            seg_means.extend(list(all_anim_means[gn_i][s_ind]))
+        joint_seg_means.append(seg_means)
+    plt.violinplot(joint_seg_means,showmedians=True)
+    result = f_oneway(*(joint_seg_means))
+    if result.pvalue < 0.05:
+        plt.title('Neuron Firing Rate Distributions\nANOVA p<0.05')
+    else:
+        plt.title('Neuron Firing Rate Distributions\nANOVA n.s.')
+    plt.xticks(np.arange(len(segments_to_analyze))+1,np.array(unique_segment_names)[segments_to_analyze])
+    plt.xlabel('Segment')
+    plt.ylabel('100 ms Bin Neuron Firing Rate (Hz)')
+    plt.tight_layout()
+    f_neur_fr.savefig(os.path.join(seg_stat_save_dir,'neur_rate_violinplots.png'))
+    f_neur_fr.savefig(os.path.join(seg_stat_save_dir,'neur_rate_violinplots.svg'))
+    plt.close(f_neur_fr)
     
 def pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
-                            pop_rates,seg_stat_save_dir):
+                            pop_rates,segments_to_analyze,seg_stat_save_dir):
     """
     Conduct significance tests and plot population firing rate coefficients
     of variation across animals and segments.
@@ -143,27 +265,28 @@ def pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
     
     #Collect pop rate significance and CV
     sig_table = [['Animal Name','ANOVA p', 'Mean Order']]
-    seg_cv_table = np.zeros((num_anim,num_seg))
+    seg_cv_table = np.zeros((num_anim,len(segments_to_analyze)))
     all_anim_data = []
     for gn_i, gn in enumerate(unique_given_names):
         #Collect segment data for animal
         all_seg_data = []
         all_seg_means = []
-        for s_i, seg_name in enumerate(unique_segment_names):
+        for s_ind, s_i in enumerate(segments_to_analyze):
+            seg_name = unique_segment_names[s_i]
             data = np.array(pop_rates[gn][seg_name])
             nonnan_data = data[~np.isnan(data)]
             all_seg_data.append(nonnan_data)
             all_seg_means.append(np.mean(nonnan_data))
-            seg_cv_table[gn_i,s_i] = np.std(nonnan_data)/np.mean(nonnan_data)
+            seg_cv_table[gn_i,s_ind] = np.std(nonnan_data)/np.mean(nonnan_data)
         all_anim_data.append(all_seg_data)
         #Test significant differences
         anim_sig = [gn]
         result = f_oneway(*(all_seg_data))
         anim_sig.append(result.pvalue)
         mean_ascend = np.argsort(all_seg_means)
-        mean_text = unique_segment_names[mean_ascend[0]]
-        for s_i in mean_ascend[1:]:
-            mean_text += ' < ' + unique_segment_names[s_i]
+        mean_text = unique_segment_names[segments_to_analyze[0]]
+        for s_ind in mean_ascend[1:]:
+            mean_text += ' < ' + unique_segment_names[segments_to_analyze[s_ind]]
         anim_sig.append(mean_text)
         sig_table.append(anim_sig)
     #Save significance results
@@ -174,16 +297,22 @@ def pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
     #Plot population rates
     f_pop_fr = plt.figure(figsize=(5,5))
     joint_seg_data = []
-    for s_i, seg_name in enumerate(unique_segment_names):
+    for s_ind, s_i in enumerate(segments_to_analyze):
+        seg_name = unique_segment_names[s_i]
         seg_data = []
         for gn_i, gn in enumerate(unique_given_names):
-            seg_data.extend(list(all_anim_data[gn_i][s_i]))
+            seg_data.extend(list(all_anim_data[gn_i][s_ind]))
         joint_seg_data.append(seg_data)
+    result = f_oneway(*joint_seg_data)
     plt.violinplot(joint_seg_data,showmedians=True)
-    plt.xticks(np.arange(num_seg)+1,unique_segment_names)
+    plt.xticks(np.arange(len(segments_to_analyze))+1,\
+               np.array(unique_segment_names)[segments_to_analyze])
     plt.xlabel('Segment')
     plt.ylabel('100 ms Bin Population Firing Rate (Hz)')
-    plt.title('Population Firing Rate Distributions')
+    if result.pvalue < 0.05:
+        plt.title('Population Firing Rate Distributions\nANOVA p<0.05')
+    else:
+        plt.title('Population Firing Rate Distributions\nANOVA n.s.')
     plt.tight_layout()
     f_pop_fr.savefig(os.path.join(seg_stat_save_dir,'pop_rate_violinplots.png'))
     f_pop_fr.savefig(os.path.join(seg_stat_save_dir,'pop_rate_violinplots.svg'))
@@ -191,11 +320,14 @@ def pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
         
     #Plot CV results
     f_cv = plt.figure(figsize=(5,5))
-    plt.boxplot(seg_cv_table,labels=unique_segment_names)
-    for s_i in range(num_seg):
-        x_vals = s_i + 1 + np.random.randn(num_anim)/10
-        plt.scatter(x_vals,seg_cv_table[:,s_i],color='g',alpha=0.3)
-    seg_pairs = list(combinations(np.arange(num_seg),2))
+    plt.boxplot(seg_cv_table,\
+                labels=np.array(unique_segment_names)[segments_to_analyze])
+    result = f_oneway(*list(seg_cv_table.T))
+    for s_ind, s_i in enumerate(segments_to_analyze):
+        seg_name = unique_segment_names[s_i]
+        x_vals = s_ind + 1 + np.random.randn(num_anim)/10
+        plt.scatter(x_vals,seg_cv_table[:,s_ind],color='g',alpha=0.3)
+    seg_pairs = list(combinations(np.arange(len(segments_to_analyze)),2))
     pairwise_ttest = np.zeros(len(seg_pairs))
     for s_i, (s_1, s_2) in enumerate(seg_pairs):
         result = mannwhitneyu(seg_cv_table[:,s_1],seg_cv_table[:,s_2])
@@ -204,14 +336,19 @@ def pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
             plt.plot([s_1+1,s_2+1],[1+rand_jitter,1+rand_jitter],\
                      color='k')
             plt.text(1+s_1+(s_2-s_1)/2,1+rand_jitter+0.05,'*')
-    plt.title('Population Firing Rate CV')
+    if result.pvalue < 0.05:
+        plt.title('Population Firing Rate CV\nANOVA p<0.05')
+    else:
+        plt.title('Population Firing Rate CV\nANOVA n.s.')
+    plt.xlabel('Segment')
     plt.tight_layout()
     f_cv.savefig(os.path.join(seg_stat_save_dir,'pop_rate_cv_boxplot.png'))
     f_cv.savefig(os.path.join(seg_stat_save_dir,'pop_rate_cv_boxplot.svg'))
     plt.close(f_cv)
     
 def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
-                            isis,cvs,seg_stat_save_dir,verbose=False):
+                            isis,cvs,segments_to_analyze,seg_stat_save_dir,\
+                                verbose=False):
     """
     Conduct significance tests and plot population firing rate coefficients
     of variation across animals and segments.
@@ -244,7 +381,8 @@ def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
     num_anim = len(unique_given_names)
     cmap = colormaps['gist_rainbow']
     anim_colors = cmap(np.linspace(0, 1, num_anim))
-    num_seg = len(unique_segment_names)
+    segment_names_to_analyze = list(np.array(unique_segment_names)[segments_to_analyze])
+    num_seg = len(segment_names_to_analyze)
     
     #Collect isi significance and CV
     x_vals = [0,1,1.1,1.2,1.5,2,10,1000] #[0,1,2,5,10,1000]
@@ -263,10 +401,11 @@ def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
         num_neur = len(cvs[gn][unique_segment_names[0]])
         neur_cv = np.nan*np.ones((num_neur,num_seg))
         neur_isis = dict()
-        for s_i, seg_name in enumerate(unique_segment_names):
+        for s_ind, s_i in enumerate(segments_to_analyze):
+            seg_name = unique_segment_names[s_i]
             isi_data = isis[gn][seg_name]
             cv_data = cvs[gn][seg_name]
-            neur_cv[np.where(cv_data > 0)[0],s_i] = cv_data[np.where(cv_data > 0)[0]]
+            neur_cv[np.where(cv_data > 0)[0],s_ind] = cv_data[np.where(cv_data > 0)[0]]
             for n_i in range(num_neur):
                 if len(np.intersect1d(list(neur_isis.keys()),[n_i])) == 0:
                     neur_isis[n_i] = []
@@ -288,7 +427,7 @@ def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
     #Individual Animals CV Separate
     f_cv, ax_cv = plt.subplots(ncols=num_seg,figsize=(15,5),\
                                sharex = True,sharey = True)
-    for s_i, seg_name in enumerate(unique_segment_names):
+    for s_i, seg_name in enumerate(segment_names_to_analyze):
         anim_seg_vals = []
         for gn_i, gn in enumerate(unique_given_names):
             anim_cv = anim_cvs[gn_i][:,s_i]
@@ -316,7 +455,7 @@ def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
     
     #Across Animals CV
     seg_vals = []
-    for s_i, seg_name in enumerate(unique_segment_names):
+    for s_i, seg_name in enumerate(segment_names_to_analyze):
         anim_seg_vals = []
         for gn_i, gn in enumerate(unique_given_names):
             anim_cv = anim_cvs[gn_i][:,s_i]
@@ -324,10 +463,15 @@ def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
         seg_vals.append(anim_seg_vals)
     f_cv_violin = plt.figure(figsize=(5,5))
     plt.violinplot(seg_vals)
+    result = f_oneway(*(seg_vals))
     plt.axhline(np.log(1),linestyle='dashed',color='k',alpha=0.2)
-    plt.xticks(np.arange(num_seg)+1,unique_segment_names)
+    plt.xticks(np.arange(num_seg)+1,segment_names_to_analyze)
     plt.ylabel('ln(CV)')
-    plt.title('Neuron ln(CV) Distributions')
+    plt.xlabel('Segment')
+    if result.pvalue < 0.05:
+        plt.title('Neuron ln(CV) Distributions\nANOVA p<0.05')
+    else:
+        plt.title('Neuron ln(CV) Distributions\nANOVA n.s.')
     plt.tight_layout()
     f_cv_violin.savefig(os.path.join(seg_stat_save_dir,'segment_neuron_ln_cv_violin.png'))
     f_cv_violin.savefig(os.path.join(seg_stat_save_dir,'segment_neuron_ln_cv_violin.svg'))
@@ -335,16 +479,20 @@ def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
     f_cv_box = plt.figure(figsize=(5,5))
     plt.boxplot(seg_vals)
     plt.axhline(np.log(1),linestyle='dashed',color='k',alpha=0.2)
-    plt.xticks(np.arange(num_seg)+1,unique_segment_names)
-    plt.ylabel('CV')
-    plt.title('Neuron CV Distributions')
+    plt.xticks(np.arange(num_seg)+1,segment_names_to_analyze)
+    plt.ylabel('ln(CV)')
+    plt.xlabel('Segment')
+    if result.pvalue < 0.05:
+        plt.title('Neuron ln(CV) Distributions\nANOVA p<0.05')
+    else:
+        plt.title('Neuron ln(CV) Distributions\nANOVA n.s.')
     plt.tight_layout()
     f_cv_box.savefig(os.path.join(seg_stat_save_dir,'segment_neuron_ln_cv_box.png'))
     f_cv_box.savefig(os.path.join(seg_stat_save_dir,'segment_neuron_ln_cv_box.svg'))
     plt.close(f_cv_box)
     
     seg_vals = []
-    for s_i, seg_name in enumerate(unique_segment_names):
+    for s_i, seg_name in enumerate(segment_names_to_analyze):
         anim_seg_vals = []
         for gn_i, gn in enumerate(unique_given_names):
             anim_cv = anim_cvs[gn_i][:,s_i]
@@ -352,10 +500,15 @@ def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
         seg_vals.append(anim_seg_vals)
     f_cv_box = plt.figure(figsize=(5,5))
     plt.boxplot(seg_vals)
+    result = f_oneway(*(seg_vals))
     plt.axhline(1,linestyle='dashed',color='k',alpha=0.2)
-    plt.xticks(np.arange(num_seg)+1,unique_segment_names)
+    plt.xticks(np.arange(num_seg)+1,segment_names_to_analyze)
     plt.ylabel('CV')
-    plt.title('Neuron CV Distributions')
+    plt.xlabel('Segment')
+    if result.pvalue < 0.05:
+        plt.title('Neuron CV Distributions\nANOVA p<0.05')
+    else:
+        plt.title('Neuron CV Distributions\nANOVA n.s.')
     plt.tight_layout()
     f_cv_box.savefig(os.path.join(seg_stat_save_dir,'segment_neuron_cv_box.png'))
     f_cv_box.savefig(os.path.join(seg_stat_save_dir,'segment_neuron_cv_box.svg'))
@@ -363,9 +516,13 @@ def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
     f_cv_violin = plt.figure(figsize=(5,5))
     plt.violinplot(seg_vals)
     plt.axhline(1,linestyle='dashed',color='k',alpha=0.2)
-    plt.xticks(np.arange(num_seg)+1,unique_segment_names)
+    plt.xticks(np.arange(num_seg)+1,segment_names_to_analyze)
     plt.ylabel('CV')
-    plt.title('Neuron CV Distributions')
+    plt.xlabel('Segment')
+    if result.pvalue < 0.05:
+        plt.title('Neuron CV Distributions\nANOVA p<0.05')
+    else:
+        plt.title('Neuron CV Distributions\nANOVA n.s.')
     plt.tight_layout()
     f_cv_violin.savefig(os.path.join(seg_stat_save_dir,'segment_neuron_cv_violin.png'))
     f_cv_violin.savefig(os.path.join(seg_stat_save_dir,'segment_neuron_cv_violin.svg'))

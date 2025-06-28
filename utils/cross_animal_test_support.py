@@ -118,7 +118,10 @@ if len(save_dir) == 0:
 
 from functions.cross_animal_seg_stats import seg_stat_collection
 
-unique_given_names, unique_segment_names, pop_rates, isis, cvs = seg_stat_collection(all_data_dict)
+segments_to_analyze = [0,2,4]
+
+unique_given_names, unique_segment_names, neur_rates, pop_rates, isis, \
+    cvs = seg_stat_collection(all_data_dict)
         
 seg_stat_save_dir = os.path.join(save_dir,'seg_stats')
 if not os.path.isdir(seg_stat_save_dir):
