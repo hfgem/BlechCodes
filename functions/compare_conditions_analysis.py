@@ -21,6 +21,9 @@ os.chdir(blech_codes_path)
 
 import functions.compare_datasets_funcs as cdf
 import functions.compare_conditions_funcs as ccf
+import functions.cross_animal_seg_stats as cass
+import functions.cross_animal_dev_stats as cads
+import functions.cross_animal_dev_null_plots as cadnp
 
 warnings.filterwarnings("ignore")
 
@@ -84,24 +87,26 @@ class run_compare_conditions_analysis():
             self.gather_dev_split_data()
             self.gather_dev_decode_data()
             self.gather_dev_split_decode_data()
-        #Correlation comparisons
-        self.find_corr_groupings()
-        self.plot_corr_results()
+        #Segment statistics
+        self.run_segment_stats()        
         #Segment comparisons
         self.find_seg_groupings()
         self.plot_seg_results()
-        #Changepoint comparisons
-        self.find_cp_groupings()
-        self.plot_cp_results()
-        #Pop Rate x Taste Corr comparisons
-        self.find_rate_corr_groupings()
-        self.plot_rate_corr_results()
         #Deviation Statistic comparisons
         self.find_dev_stats_groupings()
         self.plot_dev_stat_results()
         #Deviation True x Null comparisons
         self.find_dev_null_groupings()
         self.plot_dev_null_results()
+        #Correlation comparisons
+        self.find_corr_groupings()
+        self.plot_corr_results()
+        #Changepoint comparisons
+        self.find_cp_groupings()
+        self.plot_cp_results()
+        #Pop Rate x Taste Corr comparisons
+        self.find_rate_corr_groupings()
+        self.plot_rate_corr_results()
         #Sliding bin decoding results
         self.find_dev_split_corr_groupings()
         self.plot_dev_split_results()
@@ -111,6 +116,20 @@ class run_compare_conditions_analysis():
         #Dev split decode results
         self.find_dev_split_decode_groupings()
         self.plot_dev_split_decode_results()
+
+    def run_segment_stats(self,):
+        """Run statistical analyses and plots of segment firing data"""
+        segments_to_analyze = [0,2,4]
+
+        unique_given_names, unique_segment_names, neur_rates, pop_rates, isis, \
+            cvs = cass.seg_stat_collection(self.all_data_dict)
+                
+        seg_stat_save_dir = os.path.join(self.save_dir,'seg_stats')
+        if not os.path.isdir(seg_stat_save_dir):
+            os.mkdir(seg_stat_save_dir)
+            
+        cass.seg_stat_analysis(unique_given_names, unique_segment_names, neur_rates, \
+                              pop_rates, isis, cvs, segments_to_analyze, seg_stat_save_dir)
 
     def import_corr(self,):
         """Import previously saved correlation data"""
@@ -749,7 +768,11 @@ class run_compare_conditions_analysis():
 
         print("Beginning Plots.")
         if num_cond > 1:
-            cdf.cross_dataset_dev_stats_plots(self.dev_stats_data, self.unique_given_names, 
+            cads.cross_dataset_dev_stats_plots(self.dev_stats_data, self.unique_given_names, 
+                                              self.unique_dev_stats_names, 
+                                              self.unique_segment_names, 
+                                              results_dir)
+            cads.basic_dev_stats_plots(self.dev_stats_data, self.unique_given_names, 
                                               self.unique_dev_stats_names, 
                                               self.unique_segment_names, 
                                               results_dir)
@@ -813,8 +836,7 @@ class run_compare_conditions_analysis():
                         if rk[:len(s_name)] == s_name:
                             rk_type = rk.split('_')[1]
                             dev_null_data[data_name]['dev_null'][null_name][s_name][rk_type] = \
-                                result_dict[rk]
-                    
+                                result_dict[rk]      
                     
         self.dev_null_data = dev_null_data
         dict_save_dir = os.path.join(self.save_dir, 'dev_null_data.npy')
@@ -867,7 +889,7 @@ class run_compare_conditions_analysis():
 
         print("Beginning Plots.")
         if num_cond > 1:
-            cdf.cross_dataset_dev_null_plots(self.dev_null_data, self.unique_given_names, 
+            cadnp.cross_dataset_dev_null_plots(self.dev_null_data, self.unique_given_names, 
                                              self.unique_dev_null_names, self.unique_segment_names, 
                                              results_dir)
         else:

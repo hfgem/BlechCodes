@@ -908,6 +908,7 @@ def plot_dev_x_null_single_dist(null_data, true_val, plot_name, save_dir):
     plt.axvline(true_val, color='r', label='True Count')
     f.savefig(os.path.join(save_dir, plot_name + '.png'))
     f.savefig(os.path.join(save_dir, plot_name + '.svg'))
+    plt.close(f)
 
 def best_corr_calc_plot(dig_in_names, epochs_to_analyze, segments_to_analyze,
                         segment_names, segment_times_reshaped, segment_dev_times,
