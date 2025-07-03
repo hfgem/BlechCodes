@@ -49,6 +49,7 @@ def cross_dataset_dev_null_plots(dev_null_data, unique_given_names,
             seg_animal_null_means = []
             seg_animal_null_stds = []
             for name in unique_given_names:
+                num_neur = dev_null_data[name]['num_neur']
                 null_dataset = dev_null_data[name]['dev_null'][dev_null_stat][seg_name]['null']
                 true_dataset = dev_null_data[name]['dev_null'][dev_null_stat][seg_name]['true']
                 combined_cutoff_values.append(null_dataset[0])
@@ -141,10 +142,3 @@ def cross_dataset_dev_null_plots(dev_null_data, unique_given_names,
         f_log.savefig(os.path.join(results_dir,dev_null_stat+'_combined_log.png'))
         f_log.savefig(os.path.join(results_dir,dev_null_stat+'_combined_log.svg'))
         plt.close(f_log)
-        
-def null_cutoff_stats_combined(dev_null_data, unique_given_names, 
-                                 unique_dev_null_names, unique_segment_names, 
-                                 results_dir):
-    
-    
-    

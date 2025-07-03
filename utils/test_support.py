@@ -328,12 +328,12 @@ for s_ind, s_i in tqdm.tqdm(enumerate(segments_to_analyze)):
         null_dev_neuron_counts.append(null_i_num_neur)
         null_dev_spike_counts.append(null_i_num_spikes)
         null_dev_lengths.append(all_len)
-        null_dev_frs.append(np.array(null_i_num_spikes)/(all_len/1000))
+        null_dev_frs.append(np.array(null_i_num_spikes)/(all_len/1000)/num_neur)
     # _____Gather true data deviation event stats_____
     all_rast = segment_dev_rasters[s_ind]
     true_dev_neuron_counts, true_dev_spike_counts, true_dev_lengths = df.calculate_dev_null_stats(
         all_rast, segment_dev_times[s_ind])
-    true_dev_frs = np.array(true_dev_spike_counts)/(true_dev_lengths/1000)
+    true_dev_frs = np.array(true_dev_spike_counts)/(true_dev_lengths/1000)/num_neur
     
     # _____Gather data as dictionary of number of events as a function of cutoff
     #FR data

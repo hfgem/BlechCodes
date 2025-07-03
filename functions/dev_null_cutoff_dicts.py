@@ -5,12 +5,16 @@ Created on Mon Jun 30 16:04:51 2025
 
 @author: hannahgermaine
 """
+import os
+import numpy as np
+from scipy import stats
+import functions.dev_plot_funcs as dpf
 
 def dev_null_dict_creation(num_null, null_dev_lengths, null_dev_neuron_counts,
                            null_dev_spike_counts, null_dev_frs, true_dev_neuron_counts,
                            true_dev_spike_counts, true_dev_lengths, true_dev_frs,
                            neur_count_dict, neur_spike_dict, neur_fr_dict,
-                           neur_len_dict, seg_name):
+                           neur_len_dict, seg_name, min_dev_size, seg_fig_save_dir):
     
     # Neuron count data
     null_max_neur_count = np.max(

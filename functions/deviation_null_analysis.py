@@ -299,19 +299,19 @@ class run_deviation_null_analysis():
                     null_dev_neuron_counts.append(null_i_num_neur)
                     null_dev_spike_counts.append(null_i_num_spikes)
                     null_dev_lengths.append(all_len)
-                    null_dev_frs.append(np.array(null_i_num_spikes)/(all_len/1000))
+                    null_dev_frs.append(np.array(null_i_num_spikes)/(all_len/1000)/self.num_neur)
                 # _____Gather true data deviation event stats_____
                 all_rast = self.segment_dev_rasters[s_ind]
                 true_dev_neuron_counts, true_dev_spike_counts, true_dev_lengths = df.calculate_dev_null_stats(
                     all_rast, self.segment_dev_times[s_ind])
-                true_dev_frs = np.array(true_dev_spike_counts)/(true_dev_lengths/1000)
+                true_dev_frs = np.array(true_dev_spike_counts)/(true_dev_lengths/1000)/self.num_neur
                 # _____Gather data as dictionary of number of events as a function of cutoff
                 neur_count_dict, neur_spike_dict, neur_fr_dict, neur_len_dict = \
                     dncd.dev_null_dict_creation(self.num_null, null_dev_lengths, null_dev_neuron_counts,
                                                null_dev_spike_counts, null_dev_frs, true_dev_neuron_counts,
                                                true_dev_spike_counts, true_dev_lengths, true_dev_frs,
                                                neur_count_dict, neur_spike_dict, neur_fr_dict,
-                                               neur_len_dict, seg_name)
+                                               neur_len_dict, seg_name, self.min_dev_size, seg_fig_save_dir)
 
             # Save the dictionaries
             np.save(os.path.join(self.bin_dir,'neur_count_dict.npy'), neur_count_dict)
