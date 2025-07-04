@@ -4641,6 +4641,11 @@ def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names,
     taste_pairs = list(combinations(np.arange(num_tastes), 2))
     zoom_inds = np.where(corr_cutoffs >= 0.25)[0]
     cutoff_zoom_ind = zoom_inds[0]
+    cmap = colormaps['gist_rainbow']
+    epoch_colors = cmap(np.linspace(0, 1, max_epochs))
+    epoch_pairs = list(combinations(np.arange(max_epochs), 2))
+    unique_state_names = ['State ' + str(cp_i) for cp_i in range(max_epochs)]
+    non_null_tastes = [tname for tname in unique_taste_names if tname != 'none']
     
     f_cc_taste_rate, ax_cc_taste_rate = plt.subplots(nrows = len(unique_segment_names),\
                                            ncols = max_epochs, sharex = True,\
@@ -4732,6 +4737,16 @@ def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names,
                                                     null_mean[zoom_inds]+null_std[zoom_inds],\
                                                         color='k',alpha=0.1,\
                                                             label='Null Std')
+            #Taste curve KS tests
+            sig_pair = []
+            for tp_i, tp in enumerate(list(combinations(np.arange(len(taste_names)),2))):
+                stat = ks_2samp(taste_curves[tp[0]],taste_curves[tp[1]])
+                if stat.pvalue<=0.05:
+                    sig_pair.append(tp)
+            sig_text = 'KS Significant Pairs'
+            for sp in sig_pair:
+                sig_text = sig_text + '\n' + taste_names[sp[0]] + ' vs ' + taste_names[sp[1]]
+            ax_cc_taste_rate[s_i,cp_i].text(0.5,0.25,sig_text)  
             #Diff plot
             none_curve = np.array(none_curve).squeeze()
             ax_cc_null_diffs[s_i,cp_i].plot(corr_cutoffs,np.zeros(len(corr_cutoffs)),\
@@ -4832,3 +4847,164 @@ def rate_plots(dev_corr_rate_dict, corr_cutoffs, unique_segment_names,
     f_cc_null_diffs_zoom.savefig(os.path.join(corr_cutoff_save,corr_name + '_taste_rate_diffs_zoom.svg'))
     plt.close(f_cc_null_diffs_zoom)
     
+    #Now plot the epochs against each other
+    f_cc_taste_rate, ax_cc_taste_rate = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = num_tastes, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    f_cc_taste_rate_zoom, ax_cc_taste_rate_zoom = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = num_tastes, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    f_cc_taste_rate_box, ax_cc_taste_rate_box = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = num_tastes, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    f_cc_null_diffs, ax_cc_null_diffs = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = num_tastes, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    f_cc_null_diffs_zoom, ax_cc_null_diffs_zoom = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = num_tastes, sharex = True,\
+                                           sharey = True, figsize = (8,8))
+    for s_i, seg_name in enumerate(unique_segment_names):
+        for t_i, taste in enumerate(non_null_tastes):
+            all_null_epoch_rates = [] #Only for true tastes
+            #Plot individual animal points at cutoff value
+            indiv_animal_at_cutoff = []
+            epoch_curves = []
+            epoch_names = []
+            for cp_i in range(max_epochs):
+                epoch_rates = dev_corr_rate_dict[seg_name][taste][cp_i]['true'] #num_anim x num_cutoffs
+                num_anim, _ = np.shape(epoch_rates)
+                null_rates = dev_corr_rate_dict[seg_name][taste][cp_i]['null']
+                indiv_animal_at_cutoff.append(epoch_rates[:,cutoff_zoom_ind])
+                epoch_mean = np.nanmean(epoch_rates,0)
+                epoch_std = np.nanstd(epoch_rates,0)
+                epoch_min = epoch_mean - epoch_std
+                epoch_min[epoch_min < 0] = 0
+                all_null_epoch_rates.extend(list(null_rates))
+                epoch_curves.append(epoch_mean)
+                epoch_names.append('Epoch ' + str(cp_i))
+                #Plot in joint plot cutoff curves
+                ax_cc_taste_rate[s_i,t_i].plot(corr_cutoffs,epoch_mean,\
+                                                color=epoch_colors[cp_i,:],\
+                                                    alpha=1,label='Epoch ' + str(cp_i))
+                ax_cc_taste_rate_zoom[s_i,t_i].plot(corr_cutoffs[zoom_inds],\
+                                                     epoch_mean[zoom_inds],\
+                                                color=epoch_colors[cp_i,:],\
+                                                    alpha=1,label='Epoch ' + str(cp_i))
+            all_null_epoch_rates = np.array(all_null_epoch_rates)
+            null_mean = np.nanmean(all_null_epoch_rates,0)
+            null_std = np.nanstd(all_null_epoch_rates,0)
+            null_min = null_mean-null_std
+            null_min[null_min<0] = 0
+            ax_cc_taste_rate[s_i,t_i].plot(corr_cutoffs,null_mean,\
+                                            color='k',alpha=1,
+                                            linestyle='dashed',label='Null')
+            ax_cc_taste_rate[s_i,t_i].fill_between(corr_cutoffs,null_min,\
+                                                    null_mean+null_std,color='k',\
+                                                        alpha=0.1,label='Null Std')
+            ax_cc_taste_rate_zoom[s_i,t_i].plot(corr_cutoffs[zoom_inds],null_mean[zoom_inds],\
+                                            color='k',alpha=1,
+                                            linestyle='dashed',label='Null')
+            ax_cc_taste_rate_zoom[s_i,t_i].fill_between(corr_cutoffs[zoom_inds],\
+                                                         null_min[zoom_inds],\
+                                                    null_mean[zoom_inds]+null_std[zoom_inds],\
+                                                        color='k',alpha=0.1,\
+                                                            label='Null Std')
+            #Diff plot
+            ax_cc_null_diffs[s_i,t_i].plot(corr_cutoffs,np.zeros(len(corr_cutoffs)),\
+                                            color='k',alpha=0.5,linestyle='dashed')
+            ax_cc_null_diffs_zoom[s_i,t_i].plot(corr_cutoffs,np.zeros(len(corr_cutoffs)),\
+                                            color='k',alpha=0.5,linestyle='dashed')
+            for cp_i in range(max_epochs):
+                cp_name = 'Epoch ' + str(cp_i)
+                ax_cc_null_diffs[s_i,t_i].plot(corr_cutoffs,\
+                                                np.array(epoch_curves[cp_i])-null_mean,\
+                                                color=epoch_colors[cp_i,:],\
+                                                    alpha=1,label=cp_name)
+                ax_cc_null_diffs_zoom[s_i,t_i].plot(corr_cutoffs[zoom_inds],\
+                                                (np.array(epoch_curves[cp_i])-null_mean)[zoom_inds],\
+                                                color=epoch_colors[cp_i,:],\
+                                                    alpha=1,label=cp_name)
+            if s_i == 0:
+                ax_cc_taste_rate[s_i,t_i].set_title(taste)
+                ax_cc_taste_rate_zoom[s_i,t_i].set_title(taste)
+                ax_cc_taste_rate_box[s_i,t_i].set_title(taste)
+                ax_cc_null_diffs[s_i,t_i].set_title(taste)
+                ax_cc_null_diffs_zoom[s_i,t_i].set_title(taste)
+            if t_i == 0:
+                ax_cc_taste_rate[s_i,t_i].set_ylabel(seg_name + '\nRate (Hz)')
+                ax_cc_taste_rate_zoom[s_i,t_i].set_ylabel(seg_name + '\nRate (Hz)')
+                ax_cc_taste_rate_box[s_i,t_i].set_ylabel(seg_name + '\nRate (Hz)')
+                ax_cc_null_diffs[s_i,t_i].set_ylabel(seg_name + '\nRate Diff From Null Mean(Hz)')
+                ax_cc_null_diffs_zoom[s_i,t_i].set_ylabel(seg_name + '\nRate Diff From Null Mean(Hz)')
+            if s_i == num_segs-1:
+                ax_cc_taste_rate[s_i,t_i].set_xlabel('Min. Correlation Cutoff')
+                ax_cc_taste_rate_zoom[s_i,t_i].set_xlabel('Min. Correlation Cutoff')
+                ax_cc_null_diffs[s_i,t_i].set_xlabel('Min. Correlation Cutoff')
+                ax_cc_null_diffs_zoom[s_i,t_i].set_xlabel('Min. Correlation Cutoff')
+            #Animal dist pairwise sig
+            sig_pair = []
+            for ep_i, ep in enumerate(epoch_pairs):
+                stat = ttest_ind(indiv_animal_at_cutoff[ep[0]],indiv_animal_at_cutoff[ep[1]],\
+                                 equal_var=False,nan_policy='omit')
+                if stat[1]<=0.05:
+                    sig_pair.append(ep)
+            #Combined box plots
+            ax_cc_taste_rate_box[s_i,t_i].boxplot(indiv_animal_at_cutoff,showmeans=False,showfliers=False)
+            for cp_i in range(max_epochs):
+                x_locs = cp_i + 1 + 0.1*np.random.randn(len(indiv_animal_at_cutoff[cp_i]))
+                ax_cc_taste_rate_box[s_i,t_i].scatter(x_locs,indiv_animal_at_cutoff[cp_i],alpha=0.5,color='g')
+            for sp_i, sp in enumerate(sig_pair):
+                ax_cc_taste_rate_box[s_i,t_i].plot([sp[0]+1,sp[1]+1],[-0.01*(sp_i+1),-0.01*(sp_i+1)],color='k',alpha=0.3)
+                x_sig = (sp[0]+1)+(sp[1]-sp[0])/2
+                ax_cc_taste_rate_box[s_i,t_i].scatter(x_sig,-0.01*(sp_i+1),marker='*',color='k')
+            ax_cc_taste_rate_box[s_i,t_i].set_xticks(np.arange(max_epochs) + 1,unique_state_names)
+            #Indiv animal box plots
+            f_indiv_animal = plt.figure(figsize=(5,5))
+            plt.boxplot(indiv_animal_at_cutoff,showmeans=False,showfliers=False)
+            for cp_i in range(max_epochs):
+                x_locs = cp_i + 1 + 0.1*np.random.randn(len(indiv_animal_at_cutoff[cp_i]))
+                plt.scatter(x_locs,indiv_animal_at_cutoff[cp_i],alpha=0.5,color='g')
+            for sp_i, sp in enumerate(sig_pair):
+                plt.plot([sp[0]+1,sp[1]+1],[-0.01*(sp_i+1),-0.01*(sp_i+1)],color='k',alpha=0.3)
+                x_sig = (sp[0]+1)+(sp[1]-sp[0])/2
+                plt.scatter(x_sig,-0.01*(sp_i+1),marker='*',color='k')
+            plt.xticks(np.arange(max_epochs) + 1,unique_state_names)
+            plt.ylabel('Rate (Hz)')
+            plt.title(seg_name + '\n' + taste + '\nAt Cutoff 0.25')
+            plt.tight_layout()
+            f_indiv_animal.savefig(os.path.join(corr_cutoff_indiv_save,corr_name + '_' + seg_name + '_' + taste + '_indiv_animal_rates.png'))
+            f_indiv_animal.savefig(os.path.join(corr_cutoff_indiv_save,corr_name + '_' + seg_name + '_' + taste + '_indiv_animal_rates.svg'))
+            plt.close(f_indiv_animal)
+    ax_cc_taste_rate[0,0].legend(loc='upper left')
+    plt.suptitle('Rate by Cutoff')
+    plt.tight_layout()
+    f_cc_taste_rate.savefig(os.path.join(corr_cutoff_save,corr_name + '_epoch_rates.png'))
+    f_cc_taste_rate.savefig(os.path.join(corr_cutoff_save,corr_name + '_epoch_rates.svg'))
+    plt.close(f_cc_taste_rate)
+    ax_cc_taste_rate_zoom[0,0].legend(loc='upper left')
+    ax_cc_taste_rate_zoom[0,0].set_xlim([0.25,1])
+    plt.suptitle('Rate by Cutoff')
+    plt.tight_layout()
+    f_cc_taste_rate_zoom.savefig(os.path.join(corr_cutoff_save,corr_name + '_epoch_zoom_rates.png'))
+    f_cc_taste_rate_zoom.savefig(os.path.join(corr_cutoff_save,corr_name + '_epoch_zoom_rates.svg'))
+    plt.close(f_cc_taste_rate_zoom)
+    plt.figure(f_cc_taste_rate_box)
+    plt.suptitle('Animal Rates at 0.25 Corr')
+    plt.tight_layout()
+    f_cc_taste_rate_box.savefig(os.path.join(corr_cutoff_save,corr_name + '_epoch_box_rates.png'))
+    f_cc_taste_rate_box.savefig(os.path.join(corr_cutoff_save,corr_name + '_epoch_box_rates.svg'))
+    plt.close(f_cc_taste_rate_box)
+    plt.figure(f_cc_null_diffs)
+    ax_cc_null_diffs[0,0].legend(loc='upper left')
+    plt.suptitle('Rate Difference from None by Cutoff')
+    plt.tight_layout()
+    f_cc_null_diffs.savefig(os.path.join(corr_cutoff_save,corr_name + '_epoch_rate_diffs.png'))
+    f_cc_null_diffs.savefig(os.path.join(corr_cutoff_save,corr_name + '_epoch_rate_diffs.svg'))
+    plt.close(f_cc_null_diffs)
+    plt.figure(f_cc_null_diffs_zoom)
+    ax_cc_null_diffs_zoom[0,0].legend(loc='upper left')
+    plt.suptitle('Rate Difference from None by Cutoff')
+    plt.tight_layout()
+    f_cc_null_diffs_zoom.savefig(os.path.join(corr_cutoff_save,corr_name + '_epoch_rate_diffs_zoom.png'))
+    f_cc_null_diffs_zoom.savefig(os.path.join(corr_cutoff_save,corr_name + '_epoch_rate_diffs_zoom.svg'))
+    plt.close(f_cc_null_diffs_zoom)

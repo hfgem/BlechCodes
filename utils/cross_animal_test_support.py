@@ -114,84 +114,106 @@ if len(save_dir) == 0:
     np.save(os.path.join(save_dir,'all_data_dict.npy'),\
             all_data_dict,allow_pickle=True)
 
-#%% import pop rate corr data
+#%% import taste corr data
 
 try:
-    dict_save_dir = os.path.join(save_dir, 'rate_corr_data.npy')
-    rate_corr_data = np.load(dict_save_dir,allow_pickle=True).item()
-    rate_corr_data = rate_corr_data
-    if not os.path.isdir(os.path.join(save_dir,'Sliding_Correlation_Comparison')):
-        os.mkdir(os.path.join(save_dir,'Sliding_Correlation_Comparison'))
-    rate_corr_results_dir = os.path.join(save_dir,'Sliding_Correlation_Comparison')
+    dict_save_dir = os.path.join(save_dir, 'corr_data.npy')
+    corr_data = np.load(dict_save_dir,allow_pickle=True).item()
+    corr_data = corr_data
+    if not os.path.isdir(os.path.join(save_dir,'Correlations')):
+        os.mkdir(os.path.join(save_dir,'Correlations'))
+    corr_results_dir = os.path.join(save_dir,'Correlations')
 except:
     num_datasets = len(all_data_dict)
     dataset_names = list(all_data_dict.keys())
-    rate_corr_data = dict()
+    corr_data = dict()
     for n_i in range(num_datasets):
         data_name = dataset_names[n_i]
         data_dict = all_data_dict[data_name]['data']
         metadata = all_data_dict[data_name]['metadata']
         data_save_dir = data_dict['data_path']
-        rate_corr_save_dir = os.path.join(data_save_dir,'Sliding_Correlations')
-        num_corr_types = os.listdir(rate_corr_save_dir)
-        rate_corr_data[data_name] = dict()
-        rate_corr_data[data_name]['num_neur'] = data_dict['num_neur']
+        dev_corr_save_dir = os.path.join(
+            data_save_dir, 'dev_x_taste', 'corr')
+        num_corr_types = os.listdir(dev_corr_save_dir)
+        corr_data[data_name] = dict()
+        corr_data[data_name]['num_neur'] = data_dict['num_neur']
         segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-        rate_corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
-        rate_corr_data[data_name]['segment_names'] = data_dict['segment_names']
+        corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
+        corr_data[data_name]['segment_names'] = data_dict['segment_names']
         segment_times = data_dict['segment_times']
-        num_segments = len(rate_corr_data[data_name]['segment_names'])
-        rate_corr_data[data_name]['segment_times_reshaped'] = [
+        num_segments = len(corr_data[data_name]['segment_names'])
+        corr_data[data_name]['segment_times_reshaped'] = [
             [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
         dig_in_names = data_dict['dig_in_names']
-        rate_corr_data[data_name]['dig_in_names'] = dig_in_names
-        seg_names_to_analyze = np.array(rate_corr_data[data_name]['segment_names'])[segments_to_analyze]
-        rate_corr_data[data_name]['rate_corr_data'] = dict()
-        for nct in range(len(num_corr_types)):
-            corr_type = num_corr_types[nct]
-            if corr_type[0] != '.': #Ignore '.DS_Store'
-                rate_corr_data[data_name]['rate_corr_data'][corr_type] = dict()
-                corr_dir = os.path.join(rate_corr_save_dir,corr_type)
-                try:
-                    rate_corr_data[data_name]['rate_corr_data'][corr_type] = np.load(os.path.join(corr_dir,'popfr_corr_storage.npy'), allow_pickle=True).item()
-                except:
-                    print("No population fr x taste correlation dictionary found for " + data_name + " corr " + corr_type)
-                #This data is organized by [seg_name][bin_size] gives the result array
-    rate_corr_data = rate_corr_data
-    np.save(os.path.join(save_dir, 'rate_corr_data.npy'),rate_corr_data,allow_pickle=True)
+        corr_data[data_name]['dig_in_names'] = dig_in_names
+        corr_data[data_name]['corr_data'] = dict()
+        for nct_i in range(len(num_corr_types)):
+            nct = num_corr_types[nct_i]
+            if nct[0] != '.':
+                result_dir = os.path.join(dev_corr_save_dir, nct)
+                corr_data[data_name]['corr_data'][nct] = dict()
+                for s_i in segments_to_analyze:
+                    seg_name = corr_data[data_name]['segment_names'][s_i]
+                    corr_data[data_name]['corr_data'][nct][seg_name] = dict()
+                    filename_best_corr = os.path.join(result_dir,seg_name + '_best_taste_epoch_array.npy')
+                    best_data = np.load(filename_best_corr)
+                    corr_data[data_name]['corr_data'][nct][seg_name]['best'] = best_data
+                    for t_i in range(len(dig_in_names)):
+                        taste_name = dig_in_names[t_i]
+                        corr_data[data_name]['corr_data'][nct][seg_name][taste_name] = dict(
+                        )
+                        try:
+                            filename_corr_pop_vec = os.path.join(
+                                result_dir, seg_name + '_' + taste_name + '_pop_vec.npy')
+                            data = np.load(filename_corr_pop_vec)
+                            filename_corr_pop_vec_null_data = os.path.join(
+                                result_dir, 'null', seg_name + '_' + taste_name + '_pop_vec.npy')
+                            null_data = np.load(filename_corr_pop_vec_null_data)
+                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['data'] = data
+                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['null_data'] = null_data
+                            num_dev, num_deliv, num_cp = np.shape(data)
+                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_dev'] = num_dev
+                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_deliv'] = num_deliv
+                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_cp'] = num_cp
+                        except:
+                            print("No data in directory " + result_dir)
+    corr_data = corr_data
+    dict_save_dir = os.path.join(save_dir, 'corr_data.npy')
+    np.save(dict_save_dir,corr_data,allow_pickle=True)
     # Save the combined dataset somewhere...
     # _____Analysis Storage Directory_____
-    if not os.path.isdir(os.path.join(save_dir,'Sliding_Correlation_Comparison')):
-        os.mkdir(os.path.join(save_dir,'Sliding_Correlation_Comparison'))
-    rate_corr_results_dir = os.path.join(save_dir,'Sliding_Correlation_Comparison')
+    if not os.path.isdir(os.path.join(save_dir,'Correlations')):
+        os.mkdir(os.path.join(save_dir,'Correlations'))
+    corr_results_dir = os.path.join(save_dir,'Correlations')
     
-#%% find_rate_corr_groupings()
+#find_corr_groupings()
 
-rate_corr_data = rate_corr_data
-unique_given_names = list(rate_corr_data.keys())
+unique_given_names = list(corr_data.keys())
 unique_given_indices = np.sort(
     np.unique(unique_given_names, return_index=True)[1])
 unique_given_names = [unique_given_names[i]
                       for i in unique_given_indices]
-unique_corr_types = []
+unique_corr_names = []
 for name in unique_given_names:
-    unique_corr_types.extend(list(rate_corr_data[name]['rate_corr_data'].keys()))
-unique_corr_types = np.array(unique_corr_types)
+    unique_corr_names.extend(list(corr_data[name]['corr_data'].keys()))
+unique_corr_names = np.array(unique_corr_names)
 unique_corr_indices = np.sort(
-    np.unique(unique_corr_types, return_index=True)[1])
-unique_corr_types = [unique_corr_types[i] for i in unique_corr_indices]
+    np.unique(unique_corr_names, return_index=True)[1])
+unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
 unique_segment_names = []
 unique_taste_names = []
 for name in unique_given_names:
-    for corr_name in unique_corr_types:
+    for corr_name in unique_corr_names:
         try:
-            segment_names = list(rate_corr_data[name]['rate_corr_data'][corr_name].keys())
-            unique_segment_names.extend(segment_names)
-            for seg_name in segment_names:
-                taste_names = list(rate_corr_data[name]['rate_corr_data'][corr_name][seg_name].keys())
+            seg_names = list(
+                corr_data[name]['corr_data'][corr_name].keys())
+            unique_segment_names.extend(seg_names)
+            for seg_name in seg_names:
+                taste_names = list(np.setdiff1d(list(
+                    corr_data[name]['corr_data'][corr_name][seg_name].keys()),['best']))
                 unique_taste_names.extend(taste_names)
         except:
-            print(name + " does not have data for " + corr_name)
+            print(name + " does not have correlation data for " + corr_name)
 unique_segment_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i]
@@ -201,123 +223,48 @@ unique_taste_indices = np.sort(
 unique_taste_names = [unique_taste_names[i]
                       for i in unique_taste_indices]
 
-#%% plot_rate_corr_results()
+#%% plot_corr_results()
 
-num_cond = len(rate_corr_data)
-results_dir = rate_corr_results_dir
-
-print("Beginning Plots.")
-if num_cond > 1:
-    cdf.cross_dataset_pop_rate_taste_corr_plots(rate_corr_data, unique_given_names, 
-                                                unique_corr_types, unique_segment_names, 
-                                                unique_taste_names, results_dir)
-else:
-   print("Not enough animals for segment comparison.")
-   
-
-#%% null x true data
-
-try:
-    """Import previously saved deviation true x null data"""
-    dict_save_dir = os.path.join(save_dir, 'dev_null_data.npy')
-    dev_null_data = np.load(dict_save_dir,allow_pickle=True).item()
-    dev_null_data = dev_null_data
-    if not os.path.isdir(os.path.join(save_dir,'Dev_Null')):
-        os.mkdir(os.path.join(save_dir,'Dev_Null'))
-    dev_null_results_dir = os.path.join(save_dir,'Dev_Null')
-except:
-    num_datasets = len(all_data_dict)
-    dataset_names = list(all_data_dict.keys())
-    dev_null_data = dict()
-    for n_i in range(num_datasets):
-        data_name = dataset_names[n_i]
-        data_dict = all_data_dict[data_name]['data']
-        metadata = all_data_dict[data_name]['metadata']
-        data_save_dir = data_dict['data_path']
-        
-        dev_null_save_dir = os.path.join(
-            data_save_dir, 'Deviations','null_x_true_deviations')
-        dev_dir_files = os.listdir(dev_null_save_dir)
-        dev_dict_dirs = []
-        for dev_f in dev_dir_files:
-            if dev_f[-4:] == '.npy':
-                dev_dict_dirs.append(dev_f)
-        dev_null_data[data_name] = dict()
-        dev_null_data[data_name]['num_neur'] = data_dict['num_neur']
-        segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-        dev_null_data[data_name]['segments_to_analyze'] = segments_to_analyze
-        dev_null_data[data_name]['segment_names'] = data_dict['segment_names']
-        segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
-        segment_times = data_dict['segment_times']
-        num_segments = len(dev_null_data[data_name]['segment_names'])
-        dev_null_data[data_name]['segment_times_reshaped'] = [
-            [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
-        dig_in_names = data_dict['dig_in_names']
-        dev_null_data[data_name]['dig_in_names'] = dig_in_names
-        dev_null_data[data_name]['dev_null'] = dict()
-        for stat_i in range(len(dev_dict_dirs)):
-            stat_dir_name = dev_dict_dirs[stat_i]
-            null_name = stat_dir_name.split('.')[0]
-            result_dir = os.path.join(dev_null_save_dir, stat_dir_name)
-            result_dict = np.load(result_dir,allow_pickle=True).item()
-            result_keys = list(result_dict.keys())
-            dev_null_data[data_name]['dev_null'][null_name] = dict()
-            for s_i, s_name in enumerate(segment_names_to_analyze):
-                dev_null_data[data_name]['dev_null'][null_name][s_name] = dict()
-                for rk_i, rk in enumerate(result_keys):
-                    if rk[:len(s_name)] == s_name:
-                        rk_type = rk.split('_')[1]
-                        dev_null_data[data_name]['dev_null'][null_name][s_name][rk_type] = \
-                            result_dict[rk]      
-                
-    dev_null_data = dev_null_data
-    dict_save_dir = os.path.join(save_dir, 'dev_null_data.npy')
-    np.save(dict_save_dir,dev_null_data,allow_pickle=True)
-    # _____Analysis Storage Directory_____
-    if not os.path.isdir(os.path.join(save_dir,'Dev_Null')):
-        os.mkdir(os.path.join(save_dir,'Dev_Null'))
-    dev_null_results_dir = os.path.join(save_dir,'Dev_Null')
- 
-# find_dev_null_groupings()   
- 
-dev_null_data = dev_null_data
-unique_given_names = list(dev_null_data.keys())
-unique_given_indices = np.sort(
-    np.unique(unique_given_names, return_index=True)[1])
-unique_given_names = [unique_given_names[i]
-                      for i in unique_given_indices]
-unique_dev_null_names = []
-for name in unique_given_names:
-    unique_dev_null_names.extend(list(dev_null_data[name]['dev_null'].keys()))
-unique_dev_null_names = np.array(unique_dev_null_names)
-unique_dev_null_indices = np.sort(
-    np.unique(unique_dev_null_names, return_index=True)[1])
-unique_dev_null_names = [unique_dev_null_names[i] for i in unique_dev_null_indices]
-unique_segment_names = []
-for name in unique_given_names:
-    for dev_null_name in unique_dev_null_names:
-        try:
-            seg_names = list(
-                dev_null_data[name]['dev_null'][dev_null_name].keys())
-            unique_segment_names.extend(seg_names)
-        except:
-            print(name + " does not have correlation data for " + dev_null_name)
-unique_segment_indices = np.sort(
-    np.unique(unique_segment_names, return_index=True)[1])
-unique_segment_names = [unique_segment_names[i]
-                        for i in unique_segment_indices]
-
-# plot_dev_null_results()
-
-import functions.cross_animal_dev_null_plots as cadnp
-
-num_cond = len(dev_null_data)
-results_dir = dev_null_results_dir
+num_cond = len(corr_data)
+results_dir = corr_results_dir
 
 print("Beginning Plots.")
 if num_cond > 1:
-    cadnp.cross_dataset_dev_null_plots(dev_null_data, unique_given_names, 
-                                     unique_dev_null_names, unique_segment_names, 
-                                     results_dir)
-else:
-    print("Not enough animals for cross-animal dev stat plots.")
+    # ____Deviation Event Frequencies____
+    dev_freq_dir = os.path.join(results_dir, 'dev_frequency_plots')
+    if os.path.isdir(dev_freq_dir) == False:
+        os.mkdir(dev_freq_dir)
+    print("\tCalculating Cross-Segment Deviation Frequencies")
+    cdf.cross_dataset_dev_freq(corr_data, min_best_cutoff, 
+                               unique_given_names,unique_corr_names,
+                               unique_segment_names,
+                               unique_taste_names, dev_freq_dir)
+    # ____Correlation Distributions____
+    print("\tCalculating Correlation Cutoff Distributions")
+    cdf.cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, 
+                                         unique_given_names, unique_corr_names,
+                                         unique_segment_names, 
+                                         unique_taste_names, results_dir)
+    cross_segment_dir = os.path.join(
+        results_dir, 'cross_segment_plots')
+    if os.path.isdir(cross_segment_dir) == False:
+        os.mkdir(cross_segment_dir)
+    print("\tComparing Segments")
+    cdf.cross_segment_diffs(corr_data, min_best_cutoff, cross_segment_dir, unique_given_names,
+                            unique_corr_names, unique_segment_names, unique_taste_names)
+    cdf.combined_corr_by_segment_dist(corr_data, min_best_cutoff, cross_segment_dir, unique_given_names, 
+                                      unique_corr_names,unique_segment_names, unique_taste_names)
+    cross_taste_dir = os.path.join(results_dir, 'cross_taste_plots')
+    if os.path.isdir(cross_taste_dir) == False:
+        os.mkdir(cross_taste_dir)
+    print("\tComparing Tastes")
+    cdf.cross_taste_diffs(corr_data, min_best_cutoff, cross_taste_dir, unique_given_names,
+                          unique_corr_names, unique_segment_names, unique_taste_names)
+    cdf.combined_corr_by_taste_dist(corr_data, min_best_cutoff,cross_taste_dir, unique_given_names, 
+                                      unique_corr_names,unique_segment_names, unique_taste_names)
+    cross_epoch_dir = os.path.join(results_dir, 'cross_epoch_plots')
+    if os.path.isdir(cross_epoch_dir) == False:
+        os.mkdir(cross_epoch_dir)
+    print("\tComparing Epochs")
+    cdf.cross_epoch_diffs(corr_data, min_best_cutoff, cross_epoch_dir, unique_given_names,
+                          unique_corr_names, unique_segment_names, unique_taste_names)
