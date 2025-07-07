@@ -114,157 +114,85 @@ if len(save_dir) == 0:
     np.save(os.path.join(save_dir,'all_data_dict.npy'),\
             all_data_dict,allow_pickle=True)
 
-#%% import taste corr data
-
+#%% import taste response data
+from functions.data_description_analysis import run_data_description_analysis
+import functions.dependent_decoding_funcs as ddf
+    
 try:
-    dict_save_dir = os.path.join(save_dir, 'corr_data.npy')
-    corr_data = np.load(dict_save_dir,allow_pickle=True).item()
-    corr_data = corr_data
-    if not os.path.isdir(os.path.join(save_dir,'Correlations')):
-        os.mkdir(os.path.join(save_dir,'Correlations'))
-    corr_results_dir = os.path.join(save_dir,'Correlations')
+    dict_save_dir = os.path.join(save_dir, 'taste_resp_data.npy')
+    taste_data = np.load(dict_save_dir,allow_pickle=True).item()
+    taste_data = taste_data
+    if not os.path.isdir(os.path.join(save_dir,'Taste_Responses')):
+        os.mkdir(os.path.join(save_dir,'Taste_Responses'))
+    taste_results_dir = os.path.join(save_dir,'Taste_Responses')
 except:
     num_datasets = len(all_data_dict)
     dataset_names = list(all_data_dict.keys())
-    corr_data = dict()
+    taste_data = dict()
     for n_i in range(num_datasets):
         data_name = dataset_names[n_i]
         data_dict = all_data_dict[data_name]['data']
         metadata = all_data_dict[data_name]['metadata']
+        data_description_results = run_data_description_analysis([metadata, data_dict])
+        data_dict = data_description_results.data_dict
+        hdf5_dir = metadata['hdf5_dir']
         data_save_dir = data_dict['data_path']
-        dev_corr_save_dir = os.path.join(
-            data_save_dir, 'dev_x_taste', 'corr')
-        num_corr_types = os.listdir(dev_corr_save_dir)
-        corr_data[data_name] = dict()
-        corr_data[data_name]['num_neur'] = data_dict['num_neur']
+        taste_data[data_name] = dict()
+        num_neur = data_dict['num_neur']
+        taste_data[data_name]['num_neur'] = num_neur
         segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-        corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
-        corr_data[data_name]['segment_names'] = data_dict['segment_names']
+        taste_data[data_name]['segments_to_analyze'] = segments_to_analyze
+        segment_names = data_dict['segment_names']
+        taste_data[data_name]['segment_names'] = segment_names
         segment_times = data_dict['segment_times']
-        num_segments = len(corr_data[data_name]['segment_names'])
-        corr_data[data_name]['segment_times_reshaped'] = [
+        num_segments = len(segment_names)
+        taste_data[data_name]['segment_times_reshaped'] = [
             [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
         dig_in_names = data_dict['dig_in_names']
-        corr_data[data_name]['dig_in_names'] = dig_in_names
-        corr_data[data_name]['corr_data'] = dict()
-        for nct_i in range(len(num_corr_types)):
-            nct = num_corr_types[nct_i]
-            if nct[0] != '.':
-                result_dir = os.path.join(dev_corr_save_dir, nct)
-                corr_data[data_name]['corr_data'][nct] = dict()
-                for s_i in segments_to_analyze:
-                    seg_name = corr_data[data_name]['segment_names'][s_i]
-                    corr_data[data_name]['corr_data'][nct][seg_name] = dict()
-                    filename_best_corr = os.path.join(result_dir,seg_name + '_best_taste_epoch_array.npy')
-                    best_data = np.load(filename_best_corr)
-                    corr_data[data_name]['corr_data'][nct][seg_name]['best'] = best_data
-                    for t_i in range(len(dig_in_names)):
-                        taste_name = dig_in_names[t_i]
-                        corr_data[data_name]['corr_data'][nct][seg_name][taste_name] = dict(
-                        )
-                        try:
-                            filename_corr_pop_vec = os.path.join(
-                                result_dir, seg_name + '_' + taste_name + '_pop_vec.npy')
-                            data = np.load(filename_corr_pop_vec)
-                            filename_corr_pop_vec_null_data = os.path.join(
-                                result_dir, 'null', seg_name + '_' + taste_name + '_pop_vec.npy')
-                            null_data = np.load(filename_corr_pop_vec_null_data)
-                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['data'] = data
-                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['null_data'] = null_data
-                            num_dev, num_deliv, num_cp = np.shape(data)
-                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_dev'] = num_dev
-                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_deliv'] = num_deliv
-                            corr_data[data_name]['corr_data'][nct][seg_name][taste_name]['num_cp'] = num_cp
-                        except:
-                            print("No data in directory " + result_dir)
-    corr_data = corr_data
-    dict_save_dir = os.path.join(save_dir, 'corr_data.npy')
-    np.save(dict_save_dir,corr_data,allow_pickle=True)
+        taste_data[data_name]['dig_in_names'] = dig_in_names
+        tastant_spike_times = data_dict['tastant_spike_times']
+        taste_data[data_name]['tastant_spike_times'] = tastant_spike_times
+        segment_spike_times = data_dict['segment_spike_times']
+        taste_data[data_name]['segment_spike_times'] = segment_spike_times
+        start_dig_in_times = data_dict['start_dig_in_times']
+        taste_data[data_name]['start_dig_in_times'] = start_dig_in_times
+        taste_data[data_name]['end_dig_in_times'] = data_dict['end_dig_in_times']
+        pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir, \
+                            'changepoint_data', 'pop_taste_cp_raster_inds')
+        bayes_fr_bins = metadata['params_dict']['bayes_params']['fr_bins']
+        pre_taste = metadata['params_dict']['pre_taste']
+        post_taste = metadata['params_dict']['post_taste']
+        pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
+        post_taste_dt = np.ceil(post_taste*1000).astype('int')
+        bin_time = metadata['params_dict']['bayes_params']['z_score_bin_time']
+        bin_dt = np.ceil(bin_time*1000).astype('int')
+        trial_start_frac = metadata['params_dict']['bayes_params']['trial_start_frac']
+        tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, \
+            min_hz_z_pop = ddf.taste_fr_dist_zscore(num_neur, tastant_spike_times,
+                                                    segment_spike_times, segment_names,
+                                                    segment_times, pop_taste_cp_raster_inds,
+                                                    bayes_fr_bins, start_dig_in_times, 
+                                                    pre_taste_dt, post_taste_dt, 
+                                                    bin_dt, trial_start_frac)
+        taste_data[data_name]['tastant_fr_dist_z_pop'] = tastant_fr_dist_z_pop
+        taste_data[data_name]['taste_num_deliv'] = taste_num_deliv
+        taste_data[data_name]['max_hz_z_pop'] = max_hz_z_pop
+        taste_data[data_name]['min_hz_z_pop'] = min_hz_z_pop
+        
+    taste_data = taste_data
+    dict_save_dir = os.path.join(save_dir, 'taste_resp_data.npy')
+    np.save(dict_save_dir,taste_data,allow_pickle=True)
     # Save the combined dataset somewhere...
     # _____Analysis Storage Directory_____
-    if not os.path.isdir(os.path.join(save_dir,'Correlations')):
-        os.mkdir(os.path.join(save_dir,'Correlations'))
-    corr_results_dir = os.path.join(save_dir,'Correlations')
+    if not os.path.isdir(os.path.join(save_dir,'Taste_Responses')):
+        os.mkdir(os.path.join(save_dir,'Taste_Responses'))
+    taste_results_dir = os.path.join(save_dir,'Taste_Responses')
     
-#find_corr_groupings()
+#%% 
 
-unique_given_names = list(corr_data.keys())
-unique_given_indices = np.sort(
-    np.unique(unique_given_names, return_index=True)[1])
-unique_given_names = [unique_given_names[i]
-                      for i in unique_given_indices]
-unique_corr_names = []
-for name in unique_given_names:
-    unique_corr_names.extend(list(corr_data[name]['corr_data'].keys()))
-unique_corr_names = np.array(unique_corr_names)
-unique_corr_indices = np.sort(
-    np.unique(unique_corr_names, return_index=True)[1])
-unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
-unique_segment_names = []
-unique_taste_names = []
-for name in unique_given_names:
-    for corr_name in unique_corr_names:
-        try:
-            seg_names = list(
-                corr_data[name]['corr_data'][corr_name].keys())
-            unique_segment_names.extend(seg_names)
-            for seg_name in seg_names:
-                taste_names = list(np.setdiff1d(list(
-                    corr_data[name]['corr_data'][corr_name][seg_name].keys()),['best']))
-                unique_taste_names.extend(taste_names)
-        except:
-            print(name + " does not have correlation data for " + corr_name)
-unique_segment_indices = np.sort(
-    np.unique(unique_segment_names, return_index=True)[1])
-unique_segment_names = [unique_segment_names[i]
-                        for i in unique_segment_indices]
-unique_taste_indices = np.sort(
-    np.unique(unique_taste_names, return_index=True)[1])
-unique_taste_names = [unique_taste_names[i]
-                      for i in unique_taste_indices]
+import functions.cross_animal_taste_stats as cats
 
-#%% plot_corr_results()
+taste_stats = cats.taste_stat_collection(taste_data, taste_results_dir)
+np.save(os.path.join(taste_results_dir,'taste_stats.npy'),taste_stats,allow_pickle=True)
 
-num_cond = len(corr_data)
-results_dir = corr_results_dir
-
-print("Beginning Plots.")
-if num_cond > 1:
-    # ____Deviation Event Frequencies____
-    dev_freq_dir = os.path.join(results_dir, 'dev_frequency_plots')
-    if os.path.isdir(dev_freq_dir) == False:
-        os.mkdir(dev_freq_dir)
-    print("\tCalculating Cross-Segment Deviation Frequencies")
-    cdf.cross_dataset_dev_freq(corr_data, min_best_cutoff, 
-                               unique_given_names,unique_corr_names,
-                               unique_segment_names,
-                               unique_taste_names, dev_freq_dir)
-    # ____Correlation Distributions____
-    print("\tCalculating Correlation Cutoff Distributions")
-    cdf.cross_dataset_dev_by_corr_cutoff(corr_data, min_best_cutoff, 
-                                         unique_given_names, unique_corr_names,
-                                         unique_segment_names, 
-                                         unique_taste_names, results_dir)
-    cross_segment_dir = os.path.join(
-        results_dir, 'cross_segment_plots')
-    if os.path.isdir(cross_segment_dir) == False:
-        os.mkdir(cross_segment_dir)
-    print("\tComparing Segments")
-    cdf.cross_segment_diffs(corr_data, min_best_cutoff, cross_segment_dir, unique_given_names,
-                            unique_corr_names, unique_segment_names, unique_taste_names)
-    cdf.combined_corr_by_segment_dist(corr_data, min_best_cutoff, cross_segment_dir, unique_given_names, 
-                                      unique_corr_names,unique_segment_names, unique_taste_names)
-    cross_taste_dir = os.path.join(results_dir, 'cross_taste_plots')
-    if os.path.isdir(cross_taste_dir) == False:
-        os.mkdir(cross_taste_dir)
-    print("\tComparing Tastes")
-    cdf.cross_taste_diffs(corr_data, min_best_cutoff, cross_taste_dir, unique_given_names,
-                          unique_corr_names, unique_segment_names, unique_taste_names)
-    cdf.combined_corr_by_taste_dist(corr_data, min_best_cutoff,cross_taste_dir, unique_given_names, 
-                                      unique_corr_names,unique_segment_names, unique_taste_names)
-    cross_epoch_dir = os.path.join(results_dir, 'cross_epoch_plots')
-    if os.path.isdir(cross_epoch_dir) == False:
-        os.mkdir(cross_epoch_dir)
-    print("\tComparing Epochs")
-    cdf.cross_epoch_diffs(corr_data, min_best_cutoff, cross_epoch_dir, unique_given_names,
-                          unique_corr_names, unique_segment_names, unique_taste_names)
+cats.plot_corr_outputs(taste_stats,taste_results_dir)

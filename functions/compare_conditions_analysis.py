@@ -19,11 +19,15 @@ current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
+from functions.data_description_analysis import run_data_description_analysis
 import functions.compare_datasets_funcs as cdf
 import functions.compare_conditions_funcs as ccf
 import functions.cross_animal_seg_stats as cass
+import functions.cross_animal_taste_stats as cats
 import functions.cross_animal_dev_stats as cads
 import functions.cross_animal_dev_null_plots as cadnp
+import functions.dependent_decoding_funcs as ddf
+import functions.hdf5_handling as hf5
 
 warnings.filterwarnings("ignore")
 
@@ -36,6 +40,10 @@ class run_compare_conditions_analysis():
         self.min_best_cutoff = args[2]
         #Import/Load data
         if len(self.save_dir) > 0:
+            try:
+                self.import_taste_resp()
+            except:
+                self.gather_taste_data()
             try:
                 self.import_corr()
             except:
@@ -78,6 +86,7 @@ class run_compare_conditions_analysis():
             self.save_dir = askdirectory()
             np.save(os.path.join(self.save_dir,'all_data_dict.npy'),\
                     self.all_data_dict,allow_pickle=True)
+            self.gather_taste_data()
             self.gather_corr_data()
             self.gather_seg_data()
             self.gather_cp_data()
@@ -89,6 +98,8 @@ class run_compare_conditions_analysis():
             self.gather_dev_split_decode_data()
         #Segment statistics
         self.run_segment_stats()        
+        #Taste response statistics
+        self.run_taste_stats()
         #Segment comparisons
         self.find_seg_groupings()
         self.plot_seg_results()
@@ -131,6 +142,87 @@ class run_compare_conditions_analysis():
         cass.seg_stat_analysis(unique_given_names, unique_segment_names, neur_rates, \
                               pop_rates, isis, cvs, segments_to_analyze, seg_stat_save_dir)
 
+    def import_taste_resp(self,):
+        """Import previously saved taste response data"""
+        dict_save_dir = os.path.join(self.save_dir, 'taste_resp_data.npy')
+        taste_data = np.load(dict_save_dir,allow_pickle=True).item()
+        self.taste_data = taste_data
+        if not os.path.isdir(os.path.join(self.save_dir,'Taste_Responses')):
+            os.mkdir(os.path.join(self.save_dir,'Taste_Responses'))
+        self.taste_results_dir = os.path.join(self.save_dir,'Taste_Responses')
+
+    def gather_taste_data(self,):
+        """Import taste responses for analysis"""
+        num_datasets = len(self.all_data_dict)
+        dataset_names = list(self.all_data_dict.keys())
+        taste_data = dict()
+        for n_i in range(num_datasets):
+            data_name = dataset_names[n_i]
+            data_dict = self.all_data_dict[data_name]['data']
+            metadata = self.all_data_dict[data_name]['metadata']
+            update_descriptions = run_data_description_analysis([self.metadata, self.data_dict])
+            data_dict = update_descriptions.data_dict
+            hdf5_dir = metadata['hdf5_dir']
+            data_save_dir = data_dict['data_path']
+            taste_data[data_name] = dict()
+            num_neur = data_dict['num_neur']
+            taste_data[data_name]['num_neur'] = num_neur
+            segments_to_analyze = metadata['params_dict']['segments_to_analyze']
+            taste_data[data_name]['segments_to_analyze'] = segments_to_analyze
+            segment_names = data_dict['segment_names']
+            taste_data[data_name]['segment_names'] = segment_names
+            segment_times = data_dict['segment_times']
+            num_segments = len(segment_names)
+            taste_data[data_name]['segment_times_reshaped'] = [
+                [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
+            dig_in_names = data_dict['dig_in_names']
+            taste_data[data_name]['dig_in_names'] = dig_in_names
+            tastant_spike_times = data_dict['tastant_spike_times']
+            taste_data[data_name]['tastant_spike_times'] = tastant_spike_times
+            segment_spike_times = data_dict['segment_spike_times']
+            taste_data[data_name]['segment_spike_times'] = segment_spike_times
+            start_dig_in_times = data_dict['start_dig_in_times']
+            taste_data[data_name]['start_dig_in_times'] = start_dig_in_times
+            taste_data[data_name]['end_dig_in_times'] = data_dict['end_dig_in_times']
+            pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir, \
+                                'changepoint_data', 'pop_taste_cp_raster_inds')
+            bayes_fr_bins = metadata['params_dict']['bayes_params']['fr_bins']
+            pre_taste = metadata['params_dict']['pre_taste']
+            post_taste = metadata['params_dict']['post_taste']
+            pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
+            post_taste_dt = np.ceil(post_taste*1000).astype('int')
+            bin_time = metadata['params_dict']['bayes_params']['z_score_bin_time']
+            bin_dt = np.ceil(bin_time*1000).astype('int')
+            trial_start_frac = metadata['params_dict']['bayes_params']['trial_start_frac']
+            tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, \
+                min_hz_z_pop = ddf.taste_fr_dist_zscore(num_neur, tastant_spike_times,
+                                                        segment_spike_times, segment_names,
+                                                        segment_times, pop_taste_cp_raster_inds,
+                                                        bayes_fr_bins, start_dig_in_times, 
+                                                        pre_taste_dt, post_taste_dt, 
+                                                        bin_dt, trial_start_frac)
+            taste_data[data_name]['tastant_fr_dist_z_pop'] = tastant_fr_dist_z_pop
+            taste_data[data_name]['taste_num_deliv'] = taste_num_deliv
+            taste_data[data_name]['max_hz_z_pop'] = max_hz_z_pop
+            taste_data[data_name]['min_hz_z_pop'] = min_hz_z_pop
+            
+        self.taste_data = taste_data
+        dict_save_dir = os.path.join(self.save_dir, 'taste_resp_data.npy')
+        np.save(dict_save_dir,taste_data,allow_pickle=True)
+        # Save the combined dataset somewhere...
+        # _____Analysis Storage Directory_____
+        if not os.path.isdir(os.path.join(self.save_dir,'Taste_Responses')):
+            os.mkdir(os.path.join(self.save_dir,'Taste_Responses'))
+        self.taste_results_dir = os.path.join(self.save_dir,'Taste_Responses')
+
+    def run_taste_stats(self,):
+        """Run statistical analyses and plots of taste firing data"""
+        taste_stats = cats.taste_stat_collection(self.taste_data, self.taste_results_dir)
+        self.taste_stats = taste_stats
+        np.save(self.taste_results_dir,taste_stats,allow_pickle=True)
+        
+        cats.plot_corr_outputs(taste_stats,self.taste_results_dir)
+    
     def import_corr(self,):
         """Import previously saved correlation data"""
         dict_save_dir = os.path.join(self.save_dir, 'corr_data.npy')
