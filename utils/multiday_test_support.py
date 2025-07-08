@@ -281,11 +281,10 @@ non_none_tastes = [taste for taste in all_dig_in_names if taste[:4] != 'none']
 non_none_tastes = non_none_tastes
 # group_list, group_names = ddf.multiday_decode_groupings(day_vars[0]['epochs_to_analyze'],
 #                                                 all_dig_in_names,
-#                                                 palatable_dig_inds,
 #                                                 non_none_tastes)
 group_list, group_names = ddf.multiday_decode_groupings_split_identity(day_vars[0]['epochs_to_analyze'],
                                                 all_dig_in_names,
-                                                palatable_dig_inds,
+                                                
                                                 non_none_tastes)
 
 # decode_zscored()

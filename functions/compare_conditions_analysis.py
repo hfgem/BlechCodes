@@ -9,16 +9,17 @@ Functions to support compare_conditions.py in running cross-dataset analyses.
 """
 
 import os
-import warnings
-import pickle
-import numpy as np
-import functions.hdf5_handling as hf5
-from tkinter.filedialog import askdirectory
 
 current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
+import csv
+import warnings
+import numpy as np
+import functions.hdf5_handling as hf5
+from tkinter.filedialog import askdirectory
+from itertools import combinations
 from functions.data_description_analysis import run_data_description_analysis
 import functions.compare_datasets_funcs as cdf
 import functions.compare_conditions_funcs as ccf
@@ -27,7 +28,6 @@ import functions.cross_animal_taste_stats as cats
 import functions.cross_animal_dev_stats as cads
 import functions.cross_animal_dev_null_plots as cadnp
 import functions.dependent_decoding_funcs as ddf
-import functions.hdf5_handling as hf5
 
 warnings.filterwarnings("ignore")
 
@@ -38,6 +38,7 @@ class run_compare_conditions_analysis():
         self.all_data_dict = args[0]
         self.save_dir = args[1]
         self.min_best_cutoff = args[2]
+        self.verbose = False
         #Import/Load data
         if len(self.save_dir) > 0:
             try:
@@ -1049,7 +1050,13 @@ class run_compare_conditions_analysis():
                     taste_corr_data = np.array(taste_corr_data)
                     _, num_dev = np.shape(taste_corr_data)
                     dev_split_corr_data[data_name]['corr_data'][stat_segment][t_name] = taste_corr_data
-                    
+            #Import hotellings data
+            dev_split_corr_data[data_name]['hotellings'] = []
+            with open(os.path.join(dev_split_corr_dir,'dev_split_sig_hotellings.csv'),'r',newline='') as f:
+                reader = csv.reader(f)
+                for row in reader:
+                    dev_split_corr_data[data_name]['hotellings'].append(row)
+            
         self.dev_split_corr_data = dev_split_corr_data
         dict_save_dir = os.path.join(self.save_dir, 'dev_split_corr_data.npy')
         np.save(dict_save_dir,dev_split_corr_data,allow_pickle=True)
@@ -1385,8 +1392,6 @@ class run_compare_conditions_analysis():
         segment start and end times, taste dig in names, and the decoding
         data for all neurons"""
         
-        decode_types = ['is_taste','which_taste','which_epoch']
-
         num_datasets = len(self.all_data_dict)
         dataset_names = list(self.all_data_dict.keys())
         dev_split_decode_data = dict()
@@ -1409,8 +1414,17 @@ class run_compare_conditions_analysis():
             data_save_dir = data_dict['data_path']
             dev_split_save_dir = os.path.join(
                 data_save_dir, 'Deviation_Sequence_Analysis')
-            #Subfolders we care about: corr_tests and decode_splits
-            #First load correlation data
+            #Load relevant data
+            try:
+                group_dict = np.load(os.path.join(dev_split_save_dir,'group_dict.npy'),\
+                                     allow_pickle=True).item()
+                allgroups = list(group_dict.keys())
+                dev_split_decode_data['groups'] = allgroups
+            except:
+                dev_split_decode_data['groups'] = []
+                if self.verbose == True:
+                    print('Missing group dict for ' + data_name)
+            dev_split_dir = os.path.join(dev_split_save_dir,'decode_splits')
             dev_split_decode_dir = os.path.join(dev_split_save_dir,'decode_splits','zscore_firing_rates')
             dev_split_decode_files = os.listdir(dev_split_decode_dir)
             dev_split_decode_dict_files = []
@@ -1422,14 +1436,18 @@ class run_compare_conditions_analysis():
                 dev_split_decode_data[data_name]['decode_data'][sna] = dict()
             for stat_i, stat_filename in enumerate(dev_split_decode_dict_files):
                 stat_filename_split = (stat_filename.split('.')[0]).split('_')
-                if stat_filename_split[-1] != 'argmax':
-                    stat_seg_name = stat_filename_split[0]
-                    file_decode_type = ('_').join(stat_filename_split[-2:])
-                    file_decode_type_ind = [i for i in range(len(decode_types)) if file_decode_type == decode_types[i]]
-                    if len(file_decode_type_ind) > 0:
-                        dev_split_decode_data[data_name]['decode_data'][stat_seg_name][file_decode_type] = \
+                stat_seg = stat_filename_split[0]
+                if stat_filename_split[-1] == 'array': #Probability or argmax array
+                    if stat_filename_split[-2] == 'prob': #Probabilities
+                        dev_split_decode_data[data_name]['decode_data'][stat_seg]['probabilities'] = \
                             np.load(os.path.join(dev_split_decode_dir,stat_filename),allow_pickle=True)
-                    
+                    elif stat_filename_split[-2] == 'decode': #Argmax
+                        dev_split_decode_data[data_name]['decode_data'][stat_seg]['argmax'] = \
+                            np.load(os.path.join(dev_split_decode_dir,stat_filename),allow_pickle=True)
+                elif stat_filename_split[-1] == 'dict': #Dictionary of counts
+                    dev_split_decode_data[data_name]['decode_data'][stat_seg]['group_dict'] = \
+                        np.load(os.path.join(dev_split_decode_dir,stat_filename),allow_pickle=True).item()
+                
         self.dev_split_decode_data = dev_split_decode_data
         dict_save_dir = os.path.join(self.save_dir, 'dev_split_decode_data.npy')
         np.save(dict_save_dir,dev_split_decode_data,allow_pickle=True)
@@ -1452,23 +1470,37 @@ class run_compare_conditions_analysis():
                               for i in unique_given_indices]
         unique_segment_names = []
         unique_taste_names = []
+        unique_group_names = []
         for name in unique_given_names:
+            group_names = list(dev_split_decode_data[name]['groups'])
+            unique_group_names.extend(group_names)
             segment_names = list(dev_split_decode_data[name]['decode_data'].keys())
             unique_segment_names.extend(segment_names)
             for seg_name in segment_names:
                 taste_names = list(dev_split_decode_data[name]['dig_in_names'][:-1])
                 unique_taste_names.extend(taste_names)
-       
+                
+                
         unique_segment_indices = np.sort(
             np.unique(unique_segment_names, return_index=True)[1])
         unique_segment_names = [unique_segment_names[i] for i in unique_segment_indices]
         unique_taste_indices = np.sort(
             np.unique(unique_taste_names, return_index=True)[1])
         unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
-        
+        unique_group_indices = np.sort(
+            np.unique(unique_group_names, return_index=True)[1])
+        unique_group_names = [unique_group_names[i] for i in unique_group_indices]
+
+        group_pair_inds = list(combinations(np.arange(len(unique_group_names)),2))
+        group_pair_names = []
+        for gp_1, gp_2 in group_pair_inds:
+            group_pair_names.append(unique_group_names[gp_1] + ', ' + unique_group_names[gp_2])
+            
         self.unique_given_names = unique_given_names
         self.unique_segment_names = unique_segment_names
         self.unique_taste_names = unique_taste_names
+        self.unique_group_names = unique_group_names
+        self.group_pair_names = group_pair_names
 
     def plot_dev_split_decode_results(self,):
         num_cond = len(self.dev_split_decode_data)

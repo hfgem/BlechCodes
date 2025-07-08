@@ -390,7 +390,6 @@ class run_multiday_analysis():
         self.non_none_tastes = non_none_tastes
         group_list, group_names = ddf.decode_groupings(self.day_vars[0]['epochs_to_analyze'],
                                                        self.all_dig_in_names,
-                                                       self.palatable_dig_inds,
                                                        self.non_none_tastes)
         #Save the group information for cross-animal use 
         group_dict = dict()

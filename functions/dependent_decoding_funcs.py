@@ -1232,7 +1232,7 @@ def create_null_decode_dataset(segments_to_analyze, segment_times, segment_spike
     
     return shuffled_fr_vecs, segment_spike_times_bin, seg_means, seg_stds
 
-def decode_groupings(epochs_to_analyze,dig_in_names,palatable_dig_inds,non_none_tastes):
+def decode_groupings(epochs_to_analyze,dig_in_names,non_none_tastes):
     """
     Create fr vector grouping instructions: list of epoch,taste pairs.
     
@@ -1242,8 +1242,6 @@ def decode_groupings(epochs_to_analyze,dig_in_names,palatable_dig_inds,non_none_
         list of indices of epochs to be analyzed.
     dig_in_names: list
         list of strings of taste names
-    palatable_dig_inds: list
-        list of indices of tastes that are palatable
     non_none_tastes: list of taste names that are not "none"
     
     Returns
@@ -1258,40 +1256,33 @@ def decode_groupings(epochs_to_analyze,dig_in_names,palatable_dig_inds,non_none_
     group_list_names = []
     group_names = []
     none_group = []
-    palatable_group = []
-    unpalatable_group = []
+    palatability_group = []
     for e_ind, e_i in enumerate(epochs_to_analyze):
         epoch_group = []
         epoch_names = []
         for t_ind, t_name in enumerate(dig_in_names):
-            #First check if this is none
-            if np.setdiff1d([t_name],non_none_tastes).size > 0:
+            if np.setdiff1d([t_name],non_none_tastes).size > 0: #None
                 none_group.append((e_i,t_ind))
-            #Next check if it should be grouped
             else:
+                #Combine presence data
                 if e_i == 0:
                     epoch_group.append((e_i, t_ind))
                     epoch_names.append((e_i, t_name))
-                elif e_i == 1:
-                    group_list.append([(e_i,t_ind)])
+                #Separate identity data
+                if e_i == 1:
+                    group_list.append([(e_i, t_ind)])
                     group_list_names.append([(e_i,t_name)])
                     group_names.append(t_name.capitalize() + ' Identity')
-                else:
-                    #Check if palatable or unpalatable
-                    if (np.intersect1d(palatable_dig_inds,t_name)).size == 0: #unpalatable
-                        unpalatable_group.append((e_i,t_ind))
-                    else:
-                        palatable_group.append((e_i,t_ind))
+                #Separate palatability data
+                if e_i == 2:
+                    palatability_group.append((e_i,t_ind))
         if len(epoch_group) > 0:
             group_list.append(epoch_group)
             group_list_names.append([(e_i,'all')])
             group_names.append('Presence')
-    group_list.append(palatable_group)
-    group_list_names.append(['Palatable'])
-    group_names.append('Palatable Palatability')
-    group_list.append(unpalatable_group)
-    group_list_names.append(['Unpalatable'])
-    group_names.append('Unpalatable Palatability')
+    group_list.append(palatability_group)
+    group_list_names.append(['Palatability'])
+    group_names.append('Palatability')
     group_list.append(none_group)
     group_list_names.append(['None'])
     group_names.append('No Taste Control')
@@ -1305,7 +1296,7 @@ def decode_groupings(epochs_to_analyze,dig_in_names,palatable_dig_inds,non_none_
     
     return final_group_list, final_group_names
 
-def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,palatable_dig_inds,non_none_tastes):
+def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,non_none_tastes):
     """
     Create fr vector grouping instructions: list of epoch,taste pairs.
     
@@ -1315,8 +1306,6 @@ def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,palatable_dig_i
         list of indices of epochs to be analyzed.
     all_dig_in_names: list
         list of strings of taste names across days
-    palatable_dig_inds: list
-        list of indices of tastes that are palatable
     non_none_tastes: list of taste names that are not "none"
     
     Returns
@@ -1385,7 +1374,7 @@ def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,palatable_dig_i
     
     return final_group_list, final_group_names
 
-def multiday_decode_groupings_split_identity(epochs_to_analyze,all_dig_in_names,palatable_dig_inds,non_none_tastes):
+def multiday_decode_groupings_split_identity(epochs_to_analyze,all_dig_in_names,non_none_tastes):
     """
     Create fr vector grouping instructions: list of epoch,taste pairs.
     
@@ -1395,8 +1384,6 @@ def multiday_decode_groupings_split_identity(epochs_to_analyze,all_dig_in_names,
         list of indices of epochs to be analyzed.
     all_dig_in_names: list
         list of strings of taste names across days
-    palatable_dig_inds: list
-        list of indices of tastes that are palatable
     non_none_tastes: list of taste names that are not "none"
     
     Returns

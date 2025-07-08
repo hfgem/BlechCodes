@@ -115,84 +115,162 @@ if len(save_dir) == 0:
             all_data_dict,allow_pickle=True)
 
 #%% import taste response data
+
+import os
+
+current_path = os.path.realpath(__file__)
+blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
+os.chdir(blech_codes_path)
+
+import warnings
+import numpy as np
+import functions.hdf5_handling as hf5
+from tkinter.filedialog import askdirectory
+from itertools import combinations
 from functions.data_description_analysis import run_data_description_analysis
+import functions.compare_datasets_funcs as cdf
+import functions.compare_conditions_funcs as ccf
+import functions.cross_animal_seg_stats as cass
+import functions.cross_animal_taste_stats as cats
+import functions.cross_animal_dev_stats as cads
+import functions.cross_animal_dev_null_plots as cadnp
 import functions.dependent_decoding_funcs as ddf
-    
+
+verbose = False
+
 try:
-    dict_save_dir = os.path.join(save_dir, 'taste_resp_data.npy')
-    taste_data = np.load(dict_save_dir,allow_pickle=True).item()
-    taste_data = taste_data
-    if not os.path.isdir(os.path.join(save_dir,'Taste_Responses')):
-        os.mkdir(os.path.join(save_dir,'Taste_Responses'))
-    taste_results_dir = os.path.join(save_dir,'Taste_Responses')
+    dict_save_dir = os.path.join(save_dir, 'dev_split_decode_data.npy')
+    dev_split_decode_data = np.load(dict_save_dir,allow_pickle=True).item()
+    dev_split_decode_data = dev_split_decode_data
+    if not os.path.isdir(os.path.join(save_dir,'Dev_Split_Decode')):
+        os.mkdir(os.path.join(save_dir,'Dev_Split_Decode'))
+    dev_split_decode_results_dir = os.path.join(save_dir,'Dev_Split_Decode')
 except:
     num_datasets = len(all_data_dict)
     dataset_names = list(all_data_dict.keys())
-    taste_data = dict()
+    dev_split_decode_data = dict()
     for n_i in range(num_datasets):
         data_name = dataset_names[n_i]
         data_dict = all_data_dict[data_name]['data']
         metadata = all_data_dict[data_name]['metadata']
-        data_description_results = run_data_description_analysis([metadata, data_dict])
-        data_dict = data_description_results.data_dict
-        hdf5_dir = metadata['hdf5_dir']
-        data_save_dir = data_dict['data_path']
-        taste_data[data_name] = dict()
-        num_neur = data_dict['num_neur']
-        taste_data[data_name]['num_neur'] = num_neur
+        dev_split_decode_data[data_name] = dict()
+        dev_split_decode_data[data_name]['num_neur'] = data_dict['num_neur']
         segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-        taste_data[data_name]['segments_to_analyze'] = segments_to_analyze
-        segment_names = data_dict['segment_names']
-        taste_data[data_name]['segment_names'] = segment_names
+        dev_split_decode_data[data_name]['segments_to_analyze'] = segments_to_analyze
+        dev_split_decode_data[data_name]['segment_names'] = data_dict['segment_names']
+        segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
         segment_times = data_dict['segment_times']
-        num_segments = len(segment_names)
-        taste_data[data_name]['segment_times_reshaped'] = [
+        num_segments = len(dev_split_decode_data[data_name]['segment_names'])
+        dev_split_decode_data[data_name]['segment_times_reshaped'] = [
             [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
         dig_in_names = data_dict['dig_in_names']
-        taste_data[data_name]['dig_in_names'] = dig_in_names
-        tastant_spike_times = data_dict['tastant_spike_times']
-        taste_data[data_name]['tastant_spike_times'] = tastant_spike_times
-        segment_spike_times = data_dict['segment_spike_times']
-        taste_data[data_name]['segment_spike_times'] = segment_spike_times
-        start_dig_in_times = data_dict['start_dig_in_times']
-        taste_data[data_name]['start_dig_in_times'] = start_dig_in_times
-        taste_data[data_name]['end_dig_in_times'] = data_dict['end_dig_in_times']
-        pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(hdf5_dir, \
-                            'changepoint_data', 'pop_taste_cp_raster_inds')
-        bayes_fr_bins = metadata['params_dict']['bayes_params']['fr_bins']
-        pre_taste = metadata['params_dict']['pre_taste']
-        post_taste = metadata['params_dict']['post_taste']
-        pre_taste_dt = np.ceil(pre_taste*1000).astype('int')
-        post_taste_dt = np.ceil(post_taste*1000).astype('int')
-        bin_time = metadata['params_dict']['bayes_params']['z_score_bin_time']
-        bin_dt = np.ceil(bin_time*1000).astype('int')
-        trial_start_frac = metadata['params_dict']['bayes_params']['trial_start_frac']
-        tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, \
-            min_hz_z_pop = ddf.taste_fr_dist_zscore(num_neur, tastant_spike_times,
-                                                    segment_spike_times, segment_names,
-                                                    segment_times, pop_taste_cp_raster_inds,
-                                                    bayes_fr_bins, start_dig_in_times, 
-                                                    pre_taste_dt, post_taste_dt, 
-                                                    bin_dt, trial_start_frac)
-        taste_data[data_name]['tastant_fr_dist_z_pop'] = tastant_fr_dist_z_pop
-        taste_data[data_name]['taste_num_deliv'] = taste_num_deliv
-        taste_data[data_name]['max_hz_z_pop'] = max_hz_z_pop
-        taste_data[data_name]['min_hz_z_pop'] = min_hz_z_pop
+        dev_split_decode_data[data_name]['dig_in_names'] = dig_in_names
+        data_save_dir = data_dict['data_path']
+        dev_split_save_dir = os.path.join(
+            data_save_dir, 'Deviation_Sequence_Analysis')
+        #Subfolders we care about: corr_tests and decode_splits
+        #First load correlation data
+        try:
+            group_dict = np.load(os.path.join(dev_split_save_dir,'group_dict.npy'),\
+                                 allow_pickle=True).item()
+            allgroups = list(group_dict.keys())
+            dev_split_decode_data[data_name]['groups'] = allgroups
+        except:
+            dev_split_decode_data[data_name]['groups'] = []
+            if verbose == True:
+                print('Missing group dict for ' + data_name)
+        dev_split_dir = os.path.join(dev_split_save_dir,'decode_splits')
+        dev_split_decode_dir = os.path.join(dev_split_dir,'zscore_firing_rates')
+        dev_split_decode_files = os.listdir(dev_split_decode_dir)
+        dev_split_decode_dict_files = []
+        for dev_dec_f in dev_split_decode_files:
+            if dev_dec_f[-4:] == '.npy':
+                dev_split_decode_dict_files.append(dev_dec_f)
+        dev_split_decode_data[data_name]['decode_data'] = dict()
+        for sna in segment_names_to_analyze:
+            dev_split_decode_data[data_name]['decode_data'][sna] = dict()
+        for stat_i, stat_filename in enumerate(dev_split_decode_dict_files):
+            stat_filename_split = (stat_filename.split('.')[0]).split('_')
+            stat_seg = stat_filename_split[0]
+            if stat_filename_split[-1] == 'array': #Probability or argmax array
+                if stat_filename_split[-2] == 'prob': #Probabilities
+                    dev_split_decode_data[data_name]['decode_data'][stat_seg]['probabilities'] = \
+                        np.load(os.path.join(dev_split_decode_dir,stat_filename),allow_pickle=True)
+                elif stat_filename_split[-2] == 'decode': #Argmax
+                    dev_split_decode_data[data_name]['decode_data'][stat_seg]['argmax'] = \
+                        np.load(os.path.join(dev_split_decode_dir,stat_filename),allow_pickle=True)
+            elif stat_filename_split[-1] == 'dict': #Dictionary of counts
+                dev_split_decode_data[data_name]['decode_data'][stat_seg]['group_dict'] = \
+                    np.load(os.path.join(dev_split_decode_dir,stat_filename),allow_pickle=True).item()
         
-    taste_data = taste_data
-    dict_save_dir = os.path.join(save_dir, 'taste_resp_data.npy')
-    np.save(dict_save_dir,taste_data,allow_pickle=True)
-    # Save the combined dataset somewhere...
+    dev_split_decode_data = dev_split_decode_data
+    dict_save_dir = os.path.join(save_dir, 'dev_split_decode_data.npy')
+    np.save(dict_save_dir,dev_split_decode_data,allow_pickle=True)
     # _____Analysis Storage Directory_____
-    if not os.path.isdir(os.path.join(save_dir,'Taste_Responses')):
-        os.mkdir(os.path.join(save_dir,'Taste_Responses'))
-    taste_results_dir = os.path.join(save_dir,'Taste_Responses')
+    if not os.path.isdir(os.path.join(save_dir,'Dev_Split_Decode')):
+        os.mkdir(os.path.join(save_dir,'Dev_Split_Decode'))
+    dev_split_decode_results_dir = os.path.join(save_dir,'Dev_Split_Decode')
+
+#%% find_dev_split_decode_groupings()
+
+unique_given_names = list(dev_split_decode_data.keys())
+unique_given_indices = np.sort(
+    np.unique(unique_given_names, return_index=True)[1])
+unique_given_names = [unique_given_names[i]
+                      for i in unique_given_indices]
+unique_segment_names = []
+unique_taste_names = []
+unique_group_names = []
+unique_group_pair_names = []
+for name in unique_given_names:
+    group_names = list(dev_split_decode_data[name]['groups'])
+    unique_group_names.extend(group_names)
+    segment_names = list(dev_split_decode_data[name]['decode_data'].keys())
+    unique_segment_names.extend(segment_names)
+    for seg_name in segment_names:
+        taste_names = list(dev_split_decode_data[name]['dig_in_names'][:-1])
+        unique_taste_names.extend(taste_names)
+        unique_group_pair_names.extend(list(dev_split_decode_data[name]['decode_data'][seg_name]['group_dict'].keys()))
+        
+unique_segment_indices = np.sort(
+    np.unique(unique_segment_names, return_index=True)[1])
+unique_segment_names = [unique_segment_names[i] for i in unique_segment_indices]
+unique_taste_indices = np.sort(
+    np.unique(unique_taste_names, return_index=True)[1])
+unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
+unique_group_indices = np.sort(
+    np.unique(unique_group_names, return_index=True)[1])
+unique_group_names = [unique_group_names[i] for i in unique_group_indices]
+unique_group_pair_inds = np.sort(
+    np.unique(unique_group_pair_names, return_index=True)[1])
+unique_group_pair_names = [unique_group_pair_names[i] for i in unique_group_pair_inds]
+non_null_groups = [ugn for ugn in unique_group_names if ugn != 'No Taste Control']
+non_null_pairs = list(combinations(np.arange(len(non_null_groups)),2))    
+same_pairs = [(gn_i,gn_i) for gn_i in range(len(non_null_groups))]
+group_pair_dict = dict()
+for nnp_1, nnp_2 in non_null_pairs:
+    name_1 = unique_group_names[nnp_1]
+    name_2 = unique_group_names[nnp_2]
+    name_sort = np.sort([name_1,name_2])
+    group_pair_dict[name_sort[0] + ',' + name_sort[1]] = []
+for sp_1, sp_2 in same_pairs:
+    group_pair_dict[unique_group_names[sp_1] + ',' + unique_group_names[sp_2]] = []
+group_pair_dict['1+ Null'] = []
+group_pair_dict_keys = list(group_pair_dict.keys())
+for ugpn in unique_group_pair_names:
+    ugpn_split = np.sort(ugpn.split(', '))
+    ind = [i for i in range(len(group_pair_dict_keys)) if (',').join(ugpn_split) == group_pair_dict_keys[i]]
+    if len(ind) == 0:
+        group_pair_dict['1+ Null'].append(ugpn)
+    else:
+        group_pair_dict[group_pair_dict_keys[ind[0]]].append(ugpn)
     
-#%% 
+    
+    
+#%% plot results
 
-import functions.cross_animal_taste_stats as cats
+import functions.cross_animal_dev_split_stats as cadss
 
-taste_stats = cats.taste_stat_collection(taste_data, taste_results_dir)
-np.save(os.path.join(taste_results_dir,'taste_stats.npy'),taste_stats,allow_pickle=True)
+num_cond = len(dev_split_decode_data)
+results_dir = dev_split_decode_results_dir
 
-cats.plot_corr_outputs(taste_stats,taste_results_dir)
