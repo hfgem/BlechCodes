@@ -114,7 +114,7 @@ if len(save_dir) == 0:
     np.save(os.path.join(save_dir,'all_data_dict.npy'),\
             all_data_dict,allow_pickle=True)
 
-#%% import taste response data
+#%% import data
 
 import os
 
@@ -139,142 +139,115 @@ import functions.dependent_decoding_funcs as ddf
 verbose = False
 
 try:
-    dict_save_dir = os.path.join(save_dir, 'dev_split_decode_data.npy')
-    dev_split_decode_data = np.load(dict_save_dir,allow_pickle=True).item()
-    dev_split_decode_data = dev_split_decode_data
-    if not os.path.isdir(os.path.join(save_dir,'Dev_Split_Decode')):
-        os.mkdir(os.path.join(save_dir,'Dev_Split_Decode'))
-    dev_split_decode_results_dir = os.path.join(save_dir,'Dev_Split_Decode')
+    dict_save_dir = os.path.join(save_dir, 'dev_split_corr_data.npy')
+    dev_split_corr_data = np.load(dict_save_dir,allow_pickle=True).item()
+    dev_split_corr_data = dev_split_corr_data
+    if not os.path.isdir(os.path.join(save_dir,'Dev_Split_Corr')):
+        os.mkdir(os.path.join(save_dir,'Dev_Split_Corr'))
+    dev_split_corr_results_dir = os.path.join(save_dir,'Dev_Split_Corr')
 except:
     num_datasets = len(all_data_dict)
     dataset_names = list(all_data_dict.keys())
-    dev_split_decode_data = dict()
+    dev_split_corr_data = dict()
     for n_i in range(num_datasets):
         data_name = dataset_names[n_i]
         data_dict = all_data_dict[data_name]['data']
         metadata = all_data_dict[data_name]['metadata']
-        dev_split_decode_data[data_name] = dict()
-        dev_split_decode_data[data_name]['num_neur'] = data_dict['num_neur']
+        dev_split_corr_data[data_name] = dict()
+        dev_split_corr_data[data_name]['num_neur'] = data_dict['num_neur']
         segments_to_analyze = metadata['params_dict']['segments_to_analyze']
-        dev_split_decode_data[data_name]['segments_to_analyze'] = segments_to_analyze
-        dev_split_decode_data[data_name]['segment_names'] = data_dict['segment_names']
+        dev_split_corr_data[data_name]['segments_to_analyze'] = segments_to_analyze
+        dev_split_corr_data[data_name]['segment_names'] = data_dict['segment_names']
         segment_names_to_analyze = np.array(data_dict['segment_names'])[segments_to_analyze]
         segment_times = data_dict['segment_times']
-        num_segments = len(dev_split_decode_data[data_name]['segment_names'])
-        dev_split_decode_data[data_name]['segment_times_reshaped'] = [
+        num_segments = len(dev_split_corr_data[data_name]['segment_names'])
+        dev_split_corr_data[data_name]['segment_times_reshaped'] = [
             [segment_times[i], segment_times[i+1]] for i in range(num_segments)]
         dig_in_names = data_dict['dig_in_names']
-        dev_split_decode_data[data_name]['dig_in_names'] = dig_in_names
+        dev_split_corr_data[data_name]['dig_in_names'] = dig_in_names
         data_save_dir = data_dict['data_path']
         dev_split_save_dir = os.path.join(
             data_save_dir, 'Deviation_Sequence_Analysis')
         #Subfolders we care about: corr_tests and decode_splits
         #First load correlation data
-        try:
-            group_dict = np.load(os.path.join(dev_split_save_dir,'group_dict.npy'),\
-                                 allow_pickle=True).item()
-            allgroups = list(group_dict.keys())
-            dev_split_decode_data[data_name]['groups'] = allgroups
-        except:
-            dev_split_decode_data[data_name]['groups'] = []
-            if verbose == True:
-                print('Missing group dict for ' + data_name)
-        dev_split_dir = os.path.join(dev_split_save_dir,'decode_splits')
-        dev_split_decode_dir = os.path.join(dev_split_dir,'zscore_firing_rates')
-        dev_split_decode_files = os.listdir(dev_split_decode_dir)
-        dev_split_decode_dict_files = []
-        for dev_dec_f in dev_split_decode_files:
-            if dev_dec_f[-4:] == '.npy':
-                dev_split_decode_dict_files.append(dev_dec_f)
-        dev_split_decode_data[data_name]['decode_data'] = dict()
-        for sna in segment_names_to_analyze:
-            dev_split_decode_data[data_name]['decode_data'][sna] = dict()
-        for stat_i, stat_filename in enumerate(dev_split_decode_dict_files):
-            stat_filename_split = (stat_filename.split('.')[0]).split('_')
-            stat_seg = stat_filename_split[0]
-            if stat_filename_split[-1] == 'array': #Probability or argmax array
-                if stat_filename_split[-2] == 'prob': #Probabilities
-                    dev_split_decode_data[data_name]['decode_data'][stat_seg]['probabilities'] = \
-                        np.load(os.path.join(dev_split_decode_dir,stat_filename),allow_pickle=True)
-                elif stat_filename_split[-2] == 'decode': #Argmax
-                    dev_split_decode_data[data_name]['decode_data'][stat_seg]['argmax'] = \
-                        np.load(os.path.join(dev_split_decode_dir,stat_filename),allow_pickle=True)
-            elif stat_filename_split[-1] == 'dict': #Dictionary of counts
-                dev_split_decode_data[data_name]['decode_data'][stat_seg]['group_dict'] = \
-                    np.load(os.path.join(dev_split_decode_dir,stat_filename),allow_pickle=True).item()
+        dev_split_corr_dir = os.path.join(dev_split_save_dir,'corr_tests','zscore_firing_rates')
+        dev_split_corr_files = os.listdir(dev_split_corr_dir)
+        dev_split_corr_dict_files = []
+        for dev_corr_f in dev_split_corr_files:
+            if dev_corr_f[-4:] == '.npy':
+                dev_split_corr_dict_files.append(dev_corr_f)
+        dev_split_corr_data[data_name]['corr_data'] = dict()
+        for stat_i in range(len(dev_split_corr_dict_files)):
+            stat_filename = dev_split_corr_dict_files[stat_i]
+            stat_segment = (stat_filename.split('.')[0]).split('_')[0]
+            dev_split_corr_data[data_name]['corr_data'][stat_segment] = dict()
+            dict_data = np.load(os.path.join(dev_split_corr_dir,stat_filename),allow_pickle=True).item()
+            epoch_pairs = list(dict_data.keys())
+            dev_split_corr_data[data_name]['corr_data'][stat_segment]['epoch_pairs'] = epoch_pairs
+            num_tastes = len(dig_in_names)
+            for t_i, t_name in enumerate(dig_in_names):
+                taste_corr_data = []
+                for ep_i, ep in enumerate(epoch_pairs):
+                    taste_corr_data.append(dict_data[ep]['taste_corrs'][t_i])
+                taste_corr_data = np.array(taste_corr_data)
+                _, num_dev = np.shape(taste_corr_data)
+                dev_split_corr_data[data_name]['corr_data'][stat_segment][t_name] = taste_corr_data
+        #Import hotellings data
+        dev_split_corr_data[data_name]['hotellings'] = []
+        with open(os.path.join(dev_split_corr_dir,'dev_split_sig_hotellings.csv'),'r',newline='') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                dev_split_corr_data[data_name]['hotellings'].append(row)
         
-    dev_split_decode_data = dev_split_decode_data
-    dict_save_dir = os.path.join(save_dir, 'dev_split_decode_data.npy')
-    np.save(dict_save_dir,dev_split_decode_data,allow_pickle=True)
+    dev_split_corr_data = dev_split_corr_data
+    dict_save_dir = os.path.join(save_dir, 'dev_split_corr_data.npy')
+    np.save(dict_save_dir,dev_split_corr_data,allow_pickle=True)
     # _____Analysis Storage Directory_____
-    if not os.path.isdir(os.path.join(save_dir,'Dev_Split_Decode')):
-        os.mkdir(os.path.join(save_dir,'Dev_Split_Decode'))
-    dev_split_decode_results_dir = os.path.join(save_dir,'Dev_Split_Decode')
+    if not os.path.isdir(os.path.join(save_dir,'Dev_Split_Corr')):
+        os.mkdir(os.path.join(save_dir,'Dev_Split_Corr'))
+    dev_split_corr_results_dir = os.path.join(save_dir,'Dev_Split_Corr')
+    
+#%% find split corr groups
 
-#%% find_dev_split_decode_groupings()
-
-unique_given_names = list(dev_split_decode_data.keys())
+unique_given_names = list(dev_split_corr_data.keys())
 unique_given_indices = np.sort(
     np.unique(unique_given_names, return_index=True)[1])
 unique_given_names = [unique_given_names[i]
                       for i in unique_given_indices]
+unique_epoch_pairs = []
 unique_segment_names = []
 unique_taste_names = []
-unique_group_names = []
-unique_group_pair_names = []
 for name in unique_given_names:
-    group_names = list(dev_split_decode_data[name]['groups'])
-    unique_group_names.extend(group_names)
-    segment_names = list(dev_split_decode_data[name]['decode_data'].keys())
+    segment_names = list(dev_split_corr_data[name]['corr_data'].keys())
     unique_segment_names.extend(segment_names)
     for seg_name in segment_names:
-        taste_names = list(dev_split_decode_data[name]['dig_in_names'][:-1])
+        epoch_pairs = dev_split_corr_data[name]['corr_data'][seg_name]['epoch_pairs']
+        unique_epoch_pairs.extend(epoch_pairs)
+        taste_names = list(dev_split_corr_data[name]['corr_data'][seg_name].keys())
+        epoch_pairs_ind = np.where(np.array(taste_names) == 'epoch_pairs')
+        if len(np.shape(np.where(np.array(taste_names) == 'epoch_pairs'))) == 2:
+            taste_names.pop(epoch_pairs_ind[0][0])
+        else:
+            taste_names.pop(epoch_pairs_ind[0])
         unique_taste_names.extend(taste_names)
-        unique_group_pair_names.extend(list(dev_split_decode_data[name]['decode_data'][seg_name]['group_dict'].keys()))
-        
+
+unique_epoch_indices = np.sort(
+    np.unique(unique_epoch_pairs, return_index=True)[1])
+unique_epoch_pairs = [unique_epoch_pairs[i] for i in unique_epoch_indices]
 unique_segment_indices = np.sort(
     np.unique(unique_segment_names, return_index=True)[1])
 unique_segment_names = [unique_segment_names[i] for i in unique_segment_indices]
 unique_taste_indices = np.sort(
     np.unique(unique_taste_names, return_index=True)[1])
 unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
-unique_group_indices = np.sort(
-    np.unique(unique_group_names, return_index=True)[1])
-unique_group_names = [unique_group_names[i] for i in unique_group_indices]
-unique_group_pair_inds = np.sort(
-    np.unique(unique_group_pair_names, return_index=True)[1])
-unique_group_pair_names = [unique_group_pair_names[i] for i in unique_group_pair_inds]
-non_null_groups = [ugn for ugn in unique_group_names if ugn != 'No Taste Control']
-non_null_pairs = list(combinations(np.arange(len(non_null_groups)),2))    
-same_pairs = [(gn_i,gn_i) for gn_i in range(len(non_null_groups))]
-group_pair_dict = dict()
-for nnp_1, nnp_2 in non_null_pairs:
-    name_1 = unique_group_names[nnp_1]
-    name_2 = unique_group_names[nnp_2]
-    name_sort = np.sort([name_1,name_2])
-    group_pair_dict[name_sort[0] + ',' + name_sort[1]] = []
-for sp_1, sp_2 in same_pairs:
-    group_pair_dict[unique_group_names[sp_1] + ',' + unique_group_names[sp_2]] = []
-group_pair_dict['1+ Null'] = []
-group_pair_dict_keys = list(group_pair_dict.keys())
-for ugpn in unique_group_pair_names:
-    ugpn_split = np.sort(ugpn.split(', '))
-    ind = [i for i in range(len(group_pair_dict_keys)) if (',').join(ugpn_split) == group_pair_dict_keys[i]]
-    if len(ind) == 0:
-        group_pair_dict['1+ Null'].append(ugpn)
-    else:
-        group_pair_dict[group_pair_dict_keys[ind[0]]].append(ugpn)
-    
-    
-    
-#%% plot results
 
+#%% plot
+
+num_cond = len(dev_split_corr_data)
+results_dir = dev_split_corr_results_dir
 import functions.cross_animal_dev_split_stats as cadss
 
-num_cond = len(dev_split_decode_data)
-results_dir = dev_split_decode_results_dir
-
-cadss.run_cross_animal_dev_split_decode_analyses(dev_split_decode_data, group_pair_dict,
-                                               unique_given_names,unique_segment_names, 
-                                               unique_taste_names,unique_group_names,
-                                               unique_group_pair_names,results_dir)
+print("Beginning Plots.")
+cadss.run_cross_animal_dev_split_corr_analyses(dev_split_corr_data, unique_given_names,
+                                        unique_segment_names, unique_taste_names,
+                                        unique_epoch_pairs, results_dir)
