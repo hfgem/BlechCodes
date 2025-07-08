@@ -274,3 +274,7 @@ import functions.cross_animal_dev_split_stats as cadss
 num_cond = len(dev_split_decode_data)
 results_dir = dev_split_decode_results_dir
 
+cadss.run_cross_animal_dev_split_decode_analyses(dev_split_decode_data, group_pair_dict,
+                                               unique_given_names,unique_segment_names, 
+                                               unique_taste_names,unique_group_names,
+                                               unique_group_pair_names,results_dir)

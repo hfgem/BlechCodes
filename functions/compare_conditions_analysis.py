@@ -27,6 +27,7 @@ import functions.cross_animal_seg_stats as cass
 import functions.cross_animal_taste_stats as cats
 import functions.cross_animal_dev_stats as cads
 import functions.cross_animal_dev_null_plots as cadnp
+import functions.cross_animal_dev_split_stats as cadss
 import functions.dependent_decoding_funcs as ddf
 
 warnings.filterwarnings("ignore")
@@ -1471,6 +1472,7 @@ class run_compare_conditions_analysis():
         unique_segment_names = []
         unique_taste_names = []
         unique_group_names = []
+        unique_group_pair_names = []
         for name in unique_given_names:
             group_names = list(dev_split_decode_data[name]['groups'])
             unique_group_names.extend(group_names)
@@ -1479,7 +1481,7 @@ class run_compare_conditions_analysis():
             for seg_name in segment_names:
                 taste_names = list(dev_split_decode_data[name]['dig_in_names'][:-1])
                 unique_taste_names.extend(taste_names)
-                
+                unique_group_pair_names.extend(list(dev_split_decode_data[name]['decode_data'][seg_name]['group_dict'].keys()))
                 
         unique_segment_indices = np.sort(
             np.unique(unique_segment_names, return_index=True)[1])
@@ -1490,17 +1492,36 @@ class run_compare_conditions_analysis():
         unique_group_indices = np.sort(
             np.unique(unique_group_names, return_index=True)[1])
         unique_group_names = [unique_group_names[i] for i in unique_group_indices]
-
-        group_pair_inds = list(combinations(np.arange(len(unique_group_names)),2))
-        group_pair_names = []
-        for gp_1, gp_2 in group_pair_inds:
-            group_pair_names.append(unique_group_names[gp_1] + ', ' + unique_group_names[gp_2])
-            
+        unique_group_pair_inds = np.sort(
+            np.unique(unique_group_pair_names, return_index=True)[1])
+        unique_group_pair_names = [unique_group_pair_names[i] for i in unique_group_pair_inds]
+        non_null_groups = [ugn for ugn in unique_group_names if ugn != 'No Taste Control']
+        non_null_pairs = list(combinations(np.arange(len(non_null_groups)),2))    
+        same_pairs = [(gn_i,gn_i) for gn_i in range(len(non_null_groups))]
+        group_pair_dict = dict()
+        for nnp_1, nnp_2 in non_null_pairs:
+            name_1 = unique_group_names[nnp_1]
+            name_2 = unique_group_names[nnp_2]
+            name_sort = np.sort([name_1,name_2])
+            group_pair_dict[name_sort[0] + ',' + name_sort[1]] = []
+        for sp_1, sp_2 in same_pairs:
+            group_pair_dict[unique_group_names[sp_1] + ',' + unique_group_names[sp_2]] = []
+        group_pair_dict['1+ Null'] = []
+        group_pair_dict_keys = list(group_pair_dict.keys())
+        for ugpn in unique_group_pair_names:
+            ugpn_split = np.sort(ugpn.split(', '))
+            ind = [i for i in range(len(group_pair_dict_keys)) if (',').join(ugpn_split) == group_pair_dict_keys[i]]
+            if len(ind) == 0:
+                group_pair_dict['1+ Null'].append(ugpn)
+            else:
+                group_pair_dict[group_pair_dict_keys[ind[0]]].append(ugpn)
+        
         self.unique_given_names = unique_given_names
         self.unique_segment_names = unique_segment_names
         self.unique_taste_names = unique_taste_names
         self.unique_group_names = unique_group_names
-        self.group_pair_names = group_pair_names
+        self.unique_group_pair_names = unique_group_pair_names
+        self.group_pair_dict = group_pair_dict
 
     def plot_dev_split_decode_results(self,):
         num_cond = len(self.dev_split_decode_data)
@@ -1508,9 +1529,11 @@ class run_compare_conditions_analysis():
 
         print("Beginning Plots.")
         if num_cond > 1:
-            cdf.cross_dataset_dev_split_decode_frac_plots(self.dev_split_decode_data, self.unique_given_names,
-                                                        self.unique_segment_names, self.unique_taste_names, 
-                                                        self.decode_types, results_dir)
+            cadss.run_cross_animal_dev_split_decode_analyses(self.dev_split_decode_data, self.group_pair_dict,
+                                                           self.unique_given_names,self.unique_segment_names, 
+                                                           self.unique_taste_names,self.unique_group_names,
+                                                           self.unique_group_pair_names,results_dir)
+
         else:
             print("Not enough animals for cross-animal dev stat plots.")
             

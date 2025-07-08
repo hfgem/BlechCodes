@@ -6,6 +6,7 @@ Created on Tue Jul  8 10:32:16 2025
 @author: hannahgermaine
 """
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
@@ -59,33 +60,39 @@ def cross_dataset_dev_split_decode_rate_plots(dev_split_decode_data, group_pair_
         group_pair_rates = []
         group_pair_totals = []
         for gp_i, gp in enumerate(group_pair_dict_keys):
+            key_options = group_pair_dict[gp]
             gp_rates = []
             gp_counts = []
             for gn_i, gn in enumerate(unique_given_names):
+                anim_gp_counts = []
                 num_dev, _ = np.shape(dev_split_decode_data[gn]['decode_data'][sn]['argmax'])
-                try:
-                    gp_counts.append(dev_split_decode_data[gn]['decode_data'][sn]['group_dict'][gp]['count'])
-                    gp_rates.append(dev_split_decode_data[gn]['decode_data'][sn]['group_dict'][gp]['count']/num_dev)
-                except:
-                    gp_counts.extend([])
-                    gp_rates.extend([])
-                    if verbose == True:
-                        print('Missing data for ' + gn + ' ' + sn + ' ' + gp)
+                for ko in key_options:
+                    try:
+                        anim_gp_counts.append(dev_split_decode_data[gn]['decode_data'][sn]['group_dict'][ko]['count'])
+                    except:
+                        anim_gp_counts.extend([])
+                gp_rates.append(np.nansum(anim_gp_counts)/num_dev)
+                gp_counts.append(np.nansum(anim_gp_counts))
             group_pair_rates.append(gp_rates)
             group_pair_totals.append(np.nansum(np.array(gp_counts)))
-            x_scat = 1 + gp_i + 0.1*np.random.randn(len(gp_rates))
-            ax_pair_rates[sn_i].scatter(x_scat,np.array(gp_rates),alpha=0.25,\
-                                        color='g')
+        group_pair_rate_medians = [np.nanmedian(gpr) for gpr in group_pair_rates]
+        rate_order = np.argsort(group_pair_rate_medians)[::-1]
+        reordered_rates = [group_pair_rates[i] for i in rate_order]
+        reordered_names = [group_pair_dict_keys[i] for i in rate_order]
         #Box plots
-        f_box = plt.figure(figsize=(8,8))
-        plt.boxplot(group_pair_rates)
+        f_box = plt.figure(figsize=(8,5))
+        for rr_i, rr in enumerate(reordered_rates):
+            x_scat = 1 + rr_i + 0.1*np.random.randn(len(rr))
+            plt.scatter(x_scat,rr,alpha=0.25,\
+                                        color='g')
+        plt.boxplot(reordered_rates)
         plt.xticks(np.arange(num_group_pairs) + 1,\
-                                       group_pair_dict_keys,ha = 'right',\
+                                       reordered_names,ha = 'right',\
                                            rotation=45)
         plt.title(sn + ' decode rates')
         plt.tight_layout()
-        # f_box.savefig(os.path.join(results_dir,sn + '_decode_rates_box.png'))
-        # f_box.savefig(os.path.join(results_dir,sn + '_decode_rates_box.svg'))
+        f_box.savefig(os.path.join(results_dir,sn + '_decode_rates_box.png'))
+        f_box.savefig(os.path.join(results_dir,sn + '_decode_rates_box.svg'))
         #Pie plots
         summed_rates = np.array(group_pair_totals)
         f_pie = plt.figure(figsize=(8,8))
@@ -93,5 +100,5 @@ def cross_dataset_dev_split_decode_rate_plots(dev_split_decode_data, group_pair_
         plt.title(sn + ' total rates')
         plt.legend(labels=group_pair_dict_keys,loc='best')
         plt.tight_layout()
-        # f_pie.savefig(os.path.join(results_dir,sn + '_decode_rates_pie.png'))
-        # f_pie.savefig(os.path.join(results_dir,sn + '_decode_rates_pie.svg'))
+        f_pie.savefig(os.path.join(results_dir,sn + '_decode_rates_pie.png'))
+        f_pie.savefig(os.path.join(results_dir,sn + '_decode_rates_pie.svg'))
