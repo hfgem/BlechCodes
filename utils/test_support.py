@@ -62,7 +62,8 @@ data_dict['segment_spike_times'] = segment_spike_times
 data_dict['tastant_spike_times'] = tastant_spike_times
 
 
-# function imports
+# imports and setup
+
 import os
 import tqdm
 import gzip
@@ -70,22 +71,21 @@ import json
 import numpy as np
 
 current_path = os.path.realpath(__file__)
-blech_codes_path = '/'.join(current_path.split('/')[:-2]) + '/'
+blech_codes_path = ('/').join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
-from utils.input_funcs import *
+import functions.analysis_funcs as af
+import functions.decoding_funcs as df
+import functions.dev_sequence_funcs as dsf
 import functions.dependent_decoding_funcs as ddf
-import functions.plot_dev_decoding_funcs as pddf
 import functions.dev_funcs as dev_f
 import functions.hdf5_handling as hf5
 
-# gather_variables()
-
-# Directories
 hdf5_dir = metadata['hdf5_dir']
-bayes_dir = os.path.join(metadata['dir_name'],'Deviation_Dependent_Decoding')
-if os.path.isdir(bayes_dir) == False:
-    os.mkdir(bayes_dir)
+seq_dir = os.path.join(metadata['dir_name'],
+    'Deviation_Sequence_Analysis/')
+if os.path.isdir(seq_dir) == False:
+    os.mkdir(seq_dir)
 dev_dir = os.path.join(metadata['dir_name'],'Deviations')
 # General Params/Variables
 num_neur = data_dict['num_neur']
@@ -107,16 +107,15 @@ tastant_spike_times = data_dict['tastant_spike_times']
 start_dig_in_times = data_dict['start_dig_in_times']
 end_dig_in_times = data_dict['end_dig_in_times']
 dig_in_names = data_dict['dig_in_names']
-#Ask for user input on which dig-ins are palatable
-print("\nUSER INPUT REQUESTED: Mark which tastants are palatable.\n")
-palatable_dig_inds = select_analysis_groups(dig_in_names)
 num_tastes = len(dig_in_names)
-min_dev_size = metadata['params_dict']['min_dev_size']
-# Decoding Params/Variables
+fr_bins = metadata['params_dict']['fr_bins']
+#Bayes Params/Variables
+skip_time = metadata['params_dict']['bayes_params']['skip_time']
+skip_dt = np.ceil(skip_time*1000).astype('int')
 e_skip_time = metadata['params_dict']['bayes_params']['e_skip_time']
 e_skip_dt = np.ceil(e_skip_time*1000).astype('int')
 taste_e_len_time = metadata['params_dict']['bayes_params']['taste_e_len_time']
-taste_e_len_dt = np.ceil(taste_e_len_time*1000).astype('int')
+taste_e_len_dt = np.ceil(taste_e_len_time*1000).astype('int') 
 seg_e_len_time = metadata['params_dict']['bayes_params']['seg_e_len_time']
 seg_e_len_dt = np.ceil(seg_e_len_time*1000).astype('int') 
 bayes_fr_bins = metadata['params_dict']['bayes_params']['fr_bins']
@@ -127,13 +126,13 @@ trial_start_frac = metadata['params_dict']['bayes_params']['trial_start_frac']
 decode_prob_cutoff = metadata['params_dict']['bayes_params']['decode_prob_cutoff']
 bin_time = metadata['params_dict']['bayes_params']['z_score_bin_time']
 bin_dt = np.ceil(bin_time*1000).astype('int')
+num_null = 100 #metadata['params_dict']['num_null']
 # Import changepoint data
 pop_taste_cp_raster_inds = hf5.pull_data_from_hdf5(
     hdf5_dir, 'changepoint_data', 'pop_taste_cp_raster_inds')
-pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
 num_pt_cp = num_cp + 2
 
-# import_deviations()
+# import deviations
 
 print("\tNow importing calculated deviations")
 
@@ -145,8 +144,8 @@ segment_spike_times_to_analyze = [segment_spike_times[i] for i in segments_to_an
 
 segment_deviations = []
 for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
-    filepath = dev_dir + \
-        segment_names_to_analyze[s_i] + '/deviations.json'
+    filepath = os.path.join(dev_dir,segment_names_to_analyze[s_i],\
+                            'deviations.json')
     with gzip.GzipFile(filepath, mode="r") as f:
         json_bytes = f.read()
         json_str = json_bytes.decode('utf-8')
@@ -155,67 +154,45 @@ for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
 
 print("\tNow pulling true deviation rasters")
 segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
-    segment_dev_fr_vecs_zscore, _, _ = dev_f.create_dev_rasters(num_seg_to_analyze, 
-                                                        segment_spike_times_to_analyze,
-                                                        np.array(segment_times_to_analyze_reshaped),
-                                                        segment_deviations, pre_taste)
-
-# pull_fr_dist()
-
-print("\tPulling FR Distributions")
-tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(num_neur, tastant_spike_times,
-                                                                	 pop_taste_cp_raster_inds, bayes_fr_bins,
-                                                                	 start_dig_in_times, pre_taste_dt,
-                                                                	 post_taste_dt, trial_start_frac)
+    segment_dev_fr_vecs_zscore, segment_zscore_means, segment_zscore_stds \
+        = dev_f.create_dev_rasters(num_seg_to_analyze,
+                    segment_spike_times_to_analyze, 
+                    np.array(segment_times_to_analyze_reshaped),
+                    segment_deviations, pre_taste)
+        
+print("\tPulling taste rasters")
+tastant_raster_dict = af.taste_response_rasters(num_tastes, num_neur, 
+                           tastant_spike_times, start_dig_in_times, 
+                           pop_taste_cp_raster_inds, pre_taste_dt)
+tastant_raster_dict = tastant_raster_dict
 
 tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(num_neur, tastant_spike_times,
                                                                                         	  segment_spike_times, segment_names,
                                                                                         	  segment_times, pop_taste_cp_raster_inds,
                                                                                         	  bayes_fr_bins, start_dig_in_times, pre_taste_dt,
                                                                                         	  post_taste_dt, bin_dt, trial_start_frac)
-# decode_groups()
+tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
+max_hz_z_pop = max_hz_z_pop
+min_hz_z_pop = min_hz_z_pop
 
+# Analyze sequences
+
+print("Determine decoding groups")
+#Create fr vector grouping instructions: list of epoch,taste pairs
 non_none_tastes = [taste for taste in dig_in_names if taste[:4] != 'none']
+non_none_tastes = non_none_tastes
 group_list, group_names = ddf.decode_groupings(epochs_to_analyze,
                                                dig_in_names,
-                                               palatable_dig_inds,
                                                non_none_tastes)
+#Save the group information for cross-animal use 
+group_dict = dict()
+for gn_i, gn in enumerate(group_names):
+    group_dict[gn] = group_list[gn_i]
+np.save(os.path.join(seq_dir,'group_dict.npy'),group_dict,allow_pickle=True)
 
-# decoder vars
-print("\tRun z-scored data decoder pipeline")
-decode_dir = bayes_dir + 'All_Neurons_Z_Scored/'
-if os.path.isdir(decode_dir) == False:
-    os.mkdir(decode_dir)
-z_score = True
-tastant_fr_dist = tastant_fr_dist_z_pop
-dev_vecs = segment_dev_fr_vecs_zscore
-
-# accuracy test
-print("\t\tRunning decoder accuracy tests.")
-ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times, 
-                dig_in_names, segment_times, segment_names, 
-                start_dig_in_times, taste_num_deliv, 
-                group_list, group_names, non_none_tastes, 
-                decode_dir, bin_dt, z_score, 
-                epochs_to_analyze, segments_to_analyze)
-
-#%% sliding bin decode
-
-print("\tDecoding sliding bins of rest intervals z-scored.") 
-ddf.decode_sliding_bins(tastant_fr_dist, segment_spike_times, 
-                        dig_in_names, palatable_dig_inds,
-                        segment_times, segment_names, 
-                        start_dig_in_times, taste_num_deliv, 
-                        bin_dt, group_list, group_names, 
-                        non_none_tastes, decode_dir, z_score, 
-                        epochs_to_analyze, segments_to_analyze)
-
-# decode deviation events
-print("\t\tDecoding deviation events.")
-ddf.decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times, dig_in_names, 
-                  segment_times, segment_names, start_dig_in_times, taste_num_deliv,
-                  segment_dev_times, dev_vecs, bin_dt, 
-                  group_list, group_names, non_none_tastes, decode_dir, 
-                  z_score, epochs_to_analyze, segments_to_analyze)
-
-
+dsf.split_match_calc(num_neur,segment_dev_rasters,segment_zscore_means,
+                     segment_zscore_stds,taste_num_deliv,tastant_raster_dict,
+                     tastant_fr_dist_z_pop,dig_in_names,segment_names,
+                     segment_times,segment_spike_times,bin_dt,num_null,
+                     group_list,group_names,non_none_tastes,seq_dir,
+                     segments_to_analyze,epochs_to_analyze)

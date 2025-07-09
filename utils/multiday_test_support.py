@@ -279,16 +279,26 @@ print("Determine decoding groups")
 #Create fr vector grouping instructions: list of epoch,taste pairs
 non_none_tastes = [taste for taste in all_dig_in_names if taste[:4] != 'none']
 non_none_tastes = non_none_tastes
-group_list, group_names = ddf.multiday_decode_groupings(day_vars[0]['epochs_to_analyze'],
-                                               all_dig_in_names,
-                                               palatable_dig_inds,
-                                               non_none_tastes)
+# group_list, group_names = ddf.multiday_decode_groupings(day_vars[0]['epochs_to_analyze'],
+#                                                 all_dig_in_names,
+#                                                 non_none_tastes)
+group_list, group_names = ddf.multiday_decode_groupings_split_identity(day_vars[0]['epochs_to_analyze'],
+                                                all_dig_in_names,
+                                                
+                                                non_none_tastes)
 
 # decode_zscored()
 
-decode_dir = os.path.join(bayes_dir,'All_Neurons_Z_Scored')
+decode_dir = os.path.join(bayes_dir,'split_identity_test') #All_Neurons_Z_Scored #split_identity_test
 if os.path.isdir(decode_dir) == False:
     os.mkdir(decode_dir)
+
+#Save the group information for cross-animal use 
+group_dict = dict()
+for gn_i, gn in enumerate(group_names):
+    group_dict[gn] = group_list[gn_i]
+np.save(os.path.join(decode_dir,'group_dict.npy'),group_dict,allow_pickle=True)
+
 z_score = True
 tastant_fr_dist = tastant_fr_dist_z_pop
 dev_vecs = segment_dev_fr_vecs_zscore
@@ -301,12 +311,12 @@ epochs_to_analyze = day_vars[0]['epochs_to_analyze']
 segments_to_analyze = day_vars[0]['segments_to_analyze']
 
 # # decoder_accuracy()
-ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times, 
-                all_dig_in_names, segment_times, segment_names, 
-                start_dig_in_times, taste_num_deliv,
-                group_list, group_names, non_none_tastes, 
-                decode_dir, bin_dt, z_score, 
-                epochs_to_analyze, segments_to_analyze)
+# ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times, 
+#                 all_dig_in_names, segment_times, segment_names, 
+#                 start_dig_in_times, taste_num_deliv,
+#                 group_list, group_names, non_none_tastes, 
+#                 decode_dir, bin_dt, z_score, 
+#                 epochs_to_analyze, segments_to_analyze)
 
 # # decode_sliding_bins()
 # ddf.decode_sliding_bins(tastant_fr_dist, segment_spike_times, all_dig_in_names, 
@@ -314,7 +324,7 @@ ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times,
 #                   bin_dt, group_list, group_names, non_none_tastes, decode_dir, 
 #                   z_score, segments_to_analyze)
 
-# decode_deviations()
+# # decode_deviations()
 ddf.decode_deviations(tastant_fr_dist, tastant_spike_times,
                       segment_spike_times, all_dig_in_names, 
                       segment_times, segment_names, 

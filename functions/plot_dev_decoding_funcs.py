@@ -135,7 +135,7 @@ def plot_decode_trends(num_groups, grouped_train_names, segments_to_analyze,
 
 def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times, 
                  dig_in_names, segment_times, segment_names, start_dig_in_times, 
-                 taste_num_deliv, segment_dev_times, segment_dev_fr_vecs, bin_dt, 
+                 taste_num_deliv, segment_dev_times, dev_vecs, bin_dt, 
                  num_groups, grouped_train_names, grouped_train_data, 
                  non_none_tastes, decode_save_dir, 
                  z_score = False, epochs_to_analyze=[], segments_to_analyze=[]):
@@ -148,10 +148,18 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
     num_cp = len(tastant_fr_dist[0][0])
     num_segments = len(segment_spike_times)
     #p_taste = taste_num_deliv/np.sum(taste_num_deliv)  # P(taste)
-    cmap = colormaps['gist_rainbow']
+    cmap = colormaps['turbo']
     group_colors = cmap(np.linspace(0, 1, num_groups))
     dev_buffer = 50
     half_bin_dt = np.floor(bin_dt/2).astype('int')
+    
+    plot_groups = []
+    for i in range(num_groups):
+        if grouped_train_names[i] != 'Presence':
+            if grouped_train_names[i] != 'Palatability':
+                if grouped_train_names[i] != 'No Taste Control':
+                    if grouped_train_names[i] != 'Null':
+                        plot_groups.append(i)
     
     # if len(epochs_to_analyze) == 0:
     #     epochs_to_analyze = np.arange(num_cp)
@@ -202,22 +210,31 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
         print('\t\t\tPlotting Decoding for Segment ' + str(s_i))
         seg_decode_save_dir = os.path.join(decode_save_dir,
             'segment_' + str(s_i) + '/')
-        dev_decode_prob_argmax = np.load( os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
+        dev_decode_prob_array = np.load( os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
                       '_deviation_decodes.npy'))
-        pre_dev_decode_prob_argmax = np.load(
+        pre_dev_decode_prob_array = np.load(
             os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
                          '_pre_deviations_decodes.npy'))
-        post_dev_decode_prob_argmax = np.load(
+        post_dev_decode_prob_array = np.load(
             os.path.join(seg_decode_save_dir,'segment_' + str(s_i) + \
                          '_post_deviations_decodes.npy'))
-
+        if len(np.shape(dev_decode_prob_array)) > 1:
+            dev_decode_prob_argmax = np.argmax(dev_decode_prob_array,1)
+            pre_dev_decode_prob_argmax = np.argmax(pre_dev_decode_prob_array,1)
+            post_dev_decode_prob_argmax = np.argmax(post_dev_decode_prob_array,1)
+            prob_flag = 1
+        else:
+            dev_decode_prob_argmax = dev_decode_prob_array
+            pre_dev_decode_prob_argmax = pre_dev_decode_prob_array
+            post_dev_decode_prob_argmax = post_dev_decode_prob_array
+            prob_flag = 0
+        
         #Create plot save dir
         seg_plot_save = os.path.join(seg_decode_save_dir,'indiv_events')
         if not os.path.isdir(seg_plot_save):
             os.mkdir(seg_plot_save)
         
         num_dev = len(dev_decode_prob_argmax)
-        plot_inds = np.sort(random.sample(list(np.arange(num_dev)),50))
         
         seg_start = segment_times[s_i]
         seg_end = segment_times[s_i+1]
@@ -286,23 +303,26 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
                 firing_rate_vec[dpt_ind] = np.sum(spikes_i)/((max_t_i-min_t_i)/1000)/num_neur
             
             #Collect deviation FR vals
-            dev_fr_vec = segment_dev_fr_vecs[seg_ind][dev_i]
+            dev_fr_vec = dev_vecs[seg_ind][dev_i]
             
             #Reshape decoding probabilities for plotting
-            decoding_array = np.zeros((num_groups,d_plot_len))
-            decoding_array[pre_dev_decoded_ind,0:dev_buffer] = 1
-            decoding_array[decoded_group_ind,dev_buffer:dev_buffer + dev_len] = 1
-            decoding_array[post_dev_decoded_ind,-dev_buffer:] = 1
-            
+            if prob_flag == 0:
+                decoding_array = np.zeros((num_groups,d_plot_len))
+                decoding_array[pre_dev_decoded_ind,0:dev_buffer] = 1
+                decoding_array[decoded_group_ind,dev_buffer:dev_buffer + dev_len] = 1
+                decoding_array[post_dev_decoded_ind,-dev_buffer:] = 1
+            else:
+                decoding_array = np.zeros((num_groups,d_plot_len))
+                decoding_array[:,0:dev_buffer] = np.expand_dims(pre_dev_decode_prob_array[dev_i,:],1)*np.ones((num_groups,dev_buffer))
+                decoding_array[:,dev_buffer:dev_buffer + dev_len] = np.expand_dims(dev_decode_prob_array[dev_i,:],1)*np.ones((num_groups,dev_len))
+                decoding_array[:,-dev_buffer:] = np.expand_dims(post_dev_decode_prob_array[dev_i,:],1)*np.ones((num_groups,dev_buffer))
+                
             #Calculate correlation to mean taste responses
             corr_dev_event = np.array([pearsonr(all_group_fr_vecs_mean[g_i], dev_fr_vec)[
                                          0] for g_i in range(num_groups)])
             dev_group_corrs[:,dev_i] = corr_dev_event
             
-            if len(np.where(plot_inds == dev_i)[0])>0: 
-                corr_title = [grouped_train_names[g_i] + ' corr = ' + str(
-                    np.round(corr_dev_event[g_i], 2)) for g_i in range(num_groups)]
-                
+            if (np.argmax(corr_dev_event) == decoded_group_ind) and (len(np.intersect1d(plot_groups,decoded_group_ind))>0):
                 #Start Figure
                 f, ax = plt.subplots(nrows=4, ncols=2, figsize=(
                     10, 10), gridspec_kw=dict(height_ratios=[1, 1, 2, 2]))
@@ -349,19 +369,23 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
                 ax[1, 1].set_ylabel('FR (Hz)')
                 ax[1, 1].set_xlabel('Time from Deviation (ms)')
                 # Decoded Firing Rates
-                img = ax[2, 0].imshow(np.expand_dims(dev_fr_vec, 0))
+                # dev_fr_vec_z = (dev_fr_vec - np.nanmean(dev_fr_vec))/np.nanstd(dev_fr_vec)
+                # img = ax[2, 0].imshow(np.expand_dims(dev_fr_vec_z, 0))
+                img = ax[2, 0].imshow(np.expand_dims(dev_fr_vec, 0),cmap='cividis')
                 ax[2, 0].set_xlabel('Neuron Index')
-                ax[2, 0].set_yticks(ticks=[])
+                ax[2, 0].set_yticks([0],['DE'])
                 plt.colorbar(img, ax=ax[2,0], location='bottom', \
                              orientation='horizontal',label='Firing Rate (Hz)', \
                                  panchor=(0.9,0.5))
                 ax[2, 0].set_title('Event FR')
                 # Taste Firing Rates
                 # vmax=np.max([taste_fr_vecs_max_hz,d_fr_vec_max_hz]))
-                img = ax[3, 0].imshow(np.expand_dims(
-                    all_group_fr_vecs_mean[decoded_group_ind], 0))
+                # taste_fr_vec_z = (np.array(all_group_fr_vecs_mean) - np.expand_dims(np.nanmean(all_group_fr_vecs_mean,1),1))/np.expand_dims(np.nanstd(all_group_fr_vecs_mean,1),1)
+                # img = ax[3, 0].imshow(taste_fr_vec_z,aspect='auto')
+                img = ax[3, 0].imshow(np.array(all_group_fr_vecs_mean),aspect='auto',\
+                                      cmap='cividis')
                 ax[3, 0].set_xlabel('Neuron Index')
-                ax[3, 0].set_yticks(ticks=[])
+                ax[3, 0].set_yticks(np.arange(num_groups),grouped_train_names)
                 plt.colorbar(img, ax=ax[3, 0], location='bottom', \
                              orientation='horizontal', label='Firing Rate (Hz)', \
                                  panchor=(0.9, 0.5))
@@ -374,9 +398,13 @@ def plot_decoded(tastant_fr_dist, tastant_spike_times, segment_spike_times,
                 ax[2, 1].set_xlabel('Average Group FR')
                 ax[2, 1].set_ylabel('Dev FR')
                 ax[2, 1].set_title('Firing Rate Similarity')
-                ax[3, 1].remove()
+                #Plot correlation to each group
+                ax[3,1].scatter(np.arange(num_groups),corr_dev_event)
+                ax[3,1].set_xticks(np.arange(num_groups),grouped_train_names,\
+                                   rotation=45)
+                ax[3,1].set_ylabel('Correlation Coefficient')
+                ax[3,1].set_title('Pearson Correlation to Each Group Avg')
                 # Final Cleanup
-                plt.suptitle(corr_title, wrap=True)
                 plt.tight_layout()
                 # Save Figure
                 f.savefig(os.path.join(

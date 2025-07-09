@@ -100,8 +100,8 @@ class run_deviation_sequence_analysis():
         
         segment_deviations = []
         for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
-            filepath = self.dev_dir + \
-                segment_names_to_analyze[s_i] + '/deviations.json'
+            filepath = os.path.join(self.dev_dir,segment_names_to_analyze[s_i],\
+                                    'deviations.json')
             with gzip.GzipFile(filepath, mode="r") as f:
                 json_bytes = f.read()
                 json_str = json_bytes.decode('utf-8')
@@ -130,14 +130,14 @@ class run_deviation_sequence_analysis():
                                    self.pop_taste_cp_raster_inds, self.pre_taste_dt)
         self.tastant_raster_dict = tastant_raster_dict
         
-        print("\tPulling FR Distributions")
-        tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur, self.tastant_spike_times,
-                                                                        	 self.pop_taste_cp_raster_inds, self.bayes_fr_bins,
-                                                                        	 self.start_dig_in_times, self.pre_taste_dt,
-                                                                        	 self.post_taste_dt, self.trial_start_frac)
-        self.tastant_fr_dist_pop = tastant_fr_dist_pop
-        self.taste_num_deliv = taste_num_deliv
-        self.max_hz_pop = max_hz_pop
+        # print("\tPulling FR Distributions")
+        # tastant_fr_dist_pop, taste_num_deliv, max_hz_pop = ddf.taste_fr_dist(self.num_neur, self.tastant_spike_times,
+        #                                                                 	 self.pop_taste_cp_raster_inds, self.bayes_fr_bins,
+        #                                                                 	 self.start_dig_in_times, self.pre_taste_dt,
+        #                                                                 	 self.post_taste_dt, self.trial_start_frac)
+        # self.tastant_fr_dist_pop = tastant_fr_dist_pop
+        # self.taste_num_deliv = taste_num_deliv
+        # self.max_hz_pop = max_hz_pop
         tastant_fr_dist_z_pop, taste_num_deliv, max_hz_z_pop, min_hz_z_pop = ddf.taste_fr_dist_zscore(self.num_neur, self.tastant_spike_times,
                                                                                                 	  self.segment_spike_times, self.segment_names,
                                                                                                 	  self.segment_times, self.pop_taste_cp_raster_inds,
@@ -146,6 +146,23 @@ class run_deviation_sequence_analysis():
         self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
         self.max_hz_z_pop = max_hz_z_pop
         self.min_hz_z_pop = min_hz_z_pop
+        
+    def decode_groups(self,):
+        print("Determine decoding groups")
+        #Create fr vector grouping instructions: list of epoch,taste pairs
+        non_none_tastes = [taste for taste in self.dig_in_names if taste[:4] != 'none']
+        self.non_none_tastes = non_none_tastes
+        group_list, group_names = ddf.decode_groupings(self.epochs_to_analyze,
+                                                       self.dig_in_names,
+                                                       self.non_none_tastes)
+        #Save the group information for cross-animal use 
+        group_dict = dict()
+        for gn_i, gn in enumerate(group_names):
+            group_dict[gn] = group_list[gn_i]
+        np.save(os.path.join(self.seq_dir,'group_dict.npy'),group_dict,allow_pickle=True)
+
+        self.group_list = group_list
+        self.group_names = group_names
         
     def analyze_sequences(self,):
         print("Analyzing deviation sequences")
@@ -158,8 +175,9 @@ class run_deviation_sequence_analysis():
         #                    self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)
         dsf.split_match_calc(self.num_neur, self.segment_dev_rasters,
                            self.segment_zscore_means,self.segment_zscore_stds,
-                           self.tastant_raster_dict,
-                           self.tastant_fr_dist_pop,self.tastant_fr_dist_z_pop,
-                           self.dig_in_names,self.segment_names,self.segment_times,
+                           self.taste_num_deliv,self.tastant_raster_dict,
+                           self.tastant_fr_dist_z_pop,self.dig_in_names,
+                           self.segment_names,self.segment_times,
                            self.segment_spike_times,self.bin_dt,self.num_null,
+                           self.group_list,self.group_names,self.non_none_tastes,
                            self.seq_dir,self.segments_to_analyze,self.epochs_to_analyze)
