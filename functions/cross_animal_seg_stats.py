@@ -12,7 +12,7 @@ import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
-from scipy.stats import f_oneway, ttest_ind, mannwhitneyu
+from scipy.stats import f_oneway, ttest_ind, mannwhitneyu, ks_2samp
 from itertools import combinations
 
 def seg_stat_collection(all_data_dict):
@@ -79,16 +79,15 @@ def seg_stat_collection(all_data_dict):
                 n_isis = np.diff(n_seg_spike_times)
                 isi_zscore = (n_isis - np.nanmean(n_isis))/np.nanstd(n_isis)
                 super_outliers = np.where(isi_zscore > 10)[0]
-                if len(super_outliers) > 0: #Plot/remove the extreme outliers - neuron signal loss?
-                    plt.figure()    
-                    plt.plot(n_isis)
-                    plt.title(gn + ' ' + s_name + ' ' + str(n_i))
-                isis_cleaned = n_isis[n_isis < 60*1000]
+                # if len(super_outliers) > 0: #Plot the extreme outliers - neuron signal loss?
+                #     plt.figure()    
+                #     plt.plot(n_isis)
+                #     plt.title(gn + ' ' + s_name + ' ' + str(n_i))
                 isis[gn][s_name][n_i] = n_isis
                 cvs[gn][s_name][n_i] = np.nanstd(n_isis)/np.nanmean(n_isis)
             #Calculate population rate
             spike_sum = np.nansum(spike_rast,0)
-            pop_rate = np.array([np.sum(spike_sum[i:i+bin_size])/(bin_size/1000) for i in np.arange(0,s_len-bin_size,skip_size)])
+            pop_rate = np.array([np.sum(spike_sum[i:i+bin_size])/(bin_size/1000)/num_neur for i in np.arange(0,s_len-bin_size,skip_size)])
             pop_rates[gn][s_name] = pop_rate
 
     all_segment_names = np.array(all_segment_names)
@@ -142,11 +141,15 @@ def neur_rate_analysis_plots(unique_given_names,unique_segment_names,\
     num_anim = len(unique_given_names)
     cmap = colormaps['gist_rainbow']
     anim_colors = cmap(np.linspace(0, 1, num_anim))
-    num_seg = len(unique_segment_names)
-    
+    num_seg = len(segments_to_analyze)
+    seg_pairs = list(combinations(np.arange(num_seg), 2))
+
     #Collect neuron rate significance and CV
-    mean_sig_table = [['Animal Name','ANOVA p', 'Mean Order']]
-    seg_cv_table = np.zeros((num_anim,num_seg))
+    mean_sig_table = [['Animal Name', 'ANOVA p', 'Mean Order']]
+    seg_cv_table = np.zeros((num_anim, num_seg))
+    pairwise_sig_data = dict()
+    for sp_i in range(len(seg_pairs)):
+        pairwise_sig_data[seg_pairs[sp_i]] = np.zeros(num_anim)
     all_anim_means = []
     all_anim_stds = []
     for gn_i, gn in enumerate(unique_given_names):
@@ -175,16 +178,24 @@ def neur_rate_analysis_plots(unique_given_names,unique_segment_names,\
         mean_ascend = np.argsort(combined_seg_means)
         mean_text = unique_segment_names[segments_to_analyze[0]]
         for s_ind in mean_ascend[1:]:
-            mean_text += ' < ' + unique_segment_names[segments_to_analyze[s_ind]]
+            mean_text += ' < ' + \
+                unique_segment_names[segments_to_analyze[s_ind]]
         anim_sig.append(mean_text)
         mean_sig_table.append(anim_sig)
+        #Test pairwise ttest
+        for sp_i in range(len(seg_pairs)):
+            sp_1, sp_2 = seg_pairs[sp_i]
+            result = ttest_ind(all_seg_means[sp_1], all_seg_means[sp_2])
+            pairwise_sig_data[seg_pairs[sp_i]][gn_i] = result.pvalue
     #Save significance results
-    with open(os.path.join(seg_stat_save_dir,'seg_neur_mean_rate_dist_sig.csv'), 'w', newline='') as csvfile:
+    with open(os.path.join(seg_stat_save_dir, 'seg_neur_mean_rate_dist_sig.csv'), 'w', newline='') as csvfile:
         csv_writer = csv.writer(csvfile)
         csv_writer.writerows(mean_sig_table)
-        
+    np.save(os.path.join(seg_stat_save_dir, 'seg_neur_mean_rate_ttest_pair.npy'),
+            pairwise_sig_data, allow_pickle=True)
+
     #Plot neuron rates
-    f_neur_fr_std = plt.figure(figsize=(5,5))
+    f_neur_fr_std = plt.figure(figsize=(5, 5))
     joint_seg_stds = []
     for s_ind, s_i in enumerate(segments_to_analyze):
         seg_name = unique_segment_names[s_i]
@@ -192,23 +203,44 @@ def neur_rate_analysis_plots(unique_given_names,unique_segment_names,\
         for gn_i, gn in enumerate(unique_given_names):
             seg_stds.extend(list(all_anim_stds[gn_i][s_ind]))
         joint_seg_stds.append(seg_stds)
-    plt.violinplot(joint_seg_stds,showmedians=True)
+    plt.violinplot(joint_seg_stds, showmedians=True)
     result = f_oneway(*(joint_seg_stds))
     if result.pvalue < 0.05:
         plt.title('Neuron std(Firing Rate) Distributions\nANOVA p<0.05')
     else:
         plt.title('Neuron std(Firing Rate) Distributions\nANOVA n.s.')
-    plt.xticks(np.arange(len(segments_to_analyze))+1,np.array(unique_segment_names)[segments_to_analyze])
+    plt.xticks(np.arange(len(segments_to_analyze))+1,
+               np.array(unique_segment_names)[segments_to_analyze])
     plt.xlabel('Segment')
     plt.ylabel('100 ms Bin Neuron std(Firing Rate) (Hz)')
-    
     plt.tight_layout()
-    f_neur_fr_std.savefig(os.path.join(seg_stat_save_dir,'neur_std_rate_violinplots.png'))
-    f_neur_fr_std.savefig(os.path.join(seg_stat_save_dir,'neur_std_rate_violinplots.svg'))
+    f_neur_fr_std.savefig(os.path.join(
+        seg_stat_save_dir, 'neur_std_rate_violinplots.png'))
+    f_neur_fr_std.savefig(os.path.join(
+        seg_stat_save_dir, 'neur_std_rate_violinplots.svg'))
     plt.close(f_neur_fr_std)
-    
+
+    #Plot population rate pairwise sig results
+    f_neur_fr_ttest = plt.figure(figsize=(5, 5))
+    for sp_i in range(len(seg_pairs)):
+        sp_1, sp_2 = seg_pairs[sp_i]
+        seg_1 = np.array(unique_segment_names)[segments_to_analyze[sp_1]]
+        seg_2 = np.array(unique_segment_names)[segments_to_analyze[sp_2]]
+        plt.boxplot(pairwise_sig_data[seg_pairs[sp_i]], positions=[
+                    sp_i], labels=[seg_1 + ' v ' + seg_2])
+        x_vals = sp_i + np.random.randn(num_anim)/10
+        plt.scatter(x_vals, pairwise_sig_data[seg_pairs[sp_i]], color='g', alpha=0.3)
+    plt.axhline(0.05)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    f_neur_fr_ttest.savefig(os.path.join(
+        seg_stat_save_dir, 'neur_mean_rate_ttest_box.png'))
+    f_neur_fr_ttest.savefig(os.path.join(
+        seg_stat_save_dir, 'neur_mean_rate_ttest_box.svg'))
+    plt.close(f_neur_fr_ttest)
+
     #Plot neuron std(rates)
-    f_neur_fr = plt.figure(figsize=(5,5))
+    f_neur_fr = plt.figure(figsize=(5, 5))
     joint_seg_means = []
     for s_ind, s_i in enumerate(segments_to_analyze):
         seg_name = unique_segment_names[s_i]
@@ -216,22 +248,26 @@ def neur_rate_analysis_plots(unique_given_names,unique_segment_names,\
         for gn_i, gn in enumerate(unique_given_names):
             seg_means.extend(list(all_anim_means[gn_i][s_ind]))
         joint_seg_means.append(seg_means)
-    plt.violinplot(joint_seg_means,showmedians=True)
+    plt.violinplot(joint_seg_means, showmedians=True)
     result = f_oneway(*(joint_seg_means))
     if result.pvalue < 0.05:
         plt.title('Neuron Firing Rate Distributions\nANOVA p<0.05')
     else:
         plt.title('Neuron Firing Rate Distributions\nANOVA n.s.')
-    plt.xticks(np.arange(len(segments_to_analyze))+1,np.array(unique_segment_names)[segments_to_analyze])
+    plt.xticks(np.arange(len(segments_to_analyze))+1,
+               np.array(unique_segment_names)[segments_to_analyze])
     plt.xlabel('Segment')
     plt.ylabel('100 ms Bin Neuron Firing Rate (Hz)')
     plt.tight_layout()
-    f_neur_fr.savefig(os.path.join(seg_stat_save_dir,'neur_rate_violinplots.png'))
-    f_neur_fr.savefig(os.path.join(seg_stat_save_dir,'neur_rate_violinplots.svg'))
+    f_neur_fr.savefig(os.path.join(
+        seg_stat_save_dir, 'neur_rate_violinplots.png'))
+    f_neur_fr.savefig(os.path.join(
+        seg_stat_save_dir, 'neur_rate_violinplots.svg'))
     plt.close(f_neur_fr)
-    
-def pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
-                            pop_rates,segments_to_analyze,seg_stat_save_dir):
+
+
+def pop_rate_analysis_plots(unique_given_names, unique_segment_names,
+                            pop_rates, segments_to_analyze, seg_stat_save_dir):
     """
     Conduct significance tests and plot population firing rate coefficients
     of variation across animals and segments.
@@ -261,12 +297,18 @@ def pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
     num_anim = len(unique_given_names)
     cmap = colormaps['gist_rainbow']
     anim_colors = cmap(np.linspace(0, 1, num_anim))
-    num_seg = len(unique_segment_names)
-    
+    num_seg = len(segments_to_analyze)
+    seg_pairs = list(combinations(np.arange(num_seg), 2))
+
     #Collect pop rate significance and CV
-    sig_table = [['Animal Name','ANOVA p', 'Mean Order']]
-    seg_cv_table = np.zeros((num_anim,len(segments_to_analyze)))
+    sig_table = [['Animal Name', 'ANOVA p', 'Mean Order']]
+    seg_cv_table = np.zeros((num_anim, len(segments_to_analyze)))
+    seg_mean_fr = np.zeros((num_anim,len(segments_to_analyze)))
     all_anim_data = []
+    pairwise_sig_data = dict()
+    mean_pairwise_sig_data = np.zeros(len(seg_pairs))
+    for sp_i in range(len(seg_pairs)):
+        pairwise_sig_data[seg_pairs[sp_i]] = np.zeros(num_anim)
     for gn_i, gn in enumerate(unique_given_names):
         #Collect segment data for animal
         all_seg_data = []
@@ -277,25 +319,44 @@ def pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
             nonnan_data = data[~np.isnan(data)]
             all_seg_data.append(nonnan_data)
             all_seg_means.append(np.mean(nonnan_data))
-            seg_cv_table[gn_i,s_ind] = np.std(nonnan_data)/np.mean(nonnan_data)
+            seg_cv_table[gn_i, s_ind] = np.std(
+                nonnan_data)/np.mean(nonnan_data)
         all_anim_data.append(all_seg_data)
+        seg_mean_fr[gn_i,:] = all_seg_means
         #Test significant differences
+        #    One-way ANOVA
         anim_sig = [gn]
         result = f_oneway(*(all_seg_data))
         anim_sig.append(result.pvalue)
         mean_ascend = np.argsort(all_seg_means)
         mean_text = unique_segment_names[segments_to_analyze[0]]
         for s_ind in mean_ascend[1:]:
-            mean_text += ' < ' + unique_segment_names[segments_to_analyze[s_ind]]
+            mean_text += ' < ' + \
+                unique_segment_names[segments_to_analyze[s_ind]]
         anim_sig.append(mean_text)
         sig_table.append(anim_sig)
+        #    pairwise ttest
+        for sp_i in range(len(seg_pairs)):
+            sp_1, sp_2 = seg_pairs[sp_i]
+            data_1 = all_seg_data[sp_1]
+            data_2 = all_seg_data[sp_2]
+            result = ttest_ind(data_1, data_2)
+            pairwise_sig_data[seg_pairs[sp_i]][gn_i] = result.pvalue
+    for sp_i in range(len(seg_pairs)):
+        sp_1, sp_2 = seg_pairs[sp_i]
+        result = ttest_ind(seg_mean_fr[:,sp_1], seg_mean_fr[:,sp_2])
+        mean_pairwise_sig_data[sp_i] = result.pvalue
     #Save significance results
-    with open(os.path.join(seg_stat_save_dir,'seg_pop_rate_sig.csv'), 'w', newline='') as csvfile:
+    with open(os.path.join(seg_stat_save_dir, 'seg_pop_rate_sig.csv'), 'w', newline='') as csvfile:
         csv_writer = csv.writer(csvfile)
         csv_writer.writerows(sig_table)
-        
+    np.save(os.path.join(seg_stat_save_dir, 'pairwise_pop_rate_ttest_sig_data.npy'),
+            pairwise_sig_data, allow_pickle=True)
+    np.save(os.path.join(seg_stat_save_dir, 'mean_pairwise_pop_rate_ttest_sig_data.npy'),
+            mean_pairwise_sig_data, allow_pickle=True)
+
     #Plot population rates
-    f_pop_fr = plt.figure(figsize=(5,5))
+    f_pop_fr = plt.figure(figsize=(5, 5))
     joint_seg_data = []
     for s_ind, s_i in enumerate(segments_to_analyze):
         seg_name = unique_segment_names[s_i]
@@ -304,8 +365,8 @@ def pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
             seg_data.extend(list(all_anim_data[gn_i][s_ind]))
         joint_seg_data.append(seg_data)
     result = f_oneway(*joint_seg_data)
-    plt.violinplot(joint_seg_data,showmedians=True)
-    plt.xticks(np.arange(len(segments_to_analyze))+1,\
+    plt.violinplot(joint_seg_data, showmedians=True)
+    plt.xticks(np.arange(len(segments_to_analyze))+1,
                np.array(unique_segment_names)[segments_to_analyze])
     plt.xlabel('Segment')
     plt.ylabel('100 ms Bin Population Firing Rate (Hz)')
@@ -314,38 +375,86 @@ def pop_rate_analysis_plots(unique_given_names,unique_segment_names,\
     else:
         plt.title('Population Firing Rate Distributions\nANOVA n.s.')
     plt.tight_layout()
-    f_pop_fr.savefig(os.path.join(seg_stat_save_dir,'pop_rate_violinplots.png'))
-    f_pop_fr.savefig(os.path.join(seg_stat_save_dir,'pop_rate_violinplots.svg'))
+    f_pop_fr.savefig(os.path.join(
+        seg_stat_save_dir, 'pop_rate_violinplots.png'))
+    f_pop_fr.savefig(os.path.join(
+        seg_stat_save_dir, 'pop_rate_violinplots.svg'))
     plt.close(f_pop_fr)
-        
+
+    #Plot population rate pairwise sig results
+    f_pop_fr_ttest = plt.figure(figsize=(5, 5))
+    for sp_i in range(len(seg_pairs)):
+        sp_1, sp_2 = seg_pairs[sp_i]
+        seg_1 = np.array(unique_segment_names)[segments_to_analyze[sp_1]]
+        seg_2 = np.array(unique_segment_names)[segments_to_analyze[sp_2]]
+        plt.boxplot(pairwise_sig_data[seg_pairs[sp_i]], positions=[
+                    sp_i], labels=[seg_1 + ' v ' + seg_2])
+    plt.axhline(0.05)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    f_pop_fr_ttest.savefig(os.path.join(
+        seg_stat_save_dir, 'pop_rate_ttest_box.png'))
+    f_pop_fr_ttest.savefig(os.path.join(
+        seg_stat_save_dir, 'pop_rate_ttest_box.svg'))
+    plt.close(f_pop_fr_ttest)
+
+    #Plot population rate pairwise sig results
+    f_pop_fr_ttest = plt.figure(figsize=(5, 5))
+    for sp_i in range(len(seg_pairs)):
+        sp_1, sp_2 = seg_pairs[sp_i]
+        seg_1 = np.array(unique_segment_names)[segments_to_analyze[sp_1]]
+        seg_2 = np.array(unique_segment_names)[segments_to_analyze[sp_2]]
+        plt.boxplot(nonzero_pairwise_sig_data[seg_pairs[sp_i]], positions=[
+                    sp_i], labels=[seg_1 + ' v ' + seg_2])
+    plt.axhline(0.05)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    f_pop_fr_ttest.savefig(os.path.join(
+        seg_stat_save_dir, 'pop_rate_nonzero_ttest_box.png'))
+    f_pop_fr_ttest.savefig(os.path.join(
+        seg_stat_save_dir, 'pop_rate_nonzero_ttest_box.svg'))
+    plt.close(f_pop_fr_ttest)
+
     #Plot CV results
-    f_cv = plt.figure(figsize=(5,5))
-    plt.boxplot(seg_cv_table,\
+    f_cv = plt.figure(figsize=(5, 5))
+    plt.boxplot(seg_cv_table,
                 labels=np.array(unique_segment_names)[segments_to_analyze])
     result = f_oneway(*list(seg_cv_table.T))
+    #    pairwise ttest
+    pairwise_ttest = np.zeros(len(seg_pairs))
+    for sp_i in range(len(seg_pairs)):
+        sp_1, sp_2 = seg_pairs[sp_i]
+        data_1 = seg_cv_table[:, sp_1]
+        data_2 = seg_cv_table[:, sp_2]
+        result = ttest_ind(data_1, data_2)
+        pairwise_ttest[sp_i] = result.pvalue
     for s_ind, s_i in enumerate(segments_to_analyze):
         seg_name = unique_segment_names[s_i]
         x_vals = s_ind + 1 + np.random.randn(num_anim)/10
-        plt.scatter(x_vals,seg_cv_table[:,s_ind],color='g',alpha=0.3)
-    seg_pairs = list(combinations(np.arange(len(segments_to_analyze)),2))
-    pairwise_ttest = np.zeros(len(seg_pairs))
-    for s_i, (s_1, s_2) in enumerate(seg_pairs):
-        result = mannwhitneyu(seg_cv_table[:,s_1],seg_cv_table[:,s_2])
-        if result.pvalue <= 0.05:
-            rand_jitter = np.random.randn(1)/10
-            plt.plot([s_1+1,s_2+1],[1+rand_jitter,1+rand_jitter],\
-                     color='k')
-            plt.text(1+s_1+(s_2-s_1)/2,1+rand_jitter+0.05,'*')
+        plt.scatter(x_vals, seg_cv_table[:, s_ind], color='g', alpha=0.3)
+    seg_pairs = list(combinations(np.arange(len(segments_to_analyze)), 2))
+    ttext = 'Population Firing Rate CV'
     if result.pvalue < 0.05:
-        plt.title('Population Firing Rate CV\nANOVA p<0.05')
+        ttext += '\nANOVA p<0.05'
     else:
-        plt.title('Population Firing Rate CV\nANOVA n.s.')
+        ttext += '\nANOVA n.s.'
+    pair_tsig = np.where(pairwise_ttest < 0.05)[0]
+    ttext += '\n'
+    if len(pair_tsig) > 0:
+        for p_i in pair_tsig:
+            s_1, s_2 = seg_pairs[p_i]
+            ttext += unique_segment_names[segments_to_analyze[s_1]] + \
+                ' v ' + \
+                unique_segment_names[segments_to_analyze[s_2]] + ' *TT\n'
+    else:
+        ttext += 'All pairwise ttest n.s.'
+    plt.title(ttext)
     plt.xlabel('Segment')
     plt.tight_layout()
-    f_cv.savefig(os.path.join(seg_stat_save_dir,'pop_rate_cv_boxplot.png'))
-    f_cv.savefig(os.path.join(seg_stat_save_dir,'pop_rate_cv_boxplot.svg'))
+    f_cv.savefig(os.path.join(seg_stat_save_dir, 'pop_rate_cv_boxplot.png'))
+    f_cv.savefig(os.path.join(seg_stat_save_dir, 'pop_rate_cv_boxplot.svg'))
     plt.close(f_cv)
-    
+
 def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
                             isis,cvs,segments_to_analyze,seg_stat_save_dir,\
                                 verbose=False):
@@ -382,18 +491,14 @@ def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
     cmap = colormaps['gist_rainbow']
     anim_colors = cmap(np.linspace(0, 1, num_anim))
     segment_names_to_analyze = list(np.array(unique_segment_names)[segments_to_analyze])
-    num_seg = len(segment_names_to_analyze)
-    
-    #Collect isi significance and CV
-    x_vals = [0,1,1.1,1.2,1.5,2,10,1000] #[0,1,2,5,10,1000]
-    num_x = len(x_vals)
-    bar_w = 1/num_anim
-    half_bar = bar_w/2
-    labels = [str(x_vals[i]) + '-' + str(x_vals[i+1]) for i in range(num_x-2)]
-    labels.extend([str(x_vals[-2]) + '+'])
+    num_seg = len(segments_to_analyze)
+    seg_pairs = list(combinations(np.arange(num_seg),2))
     
     anim_cvs = []
     anim_isi_dict = dict()
+    pairwise_sig_data = dict()
+    for sp_i in range(len(seg_pairs)):
+        pairwise_sig_data[seg_pairs[sp_i]] = np.zeros(num_anim)
     for gn_i, gn in enumerate(unique_given_names):
         anim_isi_dict[gn] = dict()
         anim_isi_dict[gn]['burst'] = []
@@ -422,9 +527,37 @@ def isi_cv_analysis_plots(unique_given_names,unique_segment_names,\
                 anim_isi_dict[gn]['burst'].extend(list(neur_isis[n_i]))
             else:
                 anim_isi_dict[gn]['regular'].extend(list(neur_isis[n_i]))
-                
+        #    pairwise KS
+        for sp_i in range(len(seg_pairs)):
+            sp_1, sp_2 = seg_pairs[sp_i]
+            data_1 = neur_cv[:,sp_1]
+            data_2 = neur_cv[:,sp_2]
+            result = ttest_ind(data_1,data_2)
+            pairwise_sig_data[seg_pairs[sp_i]][gn_i] = result.pvalue
+    
+    #Plot neuron cv pairwise sig results
+    f_neur_cv_ttest = plt.figure(figsize=(5,5))
+    for sp_i in range(len(seg_pairs)):
+        sp_1, sp_2 = seg_pairs[sp_i]
+        seg_1 = np.array(unique_segment_names)[segments_to_analyze[sp_1]]
+        seg_2 = np.array(unique_segment_names)[segments_to_analyze[sp_2]]
+        plt.boxplot(pairwise_sig_data[seg_pairs[sp_i]],positions=[sp_i],labels=[seg_1 + ' v ' + seg_2])
+        x_vals = sp_i + np.random.randn(num_anim)/10
+        plt.scatter(x_vals, pairwise_sig_data[seg_pairs[sp_i]], color='g', alpha=0.3)
+    plt.axhline(0.05)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    f_neur_cv_ttest.savefig(os.path.join(seg_stat_save_dir,'neur_cv_ttest_box.png'))
+    f_neur_cv_ttest.savefig(os.path.join(seg_stat_save_dir,'neur_cv_ttest_box.svg'))
+    plt.close(f_neur_cv_ttest)
     
     #Individual Animals CV Separate
+    x_vals = [0,1,1.1,1.2,1.5,2,10,1000] #[0,1,2,5,10,1000]
+    num_x = len(x_vals)
+    bar_w = 1/num_anim
+    half_bar = bar_w/2
+    labels = [str(x_vals[i]) + '-' + str(x_vals[i+1]) for i in range(num_x-2)]
+    labels.extend([str(x_vals[-2]) + '+'])
     f_cv, ax_cv = plt.subplots(ncols=num_seg,figsize=(15,5),\
                                sharex = True,sharey = True)
     for s_i, seg_name in enumerate(segment_names_to_analyze):
