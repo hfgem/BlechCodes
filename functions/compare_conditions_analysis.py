@@ -134,13 +134,22 @@ class run_compare_conditions_analysis():
         """Run statistical analyses and plots of segment firing data"""
         segments_to_analyze = [0,2,4]
 
-        unique_given_names, unique_segment_names, neur_rates, pop_rates, isis, \
-            cvs = cass.seg_stat_collection(self.all_data_dict)
-                
         seg_stat_save_dir = os.path.join(self.save_dir,'seg_stats')
         if not os.path.isdir(seg_stat_save_dir):
             os.mkdir(seg_stat_save_dir)
             
+        try:
+            neur_rates = np.load(os.path.join(seg_stat_save_dir,'neur_rates.npy'),allow_pickle=True).item()
+            pop_rates = np.load(os.path.join(seg_stat_save_dir,'pop_rates.npy'),allow_pickle=True).item()
+            isis = np.load(os.path.join(seg_stat_save_dir,'isis.npy'),allow_pickle=True).item()
+        except:
+            unique_given_names, unique_segment_names, neur_rates, pop_rates, isis, \
+                cvs = cass.seg_stat_collection(self.all_data_dict)
+                    
+            np.save(os.path.join(seg_stat_save_dir,'neur_rates.npy'),neur_rates,allow_pickle=True)
+            np.save(os.path.join(seg_stat_save_dir,'pop_rates.npy'),pop_rates,allow_pickle=True)
+            np.save(os.path.join(seg_stat_save_dir,'isis.npy'),isis,allow_pickle=True)
+
         cass.seg_stat_analysis(unique_given_names, unique_segment_names, neur_rates, \
                               pop_rates, isis, cvs, segments_to_analyze, seg_stat_save_dir)
 
