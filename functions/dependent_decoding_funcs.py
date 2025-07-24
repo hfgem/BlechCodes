@@ -1404,7 +1404,6 @@ def multiday_decode_groupings_split_identity(epochs_to_analyze,all_dig_in_names,
     group_list_names = []
     group_names = []
     none_group = []
-    identity_group = []
     palatability_group = []
     
     for e_ind, e_i in enumerate(epochs_to_analyze):
@@ -1437,9 +1436,6 @@ def multiday_decode_groupings_split_identity(epochs_to_analyze,all_dig_in_names,
             group_list.append(epoch_group)
             group_list_names.append([(e_i,'all')])
             group_names.append('Presence')
-    group_list.append(identity_group)
-    group_list_names.append(['Identity'])
-    group_names.append('Identity')
     group_list.append(palatability_group)
     group_list_names.append(['Palatability'])
     group_names.append('Palatability')

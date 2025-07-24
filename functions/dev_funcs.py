@@ -115,7 +115,7 @@ def create_dev_rasters(num_iterations, spike_times,
         ind_dev = deviations[ind]
         ind_dev[0] = 0
         ind_dev[-1] = 0
-        change_inds = np.diff(deviations[ind])
+        change_inds = np.diff(ind_dev)
         start_dev_bouts = np.where(change_inds == 1)[0] + 1
         end_dev_bouts = np.where(change_inds == -1)[0]
         # remove all those too early to calculate a z-score in the future

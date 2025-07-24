@@ -200,55 +200,72 @@ for n_i in range(num_days):
     day_vars[n_i]['num_pt_cp'] = day_vars[n_i]['num_cp'] + 2
     
 
-# pull_taste_fr_dist()
+# pull_fr_trajectories()
+
+num_days = len(day_vars)
+fr_bin_size = 100 #ms/samples per bin to use in taste trajectory
+resp_len = 2000 #length of taste response interval
+bin_starts = np.arange(0,resp_len,fr_bin_size)
 
 all_dig_in_names = []
-tastant_fr_dist_pop = dict()
-taste_num_deliv = []
-max_hz_pop = 0
-tastant_fr_dist_z_pop = dict()
-max_hz_z_pop = 0
-min_hz_z_pop = np.inf
-max_num_cp = 0
+fr_dict = dict()
+fr_z_dict = dict()
 for n_i in range(num_days):
-    #Collect tastant names
-    day_names = day_vars[n_i]['dig_in_names']
-    day_cp = day_vars[n_i]['num_cp']
-    if day_cp > max_num_cp:
-        max_num_cp = day_cp
-    new_day_names = [dn + '_' + str(n_i) for dn in day_names]
+    fr_dict[n_i] = dict()
+    fr_z_dict[n_i] = dict()
+    
+    #Gather variables
+    tastant_spike_times = day_vars[n_i]['tastant_spike_times']
+    segment_names = day_vars[n_i]['segment_names']
+    seg_taste_ind = [i for i in range(len(segment_names)) if segment_names[i] == 'taste'][0]
+    segment_times = day_vars[n_i]['segment_times']
+    taste_segment_times = day_vars[n_i]['segment_spike_times'][seg_taste_ind]
+    start_dig_in_times = day_vars[n_i]['start_dig_in_times']
+    dig_in_names = day_vars[n_i]['dig_in_names']
+    new_day_names = [dn + '_' + str(n_i) for dn in dig_in_names]
     all_dig_in_names.extend(new_day_names)
-    #Collect firing rate distribution dictionaries
-    tastant_fr_dist_pop_day, taste_num_deliv_day, max_hz_pop_day = ddf.taste_fr_dist(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
-                                                                    	 day_vars[n_i]['pop_taste_cp_raster_inds'], day_vars[n_i]['bayes_fr_bins'],
-                                                                    	 day_vars[n_i]['start_dig_in_times'], day_vars[n_i]['pre_taste_dt'],
-                                                                    	 day_vars[n_i]['post_taste_dt'], day_vars[n_i]['trial_start_frac'])
-    start_update_ind = len(tastant_fr_dist_pop)
-    for tf_i in range(len(tastant_fr_dist_pop_day)):
-        tastant_fr_dist_pop[tf_i+start_update_ind] = tastant_fr_dist_pop_day[tf_i]
-    taste_num_deliv.extend(list(taste_num_deliv_day))
-    if max_hz_pop_day > max_hz_pop:
-        max_hz_pop = max_hz_pop_day
-    tastant_fr_dist_z_pop_day, _, max_hz_z_pop_day, min_hz_z_pop_day = ddf.taste_fr_dist_zscore(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
-                                                                                        day_vars[n_i]['segment_spike_times'], day_vars[n_i]['segment_names'],
-                                                                                        day_vars[n_i]['segment_times'], day_vars[n_i]['pop_taste_cp_raster_inds'],
-                                                                                        day_vars[n_i]['bayes_fr_bins'], day_vars[n_i]['start_dig_in_times'],
-                                                                                        day_vars[n_i]['pre_taste_dt'], day_vars[n_i]['post_taste_dt'], 
-                                                                                        day_vars[n_i]['bin_dt'], day_vars[n_i]['trial_start_frac'])
-    start_update_ind = len(tastant_fr_dist_z_pop)
-    for tf_i in range(len(tastant_fr_dist_z_pop_day)):
-        tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
-    if max_hz_z_pop_day > max_hz_z_pop:
-        max_hz_z_pop = max_hz_z_pop_day
-    if min_hz_z_pop_day < min_hz_z_pop:
-        min_hz_z_pop = min_hz_z_pop_day
+    num_neur = len(day_vars[n_i]['keep_neur'])
+    
+    #Calculate z-scoring info
+    neur_mean, neur_std = calc_seg_z_score(segment_times,seg_taste_ind,num_neur,seg_len,\
+                         taste_segment_times,fr_bin_size)
+    
+    #Calculate taste response vectors
+    for t_i, t_name in enumerate(dig_in_names):
+        fr_dict[n_i][t_name] = []
+        fr_z_dict[n_i][t_name] = []
+        t_starts = start_dig_in_times[t_i]
+        t_times = tastant_spike_times[t_i]
+        for d_i in range(len(t_starts)): #Go through each delivery
+            ts_i = t_starts[d_i]
+            tt_i = t_times[d_i]
+            #Get spike raster
+            bin_spikes = np.zeros((num_neur,resp_len))
+            for nn_i in range(num_neur):
+                s_times = (np.array(tt_i[nn_i]) - ts_i).astype('int')
+                bin_spikes[nn_i,s_times[s_times < resp_len]] = 1
+            #Convert to binned fr vectors
+            fr_vecs = np.zeros((num_neur,len(bin_starts)))
+            for bs_ind, bs_i in enumerate(bin_starts):
+                fr_i = np.sum(bin_spikes[:,bs_i:bs_i+fr_bin_size],1)/(fr_bin_size/1000)
+                fr_vecs[:,bs_ind] = fr_i
+            fr_z_vecs = (fr_vecs - np.expand_dims(neur_mean,1))/np.expand_dims(neur_std,1)
+            fr_dict[n_i][t_name].append(fr_vecs)
+            fr_z_dict[n_i][t_name].append(fr_z_vecs)
 
-palatable_dig_inds = []
+#%% run tests
 
-# import_deviations()
+import functions.lstm_funcs as lstm
 
-print("\tNow importing calculated deviations for first day")
+day_1_tastes = day_vars[0]['dig_in_names']
+#Format training data
+data_array, data_labels, data_inds = lstm.prep_lstm_data(fr_z_dict,\
+                                                                   day_1_tastes,\
+                                                                all_dig_in_names)
+#Run LSTM size tests
+best_lstm_accuracies, best_lstm_size = lstm.run_model_tests(data_array,data_inds)
 
+#%% Import deviations
 num_seg_to_analyze = len(day_vars[0]['segments_to_analyze'])
 segment_names_to_analyze = [day_vars[0]['segment_names'][i] for i in day_vars[0]['segments_to_analyze']]
 segment_times_to_analyze_reshaped = [
@@ -265,71 +282,17 @@ for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
         data = json.loads(json_str)
         segment_deviations.append(data)
 
-print("\tNow pulling true deviation rasters")
+print("\tNow pulling deviations for classification.")
 #Note, these will already reflect the held units
-segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
-    segment_dev_fr_vecs_zscore, _, _ = dev_f.create_dev_rasters(num_seg_to_analyze, 
-                                                        segment_spike_times_to_analyze,
-                                                        np.array(segment_times_to_analyze_reshaped),
-                                                        segment_deviations, day_vars[0]['pre_taste'])
+dev_rasters, dev_times, _, dev_fr_vecs_zscore, _, _ = lstm.create_dev_rasters(num_seg_to_analyze, 
+                                                    segment_spike_times_to_analyze,
+                                                    np.array(segment_times_to_analyze_reshaped),
+                                                    segment_deviations, day_vars[0]['pre_taste'])
 
-# decode_groups()
+#%% run LSTM on deviation events
 
-print("Determine decoding groups")
-#Create fr vector grouping instructions: list of epoch,taste pairs
-non_none_tastes = [taste for taste in all_dig_in_names if taste[:4] != 'none']
-non_none_tastes = non_none_tastes
-# group_list, group_names = ddf.multiday_decode_groupings(day_vars[0]['epochs_to_analyze'],
-#                                                 all_dig_in_names,
-#                                                 non_none_tastes)
-group_list, group_names = ddf.multiday_decode_groupings_split_identity(day_vars[0]['epochs_to_analyze'],
-                                                all_dig_in_names,
-                                                
-                                                non_none_tastes)
 
-# decode_zscored()
 
-decode_dir = os.path.join(bayes_dir,'split_identity_test') #All_Neurons_Z_Scored #split_identity_test
-if os.path.isdir(decode_dir) == False:
-    os.mkdir(decode_dir)
+#%% run LSTM on pairs of deviation events
 
-#Save the group information for cross-animal use 
-group_dict = dict()
-for gn_i, gn in enumerate(group_names):
-    group_dict[gn] = group_list[gn_i]
-np.save(os.path.join(decode_dir,'group_dict.npy'),group_dict,allow_pickle=True)
 
-z_score = True
-tastant_fr_dist = tastant_fr_dist_z_pop
-dev_vecs = segment_dev_fr_vecs_zscore
-segment_spike_times = day_vars[0]['segment_spike_times']
-segment_times = day_vars[0]['segment_times']
-segment_names = day_vars[0]['segment_names']
-start_dig_in_times = day_vars[0]['start_dig_in_times']
-bin_dt = day_vars[0]['bin_dt']
-epochs_to_analyze = day_vars[0]['epochs_to_analyze']
-segments_to_analyze = day_vars[0]['segments_to_analyze']
-
-# # decoder_accuracy()
-# ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times, 
-#                 all_dig_in_names, segment_times, segment_names, 
-#                 start_dig_in_times, taste_num_deliv,
-#                 group_list, group_names, non_none_tastes, 
-#                 decode_dir, bin_dt, z_score, 
-#                 epochs_to_analyze, segments_to_analyze)
-
-# # decode_sliding_bins()
-# ddf.decode_sliding_bins(tastant_fr_dist, segment_spike_times, all_dig_in_names, 
-#                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
-#                   bin_dt, group_list, group_names, non_none_tastes, decode_dir, 
-#                   z_score, segments_to_analyze)
-
-# # decode_deviations()
-ddf.decode_deviations(tastant_fr_dist, tastant_spike_times,
-                      segment_spike_times, all_dig_in_names, 
-                      segment_times, segment_names, 
-                      start_dig_in_times, taste_num_deliv, 
-                      segment_dev_times, dev_vecs, 
-                      bin_dt, group_list, group_names, 
-                      non_none_tastes, decode_dir, z_score, 
-                      segments_to_analyze)
