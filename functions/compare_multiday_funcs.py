@@ -129,9 +129,11 @@ def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names,
                                     print(errormsg)
                         all_taste_dist.append(taste_dist)
                     #Now calculate KS-2samp results
+                    #Plot
+                    f_test, ax_test = plt.subplots(ncols=len(t_pairs),figsize=(3*len(t_pairs),5))
                     ks_results = []
                     tt_results = []
-                    for tp in t_pairs:
+                    for tp_i, tp in enumerate(t_pairs):
                         tp_i1 = tp[0]
                         data_1 = all_taste_dist[tp_i1]
                         tp_i2 = tp[1]
@@ -154,7 +156,22 @@ def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names,
                                         tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'*>',tt_result[1]])
                                 else:
                                     tt_results.append([unique_taste_names[tp_i1],unique_taste_names[tp_i2],'n.s.',tt_result[1]])
-                                
+                                ax_test[tp_i].hist(data_1,bins=100,density=True,cumulative=True,\
+                                         label=unique_taste_names[tp_i1],alpha=0.5,\
+                                             histtype='step')
+                                ax_test[tp_i].hist(data_2,bins=100,density=True,cumulative=True,\
+                                         label=unique_taste_names[tp_i2],alpha=0.5,\
+                                             histtype='step')
+                                ax_test[tp_i].set_xlabel('Pearson Correlation')
+                                ax_test[tp_i].set_ylabel('Cumulative Density')
+                                ax_test[tp_i].legend(loc='upper right')
+                                ax_test[tp_i].set_title = unique_taste_names[tp_i1] + ' x ' + unique_taste_names[tp_i2]
+                    plt.tight_layout()
+                    fig_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i)
+                    f_test.savefig(os.path.join(taste_comp_save_dir,fig_save_name  + '.png'))
+                    f_test.savefig(os.path.join(taste_comp_save_dir,fig_save_name  + '.svg'))
+                    plt.close(f_test)
+                    
                     #Output results to csv
                     csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_ks.csv'
                     with open(os.path.join(taste_comp_save_dir,csv_save_name),'w',newline='') as file:
@@ -181,6 +198,8 @@ def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names,
                 else:
                     re_run = 'y'
                 if re_run == 'y':
+                    #Plot
+                    f_test, ax_test = plt.subplots(ncols=len(unique_taste_names),figsize=(3*len(t_pairs),5))
                     ks_results = []
                     tt_results = []
                     for t_i, taste in enumerate(unique_taste_names):
@@ -195,25 +214,19 @@ def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names,
                                 num_deliv = int(num_pts/num_dev)
                                 data_reshape = np.reshape(data,(data_cp,num_deliv,num_dev))
                                 deliv_means = np.squeeze(np.nanmean(data_reshape,1)) #cp x num_dev
-                                if taste == 'none_0':
-                                    cp_means = np.nanmean(deliv_means,0) #num_dev
-                                    taste_dist.extend(list(cp_means))
-                                else:
-                                    taste_dist.extend(list(np.squeeze(deliv_means[cp_i,:])))
+                                taste_dist.extend(list(np.squeeze(deliv_means[cp_i,:])))
                             except:
                                 errormsg = 'No data for ' + seg_name + ' Epoch ' + \
                                     str(cp_i) + ' ' + taste + ' animal ' + g_n
                                 if verbose == True:
                                     print(errormsg)
                             #Collect null data
+                            num_null = null_corr_dict[g_n]['num_null']
                             try:
-                                null_data = null_corr_dict[g_n][seg_name][taste][corr_name] #already average across deliveries
-                                if taste == 'none_0':
-                                    null_cp_data = []
-                                    for cp_i_null in range(max_cp):
-                                        null_cp_data.extend(null_data[cp_i_null])
-                                else:
-                                    null_cp_data = null_data[cp_i]
+                                null_data = null_corr_dict[g_n][seg_name][taste][corr_name][cp_i] #already average across deliveries but list for all null
+                                null_cp_data = []
+                                for null_i in range(num_null):
+                                    null_cp_data.extend(null_data[null_i])
                                 null_taste_dist.extend(null_cp_data)
                             except:
                                 errormsg = 'No null data for ' + seg_name + ' Epoch ' + \
@@ -239,7 +252,22 @@ def test_corr_dist_sig_test(corr_dict, null_corr_dict, unique_given_names,
                                         tt_results.append([taste,'*>',tt_result[1]])
                                 else:
                                     tt_results.append([taste,'n.s.',tt_result[1]])
-                                
+                                ax_test[t_i].hist(taste_dist,bins=100,density=True,cumulative=True,\
+                                         label=unique_taste_names[t_i],alpha=0.5,\
+                                             histtype='step')
+                                ax_test[t_i].hist(null_taste_dist,bins=100,density=True,cumulative=True,\
+                                         label='Null',alpha=0.5,\
+                                             histtype='step')
+                                ax_test[t_i].set_xlabel('Pearson Correlation')
+                                ax_test[t_i].set_ylabel('Cumulative Density')
+                                ax_test[t_i].legend(loc='upper right')
+                                ax_test[t_i].set_title = unique_taste_names[t_i] + ' x null'
+                    plt.tight_layout()
+                    fig_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i)
+                    f_test.savefig(os.path.join(null_comp_save_dir,fig_save_name  + '.png'))
+                    f_test.savefig(os.path.join(null_comp_save_dir,fig_save_name  + '.svg'))
+                    plt.close(f_test)
+                    
                     #Output results to csv
                     csv_save_name = corr_name + '_' + seg_name + '_Epoch_' + str(cp_i) + '_null_ks.csv'
                     with open(os.path.join(null_comp_save_dir,csv_save_name),'w',newline='') as file:
@@ -315,20 +343,19 @@ def calc_ind_dicts(corr_dict, null_corr_dict, unique_given_names,
                             if verbose == True:
                                 print(errormsg)
                         #Collect null data
+                        num_null = null_corr_dict[gn]['num_null']
                         try:
                             #Grab animal data
-                            null_data = null_corr_dict[gn][seg_name][taste][corr_name] #already nanmean across deliveries
+                            null_data = null_corr_dict[gn][seg_name][taste][corr_name][cp_i] #list of mean correlation across deliveries for all null
                             #Collect indices by cutoff
-                            if taste == 'none_0':
-                                null_cp_data = []
-                                for cp_i_2 in range(max_cp):
-                                    try:
-                                        null_cp_data.extend(null_data[cp_i])
-                                    except:
-                                        null_cp_data.extend([])
-                            else:
-                                null_cp_data = null_data[cp_i]
-                            all_null_corr_dicts[corr_name][seg_name][cp_i][taste][gn] = [np.where(null_cp_data >= cc)[0] for cc in corr_cutoffs]
+                            null_cp_data = []
+                            for null_i in range(num_null):
+                                try:
+                                    null_cp_data.extend(null_data[null_i])
+                                except:
+                                    null_cp_data.extend([])
+                            null_cp_data = np.array(null_cp_data)
+                            all_null_corr_dicts[corr_name][seg_name][cp_i][taste][gn] = [len(np.where(null_cp_data >= cc)[0])/num_null for cc in corr_cutoffs]
                         except:
                             errormsg = 'Missing null data for ' + corr_name + ' ' + \
                                 seg_name + ' Epoch ' + str(cp_i) + ' ' + taste + \
@@ -361,7 +388,6 @@ def plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict,
         
         #Plot all corr values          
         all_dev_corr_inds = all_corr_dicts[corr_name]
-        all_null_dev_corr_inds = all_null_corr_dicts[corr_name]
         f_rate, ax_rate = plt.subplots(nrows = len(unique_segment_names),\
                                        ncols = max_cp, figsize=(8,8),\
                                     sharex = True, sharey = True)
@@ -388,7 +414,6 @@ def plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict,
                     if not os.path.isdir(taste_indiv_dir):
                         os.mkdir(taste_indiv_dir)
                     animal_inds = all_dev_corr_inds[seg_name][cp_i][taste]
-                    animal_null_inds = all_null_dev_corr_inds[seg_name][cp_i][taste]
                     animal_true_rates = np.zeros((num_anim,num_cutoff))
                     animal_null_rates = np.zeros((num_anim,num_cutoff))
                     for gn_i, g_n in enumerate(unique_given_names):
@@ -407,9 +432,7 @@ def plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict,
                                 print(errormsg)
                         #Collect null data
                         try:
-                            num_null_inds = np.array([len(animal_null_inds[g_n][cc_i]) for cc_i in range(len(corr_cutoffs))])
-                            num_null_sets = null_corr_dict[g_n]['num_null']
-                            animal_null_rates[gn_i,:] = num_null_inds/num_null_sets/seg_len
+                            animal_null_rates[gn_i,:] = all_null_corr_dicts[corr_name][seg_name][cp_i][taste][g_n]/seg_len
                         except:
                             errormsg = g_n + ' does not have ' + seg_name + \
                                 ' epoch ' + str(cp_i) + ' ' + taste + ' data.'
@@ -525,7 +548,6 @@ def plot_corr_cutoff_epochs(all_corr_dicts, all_null_corr_dicts, corr_dict, null
     for corr_name in unique_corr_names:
         #Plot all corr values
         all_dev_corr_inds = all_corr_dicts[corr_name]
-        all_null_dev_corr_inds = all_null_corr_dicts[corr_name]
         f_rate, ax_rate = plt.subplots(nrows = num_segs,\
                                        ncols = num_tastes, \
                                     figsize=(4*num_tastes,4*num_segs),\
@@ -551,12 +573,12 @@ def plot_corr_cutoff_epochs(all_corr_dicts, all_null_corr_dicts, corr_dict, null
                 if not os.path.isdir(taste_indiv_dir):
                     os.mkdir(taste_indiv_dir)
                 epoch_null_rates = []
+                anim_avg_rates = []
                 for cp_i in range(max_cp):
                     cp_indiv_dir = os.path.join(taste_indiv_dir,'Epoch_' + str(cp_i))
                     if not os.path.isdir(cp_indiv_dir):
                         os.mkdir(cp_indiv_dir)
                     animal_inds = all_dev_corr_inds[seg_name][cp_i][taste]
-                    animal_null_inds = all_null_dev_corr_inds[seg_name][cp_i][taste]
                     animal_true_rates = np.zeros((num_anim,num_cutoff))
                     animal_null_rates = np.zeros((num_anim,num_cutoff))
                     for gn_i, g_n in enumerate(unique_given_names):
@@ -575,9 +597,7 @@ def plot_corr_cutoff_epochs(all_corr_dicts, all_null_corr_dicts, corr_dict, null
                                 print(errormsg) 
                         #Collect null data
                         try:
-                            num_null_inds = np.array([len(animal_null_inds[g_n][cc_i]) for cc_i in range(len(corr_cutoffs))])
-                            num_null_sets = null_corr_dict[g_n]['num_null']
-                            animal_null_rates[gn_i,:] = num_null_inds/num_null_sets/seg_len
+                            animal_null_rates[gn_i,:] = all_null_corr_dicts[corr_name][seg_name][cp_i][taste][g_n]/seg_len
                         except:
                             errormsg = g_n + ' does not have ' + seg_name + \
                                 ' epoch ' + str(cp_i) + ' ' + taste + ' data.'
@@ -585,6 +605,7 @@ def plot_corr_cutoff_epochs(all_corr_dicts, all_null_corr_dicts, corr_dict, null
                                 print(errormsg)
                     #Average rates
                     anim_true_avg_rate = np.nanmean(animal_true_rates,0)
+                    anim_avg_rates.append(list(anim_true_avg_rate))
                     anim_null_avg_rate = np.nanmean(animal_null_rates,0)
                     epoch_null_rates.append(list(anim_null_avg_rate))
                     ax_rate[s_i,t_i].plot(corr_cutoffs,anim_true_avg_rate,label='Epoch ' + str(cp_i))
@@ -598,6 +619,9 @@ def plot_corr_cutoff_epochs(all_corr_dicts, all_null_corr_dicts, corr_dict, null
                     x_locs = cp_i + 1 + 0.1*np.random.randn(num_anim)
                     ax_rate_box[s_i,t_i].scatter(x_locs,anim_25_rates,alpha=0.5,color='g')
                 epoch_null_avg_rate = np.nanmean(np.array(epoch_null_rates),0)
+                #Calculate significance of anim curves against null
+                
+                #Plot null curve
                 ax_rate[s_i,t_i].plot(corr_cutoffs,epoch_null_avg_rate,label='Null')
                 ax_rate_zoom[s_i,t_i].plot(corr_cutoffs[cc_top_third_ind:],epoch_null_avg_rate[cc_top_third_ind:],label='Null')
                 ax_rate_zoom_split_y[s_i,t_i].plot(corr_cutoffs[cc_top_third_ind:],epoch_null_avg_rate[cc_top_third_ind:],label='Null')
