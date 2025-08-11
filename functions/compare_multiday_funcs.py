@@ -364,7 +364,7 @@ def calc_ind_dicts(corr_dict, null_corr_dict, unique_given_names,
                                 print(errormsg)
 
     return all_corr_dicts, all_null_corr_dicts
-        
+
 def plot_corr_cutoff_tastes(all_corr_dicts, all_null_corr_dicts, corr_dict, 
                             null_corr_dict, multiday_data_dict, unique_given_names, 
                             unique_corr_names, unique_segment_names, unique_taste_names, 
@@ -672,6 +672,98 @@ def plot_corr_cutoff_epochs(all_corr_dicts, all_null_corr_dicts, corr_dict, null
         f_rate_box.savefig(os.path.join(plot_save_dir,corr_name+'_rate_epoch_at_cutoff_box.svg'))
         plt.close(f_rate_box)
         
+def plot_corr_cutoff_boxes(all_corr_dicts, all_null_corr_dicts, corr_dict, 
+                            null_corr_dict, multiday_data_dict, unique_given_names, 
+                            unique_corr_names, unique_segment_names, unique_taste_names, 
+                            max_cp, corr_cutoffs, colors, plot_save_dir, verbose = False):
+    
+    "Plot boxplots of individual null and animal rates above given cutoff"
+    
+    warnings.filterwarnings('ignore')
+    non_none_tastes = [taste for taste in unique_taste_names if taste != 'none_0']
+    num_anim = len(unique_given_names)
+    num_tastes = len(non_none_tastes)
+    cutoffs = [0.10,0.20,0.30,0.40,0.50]
+    cutoff_inds = [np.where(corr_cutoffs == cutoffs[i])[0][0] for i in range(len(cutoffs))]
+    cutoff_folders = ['cutoff_0_10','cutoff_0_20','cutoff_0_30','cutoff_0_40','cutoff_0_50']
+    
+    for cf_i, cf in enumerate(cutoff_folders):
+        
+        if not os.path.isdir(os.path.join(plot_save_dir,cf)):
+            os.mkdir(os.path.join(plot_save_dir,cf))
+            
+        c_val = cutoffs[cf_i]
+        c_ind = cutoff_inds[cf_i]
+        
+        for corr_name in unique_corr_names:
+            all_dev_corr_inds = all_corr_dicts[corr_name]
+            
+            f_box, ax_box = plt.subplots(nrows = len(unique_segment_names),\
+                                           ncols = max_cp, figsize=(8,8),\
+                                        sharex = True, sharey = True)
+            for s_i, seg_name in enumerate(unique_segment_names):
+                for cp_i in range(max_cp):
+                    x_tick_labels = []
+                    for t_i, taste in enumerate(non_none_tastes):
+                        animal_inds = all_dev_corr_inds[seg_name][cp_i][taste]
+                        anim_rates = []
+                        null_rates = []
+                        for gn_i, g_n in enumerate(unique_given_names):
+                            #Collect true data
+                            animal_seg_times = multiday_data_dict[g_n]['segment_times']
+                            animal_seg_names = multiday_data_dict[g_n]['segment_names']
+                            a_s_ind = [i for i in range(len(animal_seg_names)) if animal_seg_names[i] == seg_name][0]
+                            seg_len = (animal_seg_times[a_s_ind+1]-animal_seg_times[a_s_ind])*(1/1000) #seconds length
+                            try:
+                                true_rate = len(animal_inds[g_n][c_ind])/seg_len
+                                anim_rates.append(true_rate)
+                            except:
+                                errormsg = g_n + ' does not have ' + seg_name + \
+                                    ' epoch ' + str(cp_i) + ' ' + taste + ' data.'
+                                if verbose == True:
+                                    print(errormsg)
+                            #Collect null data
+                            num_null = null_corr_dict[g_n]['num_null']
+                            try:
+                                null_data = null_corr_dict[g_n][seg_name][taste][corr_name][cp_i]
+                                anim_null_rates = []
+                                for null_i in range(num_null):
+                                    null_rate = len(np.where(null_data[null_i] > c_val)[0])/seg_len
+                                    anim_null_rates.append(null_rate)
+                                null_rates.append(np.nanmean(anim_null_rates))
+                            except:
+                                errormsg = g_n + ' does not have ' + seg_name + \
+                                    ' epoch ' + str(cp_i) + ' ' + taste + ' data.'
+                                if verbose == True:
+                                    print(errormsg)
+                        #Create box plot
+                        anim_x = 2*t_i + 0.1*np.random.randn(num_anim)
+                        ax_box[s_i,cp_i].boxplot(anim_rates,positions=[2*t_i])
+                        ax_box[s_i,cp_i].scatter(anim_x,anim_rates,color='g',\
+                                                 alpha=0.5)
+                        x_tick_labels.append(taste)
+                        null_x = 2*t_i + 1 + 0.1*np.random.randn(len(null_rates))
+                        ax_box[s_i,cp_i].boxplot(null_rates,positions=[2*t_i+1])
+                        ax_box[s_i,cp_i].scatter(null_x,null_rates,color='g',\
+                                                 alpha=0.5)
+                        x_tick_labels.append(taste + ' null')
+                        #Sig test
+                        tt_result = ttest_ind(anim_rates,null_rates,alternative='two-sided')
+                        if tt_result[1] <= 0.05:
+                            height = 0.05+np.max([np.max(anim_rates),np.max(null_rates)])
+                            ax_box[s_i,cp_i].plot([2*t_i,2*t_i+1],[height,height],color='k')
+                            ax_box[s_i,cp_i].scatter(2*t_i+0.5,height+0.025,'*tt')
+                    ax_box[s_i,cp_i].set_xticks(np.arange(num_tastes*2),x_tick_labels,rotation=45)
+                    if s_i == 0:
+                        ax_box[s_i,cp_i].set_title('Epoch ' + str(cp_i))
+                ax_box[s_i,0].set_ylabel(seg_name)
+            plt.suptitle('Event Rates at Cutoff = ' + str(c_val))
+            plt.tight_layout()
+            f_box.savefig(os.path.join(os.path.join(plot_save_dir,cf),corr_name+'_rate_at_' + cf + '.png'))
+            f_box.savefig(os.path.join(os.path.join(plot_save_dir,cf),corr_name+'_rate_at_' + cf + '.svg'))
+            plt.close(f_box)
+    
+    
         
 def compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
                        unique_decode_names, unique_decode_groups, unique_segment_names, 
