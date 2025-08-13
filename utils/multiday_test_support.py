@@ -211,92 +211,13 @@ taste_unique_categories, training_matrices, training_labels = lstm.create_taste_
                          start_dig_in_times, pre_taste_dt, post_taste_dt, 
                          all_dig_in_names, num_bins, z_bin_dt, start_bins=0)
 
+#%% get deviation matrices
 
-# import_deviations()
+dev_matrices = lstm.create_dev_matrices(segment_spike_times, segments_to_analyze, 
+                        start_end_times, deviations, z_bin_dt, num_bins)
 
-print("\tNow importing calculated deviations for first day")
+#%% run training
 
-num_seg_to_analyze = len(day_vars[0]['segments_to_analyze'])
-segment_names_to_analyze = [day_vars[0]['segment_names'][i] for i in day_vars[0]['segments_to_analyze']]
-segment_times_to_analyze_reshaped = [
-    [day_vars[0]['segment_times'][i], day_vars[0]['segment_times'][i+1]] for i in day_vars[0]['segments_to_analyze']]
-segment_spike_times_to_analyze = [day_vars[0]['segment_spike_times'][i] for i in day_vars[0]['segments_to_analyze']]
-segment_names_to_analyze = segment_names_to_analyze
 
-segment_deviations = []
-for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
-    filepath = os.path.join(day_vars[0]['dev_dir'],segment_names_to_analyze[s_i],'deviations.json')
-    with gzip.GzipFile(filepath, mode="r") as f:
-        json_bytes = f.read()
-        json_str = json_bytes.decode('utf-8')
-        data = json.loads(json_str)
-        segment_deviations.append(data)
+#%% run testing
 
-print("\tNow pulling true deviation rasters")
-#Note, these will already reflect the held units
-segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
-    segment_dev_fr_vecs_zscore, _, _ = dev_f.create_dev_rasters(num_seg_to_analyze, 
-                                                        segment_spike_times_to_analyze,
-                                                        np.array(segment_times_to_analyze_reshaped),
-                                                        segment_deviations, day_vars[0]['pre_taste'])
-
-# decode_groups()
-
-print("Determine decoding groups")
-#Create fr vector grouping instructions: list of epoch,taste pairs
-non_none_tastes = [taste for taste in all_dig_in_names if taste[:4] != 'none']
-non_none_tastes = non_none_tastes
-# group_list, group_names = ddf.multiday_decode_groupings(day_vars[0]['epochs_to_analyze'],
-#                                                 all_dig_in_names,
-#                                                 non_none_tastes)
-group_list, group_names = ddf.multiday_decode_groupings_split_identity(day_vars[0]['epochs_to_analyze'],
-                                                all_dig_in_names,
-                                                
-                                                non_none_tastes)
-
-# decode_zscored()
-
-decode_dir = os.path.join(bayes_dir,'split_identity_test') #All_Neurons_Z_Scored #split_identity_test
-if os.path.isdir(decode_dir) == False:
-    os.mkdir(decode_dir)
-
-#Save the group information for cross-animal use 
-group_dict = dict()
-for gn_i, gn in enumerate(group_names):
-    group_dict[gn] = group_list[gn_i]
-np.save(os.path.join(decode_dir,'group_dict.npy'),group_dict,allow_pickle=True)
-
-z_score = True
-tastant_fr_dist = tastant_fr_dist_z_pop
-dev_vecs = segment_dev_fr_vecs_zscore
-segment_spike_times = day_vars[0]['segment_spike_times']
-segment_times = day_vars[0]['segment_times']
-segment_names = day_vars[0]['segment_names']
-start_dig_in_times = day_vars[0]['start_dig_in_times']
-bin_dt = day_vars[0]['bin_dt']
-epochs_to_analyze = day_vars[0]['epochs_to_analyze']
-segments_to_analyze = day_vars[0]['segments_to_analyze']
-
-# # decoder_accuracy()
-# ddf.decoder_accuracy_tests(tastant_fr_dist, segment_spike_times, 
-#                 all_dig_in_names, segment_times, segment_names, 
-#                 start_dig_in_times, taste_num_deliv,
-#                 group_list, group_names, non_none_tastes, 
-#                 decode_dir, bin_dt, z_score, 
-#                 epochs_to_analyze, segments_to_analyze)
-
-# # decode_sliding_bins()
-# ddf.decode_sliding_bins(tastant_fr_dist, segment_spike_times, all_dig_in_names, 
-#                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
-#                   bin_dt, group_list, group_names, non_none_tastes, decode_dir, 
-#                   z_score, segments_to_analyze)
-
-# # decode_deviations()
-ddf.decode_deviations(tastant_fr_dist, tastant_spike_times,
-                      segment_spike_times, all_dig_in_names, 
-                      segment_times, segment_names, 
-                      start_dig_in_times, taste_num_deliv, 
-                      segment_dev_times, dev_vecs, 
-                      bin_dt, group_list, group_names, 
-                      non_none_tastes, decode_dir, z_score, 
-                      segments_to_analyze)

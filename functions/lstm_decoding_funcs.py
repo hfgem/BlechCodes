@@ -125,11 +125,79 @@ def create_taste_matrices(num_neur, tastant_spike_times, segment_spike_times,
     
     return taste_unique_categories, training_matrices, training_labels
     
-def create_dev_matrices():
+def create_dev_matrices(segment_spike_times, segments_to_analyze, 
+                        start_end_times, deviations, z_bin_dt, num_bins):
     """Function to take spike times during deviation events and create 
     matrices of timeseries firing trajectories the same size as taste trajectories"""
     
+    half_z_bin = np.floor(z_bin_dt/2).astype('int')
+    dev_matrices = []
     
+    for s_ind, s_i in enumerate(segments_to_analyze):
+        seg_dev_matrices = []
+        
+        seg_spikes = spike_times[s_i]
+        seg_start = int(start_end_times[s_i][0])
+        seg_end = int(start_end_times[s_i][1])
+        seg_len = seg_end - seg_start
+        num_neur = len(seg_spikes)
+        spikes_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in range(num_neur):
+            neur_spikes = np.array(seg_spikes[n_i]).astype(
+                'int') - seg_start
+            spikes_bin[n_i, neur_spikes] = 1
+        # Calculate z-score mean and std
+        time_bin_starts = np.arange(
+            seg_start+half_z_bin, seg_end-half_z_bin, bin_dt)
+        segment_spike_times_s_i = segment_spike_times[s_i]
+        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in range(num_neur):
+            n_i_spike_times = (np.array(
+                segment_spike_times_s_i[n_i]) - seg_start).astype('int')
+            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
+        tb_fr = np.zeros((num_neur, len(time_bin_starts)))
+        for tb_i, tb in enumerate(time_bin_starts):
+            tb_fr[:, tb_i] = np.sum(segment_spike_times_s_i_bin[:, tb-seg_start -
+                                    half_z_bin:tb+half_z_bin-seg_start], 1)/(2*half_z_bin*(1/1000))
+        mean_fr = np.mean(tb_fr, 1)
+        std_fr = np.std(tb_fr, 1)
+        
+        seg_fr = np.zeros(np.shape(spikes_bin))
+        for tb_i in range(num_dt - z_bin_dt):
+            seg_fr[:, tb_i] = np.sum(
+                spikes_bin[:, tb_i:tb_i+z_bin_dt], 1)/z_bin
+        mean_fr = np.nanmean(seg_fr, 1)
+        std_fr = np.nanstd(seg_fr, 1)
+        zscore_means.append(mean_fr)
+        zscore_stds.append(std_fr)
+        #Now pull deviation matrices
+        seg_dev = deviations[s_ind]
+        seg_dev[0] = 0
+        seg_dev[-1] = 0
+        change_inds = np.diff(seg_dev)
+        start_dev_bouts = np.where(change_inds == 1)[0] + 1
+        end_dev_bouts = np.where(change_inds == -1)[0]
+        for b_i in range(len(start_dev_bouts)):
+            dev_s_i = start_dev_bouts[b_i]
+            dev_e_i = end_dev_bouts[b_i]
+            dev_len = dev_e_i - dev_s_i
+            
+            dev_rast_i = spikes_bin[:, dev_s_i:dev_e_i]
+            
+            bin_starts = np.ceil(np.linspace(0,dev_len,num_bins+2)).astype('int')
+            
+            dev_fr_mat = np.zeros((num_neur,num_bins))
+            for nb_i in range(num_bins):
+                bs_i = bin_starts[nb_i]
+                be_i = bin_starts[nb_i+2]
+                dev_fr_mat[:,nb_i] = np.sum(dev_rast_i[:,bs_i:be_i],1)/((be_i-bs_i)/1000)
+            z_dev_fr_mat = (dev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+            seg_dev_matrices.append(z_dev_fr_mat)
+        dev_matrices.append(seg_dev_matrices)
+        
+    return dev_matrices
+        
+            
 def lstm_cross_validation():
     """Function to perform training and cross-validation of a LSTM model using
     taste response firing trajectories to determine best model size"""
