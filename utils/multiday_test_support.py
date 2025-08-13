@@ -200,50 +200,17 @@ for n_i in range(num_days):
     day_vars[n_i]['num_pt_cp'] = day_vars[n_i]['num_cp'] + 2
     
 
-# pull_taste_fr_dist()
+#%% get taste response matrices
 
-all_dig_in_names = []
-tastant_fr_dist_pop = dict()
-taste_num_deliv = []
-max_hz_pop = 0
-tastant_fr_dist_z_pop = dict()
-max_hz_z_pop = 0
-min_hz_z_pop = np.inf
-max_num_cp = 0
-for n_i in range(num_days):
-    #Collect tastant names
-    day_names = day_vars[n_i]['dig_in_names']
-    day_cp = day_vars[n_i]['num_cp']
-    if day_cp > max_num_cp:
-        max_num_cp = day_cp
-    new_day_names = [dn + '_' + str(n_i) for dn in day_names]
-    all_dig_in_names.extend(new_day_names)
-    #Collect firing rate distribution dictionaries
-    tastant_fr_dist_pop_day, taste_num_deliv_day, max_hz_pop_day = ddf.taste_fr_dist(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
-                                                                    	 day_vars[n_i]['pop_taste_cp_raster_inds'], day_vars[n_i]['bayes_fr_bins'],
-                                                                    	 day_vars[n_i]['start_dig_in_times'], day_vars[n_i]['pre_taste_dt'],
-                                                                    	 day_vars[n_i]['post_taste_dt'], day_vars[n_i]['trial_start_frac'])
-    start_update_ind = len(tastant_fr_dist_pop)
-    for tf_i in range(len(tastant_fr_dist_pop_day)):
-        tastant_fr_dist_pop[tf_i+start_update_ind] = tastant_fr_dist_pop_day[tf_i]
-    taste_num_deliv.extend(list(taste_num_deliv_day))
-    if max_hz_pop_day > max_hz_pop:
-        max_hz_pop = max_hz_pop_day
-    tastant_fr_dist_z_pop_day, _, max_hz_z_pop_day, min_hz_z_pop_day = ddf.taste_fr_dist_zscore(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
-                                                                                        day_vars[n_i]['segment_spike_times'], day_vars[n_i]['segment_names'],
-                                                                                        day_vars[n_i]['segment_times'], day_vars[n_i]['pop_taste_cp_raster_inds'],
-                                                                                        day_vars[n_i]['bayes_fr_bins'], day_vars[n_i]['start_dig_in_times'],
-                                                                                        day_vars[n_i]['pre_taste_dt'], day_vars[n_i]['post_taste_dt'], 
-                                                                                        day_vars[n_i]['bin_dt'], day_vars[n_i]['trial_start_frac'])
-    start_update_ind = len(tastant_fr_dist_z_pop)
-    for tf_i in range(len(tastant_fr_dist_z_pop_day)):
-        tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
-    if max_hz_z_pop_day > max_hz_z_pop:
-        max_hz_z_pop = max_hz_z_pop_day
-    if min_hz_z_pop_day < min_hz_z_pop:
-        min_hz_z_pop = min_hz_z_pop_day
+import functions.lstm_decoding_funcs as lstm
 
-palatable_dig_inds = []
+num_bins = 4
+
+taste_unique_categories, training_matrices, training_labels = lstm.create_taste_matrices(num_neur, tastant_spike_times, segment_spike_times,
+                         segment_names, segment_times, cp_raster_inds, fr_bins,
+                         start_dig_in_times, pre_taste_dt, post_taste_dt, 
+                         all_dig_in_names, num_bins, z_bin_dt, start_bins=0)
+
 
 # import_deviations()
 

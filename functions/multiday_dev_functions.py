@@ -5,8 +5,7 @@ Created on Mon Jan 13 13:59:01 2025
 
 @author: Hannah Germaine
 
-A collection of functions dedicated to testing deviations' correlations and
-decodes against multiple days of taste responses.
+A collection of functions dedicated to testing deviations' correlations against multiple days of taste responses.
 """
 
 import os
@@ -55,9 +54,9 @@ def multiday_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
         dev_fr_vecs_z = segment_dev_fr_vecs_zscore[s_i]
         
         #Run correlation analyses
-        correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
-                                    taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
-                                    dev_times,dev_fr_vecs,seg_name,corr_dir)
+        # correlate_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_pop,
+        #                             taste_num_deliv,max_hz_pop,max_num_cp,dev_rast,
+        #                             dev_times,dev_fr_vecs,seg_name,corr_dir)
         correlate_dev_to_taste_zscore(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
                                           taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
                                           max_num_cp,dev_rast,dev_times,dev_fr_vecs_z,
