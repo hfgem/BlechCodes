@@ -101,10 +101,11 @@ root_path = os.path.join(*list(day_dir_array[0,:stop_ind]))
 save_dir = os.path.join(root_path,joint_name)
 if not os.path.isdir(save_dir):
     os.mkdir(save_dir)
-bayes_dir = os.path.join(save_dir,\
-                              'Deviation_Dependent_Decoding/')
-if os.path.isdir(bayes_dir) == False:
-    os.mkdir(bayes_dir)
+    
+    
+lstm_dir = os.path.join(save_dir,'LSTM_Decoding')
+if os.path.isdir(lstm_dir) == False:
+    os.mkdir(lstm_dir)
 
 def get_spike_time_datasets(args):
     segment_times, spike_times, num_neur, keep_neur, start_dig_in_times, \
@@ -199,25 +200,70 @@ for n_i in range(num_days):
         day_vars[n_i]['hdf5_dir'], 'changepoint_data', 'pop_taste_cp_raster_inds')
     day_vars[n_i]['num_pt_cp'] = day_vars[n_i]['num_cp'] + 2
     
-
-#%% get taste response matrices
-
+   
+#%% import deviations
 import functions.lstm_decoding_funcs as lstm
 
-num_bins = 4
+num_seg_to_analyze = len(day_vars[0]['segments_to_analyze'])
+segment_names_to_analyze = [day_vars[0]['segment_names'][i] for i in day_vars[0]['segments_to_analyze']]
+segment_times_to_analyze_reshaped = [
+    [day_vars[0]['segment_times'][i], day_vars[0]['segment_times'][i+1]] for i in day_vars[0]['segments_to_analyze']]
+segment_spike_times_to_analyze = [day_vars[0]['segment_spike_times'][i] for i in day_vars[0]['segments_to_analyze']]
 
-taste_unique_categories, training_matrices, training_labels = lstm.create_taste_matrices(num_neur, tastant_spike_times, segment_spike_times,
-                         segment_names, segment_times, cp_raster_inds, fr_bins,
-                         start_dig_in_times, pre_taste_dt, post_taste_dt, 
-                         all_dig_in_names, num_bins, z_bin_dt, start_bins=0)
+segment_deviations = []
+for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
+    filepath = os.path.join(day_vars[0]['dev_dir'],segment_names_to_analyze[s_i],'deviations.json')
+    with gzip.GzipFile(filepath, mode="r") as f:
+        json_bytes = f.read()
+        json_str = json_bytes.decode('utf-8')
+        data = json.loads(json_str)
+        segment_deviations.append(data)
+   
+# get deviation matrices
+try:
+    dev_matrices = np.load(os.path.join(lstm_dir,'dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
+except:
+    dev_matrices = lstm.create_dev_matrices(day_vars, segment_deviations, z_bin_dt, num_bins)
+    np.save(os.path.join(lstm_dir,'dev_fr_vecs_zscore.npy'),dev_matrices,allow_pickle=True)
 
-#%% get deviation matrices
+#%% get_taste_response_matrices
 
-dev_matrices = lstm.create_dev_matrices(segment_spike_times, segments_to_analyze, 
-                        start_end_times, deviations, z_bin_dt, num_bins)
+def get_taste_response_matrices(start_bins):
+    day_1_tastes = day_vars[0]['dig_in_names']
+    all_dig_in_names = []
+    all_dig_in_names.extend([d1 + '_0' for d1 in day_1_tastes])
+    all_segment_times = []
+    all_tastant_spike_times = []
+    for n_i in np.arange(1,num_days):
+        new_day_tastes = day_vars[n_i]['dig_in_names']
+        all_dig_in_names.extend([ndt + '_' + str(n_i) for ndt in new_day_tastes if 
+                                 len(np.intersect1d(np.array([ndt.split('_')]),np.array(day_1_tastes))) == 0])
+        
+    taste_unique_categories, training_matrices, training_labels = lstm.create_taste_matrices(\
+                           day_vars, all_dig_in_names, num_bins, z_bin_dt, start_bins=0)
+    
+    return taste_unique_categories, training_matrices, training_labels
 
 #%% run training
 
+start_bin_array = np.arange(100,600,100)
+num_bins = 4
+z_bin_dt = 100
+
+for sb in start_bin_array:
+    print("\n--- Testing start bin " + str(sb) + "---")
+    
+    sb_save_dir = os.path.join(lstm_dir,'start_t_' + str(sb))
+    if not os.path.isdir(sb_save_dir):
+        os.mkdir(sb_save_dir)
+    
+    taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(sb)
+    
+    fold_accuracies = lstm_cross_validation(training_matrices,\
+                            training_labels,taste_unique_categories,\
+                                sb_save_dir)
+    
+    np.save(os.path.join(sb_save_dir,'fold_accuracies.npy'),fold_accuracies,allow_pickle=True)
 
 #%% run testing
 

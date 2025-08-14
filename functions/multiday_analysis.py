@@ -44,10 +44,6 @@ class run_multiday_analysis():
         self.import_deviations()
         self.decode_groups()
         self.multiday_dev_tests()
-        #Null deviation analyses next
-        self.import_null_deviations()
-        self.get_null_rasters()
-        self.multiday_null_dev_tests()
         
     def create_save_dir(self,):
         # Using the directories of the different days find a common root folder and create save dir there
@@ -263,126 +259,6 @@ class run_multiday_analysis():
         self.segment_dev_fr_vecs = segment_dev_fr_vecs
         self.segment_dev_fr_vecs_zscore = segment_dev_fr_vecs_zscore
         
-    def import_null_deviations(self,):
-        print("\tNow importing calculated null deviations for first day")
-        num_null = self.day_vars[0]['num_null']
-        num_neur = self.data_dict[0]['num_neur']
-        keep_neur = np.array(self.day_vars[0]['keep_neur'])
-        null_dir = self.day_vars[0]['null_dir']
-        segments_to_analyze = self.day_vars[0]['segments_to_analyze']
-        num_seg_to_analyze = len(segments_to_analyze)
-        segment_names_to_analyze = [self.day_vars[0]['segment_names'][i] for i in self.day_vars[0]['segments_to_analyze']]
-        segment_times_to_analyze_reshaped = [
-            [self.day_vars[0]['segment_times'][i], self.day_vars[0]['segment_times'][i+1]] for i in self.day_vars[0]['segments_to_analyze']]
-        segment_spike_times_to_analyze = [self.day_vars[0]['segment_spike_times'][i] for i in self.day_vars[0]['segments_to_analyze']]
-        self.segment_names_to_analyze = segment_names_to_analyze
-        
-        # _____Check for null datasets generated previously_____
-        for s_ind, s_i in enumerate(segments_to_analyze):
-            seg_null_dir = os.path.join(null_dir,segment_names_to_analyze[s_ind])
-            try:
-                filepath = os.path.join(seg_null_dir,'null_0.json')
-                with gzip.GzipFile(filepath, mode="r") as f:
-                    json_bytes = f.read()
-                    json_str = json_bytes.decode('utf-8')
-                    null_segment_spike_times = json.loads(json_str)
-                print('\t' + segment_names_to_analyze[s_ind] +
-                      ' null distributions previously created')
-            except:
-                # First create a null distribution set
-                print('\tMissing ' +
-                      segment_names_to_analyze[s_ind] + ' null distributions')
-                quit()
-        print('\tGetting null distribution spike times')
-        # _____Grab null dataset spike times_____
-        all_null_segment_spike_times = []
-        for null_i in range(num_null):
-            null_segment_spike_times = []
-            for s_ind, s_i in enumerate(segments_to_analyze):
-                seg_null_dir = os.path.join(null_dir,segment_names_to_analyze[s_ind])
-                # Import the null distribution into memory
-                filepath = os.path.join(seg_null_dir,'null_' + str(null_i) + '.json')
-                try:
-                    with gzip.GzipFile(filepath, mode="r") as f:
-                        json_bytes = f.read()
-                        json_str = json_bytes.decode('utf-8')
-                        data = json.loads(json_str)
-                    seg_start = segment_times_to_analyze_reshaped[s_ind][0]
-                    seg_end = segment_times_to_analyze_reshaped[s_ind][1]
-                    null_seg_st = []
-                    for n_i in keep_neur:
-                        data_array = np.array(data[n_i])
-                        seg_spike_inds = np.where(
-                            (data_array >= seg_start)*(data_array <= seg_end))[0]
-                        null_seg_st.append(
-                            list(np.array(data_array)[seg_spike_inds]))
-                    null_segment_spike_times.append(null_seg_st)
-                except:
-                    null_exists = 0
-            if len(null_segment_spike_times) > 0:
-                all_null_segment_spike_times.append(null_segment_spike_times)
-        self.all_null_segment_spike_times = all_null_segment_spike_times
-
-        num_null = len(all_null_segment_spike_times)
-        self.num_null = num_null
-        
-        # _____Import null deviations for all segments_____
-        print("\tNow importing previously calculated null deviations")
-        all_null_deviations = []
-        for null_i in tqdm.tqdm(range(num_null)):
-            null_segment_deviations = []
-            for s_ind, s_i in enumerate(segments_to_analyze):
-                filepath = os.path.join(self.day_vars[0]['dev_dir'],'null_data', \
-                    segment_names_to_analyze[s_ind],'null_' + \
-                    str(null_i) + '_deviations.json')
-                try:
-                    with gzip.GzipFile(filepath, mode="r") as f:
-                        json_bytes = f.read()
-                        json_str = json_bytes.decode('utf-8')
-                        data = json.loads(json_str)
-                        null_segment_deviations.append(data)
-                except:
-                    null_exist = 0 #Placeholder for missing null
-            if len(null_segment_deviations) > 0:
-                all_null_deviations.append(null_segment_deviations)
-        
-        self.all_null_deviations = all_null_deviations
-        
-    def get_null_rasters(self,):
-        segments_to_analyze = self.day_vars[0]['segments_to_analyze']
-        num_seg_to_analyze = len(segments_to_analyze)
-        segment_names_to_analyze = [self.day_vars[0]['segment_names'][i] for i in self.day_vars[0]['segments_to_analyze']]
-        segment_times_to_analyze_reshaped = [
-            [self.day_vars[0]['segment_times'][i], self.day_vars[0]['segment_times'][i+1]] for i in self.day_vars[0]['segments_to_analyze']]
-        segment_spike_times_to_analyze = [self.day_vars[0]['segment_spike_times'][i] for i in self.day_vars[0]['segments_to_analyze']]
-        z_bin = self.day_vars[0]['z_bin']
-        
-        # Calculate segment deviation spikes
-        print("\tNow pulling null deviation rasters")
-        null_dev_rasters = []
-        null_dev_times = []
-        null_segment_dev_fr_vecs = []
-        null_segment_dev_fr_vecs_zscore = []
-        for null_i in tqdm.tqdm(range(self.num_null)):
-            null_segment_deviations = self.all_null_deviations[null_i]
-            null_segment_spike_times = self.all_null_segment_spike_times[null_i]
-            null_segment_dev_rasters_i, null_segment_dev_times_i, null_segment_dev_fr_vecs_i, \
-                null_segment_dev_fr_vecs_zscore_i, _, _= df.create_dev_rasters(num_seg_to_analyze,
-                                                                                               null_segment_spike_times,
-                                                                                               segment_times_to_analyze_reshaped,
-                                                                                               null_segment_deviations, z_bin)
-            null_dev_rasters.append(null_segment_dev_rasters_i)
-            null_dev_times.append(null_segment_dev_times_i)
-            null_segment_dev_fr_vecs.append(null_segment_dev_fr_vecs_i)
-            null_segment_dev_fr_vecs_zscore.append(null_segment_dev_fr_vecs_zscore_i)
-        
-        self.__dict__.pop('all_null_deviations', None)
-        self.null_dev_rasters = null_dev_rasters
-        self.null_dev_times = null_dev_times
-        self.null_segment_dev_fr_vecs = null_segment_dev_fr_vecs
-        self.null_segment_dev_fr_vecs_zscore = null_segment_dev_fr_vecs_zscore
-        
-           
     def decode_groups(self,):
         print("Determine decoding groups")
         #Create fr vector grouping instructions: list of epoch,taste pairs
@@ -415,25 +291,7 @@ class run_multiday_analysis():
                                   self.day_vars[0]['segment_times'], 
                                   self.day_vars[0]['segment_spike_times'],
                                   self.day_vars[0]['bin_dt'],self.segment_names_to_analyze)
-    def multiday_null_dev_tests(self,):
-        """
-        Runs correlation between deviation events and taste responses as well
-        as probabilistic decoding of deviation events using taste responses. 
-        """
-        segment_names_to_analyze = [self.day_vars[0]['segment_names'][i] for i in self.day_vars[0]['segments_to_analyze']]
-        segment_times_to_analyze_reshaped = [
-            [self.day_vars[0]['segment_times'][i], self.day_vars[0]['segment_times'][i+1]] for i in self.day_vars[0]['segments_to_analyze']]
-        segment_spike_times_to_analyze = [self.day_vars[0]['segment_spike_times'][i] for i in self.day_vars[0]['segments_to_analyze']]
-        
-        mdf.multiday_null_dev_analysis(self.save_dir,self.all_dig_in_names,self.tastant_fr_dist_pop,
-                                  self.taste_num_deliv,self.max_hz_pop,self.tastant_fr_dist_z_pop,
-                                  self.max_hz_z_pop,self.min_hz_z_pop,self.max_num_cp,
-                                  self.null_dev_rasters,self.null_dev_times,
-                                  self.null_segment_dev_fr_vecs,self.null_segment_dev_fr_vecs_zscore,
-                                  self.day_vars[0]['segments_to_analyze'],segment_times_to_analyze_reshaped, 
-                                  segment_spike_times_to_analyze,
-                                  self.day_vars[0]['bin_dt'],segment_names_to_analyze)
-        
+    
     def decode_zscored(self,):
         """
         Runs decoding of zscored data
@@ -493,17 +351,3 @@ class run_multiday_analysis():
                               self.non_none_tastes, self.decode_dir, self.z_score, 
                               self.epochs_to_analyze, self.segments_to_analyze)
         
-    # def multiday_nn_class(self,):
-    #     """
-    #     Runs neural network training/testing on taste responses followed by 
-    #     classification of deviation events.
-    #     """
-    #     mnf.run_nn_pipeline(self.save_dir,self.all_dig_in_names,self.tastant_fr_dist_pop,
-    #                          self.taste_num_deliv,self.max_hz_pop,self.tastant_fr_dist_z_pop,
-    #                          self.max_hz_z_pop,self.min_hz_z_pop,self.max_num_cp,
-    #                          self.segment_dev_rasters,self.segment_dev_times,
-    #                          self.segment_dev_fr_vecs,self.segment_dev_fr_vecs_zscore,
-    #                          self.day_vars[0]['segments_to_analyze'],
-    #                          self.day_vars[0]['segment_times'], 
-    #                          self.day_vars[0]['segment_spike_times'],
-    #                          self.day_vars[0]['bin_dt'],self.segment_names_to_analyze)

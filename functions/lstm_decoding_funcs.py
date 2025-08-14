@@ -13,132 +13,111 @@ import os
 import tqdm
 import itertools
 import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras import layers, Model
-import matplotlib.pyplot as plt
+from sklearn.model_selection import StratifiedKFold
 from matplotlib import colormaps
+os.environ["OMP_NUM_THREADS"] = "4"
 
-def create_taste_matrices(num_neur, tastant_spike_times, segment_spike_times,
-                         segment_names, segment_times, cp_raster_inds, fr_bins,
-                         start_dig_in_times, pre_taste_dt, post_taste_dt, 
-                         all_dig_in_names, num_bins, z_bin_dt, start_bins=0):
+def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt, start_bins=0):
     """Function to take spike times following taste delivery and create 
     matrices of timeseries firing trajectories"""
     
-    num_tastes = len(tastant_spike_times)
-    num_cp = np.shape(cp_raster_inds[0])[-1] - 1
-    bin_starts = np.linspace(start_bins,post_taste_dt,num_bins+1)
+    print("\n--- Creating Taste Matrices ---")
     half_z_bin = np.floor(z_bin_dt/2).astype('int')
-    max_num_deliv = 0  # Find the maximum number of deliveries across tastants
-    for t_i in range(num_tastes):
-        num_deliv = len(tastant_spike_times[t_i])
-        if num_deliv > max_num_deliv:
-            max_num_deliv = num_deliv
-    del t_i, num_deliv
     
     #Create storage matrices and outputs
     taste_unique_categories = list(all_dig_in_names)
-    taste_unique_categories.append('Null')
-    taste_matrices = []
-    taste_labels = []
-    null_matrices = []
-    null_labels = []
-    #Get taste segment z-score info
-    s_i_taste = np.nan*np.ones(1)
-    for s_i in range(len(segment_names)):
-        if segment_names[s_i].lower() == 'taste':
-            s_i_taste[0] = s_i
-
-    if not np.isnan(s_i_taste[0]):
-        s_i = int(s_i_taste[0])
-        seg_start = int(segment_times[s_i])
-        seg_end = int(segment_times[s_i+1])
-        seg_len = seg_end - seg_start
-        time_bin_starts = np.arange(
-            seg_start+half_z_bin, seg_end-half_z_bin, bin_dt)
-        segment_spike_times_s_i = segment_spike_times[s_i]
-        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
-        for n_i in range(num_neur):
-            n_i_spike_times = (np.array(
-                segment_spike_times_s_i[n_i]) - seg_start).astype('int')
-            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
-        tb_fr = np.zeros((num_neur, len(time_bin_starts)))
-        for tb_i, tb in enumerate(time_bin_starts):
-            tb_fr[:, tb_i] = np.sum(segment_spike_times_s_i_bin[:, tb-seg_start -
-                                    half_z_bin:tb+half_z_bin-seg_start], 1)/(2*half_z_bin*(1/1000))
-        mean_fr = np.mean(tb_fr, 1)
-        std_fr = np.std(tb_fr, 1)
-    else:
-        mean_fr = np.zeros(num_neur)
-        std_fr = np.zeros(num_neur)
-    
-    #Generate response matrices
-    for t_i in range(num_tastes):
-        num_deliv = (taste_num_deliv[t_i]).astype('int')
-        taste_cp = cp_raster_inds[t_i]
-        for d_i in range(num_deliv):  # index for that taste
-            if d_i >= trial_start_ind:
-                raster_times = tastant_spike_times[t_i][d_i]
-                start_taste_i = start_dig_in_times[t_i][d_i]
-                deliv_cp = taste_cp[d_i, :] - pre_taste_dt
-                # Binerize the activity following taste delivery start
-                times_post_taste = [(np.array(raster_times[n_i])[np.where((raster_times[n_i] >= start_taste_i)*(
-                    raster_times[n_i] < start_taste_i + post_taste_dt))[0]] - start_taste_i).astype('int') for n_i in range(num_neur)]
-                bin_post_taste = np.zeros((num_neur, post_taste_dt))
-                for n_i in range(num_neur):
-                    bin_post_taste[n_i, times_post_taste[n_i]] += 1
-                #Calculate binned firing rate matrix
-                fr_mat = np.zeros((num_neur,num_bins))
-                for bin_i in range(num_bins):
-                    bs_i = bin_starts[bin_i]
-                    be_i = bin_starts[bin_i+1]
-                    b_len = (be_i - bs_i)/1000
-                    fr_mat[:,bin_i] = np.sum(bin_post_taste[:,bs_i:be_i],1)/b_len
-                #Convert to z-scored matrix
-                fr_z_mat = (fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
-                taste_matrices.append(fr_z_mat)
-                taste_labels.append(t_i)
-                #Generate null taste response matrix - same firing count across interval, but shuffled times
-                rand_times_post_taste = [np.random.randint(0,post_taste_dt,len(tpt)) for tpt in times_post_taste]
-                rand_bin_post_taste = np.zeros((num_neur, post_taste_dt))
-                for n_i in range(num_neur):
-                    rand_bin_post_taste[n_i, rand_times_post_taste[n_i]] += 1
-                rand_fr_mat = np.zeros((num_neur,num_bins))
-                for bin_i in range(num_bins):
-                    bs_i = bin_starts[bin_i]
-                    be_i = bin_starts[bin_i+1]
-                    b_len = (be_i - bs_i)/1000
-                    fr_mat[:,bin_i] = np.sum(bin_post_taste[:,bs_i:be_i],1)/b_len
-                rand_fr_z_mat = (fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
-                null_matrices.append(fr_z_mat)
-                null_labels.append(len(taste_unique_categories)-1)
-    
-    #Sample null dataset to a subset that match the true taste delivery counts
-    #Combine into one dataset
-    rand_null_ind = np.random.randint(0,len(null_matrices),max_num_deliv)
     training_matrices = []
     training_labels = []
-    training_matrices.extend(taste_matrices)
-    training_labels.extend(taste_labels)
-    training_matrices.extend([null_matrices[rni] for rni in rand_null_ind])
-    training_labels.extend([null_labels[rni] for rni in rand_null_ind])
+    for t_i, t_name in tqdm.tqdm(enumerate(all_dig_in_names)):
+        taste, day = t_name.split('_')
+        day = int(day)
+        t_i_day = np.where(np.array(day_vars[day]['dig_in_names']) == taste)[0][0]
+        
+        segment_names = day_vars[day]['segment_names']
+        segment_times = day_vars[day]['segment_times']
+        segment_spike_times = day_vars[day]['segment_spike_times']
+        tastant_spike_times = day_vars[day]['tastant_spike_times']
+        num_neur = len(tastant_spike_times[0][0])
+        start_dig_in_times = day_vars[day]['start_dig_in_times']
+        pre_taste_dt = day_vars[day]['pre_taste_dt']
+        post_taste_dt = day_vars[day]['post_taste_dt']
+        bin_starts = np.ceil(np.linspace(start_bins,post_taste_dt,num_bins+1)).astype('int')
+        num_deliv = len(tastant_spike_times[t_i_day])
+        
+        #Get taste segment z-score info
+        s_i_taste = np.nan*np.ones(1)
+        for s_i in range(len(segment_names)):
+            if segment_names[s_i].lower() == 'taste':
+                s_i_taste[0] = s_i
+    
+        if not np.isnan(s_i_taste[0]):
+            s_i = int(s_i_taste[0])
+            seg_start = int(segment_times[s_i])
+            seg_end = int(segment_times[s_i+1])
+            seg_len = seg_end - seg_start
+            time_bin_starts = np.arange(
+                seg_start+half_z_bin, seg_end-half_z_bin, z_bin_dt)
+            segment_spike_times_s_i = segment_spike_times[s_i]
+            segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
+            for n_i in range(num_neur):
+                n_i_spike_times = (np.array(
+                    segment_spike_times_s_i[n_i]) - seg_start).astype('int')
+                segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
+            tb_fr = np.zeros((num_neur, len(time_bin_starts)))
+            for tb_i, tb in enumerate(time_bin_starts):
+                tb_fr[:, tb_i] = np.sum(segment_spike_times_s_i_bin[:, tb-seg_start -
+                                        half_z_bin:tb+half_z_bin-seg_start], 1)/(2*half_z_bin*(1/1000))
+            mean_fr = np.mean(tb_fr, 1)
+            std_fr = np.std(tb_fr, 1)
+        else:
+            mean_fr = np.zeros(num_neur)
+            std_fr = np.zeros(num_neur)
+        
+        #Generate response matrices
+        for d_i in range(num_deliv):  # index for that taste
+            raster_times = tastant_spike_times[t_i_day][d_i]
+            start_taste_i = start_dig_in_times[t_i_day][d_i]
+            # Binerize the activity following taste delivery start
+            times_post_taste = [(np.array(raster_times[n_i])[np.where((raster_times[n_i] >= start_taste_i)*(
+                raster_times[n_i] < start_taste_i + post_taste_dt))[0]] - start_taste_i).astype('int') for n_i in range(num_neur)]
+            bin_post_taste = np.zeros((num_neur, post_taste_dt))
+            for n_i in range(num_neur):
+                bin_post_taste[n_i, times_post_taste[n_i]] += 1
+            #Calculate binned firing rate matrix
+            fr_mat = np.zeros((num_neur,num_bins))
+            for bin_i in range(num_bins):
+                bs_i = bin_starts[bin_i]
+                be_i = bin_starts[bin_i+1]
+                b_len = (be_i - bs_i)/1000
+                fr_mat[:,bin_i] = np.sum(bin_post_taste[:,bs_i:be_i],1)/b_len
+            #Convert to z-scored matrix
+            fr_z_mat = (fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+            training_matrices.append(fr_z_mat)
+            training_labels.append(t_i)
     
     return taste_unique_categories, training_matrices, training_labels
     
-def create_dev_matrices(segment_spike_times, segments_to_analyze, 
-                        start_end_times, deviations, z_bin_dt, num_bins):
+def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
     """Function to take spike times during deviation events and create 
     matrices of timeseries firing trajectories the same size as taste trajectories"""
     
-    half_z_bin = np.floor(z_bin_dt/2).astype('int')
-    dev_matrices = []
+    print("\n--- Creating Deviation Matrices ---")
+    segment_spike_times = day_vars[0]['segment_spike_times']
+    segments_to_analyze = day_vars[0]['segments_to_analyze']
+    start_end_times = np.array(day_vars[0]['segment_times_reshaped'])[segments_to_analyze]
     
-    for s_ind, s_i in enumerate(segments_to_analyze):
+    half_z_bin = np.floor(z_bin_dt/2).astype('int')
+    dev_matrices = dict()
+    
+    for s_ind, s_i in tqdm.tqdm(enumerate(segments_to_analyze)):
         seg_dev_matrices = []
         
-        seg_spikes = spike_times[s_i]
-        seg_start = int(start_end_times[s_i][0])
-        seg_end = int(start_end_times[s_i][1])
+        seg_spikes = segment_spike_times[s_i]
+        seg_start = int(start_end_times[s_ind][0])
+        seg_end = int(start_end_times[s_ind][1])
         seg_len = seg_end - seg_start
         num_neur = len(seg_spikes)
         spikes_bin = np.zeros((num_neur, seg_len+1))
@@ -148,14 +127,15 @@ def create_dev_matrices(segment_spike_times, segments_to_analyze,
             spikes_bin[n_i, neur_spikes] = 1
         # Calculate z-score mean and std
         time_bin_starts = np.arange(
-            seg_start+half_z_bin, seg_end-half_z_bin, bin_dt)
+            seg_start+half_z_bin, seg_end-half_z_bin, z_bin_dt)
         segment_spike_times_s_i = segment_spike_times[s_i]
         segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
         for n_i in range(num_neur):
             n_i_spike_times = (np.array(
                 segment_spike_times_s_i[n_i]) - seg_start).astype('int')
             segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
-        tb_fr = np.zeros((num_neur, len(time_bin_starts)))
+        num_dt = len(time_bin_starts)
+        tb_fr = np.zeros((num_neur, num_dt))
         for tb_i, tb in enumerate(time_bin_starts):
             tb_fr[:, tb_i] = np.sum(segment_spike_times_s_i_bin[:, tb-seg_start -
                                     half_z_bin:tb+half_z_bin-seg_start], 1)/(2*half_z_bin*(1/1000))
@@ -165,11 +145,10 @@ def create_dev_matrices(segment_spike_times, segments_to_analyze,
         seg_fr = np.zeros(np.shape(spikes_bin))
         for tb_i in range(num_dt - z_bin_dt):
             seg_fr[:, tb_i] = np.sum(
-                spikes_bin[:, tb_i:tb_i+z_bin_dt], 1)/z_bin
+                spikes_bin[:, tb_i:tb_i+z_bin_dt], 1)/(z_bin_dt/1000)
         mean_fr = np.nanmean(seg_fr, 1)
         std_fr = np.nanstd(seg_fr, 1)
-        zscore_means.append(mean_fr)
-        zscore_stds.append(std_fr)
+        
         #Now pull deviation matrices
         seg_dev = deviations[s_ind]
         seg_dev[0] = 0
@@ -193,43 +172,140 @@ def create_dev_matrices(segment_spike_times, segments_to_analyze,
                 dev_fr_mat[:,nb_i] = np.sum(dev_rast_i[:,bs_i:be_i],1)/((be_i-bs_i)/1000)
             z_dev_fr_mat = (dev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
             seg_dev_matrices.append(z_dev_fr_mat)
-        dev_matrices.append(seg_dev_matrices)
+        dev_matrices[s_ind] = np.array(seg_dev_matrices)
         
     return dev_matrices
-        
-            
-def lstm_cross_validation():
+
+def lstm_cross_validation(training_matrices,training_labels,\
+                          taste_unique_categories,savedir):
     """Function to perform training and cross-validation of a LSTM model using
     taste response firing trajectories to determine best model size"""
     
     latent_dim_sizes = np.arange(20,150,10)
-    k_folds = 5
+    num_classes = len(np.unique(training_labels))
+    ex_per_class = [len(np.where(np.array(training_labels) == i)[0]) for i in range(num_classes)]
+    min_count = np.min(ex_per_class)
     
-    fold_accuracies = dict() #For each size return fold matrix
-    for latent_dim in latent_dim_sizes:
+    X = np.array(training_matrices)
+    Y = np.array(tf.one_hot(training_labels, num_classes))
+    
+    num_samples, timesteps, features = X.shape
+    
+    kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    
+    fold_dict = dict() #For each size return fold matrix
+    for l_i, latent_dim in enumerate(latent_dim_sizes):
+        fold_dict[l_i] = dict()
+        fold_dict[l_i]["latent_dim"] = latent_dim
+        fold_dict[l_i]["taste_unique_categories"] = taste_unique_categories
         
+        histories = []                # To store training history (loss, accuracy) per fold
+        hidden_states_per_fold = []   # To store extracted LSTM hidden states per fold
+        val_accuracy_per_fold = []     # To store final validation loss and accuracy per fold
+        val_loss_per_fold = []
+        prediction_probabilities = np.zeros((num_samples,num_classes))
+        state_cs = np.zeros((num_samples,latent_dim))
+        
+        for fold, (train_index, val_index) in enumerate(kf.split(X,training_labels)):
+            # Split data into training and validation sets for the current fold
+            #Ensure shuffling of categories
+            train_index_rand = train_index[np.random.choice(np.arange(len(train_index)),len(train_index))]
+            val_index_rand = val_index[np.random.choice(np.arange(len(val_index)),len(val_index))]
+            
+            train_data, test_data = X[train_index_rand], X[val_index_rand]
+            train_cat, test_cat = Y[train_index_rand,:], Y[val_index_rand,:]
+            
+            history, val_loss, val_accuracy, predictions, state_c = fit_model(train_data,\
+                                                    train_cat,test_data,\
+                                                    test_cat,num_classes,\
+                                                    latent_dim,fold,savedir)
+            histories.append(history.history)
+            val_accuracy_per_fold.append(val_accuracy)
+            val_loss_per_fold.append(val_loss)
+            prediction_probabilities[val_index_rand,:] = predictions
+            state_cs[val_index_rand,:] = state_c
+            
+        fold_dict[l_i]["histories"] = histories
+        fold_dict[l_i]["hidden_states_per_fold"] = hidden_states_per_fold
+        fold_dict[l_i]["val_accuracy_per_fold"] = val_accuracy_per_fold
+        fold_dict[l_i]["val_loss_per_fold"] = val_loss_per_fold
+        fold_dict[l_i]["predictions"] = prediction_probabilities
+        fold_dict[l_i]["true_labels"] = Y
+        
+        argmax_predict = np.argmax(prediction_probabilities,1)
+        predict_onehot = np.array(tf.one_hot(argmax_predict, np.shape(prediction_probabilities)[1]))
+        
+        #Plot predictions
+        f, ax = plt.subplots(ncols=3)
+        ax[0].imshow(Y,aspect='auto')
+        ax[0].set_title('Categories')
+        ax[0].set_xticks(np.arange(num_classes),taste_unique_categories,
+                         rotation=45)
+        ax[1].imshow(prediction_probabilities,aspect='auto')
+        ax[1].set_title('Predictions')
+        ax[1].set_xticks(np.arange(num_classes),taste_unique_categories,
+                         rotation=45)
+        ax[2].imshow(predict_onehot,aspect='auto')
+        ax[2].set_title('One-hot predictions')
+        ax[2].set_xticks(np.arange(num_classes),taste_unique_categories,
+                         rotation=45)
+        plt.tight_layout()
+        f.savefig(os.path.join(savedir,'latent_' + str(latent_dim) + '_predictions.png'))
+        f.savefig(os.path.join(savedir,'latent_' + str(latent_dim) + '_predictions.svg'))
+        plt.close(f)
+        
+        #Plot hidden states
+        avg_state = []
+        for class_i in range(num_classes):
+            class_inds = np.where(np.array(training_labels) == class_i)[0]
+            avg_state.append(np.nanmean(state_cs[class_inds,:],0))
+            
+        f_state, ax_state = plt.subplots(ncols=2)
+        ax_state[0].imshow(state_cs,aspect='auto')
+        ax_state[0].set_title('Test LSTM Hidden State')
+        for class_i, class_n in enumerate(taste_unique_categories):
+            ax_state[1].plot(np.arange(latent_dim),avg_state[class_i],\
+                             label=class_n)
+        ax_state[1].legend(loc='upper left')
+        ax_state[1].set_title('Avg LSTM State C')
+        plt.tight_layout()
+        f_state.savefig(os.path.join(savedir,'latent_' + str(latent_dim) + '_state_c.png'))
+        f_state.savefig(os.path.join(savedir,'latent_' + str(latent_dim) + '_state_c.svg'))
+        plt.close(f_state)
+        
+    np.save(os.path.join(savedir,'fold_dict.npy'),fold_dict,allow_pickle=True)
     
-def fit_model(input_data,latent_dim):
+def fit_model(train_data,train_cat,test_data,test_cat,num_classes,latent_dim,fold,savedir):
+    """Function to fit model"""
     
-    model = _get_lstm_model(input_shape,latent_dim,num_classes)
-    model.fit(X, [Y,_,_], epochs = 20, batch_size = 40) #y1 is the one-hot, y2 is hidden state, y3 is cell state
+    model = _get_lstm_model(np.shape(train_data[0]),latent_dim,num_classes)
+    #Print model summary
+    #model.summary()
     
-    #Get hidden states of trained model
+    history = model.fit(train_data, train_cat, epochs = 20, batch_size = 40,\
+                        validation_data = (test_data,test_cat),\
+                            verbose=0)
     
+    val_loss, val_accuracy = model.evaluate(test_data, test_cat, verbose=0)
     
-def lstm_dev_prediction():
-    """Function to use the trained LSTM model to make classification of deviation
-    events into one of the taste response categories."""
+    lstm_output_extractor_model = Model(inputs=model.input,
+                                            outputs=model.get_layer('lstm_layer').output)
+    lstm_outputs, state_h, state_c = lstm_output_extractor_model.predict(test_data)
     
+    predictions = model.predict(test_data)
+    
+    return history, val_loss, val_accuracy, predictions, state_c
     
 def _get_lstm_model(input_shape, latent_dim, num_classes):
     """Function to define and return an LSTM model for training/prediction."""
     
-    inputs = layer.Input(shape=input_shape)
-    lstm_outputs, state_h, state_c = layers.LSTM(latent_dim, activation='relu',
-                                                 dropout=0.1,return_state=True)(inputs)
-    predictions = layers.Dense(num_classes, activation='softmax')(lstm_outputs)
-    model = Model(inputs=inputs, outputs=[predictions,state_h,state_c])
+    inputs = layers.Input(shape=input_shape)
+    lstm_outputs, state_h, state_c = layers.LSTM(units = int(latent_dim), 
+                                                 dropout=0.1,return_state=True,\
+                                                name='lstm_layer')(inputs)
+    predictions = layers.Dense(units = int(num_classes), activation='softmax',\
+                               name='dense_layer')(lstm_outputs)
+    model = Model(inputs=inputs, outputs=predictions)
     model.compile(optimizer='adam',loss='categorical_crossentropy',metrics=['accuracy'])
     
     return model
