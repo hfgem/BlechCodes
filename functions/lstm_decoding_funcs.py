@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 from sklearn.model_selection import StratifiedKFold
+from scipy.optimize import curve_fit
 from matplotlib import colormaps
 os.environ["OMP_NUM_THREADS"] = "4"
 
@@ -200,7 +201,6 @@ def lstm_cross_validation(training_matrices,training_labels,\
         fold_dict[l_i]["taste_unique_categories"] = taste_unique_categories
         
         histories = []                # To store training history (loss, accuracy) per fold
-        hidden_states_per_fold = []   # To store extracted LSTM hidden states per fold
         val_accuracy_per_fold = []     # To store final validation loss and accuracy per fold
         val_loss_per_fold = []
         prediction_probabilities = np.zeros((num_samples,num_classes))
@@ -226,7 +226,6 @@ def lstm_cross_validation(training_matrices,training_labels,\
             state_cs[val_index_rand,:] = state_c
             
         fold_dict[l_i]["histories"] = histories
-        fold_dict[l_i]["hidden_states_per_fold"] = hidden_states_per_fold
         fold_dict[l_i]["val_accuracy_per_fold"] = val_accuracy_per_fold
         fold_dict[l_i]["val_loss_per_fold"] = val_loss_per_fold
         fold_dict[l_i]["predictions"] = prediction_probabilities
@@ -309,6 +308,124 @@ def _get_lstm_model(input_shape, latent_dim, num_classes):
     model.compile(optimizer='adam',loss='categorical_crossentropy',metrics=['accuracy'])
     
     return model
+
+def get_best_size(fold_dict, savedir):
+    """Calculate best model size"""
+    
+    num_tested = len(fold_dict)
+    class_names = fold_dict[0]["taste_unique_categories"]
+    num_classes = len(class_names)
+    true_taste_inds = [i for i in range(num_classes) if class_names[i].split('_')[0] != 'none']
+    tested_latent_dim = np.array([fold_dict[l_i]["latent_dim"] for l_i in range(num_tested)])
+    
+    accuracy = np.nan*np.ones((num_tested,num_classes))
+    strong_accuracy = np.nan*np.ones((num_tested,num_classes))
+    confusion_matrices = np.nan*np.ones((num_tested,num_classes,num_classes))
+    
+    for l_i, latent_dim in enumerate(tested_latent_dim):
+        predictions = fold_dict[l_i]["predictions"]
+        true_labels = fold_dict[l_i]["true_labels"]
+        true_inds = np.where(true_labels == 1)[1]
+        argmax_predictions = np.argmax(predictions,1)
+        matching_predictions = np.where(true_inds == argmax_predictions)[0]
+        for c_i in range(num_classes):
+            #Calculate accuracy of prediction
+            class_inds = np.where(true_inds == c_i)[0]
+            predicted_inds = np.intersect1d(class_inds,matching_predictions)
+            accuracy[l_i,c_i] = len(predicted_inds)/len(class_inds)
+            #Calculate strong accuracy of prediction
+            strong_accuracy[l_i,c_i] = len(np.where(predictions[predicted_inds,c_i] >= 0.25)[0])/len(class_inds)
+            #Confusion matrix population
+            predicted_classes = argmax_predictions[class_inds]
+            confusion_matrices[l_i,c_i,:] = np.array([len(np.where(predicted_classes == c_i2)[0])/len(class_inds) for c_i2 in range(num_classes)])
+    
+    average_accuracy = np.nanmean(accuracy,1)
+    average_strong_accuracy = np.nanmean(strong_accuracy,1)
+    average_true_taste_accuracy = np.nanmean(accuracy[:,true_taste_inds],1)
+    average_strong_true_taste_accuracy = np.nanmean(strong_accuracy[:,true_taste_inds],1)
+    
+    #Plot results
+    f_accuracy, ax_accuracy = plt.subplots(nrows = 2, ncols = 2, figsize = (7.5,7.5))
+    #Plot accuracy
+    img = ax_accuracy[0,0].imshow(accuracy,aspect='auto',cmap='viridis')
+    ax_accuracy[0,0].set_xticks(np.arange(num_classes),class_names,rotation=45)
+    ax_accuracy[0,0].set_yticks(np.arange(num_tested),tested_latent_dim)
+    ax_accuracy[0,0].set_ylabel('Latent Dim')
+    img.set_clim(0, 1)
+    ax_accuracy[0,0].set_title('Accurate Predictions')
+    plt.colorbar(mappable=img,ax=ax_accuracy[0,0])
+    #Plot strong accuracy
+    img = ax_accuracy[0,1].imshow(strong_accuracy,aspect='auto',cmap='viridis')
+    ax_accuracy[0,1].set_xticks(np.arange(num_classes),class_names,rotation=45)
+    ax_accuracy[0,1].set_yticks(np.arange(num_tested),tested_latent_dim)
+    img.set_clim(0, 1)
+    ax_accuracy[0,1].set_title('Accurate Predictions w Probability >= 0.25')
+    plt.colorbar(mappable=img,ax=ax_accuracy[0,1])
+    #Plot average accuracy by size
+    img = ax_accuracy[1,0].imshow(accuracy - strong_accuracy,aspect='auto',cmap='viridis')
+    ax_accuracy[1,0].set_xticks(np.arange(num_classes),class_names,rotation=45)
+    ax_accuracy[1,0].set_yticks(np.arange(num_tested),tested_latent_dim)
+    img.set_clim(0, 1)
+    ax_accuracy[1,0].set_title('All - Strong')
+    plt.colorbar(mappable=img,ax=ax_accuracy[1,0])
+    #Plot average strong accuracy by size
+    ax_accuracy[1,1].plot(tested_latent_dim,average_accuracy,label='Average Accuracy')
+    ax_accuracy[1,1].plot(tested_latent_dim,average_strong_accuracy,label='Average Strong Accuracy')
+    ax_accuracy[1,1].plot(tested_latent_dim,average_true_taste_accuracy,label='Average True Accuracy')
+    ax_accuracy[1,1].plot(tested_latent_dim,average_strong_true_taste_accuracy,label='Average Strong True Accuracy')
+    ax_accuracy[1,1].set_ylim([0,1])
+    ax_accuracy[1,1].set_ylabel('Average Accuracy')
+    ax_accuracy[1,1].set_xlabel('Latent Dim')
+    ax_accuracy[1,1].legend(loc='upper right')
+    #Finish and save
+    plt.tight_layout()
+    f_accuracy.savefig(os.path.join(savedir,'accuracy_plots.png'))
+    f_accuracy.savefig(os.path.join(savedir,'accuracy_plots.svg'))
+    plt.close(f_accuracy)
+    
+    #Fit choose best size based on accuracy - std accuracy scoring
+    f_log = plt.figure(figsize=(5,5))
+    all_y = []
+    all_x = []
+    for t_i in true_taste_inds:
+        all_y.extend(list(strong_accuracy[:,t_i]))
+        all_x.extend(list(tested_latent_dim))
+    plt.scatter(all_x,all_y,color='g',alpha=0.5,label='True Taste Accuracies')
+    score = average_strong_true_taste_accuracy - np.nanstd(strong_accuracy[:,true_taste_inds],1)
+    plt.plot(tested_latent_dim,score,linestyle='dashed',color='b',label='Score Curve')
+    # try:
+    #     params, covariance = curve_fit(shifted_log_func, all_x, all_y)
+    #     a_fit, b_fit, c_fit = params
+    #     log_y = shifted_log_func(tested_latent_dim, a_fit, b_fit, c_fit)
+    #     plt.plot(tested_latent_dim,log_y,linestyle='dashed',color='k',label='Log Fit')
+    #     #Calculate elbow
+    #     deriv_1 = np.diff(log_y)/np.diff(tested_latent_dim)
+    #     deriv_2 = np.diff(deriv_1)
+    #     m = (deriv_2[-1] - deriv_2[0])/(len(deriv_2)-1)
+    #     line = m*np.arange(len(deriv_2)) + deriv_2[0]
+    #     best_ind = np.argmax(deriv_2 - line) + 1
+    #     best_latent_dim = tested_latent_dim[best_ind]
+    # except: #A log can't be fit
+    #     #Calculate best score by taking the mean accuracy and subtracting the std
+    #     best_ind = np.argmax(score)
+    #     best_latent_dim = tested_latent_dim[best_ind]
+    best_ind = np.argmax(score)
+    best_latent_dim = tested_latent_dim[best_ind]
+    plt.axvline(best_latent_dim,label='Best Size = ' + str(best_latent_dim),\
+                color='r',linestyle='dashed')#Finish plot
+    plt.ylabel('Strong Accuracy')
+    plt.xlabel('Latent Dim')
+    plt.legend(loc='upper left')
+    plt.title('Calculated Best Latent Dim')
+    plt.tight_layout()
+    f_log.savefig(os.path.join(savedir,'best_latent_dim.png'))
+    f_log.savefig(os.path.join(savedir,'best_latent_dim.svg'))
+    plt.close(f_log)
+    
+    return best_latent_dim
+    
+def shifted_log_func(x, a, b, c):
+        return a * np.log(x + c) + b
 
 def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
                       latent_dim, taste_unique_categories, savedir):

@@ -201,7 +201,7 @@ for n_i in range(num_days):
     day_vars[n_i]['num_pt_cp'] = day_vars[n_i]['num_cp'] + 2
     
    
-#%% import deviations
+# import deviations
 import functions.lstm_decoding_funcs as lstm
 
 num_seg_to_analyze = len(day_vars[0]['segments_to_analyze'])
@@ -226,7 +226,7 @@ except:
     dev_matrices = lstm.create_dev_matrices(day_vars, segment_deviations, z_bin_dt, num_bins)
     np.save(os.path.join(lstm_dir,'dev_fr_vecs_zscore.npy'),dev_matrices,allow_pickle=True)
 
-#%% get_taste_response_matrices
+# get_taste_response_matrices
 
 def get_taste_response_matrices(start_bins):
     day_1_tastes = day_vars[0]['dig_in_names']
@@ -244,7 +244,7 @@ def get_taste_response_matrices(start_bins):
     
     return taste_unique_categories, training_matrices, training_labels
 
-#%% run training
+# run training
 
 start_bin_array = np.arange(100,600,100)
 num_bins = 4
@@ -257,13 +257,18 @@ for sb in start_bin_array:
     if not os.path.isdir(sb_save_dir):
         os.mkdir(sb_save_dir)
     
-    taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(sb)
+    #Cross-validation
+    try:
+        fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
+    except:
+        taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(sb)
+        
+        fold_dict = lstm.lstm_cross_validation(training_matrices,\
+                                training_labels,taste_unique_categories,\
+                                    sb_save_dir)
+        
+    #Best size calculation
+    best_latent_dim = lstm.get_best_size(fold_dict,sb_save_dir)
     
-    fold_accuracies = lstm.lstm_cross_validation(training_matrices,\
-                            training_labels,taste_unique_categories,\
-                                sb_save_dir)
-    
-    np.save(os.path.join(sb_save_dir,'fold_accuracies.npy'),fold_accuracies,allow_pickle=True)
-
 #%% run testing
 
