@@ -310,3 +310,34 @@ def _get_lstm_model(input_shape, latent_dim, num_classes):
     
     return model
 
+def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
+                      latent_dim, taste_unique_categories, savedir):
+    """Function to run the best model on classifying the deviation events"""
+    
+    training_labels = np.array(training_labels)
+    num_classes = len(np.unique(training_labels))
+    class_inds = [np.where(training_labels == i)[0] for i in range(num_classes)]     
+    ex_per_class = [len(ci) for ci in class_inds]
+    min_count = np.min(ex_per_class)
+    
+    #Equalize the data to be the same number of samples per class
+    keep_class_inds = []
+    for i in range(class_inds):
+        keep_class_inds.extend(list(class_inds[i][np.random.sample(class_inds[i],min_count)]))
+    
+    X = np.array(training_matrices)[keep_class_inds]
+    train_labels_balanced = training_labels[keep_class_inds]
+    Y = np.array(tf.one_hot(train_labels_balanced, num_classes))
+    
+    num_samples, timesteps, features = X.shape
+    
+    history = model.fit(X, Y, epochs = 20, batch_size = 40,\
+                            verbose=0)
+    
+    lstm_output_extractor_model = Model(inputs=model.input,
+                                            outputs=model.get_layer('lstm_layer').output)
+    lstm_outputs, state_h, state_c = lstm_output_extractor_model.predict(np.array(dev_matrices))
+    
+    predictions = model.predict(np.array(dev_matrices))
+    
+    return predictions

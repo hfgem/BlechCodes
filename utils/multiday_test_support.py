@@ -259,7 +259,7 @@ for sb in start_bin_array:
     
     taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(sb)
     
-    fold_accuracies = lstm_cross_validation(training_matrices,\
+    fold_accuracies = lstm.lstm_cross_validation(training_matrices,\
                             training_labels,taste_unique_categories,\
                                 sb_save_dir)
     
