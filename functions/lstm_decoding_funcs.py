@@ -422,10 +422,31 @@ def get_best_size(fold_dict, savedir):
     f_log.savefig(os.path.join(savedir,'best_latent_dim.svg'))
     plt.close(f_log)
     
-    return best_latent_dim
+    return best_latent_dim, score, tested_latent_dim
     
-def shifted_log_func(x, a, b, c):
-        return a * np.log(x + c) + b
+# def shifted_log_func(x, a, b, c):
+#         return a * np.log(x + c) + b
+
+def cross_start_scores(start_bin_array, score_curves, latent_dims, \
+                       best_dims, savedir):
+    """Plot across start times the score curves and best dimensions"""
+    
+    colors=['teal','blue','magenta','purple','forestgreen','navyblue',\
+            'darkpurple','rose']
+    
+    f_score = plt.figure(figsize=(5,5))
+    for s_i, sb in enumerate(start_bin_array):
+        plt.plot(latent_dims[s_i],score_curves[s_i],label=str(sb),\
+                 color=colors[s_i],alpha=0.5)
+        plt.axvline(best_dims[s_i],label=str(sb) + ' ' + str(best_dims[s_i]),\
+                 color=colors[s_i],alpha=0.5,linestyle='dashed')
+    avg_score = np.nanmean(np.array(score_curves),0)
+    plt.plot(latent_dims[0],avg_score,label='Avg Score',\
+             color='k',linestyle='dashed')
+    plt.legend(loc='lower right')
+    plt.tight_layout()
+    f_score.savefig(os.path.join(savedir,'cross_start_scores.png'))
+    f_score.savefig(os.path.join(savedir,'cross_start_scores.svg'))
 
 def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
                       latent_dim, taste_unique_categories, savedir):

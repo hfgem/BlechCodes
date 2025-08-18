@@ -251,6 +251,9 @@ def get_taste_response_matrices(start_bins):
 
 # run training
 
+best_dims = []
+score_curves = []
+latent_dims = []
 for sb in start_bin_array:
     print("\n--- Testing start bin " + str(sb) + "---")
     
@@ -271,7 +274,20 @@ for sb in start_bin_array:
         fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
         
     #Best size calculation
-    best_latent_dim = lstm.get_best_size(fold_dict,sb_save_dir)
+    best_latent_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,sb_save_dir)
+    best_dims.append(best_latent_dim)
+    score_curves.append(score_curve)
+    latent_dims.append(tested_latent_dim)
     
-#%% run testing
+# plot across start times the score curves and best dims
+lstm.cross_start_scores(start_bin_array, score_curves, latent_dims, \
+                           best_dims, lstm_dir)
 
+#%% Run testing
+
+    #Run decoding
+    
+    predictions = lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
+                          best_latent_dim, taste_unique_categories, sb_save_dir)
+    
+    np.save(os.path.join(sb_save_dir,'predictions.npy'),predictions,allow_pickle=True)
