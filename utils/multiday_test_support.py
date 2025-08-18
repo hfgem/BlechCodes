@@ -204,6 +204,11 @@ for n_i in range(num_days):
 # import deviations
 import functions.lstm_decoding_funcs as lstm
 
+z_bin_dt = 100
+start_bin_array = np.arange(100,600,100)
+num_bins = 4
+
+
 num_seg_to_analyze = len(day_vars[0]['segments_to_analyze'])
 segment_names_to_analyze = [day_vars[0]['segment_names'][i] for i in day_vars[0]['segments_to_analyze']]
 segment_times_to_analyze_reshaped = [
@@ -246,10 +251,6 @@ def get_taste_response_matrices(start_bins):
 
 # run training
 
-start_bin_array = np.arange(100,600,100)
-num_bins = 4
-z_bin_dt = 100
-
 for sb in start_bin_array:
     print("\n--- Testing start bin " + str(sb) + "---")
     
@@ -263,9 +264,11 @@ for sb in start_bin_array:
     except:
         taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(sb)
         
-        fold_dict = lstm.lstm_cross_validation(training_matrices,\
+        lstm.lstm_cross_validation(training_matrices,\
                                 training_labels,taste_unique_categories,\
                                     sb_save_dir)
+            
+        fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
         
     #Best size calculation
     best_latent_dim = lstm.get_best_size(fold_dict,sb_save_dir)

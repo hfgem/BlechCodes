@@ -212,7 +212,7 @@ def lstm_cross_validation(training_matrices,training_labels,\
             train_index_rand = train_index[np.random.choice(np.arange(len(train_index)),len(train_index))]
             val_index_rand = val_index[np.random.choice(np.arange(len(val_index)),len(val_index))]
             
-            train_data, test_data = X[train_index_rand], X[val_index_rand]
+            train_data, test_data = X[train_index_rand,:,:], X[val_index_rand,:,:]
             train_cat, test_cat = Y[train_index_rand,:], Y[val_index_rand,:]
             
             history, val_loss, val_accuracy, predictions, state_c = fit_model(train_data,\
@@ -312,7 +312,7 @@ def _get_lstm_model(input_shape, latent_dim, num_classes):
 def get_best_size(fold_dict, savedir):
     """Calculate best model size"""
     
-    num_tested = len(fold_dict)
+    num_tested = len(list(fold_dict.keys()))
     class_names = fold_dict[0]["taste_unique_categories"]
     num_classes = len(class_names)
     true_taste_inds = [i for i in range(num_classes) if class_names[i].split('_')[0] != 'none']
