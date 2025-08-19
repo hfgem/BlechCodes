@@ -429,7 +429,9 @@ def get_best_size(fold_dict, savedir):
 
 def cross_start_scores(start_bin_array, score_curves, latent_dims, \
                        best_dims, savedir):
-    """Plot across start times the score curves and best dimensions"""
+    """Plots and calculations across start times"""
+    
+    print("\n--- Plotting score curves across start times. ---")
     
     colors=['teal','blue','magenta','purple','forestgreen','navyblue',\
             'darkpurple','rose']
@@ -447,6 +449,7 @@ def cross_start_scores(start_bin_array, score_curves, latent_dims, \
     plt.tight_layout()
     f_score.savefig(os.path.join(savedir,'cross_start_scores.png'))
     f_score.savefig(os.path.join(savedir,'cross_start_scores.svg'))
+    
 
 def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
                       latent_dim, taste_unique_categories, savedir):
@@ -460,8 +463,10 @@ def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
     
     #Equalize the data to be the same number of samples per class
     keep_class_inds = []
-    for i in range(class_inds):
-        keep_class_inds.extend(list(class_inds[i][np.random.sample(class_inds[i],min_count)]))
+    for i in range(num_classes):
+        keep_class_inds.extend(list(np.random.choice(class_inds[i],min_count,replace=False)))
+    #Shuffle
+    keep_class_inds = list(np.random.choice(keep_class_inds,len(keep_class_inds),replace=False))
     
     X = np.array(training_matrices)[keep_class_inds]
     train_labels_balanced = training_labels[keep_class_inds]
@@ -469,13 +474,19 @@ def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
     
     num_samples, timesteps, features = X.shape
     
+    model = _get_lstm_model(np.shape(X[0]),latent_dim,num_classes)
+    
     history = model.fit(X, Y, epochs = 20, batch_size = 40,\
                             verbose=0)
     
     lstm_output_extractor_model = Model(inputs=model.input,
                                             outputs=model.get_layer('lstm_layer').output)
-    lstm_outputs, state_h, state_c = lstm_output_extractor_model.predict(np.array(dev_matrices))
     
-    predictions = model.predict(np.array(dev_matrices))
+    seg_predictions = dict()
+    for seg_i in range(len(dev_matrices)):
+        # lstm_outputs, state_h, state_c = lstm_output_extractor_model.predict(np.array(dev_matrices[seg_i]))
+        
+        predictions = model.predict(np.array(dev_matrices[seg_i]))
+        seg_predictions[seg_i] = predictions
     
-    return predictions
+    return seg_predictions

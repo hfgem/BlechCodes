@@ -267,10 +267,17 @@ for sb in start_bin_array:
     except:
         taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(sb)
         
+        np.save(os.path.join(sb_save_dir,'taste_unique_categories.npy'),\
+                np.array(taste_unique_categories))
+        np.save(os.path.join(sb_save_dir,'training_matrices.npy'),\
+                np.array(training_matrices))
+        np.save(os.path.join(sb_save_dir,'training_labels.npy'),\
+                np.array(training_labels))
+            
         lstm.lstm_cross_validation(training_matrices,\
                                 training_labels,taste_unique_categories,\
                                     sb_save_dir)
-            
+        
         fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
         
     #Best size calculation
@@ -285,9 +292,21 @@ lstm.cross_start_scores(start_bin_array, score_curves, latent_dims, \
 
 #%% Run testing
 
+# Collect decodes across start bins for democratic assignment
+
+all_seg_predictions = []
+for sb_i, sb in enumerate(start_bin_array):
+    
+    sb_save_dir = os.path.join(lstm_dir,'start_t_' + str(sb))
+    
+    taste_unique_categories = np.load(os.path.join(sb_save_dir,'taste_unique_categories.npy'))
+    training_matrices = list(np.load(os.path.join(sb_save_dir,'training_matrices.npy')))
+    training_labels = list(np.load(os.path.join(sb_save_dir,'training_labels.npy')))
+    
     #Run decoding
     
     predictions = lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
-                          best_latent_dim, taste_unique_categories, sb_save_dir)
+                          best_dims[sb_i], taste_unique_categories, sb_save_dir)
     
     np.save(os.path.join(sb_save_dir,'predictions.npy'),predictions,allow_pickle=True)
+    all_seg_predictions.append(predictions)

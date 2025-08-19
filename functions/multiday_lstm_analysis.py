@@ -204,19 +204,43 @@ class run_multiday_lstm_analysis():
         
         self.dev_matrices = dev_matrices
         
-    def run_size_tests():
+    def run_size_tests(self,):
         
         start_bin_array = np.arange(100,600,100)
         
+        best_dims = []
+        score_curves = []
+        latent_dims = []
         for sb in start_bin_array:
+            print("\n--- Testing start bin " + str(sb) + "---")
+            
             sb_save_dir = os.path.join(self.lstm_dir,'start_t_' + str(sb))
             if not os.path.isdir(sb_save_dir):
                 os.mkdir(sb_save_dir)
             
-            self.get_taste_response_matrices(sb)
+            #Cross-validation
+            try:
+                fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
+            except:
+                taste_unique_categories, training_matrices, training_labels = self.get_taste_response_matrices(sb)
+                
+                lstm.lstm_cross_validation(training_matrices,\
+                                        training_labels,taste_unique_categories,\
+                                            sb_save_dir)
+                    
+                fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
+                
+            #Best size calculation
+            best_latent_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,sb_save_dir)
+            best_dims.append(best_latent_dim)
+            score_curves.append(score_curve)
+            latent_dims.append(tested_latent_dim)
             
-            fold_accuracies = lstm.lstm_cross_validation(self.training_matrices,\
-                                    self.training_labels,self.taste_unique_categories,\
-                                        sb_save_dir)
+        # plot across start times the score curves and best dims
+        lstm.cross_start_scores(start_bin_array, score_curves, latent_dims, \
+                                   best_dims, lstm_dir)
             
-            np.save(os.path.join(sb_save_dir,'fold_accuracies.npy'),fold_accuracies,allow_pickle=True)
+        # across start times compare the decoding of each event - using a
+        # democratic approach to assigning the decoded taste
+        
+        
