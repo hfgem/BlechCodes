@@ -264,6 +264,10 @@ for sb in start_bin_array:
     #Cross-validation
     try:
         fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
+        taste_unique_categories = np.load(os.path.join(sb_save_dir,'taste_unique_categories.npy'))
+        training_matrices = list(np.load(os.path.join(sb_save_dir,'training_matrices.npy')))
+        training_labels = list(np.load(os.path.join(sb_save_dir,'training_labels.npy')))
+        
     except:
         taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(sb)
         
@@ -290,23 +294,39 @@ for sb in start_bin_array:
 lstm.cross_start_scores(start_bin_array, score_curves, latent_dims, \
                            best_dims, lstm_dir)
 
-#%% Run testing
+# Run testing
 
 # Collect decodes across start bins for democratic assignment
 
-all_seg_predictions = []
+segments_to_analyze = day_vars[0]['segments_to_analyze']
+segment_names = [day_vars[0]['segment_names'][i] for i in segments_to_analyze]
+
+all_seg_predictions = dict()
 for sb_i, sb in enumerate(start_bin_array):
     
     sb_save_dir = os.path.join(lstm_dir,'start_t_' + str(sb))
     
-    taste_unique_categories = np.load(os.path.join(sb_save_dir,'taste_unique_categories.npy'))
-    training_matrices = list(np.load(os.path.join(sb_save_dir,'training_matrices.npy')))
-    training_labels = list(np.load(os.path.join(sb_save_dir,'training_labels.npy')))
+    try:
+        predictions = np.load(os.path.join(sb_save_dir,'predictions.npy'),allow_pickle=True)
+    except:
+        taste_unique_categories = np.load(os.path.join(sb_save_dir,'taste_unique_categories.npy'))
+        training_matrices = list(np.load(os.path.join(sb_save_dir,'training_matrices.npy')))
+        training_labels = list(np.load(os.path.join(sb_save_dir,'training_labels.npy')))
+        
+        #Run decoding
+        
+        predictions = lstm.lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
+                              best_dims[sb_i], taste_unique_categories, sb_save_dir)
+        predictions['taste_unique_categories'] = taste_unique_categories
+            
+        np.save(os.path.join(sb_save_dir,'predictions.npy'),predictions,allow_pickle=True)
+        all_seg_predictions[sb_i] = dict()
+        all_seg_predictions[sb_i]['predictions'] = predictions
+        all_seg_predictions[sb_i]['start_bin'] = sb
     
-    #Run decoding
-    
-    predictions = lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
-                          best_dims[sb_i], taste_unique_categories, sb_save_dir)
-    
-    np.save(os.path.join(sb_save_dir,'predictions.npy'),predictions,allow_pickle=True)
-    all_seg_predictions.append(predictions)
+np.save(os.path.join(lstm_dir,'all_seg_predictions.npy'),all_seg_predictions,allow_pickle=True)
+
+
+seg_predictions = lstm.lstm_prediction_democratization(all_seg_predictions,segment_names,lstm_dir)
+
+lstm.plot_lstm_predictions(seg_predictions,segment_names,lstm_dir)

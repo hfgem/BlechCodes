@@ -12,6 +12,8 @@ current_path = os.path.realpath(__file__)
 blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
+import gzip
+import tqdm
 import numpy as np
 import functions.analysis_funcs as af
 import functions.hdf5_handling as hf5
@@ -177,7 +179,7 @@ class run_multiday_lstm_analysis():
         self.training_matrices = training_matrices
         self.training_labels = training_labels
         
-    def get_deviation_matrices():
+    def get_deviation_matrices(self,):
         
         num_seg_to_analyze = len(self.day_vars[0]['segments_to_analyze'])
         segment_names_to_analyze = [self.day_vars[0]['segment_names'][i] for i in self.day_vars[0]['segments_to_analyze']]
@@ -197,21 +199,21 @@ class run_multiday_lstm_analysis():
            
         # get deviation matrices
         try:
-            dev_matrices = np.load(os.path.join(lstm_dir,'dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
+            dev_matrices = np.load(os.path.join(self.lstm_dir,'dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
         except:
             dev_matrices = lstm.create_dev_matrices(self.day_vars, segment_deviations, self.z_bin_dt, self.num_bins)
-            np.save(os.path.join(lstm_dir,'dev_fr_vecs_zscore.npy'),dev_matrices,allow_pickle=True)
+            np.save(os.path.join(self.lstm_dir,'dev_fr_vecs_zscore.npy'),dev_matrices,allow_pickle=True)
         
         self.dev_matrices = dev_matrices
         
     def run_size_tests(self,):
         
-        start_bin_array = np.arange(100,600,100)
+        self.start_bin_array = np.arange(100,600,100)
         
         best_dims = []
         score_curves = []
         latent_dims = []
-        for sb in start_bin_array:
+        for sb in self.start_bin_array:
             print("\n--- Testing start bin " + str(sb) + "---")
             
             sb_save_dir = os.path.join(self.lstm_dir,'start_t_' + str(sb))
@@ -237,10 +239,38 @@ class run_multiday_lstm_analysis():
             latent_dims.append(tested_latent_dim)
             
         # plot across start times the score curves and best dims
-        lstm.cross_start_scores(start_bin_array, score_curves, latent_dims, \
-                                   best_dims, lstm_dir)
+        lstm.cross_start_scores(self.start_bin_array, score_curves, latent_dims, \
+                                   best_dims, self.lstm_dir)
             
+        self.best_dims = best_dims
+        self.score_curves = score_curves
+        self.latent_dims = latent_dims
+       
+    def run_deviation_decoding(self,):
         # across start times compare the decoding of each event - using a
         # democratic approach to assigning the decoded taste
         
+        all_seg_predictions = []
+        for sb_i, sb in enumerate(self.start_bin_array):
+            
+            sb_save_dir = os.path.join(self.lstm_dir,'start_t_' + str(sb))
+            
+            try:
+                predictions = np.load(os.path.join(sb_save_dir,'predictions.npy'),allow_pickle=True).item()
+            except:
+                taste_unique_categories = np.load(os.path.join(sb_save_dir,'taste_unique_categories.npy'))
+                training_matrices = list(np.load(os.path.join(sb_save_dir,'training_matrices.npy')))
+                training_labels = list(np.load(os.path.join(sb_save_dir,'training_labels.npy')))
+                
+                #Run decoding
+                
+                predictions = lstm.lstm_dev_decoding(self.dev_matrices, training_matrices, training_labels,\
+                                      self.best_dims[sb_i], taste_unique_categories, sb_save_dir)
+                
+                np.save(os.path.join(sb_save_dir,'predictions.npy'),predictions,allow_pickle=True)
+            all_seg_predictions.append(predictions)
+            
+        np.save(os.path.join(self.lstm_dir,'all_seg_predictions.npy'),all_seg_predictions,allow_pickle=True)
+            
+        #Run cross-start democratization
         

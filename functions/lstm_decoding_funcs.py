@@ -315,6 +315,7 @@ def get_best_size(fold_dict, savedir):
     num_tested = len(list(fold_dict.keys()))
     class_names = fold_dict[0]["taste_unique_categories"]
     num_classes = len(class_names)
+    strong_cutoff = 1.1*(1/(num_classes - 1))
     true_taste_inds = [i for i in range(num_classes) if class_names[i].split('_')[0] != 'none']
     tested_latent_dim = np.array([fold_dict[l_i]["latent_dim"] for l_i in range(num_tested)])
     
@@ -334,7 +335,7 @@ def get_best_size(fold_dict, savedir):
             predicted_inds = np.intersect1d(class_inds,matching_predictions)
             accuracy[l_i,c_i] = len(predicted_inds)/len(class_inds)
             #Calculate strong accuracy of prediction
-            strong_accuracy[l_i,c_i] = len(np.where(predictions[predicted_inds,c_i] >= 0.25)[0])/len(class_inds)
+            strong_accuracy[l_i,c_i] = len(np.where(predictions[predicted_inds,c_i] >= strong_cutoff)[0])/len(class_inds)
             #Confusion matrix population
             predicted_classes = argmax_predictions[class_inds]
             confusion_matrices[l_i,c_i,:] = np.array([len(np.where(predicted_classes == c_i2)[0])/len(class_inds) for c_i2 in range(num_classes)])
@@ -449,7 +450,7 @@ def cross_start_scores(start_bin_array, score_curves, latent_dims, \
     plt.tight_layout()
     f_score.savefig(os.path.join(savedir,'cross_start_scores.png'))
     f_score.savefig(os.path.join(savedir,'cross_start_scores.svg'))
-    
+    plt.close(f_score)
 
 def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
                       latent_dim, taste_unique_categories, savedir):
@@ -490,3 +491,91 @@ def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
         seg_predictions[seg_i] = predictions
     
     return seg_predictions
+
+def lstm_prediction_democratization(all_seg_predictions,segment_names,savedir):
+    """Take predictions from all models and create a democratic prediction"""
+    
+    num_bins = len(all_seg_predictions)
+    num_seg = len(all_seg_predictions[0]['predictions']) - 1
+    categories = all_seg_predictions[0]['predictions']['taste_unique_categories']
+    num_classes = len(categories)
+    strong_cutoff = 1.1*(1/(num_classes - 1))
+    true_taste_inds = [c for c in range(len(categories)) if categories[c].split('_')[0] != 'none']
+    true_taste_categories = [categories[c] for c in true_taste_inds]
+    true_taste_pairs = list(itertools.combinations(true_taste_inds,2))
+    
+    seg_predictions = dict()
+    seg_predictions["variables"] = dict()
+    seg_predictions["variables"]["categories"] = categories
+    seg_predictions["variables"]["strong_cutoff"] = strong_cutoff
+    seg_predictions["variables"]["true_taste_inds"] = true_taste_inds
+    seg_predictions["variables"]["true_taste_categories"] = true_taste_categories
+    seg_predictions["variables"]["true_taste_pairs"] = true_taste_pairs
+    
+    for seg_i in range(num_seg):
+        #Collect predictions across start bins
+        all_dev_predictions = []
+        for sb_i in range(num_bins):
+            all_dev_predictions.append(all_seg_predictions[sb_i]['predictions'][seg_i])
+        all_dev_predictions = np.array(all_dev_predictions) #num bins x num dev x num categories
+        _, num_dev, _ = np.shape(all_dev_predictions)
+        
+        #Average prediction across start bins
+        mean_predictions = np.nanmean(all_dev_predictions,0)
+        cat_predictions = np.nan*np.ones(num_dev)
+        for dev_i in range(num_dev):
+            cat_argmax = np.argmax(mean_predictions[dev_i,:])
+            if mean_predictions[dev_i,cat_argmax] > strong_cutoff:
+                cat_predictions[dev_i] = cat_argmax
+        
+        seg_predictions[seg_i] = cat_predictions
+        
+    np.save(os.path.join(savedir,'seg_predictions.npy'),seg_predictions,allow_pickle=True)
+    
+    return seg_predictions
+        
+def plot_lstm_predictions(seg_predictions,segment_names,savedir):
+    
+    num_seg = len(seg_predictions) - 1
+    categories = seg_predictions["variables"]["categories"]
+    num_classes = len(categories)
+    strong_cutoff = seg_predictions["variables"]["strong_cutoff"] 
+    true_taste_inds = seg_predictions["variables"]["true_taste_inds"]
+    true_taste_pairs = seg_predictions["variables"]["true_taste_pairs"]
+    num_pairs = len(true_taste_pairs)
+    
+    #Plot regular histogram of decoding counts
+    seg_pred_hist, ax_seg_pred = plt.subplots(ncols = num_seg, sharey = True,\
+                                              figsize=(num_seg*5,5))
+    for seg_i in range(num_seg):
+        cat_predictions = seg_predictions[seg_i]
+        
+        ax_seg_pred[seg_i].hist(cat_predictions[cat_predictions != np.nan])
+        ax_seg_pred[seg_i].set_xticks(np.arange(num_classes),categories)
+        ax_seg_pred[seg_i].set_title(segment_names[seg_i])
+        
+    plt.suptitle('Democratic decoding histograms')
+    plt.tight_layout()
+    seg_pred_hist.savefig(os.path.join(savedir,'democratic_decoding_histograms.png'))
+    seg_pred_hist.savefig(os.path.join(savedir,'democratic_decoding_histograms.svg'))
+    plt.close(seg_pred_hist)
+    
+    #Plot ratios of decoding across segments
+    f_pred_ratios, ax_pred_ratios = plt.subplots(ncols = num_pairs, \
+                                                 figsize = (5*num_pairs,5))
+    for tp_i, (t_i1,t_i2) in enumerate(true_taste_pairs):
+        ratios = []
+        for seg_i in range(num_seg):
+            cat_predictions = seg_predictions[seg_i]
+            tc_1 = len(np.where(cat_predictions == t_i1)[0])
+            tc_2 = len(np.where(cat_predictions == t_i2)[0])
+            ratios.append(tc_1/tc_2)
+        ax_pred_ratios[tp_i].plot(np.arange(num_seg),ratios)
+        ax_pred_ratios[tp_i].set_xticks(np.arange(num_seg),segment_names)
+        ax_pred_ratios[tp_i].set_title(categories[t_i1] + ' / ' + \
+                                       categories[t_i2])
+    plt.suptitle('True Taste Decoding Ratios')
+    plt.tight_layout()
+    f_pred_ratios.savefig(os.path.join(savedir,'democratic_decoding_ratios.png'))
+    f_pred_ratios.savefig(os.path.join(savedir,'democratic_decoding_ratios.svg'))
+    plt.close(f_pred_ratios)
