@@ -205,7 +205,6 @@ for n_i in range(num_days):
 import functions.lstm_decoding_funcs as lstm
 
 z_bin_dt = 100
-start_bin_array = np.arange(100,600,100)
 num_bins = 4
 
 
@@ -233,7 +232,7 @@ except:
 
 # get_taste_response_matrices
 
-def get_taste_response_matrices(start_bins):
+def get_taste_response_matrices():
     day_1_tastes = day_vars[0]['dig_in_names']
     all_dig_in_names = []
     all_dig_in_names.extend([d1 + '_0' for d1 in day_1_tastes])
@@ -245,7 +244,7 @@ def get_taste_response_matrices(start_bins):
                                  len(np.intersect1d(np.array([ndt.split('_')]),np.array(day_1_tastes))) == 0])
         
     taste_unique_categories, training_matrices, training_labels = lstm.create_taste_matrices(\
-                           day_vars, all_dig_in_names, num_bins, z_bin_dt, start_bins=0)
+                           day_vars, all_dig_in_names, num_bins, z_bin_dt)
     
     return taste_unique_categories, training_matrices, training_labels
 
@@ -269,7 +268,7 @@ for sb in start_bin_array:
         training_labels = list(np.load(os.path.join(sb_save_dir,'training_labels.npy')))
         
     except:
-        taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(sb)
+        taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices()
         
         np.save(os.path.join(sb_save_dir,'taste_unique_categories.npy'),\
                 np.array(taste_unique_categories))

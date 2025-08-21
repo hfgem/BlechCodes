@@ -21,17 +21,41 @@ from scipy.optimize import curve_fit
 from matplotlib import colormaps
 os.environ["OMP_NUM_THREADS"] = "4"
 
-def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt, start_bins=0):
+def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt):
     """Function to take spike times following taste delivery and create 
     matrices of timeseries firing trajectories"""
     
     print("\n--- Creating Taste Matrices ---")
     half_z_bin = np.floor(z_bin_dt/2).astype('int')
     
+    #Get whole-experiment mean rate info
+    exp_len = 0
+    tastant_spike_times = day_vars[0]['tastant_spike_times']
+    num_neur = len(tastant_spike_times[0][0])
+    neur_spike_counts = np.zeros(num_neur)
+    for s_i in range(len(day_vars[0]['segment_names'])):
+        seg_start = int(day_vars[0]['segment_times'][s_i])
+        seg_end = int(day_vars[0]['segment_times'][s_i+1])
+        seg_len = seg_end - seg_start
+        exp_len += seg_len
+        time_bin_starts = np.arange(
+            seg_start+half_z_bin, seg_end-half_z_bin, z_bin_dt)
+        segment_spike_times_s_i = day_vars[0]['segment_spike_times'][s_i]
+        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in range(num_neur):
+            n_i_spike_times = (np.array(
+                segment_spike_times_s_i[n_i]) - seg_start).astype('int')
+            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
+        neur_spike_counts += np.sum(segment_spike_times_s_i_bin,1)
+    all_neur_mean_fr = (np.sum(neur_spike_counts)/(exp_len/1000))/num_neur
+    
     #Create storage matrices and outputs
     taste_unique_categories = list(all_dig_in_names)
     training_matrices = []
     training_labels = []
+    deliv_counts = []
+    taste_neur_mean_fr = np.zeros(len(all_dig_in_names))
+    #Get individual taste responses
     for t_i, t_name in tqdm.tqdm(enumerate(all_dig_in_names)):
         taste, day = t_name.split('_')
         day = int(day)
@@ -43,17 +67,15 @@ def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt, start_
         tastant_spike_times = day_vars[day]['tastant_spike_times']
         num_neur = len(tastant_spike_times[0][0])
         start_dig_in_times = day_vars[day]['start_dig_in_times']
-        pre_taste_dt = day_vars[day]['pre_taste_dt']
-        post_taste_dt = day_vars[day]['post_taste_dt']
-        bin_starts = np.ceil(np.linspace(start_bins,post_taste_dt,num_bins+1)).astype('int')
+        bin_starts = np.ceil(np.linspace(0,2000,num_bins+1)).astype('int')
         num_deliv = len(tastant_spike_times[t_i_day])
+        deliv_counts.append(num_deliv)
         
         #Get taste segment z-score info
         s_i_taste = np.nan*np.ones(1)
         for s_i in range(len(segment_names)):
             if segment_names[s_i].lower() == 'taste':
                 s_i_taste[0] = s_i
-    
         if not np.isnan(s_i_taste[0]):
             s_i = int(s_i_taste[0])
             seg_start = int(segment_times[s_i])
@@ -78,15 +100,17 @@ def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt, start_
             std_fr = np.zeros(num_neur)
         
         #Generate response matrices
+        total_neuron_counts = np.zeros(num_neur)
         for d_i in range(num_deliv):  # index for that taste
             raster_times = tastant_spike_times[t_i_day][d_i]
             start_taste_i = start_dig_in_times[t_i_day][d_i]
             # Binerize the activity following taste delivery start
             times_post_taste = [(np.array(raster_times[n_i])[np.where((raster_times[n_i] >= start_taste_i)*(
-                raster_times[n_i] < start_taste_i + post_taste_dt))[0]] - start_taste_i).astype('int') for n_i in range(num_neur)]
-            bin_post_taste = np.zeros((num_neur, post_taste_dt))
+                raster_times[n_i] < start_taste_i + 2000))[0]] - start_taste_i).astype('int') for n_i in range(num_neur)]
+            bin_post_taste = np.zeros((num_neur, 2000))
             for n_i in range(num_neur):
                 bin_post_taste[n_i, times_post_taste[n_i]] += 1
+            total_neuron_counts += np.sum(bin_post_taste,1)
             #Calculate binned firing rate matrix
             fr_mat = np.zeros((num_neur,num_bins))
             for bin_i in range(num_bins):
@@ -98,6 +122,14 @@ def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt, start_
             fr_z_mat = (fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
             training_matrices.append(fr_z_mat)
             training_labels.append(t_i)
+        taste_neur_mean_fr[t_i] = (np.sum(total_neuron_counts)/num_deliv/num_neur)/2
+    
+    # #Generate random responses
+    # min_deliv = min(deliv_counts)
+    # for d_i in range(min_deliv):
+    #     spikes_bin = np.zeros((num_neur,2000))
+        
+        
     
     return taste_unique_categories, training_matrices, training_labels
     
@@ -360,7 +392,7 @@ def get_best_size(fold_dict, savedir):
     ax_accuracy[0,1].set_xticks(np.arange(num_classes),class_names,rotation=45)
     ax_accuracy[0,1].set_yticks(np.arange(num_tested),tested_latent_dim)
     img.set_clim(0, 1)
-    ax_accuracy[0,1].set_title('Accurate Predictions w Probability >= 0.25')
+    ax_accuracy[0,1].set_title('Accurate Predictions w Probability >= ' + str(np.round(strong_cutoff,2)))
     plt.colorbar(mappable=img,ax=ax_accuracy[0,1])
     #Plot average accuracy by size
     img = ax_accuracy[1,0].imshow(accuracy - strong_accuracy,aspect='auto',cmap='viridis')
@@ -549,10 +581,12 @@ def plot_lstm_predictions(seg_predictions,segment_names,savedir):
                                               figsize=(num_seg*5,5))
     for seg_i in range(num_seg):
         cat_predictions = seg_predictions[seg_i]
-        
-        ax_seg_pred[seg_i].hist(cat_predictions[cat_predictions != np.nan])
-        ax_seg_pred[seg_i].set_xticks(np.arange(num_classes),categories)
-        ax_seg_pred[seg_i].set_title(segment_names[seg_i])
+        try:
+            ax_seg_pred[seg_i].hist(cat_predictions[cat_predictions != np.nan])
+            ax_seg_pred[seg_i].set_xticks(np.arange(num_classes),categories)
+            ax_seg_pred[seg_i].set_title(segment_names[seg_i])
+        except:
+            ax_seg_pred[seg_i].set_title(segment_names[seg_i] + '\nAll NaN.')
         
     plt.suptitle('Democratic decoding histograms')
     plt.tight_layout()
@@ -569,7 +603,10 @@ def plot_lstm_predictions(seg_predictions,segment_names,savedir):
             cat_predictions = seg_predictions[seg_i]
             tc_1 = len(np.where(cat_predictions == t_i1)[0])
             tc_2 = len(np.where(cat_predictions == t_i2)[0])
-            ratios.append(tc_1/tc_2)
+            if tc_2 > 0:
+                ratios.append(tc_1/tc_2)
+            else:
+                ratios.append(1)
         ax_pred_ratios[tp_i].plot(np.arange(num_seg),ratios)
         ax_pred_ratios[tp_i].set_xticks(np.arange(num_seg),segment_names)
         ax_pred_ratios[tp_i].set_title(categories[t_i1] + ' / ' + \

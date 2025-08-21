@@ -13,6 +13,7 @@ blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
 import gzip
+import json
 import tqdm
 import numpy as np
 import functions.analysis_funcs as af
@@ -161,7 +162,7 @@ class run_multiday_lstm_analysis():
             
         return keep_segment_spike_times, keep_tastant_spike_times
     
-    def get_taste_response_matrices(self,start_bins):
+    def get_taste_response_matrices(self,):
         day_1_tastes = self.day_vars[0]['dig_in_names']
         all_dig_in_names = []
         all_dig_in_names.extend([d1 + '_0' for d1 in day_1_tastes])
@@ -196,7 +197,6 @@ class run_multiday_lstm_analysis():
                 data = json.loads(json_str)
                 segment_deviations.append(data)
 
-           
         # get deviation matrices
         try:
             dev_matrices = np.load(os.path.join(self.lstm_dir,'dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
@@ -206,71 +206,52 @@ class run_multiday_lstm_analysis():
         
         self.dev_matrices = dev_matrices
         
-    def run_size_tests(self,):
+    def run_cross_validation(self,):
         
-        self.start_bin_array = np.arange(100,600,100)
+        print("\n--- Running cross-validation ---")
+            
+        cv_save_dir = os.path.join(self.lstm_dir,'cross_validation')
+        if not os.path.isdir(cv_save_dir):
+            os.mkdir(cv_save_dir)
         
-        best_dims = []
-        score_curves = []
-        latent_dims = []
-        for sb in self.start_bin_array:
-            print("\n--- Testing start bin " + str(sb) + "---")
+        #Cross-validation
+        try:
+            fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict.npy'),allow_pickle=True).item()
+        except:
+            taste_unique_categories, training_matrices, training_labels = self.get_taste_response_matrices()
             
-            sb_save_dir = os.path.join(self.lstm_dir,'start_t_' + str(sb))
-            if not os.path.isdir(sb_save_dir):
-                os.mkdir(sb_save_dir)
-            
-            #Cross-validation
-            try:
-                fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
-            except:
-                taste_unique_categories, training_matrices, training_labels = self.get_taste_response_matrices(sb)
+            lstm.lstm_cross_validation(training_matrices,\
+                                    training_labels,taste_unique_categories,\
+                                        cv_save_dir)
                 
-                lstm.lstm_cross_validation(training_matrices,\
-                                        training_labels,taste_unique_categories,\
-                                            sb_save_dir)
-                    
-                fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
-                
-            #Best size calculation
-            best_latent_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,sb_save_dir)
-            best_dims.append(best_latent_dim)
-            score_curves.append(score_curve)
-            latent_dims.append(tested_latent_dim)
+            fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict.npy'),allow_pickle=True).item()
             
-        # plot across start times the score curves and best dims
+        #Best size calculation
+        best_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,cv_save_dir)
+        
+        # plot the score curves and best dim
         lstm.cross_start_scores(self.start_bin_array, score_curves, latent_dims, \
                                    best_dims, self.lstm_dir)
             
-        self.best_dims = best_dims
-        self.score_curves = score_curves
-        self.latent_dims = latent_dims
+        self.best_dim = best_dim
+        self.score_curve = score_curve
+        self.tested_latent_dim = tested_latent_dim
        
     def run_deviation_decoding(self,):
         # across start times compare the decoding of each event - using a
         # democratic approach to assigning the decoded taste
-        
-        all_seg_predictions = []
-        for sb_i, sb in enumerate(self.start_bin_array):
+        try:
+            predictions = np.load(os.path.join(self.lstm_dir,'predictions.npy'),allow_pickle=True).item()
+        except:
+            taste_unique_categories = np.load(os.path.join(self.lstm_dir,'taste_unique_categories.npy'))
+            training_matrices = list(np.load(os.path.join(self.lstm_dir,'training_matrices.npy')))
+            training_labels = list(np.load(os.path.join(self.lstm_dir,'training_labels.npy')))
             
-            sb_save_dir = os.path.join(self.lstm_dir,'start_t_' + str(sb))
+            #Run decoding
             
-            try:
-                predictions = np.load(os.path.join(sb_save_dir,'predictions.npy'),allow_pickle=True).item()
-            except:
-                taste_unique_categories = np.load(os.path.join(sb_save_dir,'taste_unique_categories.npy'))
-                training_matrices = list(np.load(os.path.join(sb_save_dir,'training_matrices.npy')))
-                training_labels = list(np.load(os.path.join(sb_save_dir,'training_labels.npy')))
-                
-                #Run decoding
-                
-                predictions = lstm.lstm_dev_decoding(self.dev_matrices, training_matrices, training_labels,\
-                                      self.best_dims[sb_i], taste_unique_categories, sb_save_dir)
-                
-                np.save(os.path.join(sb_save_dir,'predictions.npy'),predictions,allow_pickle=True)
-            all_seg_predictions.append(predictions)
+            predictions = lstm.lstm_dev_decoding(self.dev_matrices, training_matrices, training_labels,\
+                                  self.best_dim, taste_unique_categories, self.lstm_dir)
             
-        np.save(os.path.join(self.lstm_dir,'all_seg_predictions.npy'),all_seg_predictions,allow_pickle=True)
+            np.save(os.path.join(sb_save_dir,'predictions.npy'),predictions,allow_pickle=True)
             
-        #Run cross-start democratization
         
