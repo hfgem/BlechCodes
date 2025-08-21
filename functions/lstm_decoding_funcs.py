@@ -460,30 +460,6 @@ def get_best_size(fold_dict, savedir):
 # def shifted_log_func(x, a, b, c):
 #         return a * np.log(x + c) + b
 
-def cross_start_scores(start_bin_array, score_curves, latent_dims, \
-                       best_dims, savedir):
-    """Plots and calculations across start times"""
-    
-    print("\n--- Plotting score curves across start times. ---")
-    
-    colors=['teal','blue','magenta','purple','forestgreen','navyblue',\
-            'darkpurple','rose']
-    
-    f_score = plt.figure(figsize=(5,5))
-    for s_i, sb in enumerate(start_bin_array):
-        plt.plot(latent_dims[s_i],score_curves[s_i],label=str(sb),\
-                 color=colors[s_i],alpha=0.5)
-        plt.axvline(best_dims[s_i],label=str(sb) + ' ' + str(best_dims[s_i]),\
-                 color=colors[s_i],alpha=0.5,linestyle='dashed')
-    avg_score = np.nanmean(np.array(score_curves),0)
-    plt.plot(latent_dims[0],avg_score,label='Avg Score',\
-             color='k',linestyle='dashed')
-    plt.legend(loc='lower right')
-    plt.tight_layout()
-    f_score.savefig(os.path.join(savedir,'cross_start_scores.png'))
-    f_score.savefig(os.path.join(savedir,'cross_start_scores.svg'))
-    plt.close(f_score)
-
 def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
                       latent_dim, taste_unique_categories, savedir):
     """Function to run the best model on classifying the deviation events"""
@@ -524,63 +500,62 @@ def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
     
     return seg_predictions
 
-def lstm_prediction_democratization(all_seg_predictions,segment_names,savedir):
+def prediction_plots(seg_predictions,taste_unique_categories,segment_names,savedir):
     """Take predictions from all models and create a democratic prediction"""
     
-    num_bins = len(all_seg_predictions)
-    num_seg = len(all_seg_predictions[0]['predictions']) - 1
-    categories = all_seg_predictions[0]['predictions']['taste_unique_categories']
-    num_classes = len(categories)
-    strong_cutoff = 1.1*(1/(num_classes - 1))
-    true_taste_inds = [c for c in range(len(categories)) if categories[c].split('_')[0] != 'none']
-    true_taste_categories = [categories[c] for c in true_taste_inds]
+    num_seg = len(seg_predictions)
+    num_classes = len(taste_unique_categories)
+    # strong_cutoff = 1.1*(1/(num_classes - 1))
+    true_taste_inds = [c for c in range(num_classes) if taste_unique_categories[c].split('_')[0] != 'none']
+    true_taste_categories = [taste_unique_categories[c] for c in true_taste_inds]
     true_taste_pairs = list(itertools.combinations(true_taste_inds,2))
     
-    seg_predictions = dict()
-    seg_predictions["variables"] = dict()
-    seg_predictions["variables"]["categories"] = categories
-    seg_predictions["variables"]["strong_cutoff"] = strong_cutoff
-    seg_predictions["variables"]["true_taste_inds"] = true_taste_inds
-    seg_predictions["variables"]["true_taste_categories"] = true_taste_categories
-    seg_predictions["variables"]["true_taste_pairs"] = true_taste_pairs
+    thresholded_predictions = dict()
+    thresholded_predictions["variables"] = dict()
+    thresholded_predictions["variables"]["categories"] = taste_unique_categories
+    # seg_predictions["variables"]["strong_cutoff"] = strong_cutoff
+    thresholded_predictions["variables"]["strong_cutoff"]  = '2x'
+    thresholded_predictions["variables"]["true_taste_inds"] = true_taste_inds
+    thresholded_predictions["variables"]["true_taste_categories"] = true_taste_categories
+    thresholded_predictions["variables"]["true_taste_pairs"] = true_taste_pairs
     
     for seg_i in range(num_seg):
-        #Collect predictions across start bins
-        all_dev_predictions = []
-        for sb_i in range(num_bins):
-            all_dev_predictions.append(all_seg_predictions[sb_i]['predictions'][seg_i])
-        all_dev_predictions = np.array(all_dev_predictions) #num bins x num dev x num categories
-        _, num_dev, _ = np.shape(all_dev_predictions)
+        predictions = seg_predictions[seg_i]
+        num_dev, _ = np.shape(predictions)
         
         #Average prediction across start bins
-        mean_predictions = np.nanmean(all_dev_predictions,0)
         cat_predictions = np.nan*np.ones(num_dev)
         for dev_i in range(num_dev):
-            cat_argmax = np.argmax(mean_predictions[dev_i,:])
-            if mean_predictions[dev_i,cat_argmax] > strong_cutoff:
-                cat_predictions[dev_i] = cat_argmax
+            sort_ind = np.argsort(predictions[dev_i,:])
+            if predictions[dev_i,sort_ind[-1]] > 2*predictions[dev_i,sort_ind[-2]]:
+                cat_predictions[dev_i] = sort_ind[-1]
+            
+            # cat_argmax = np.argmax(mean_predictions[dev_i,:])
+            
+            # if mean_predictions[dev_i,cat_argmax] > strong_cutoff:
+            #     cat_predictions[dev_i] = cat_argmax
         
-        seg_predictions[seg_i] = cat_predictions
+        thresholded_predictions[seg_i] = cat_predictions
         
-    np.save(os.path.join(savedir,'seg_predictions.npy'),seg_predictions,allow_pickle=True)
+    np.save(os.path.join(savedir,'thresholded_predictions.npy'),thresholded_predictions,allow_pickle=True)
     
     return seg_predictions
         
-def plot_lstm_predictions(seg_predictions,segment_names,savedir):
+def plot_lstm_predictions(thresholded_predictions,segment_names,savedir):
     
-    num_seg = len(seg_predictions) - 1
-    categories = seg_predictions["variables"]["categories"]
+    num_seg = len(thresholded_predictions) - 1
+    categories = thresholded_predictions["variables"]["categories"]
     num_classes = len(categories)
-    strong_cutoff = seg_predictions["variables"]["strong_cutoff"] 
-    true_taste_inds = seg_predictions["variables"]["true_taste_inds"]
-    true_taste_pairs = seg_predictions["variables"]["true_taste_pairs"]
+    strong_cutoff = thresholded_predictions["variables"]["strong_cutoff"] 
+    true_taste_inds = thresholded_predictions["variables"]["true_taste_inds"]
+    true_taste_pairs = thresholded_predictions["variables"]["true_taste_pairs"]
     num_pairs = len(true_taste_pairs)
     
     #Plot regular histogram of decoding counts
     seg_pred_hist, ax_seg_pred = plt.subplots(ncols = num_seg, sharey = True,\
                                               figsize=(num_seg*5,5))
     for seg_i in range(num_seg):
-        cat_predictions = seg_predictions[seg_i]
+        cat_predictions = thresholded_predictions[seg_i]
         try:
             ax_seg_pred[seg_i].hist(cat_predictions[cat_predictions != np.nan])
             ax_seg_pred[seg_i].set_xticks(np.arange(num_classes),categories)
@@ -600,7 +575,7 @@ def plot_lstm_predictions(seg_predictions,segment_names,savedir):
     for tp_i, (t_i1,t_i2) in enumerate(true_taste_pairs):
         ratios = []
         for seg_i in range(num_seg):
-            cat_predictions = seg_predictions[seg_i]
+            cat_predictions = thresholded_predictions[seg_i]
             tc_1 = len(np.where(cat_predictions == t_i1)[0])
             tc_2 = len(np.where(cat_predictions == t_i2)[0])
             if tc_2 > 0:

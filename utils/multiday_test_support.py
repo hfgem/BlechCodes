@@ -248,52 +248,32 @@ def get_taste_response_matrices():
     
     return taste_unique_categories, training_matrices, training_labels
 
-# run training
+#%%  run training
+cv_save_dir = os.path.join(lstm_dir,'cross_validation')
+if not os.path.isdir(cv_save_dir):
+    os.mkdir(cv_save_dir)
 
-best_dims = []
-score_curves = []
-latent_dims = []
-for sb in start_bin_array:
-    print("\n--- Testing start bin " + str(sb) + "---")
+#Cross-validation
+try:
+    fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict.npy'),allow_pickle=True).item()
+except:
+    taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices()
     
-    sb_save_dir = os.path.join(lstm_dir,'start_t_' + str(sb))
-    if not os.path.isdir(sb_save_dir):
-        os.mkdir(sb_save_dir)
+    lstm.lstm_cross_validation(training_matrices,\
+                            training_labels,taste_unique_categories,\
+                                cv_save_dir)
+        
+    fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict.npy'),allow_pickle=True).item()
     
-    #Cross-validation
-    try:
-        fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
-        taste_unique_categories = np.load(os.path.join(sb_save_dir,'taste_unique_categories.npy'))
-        training_matrices = list(np.load(os.path.join(sb_save_dir,'training_matrices.npy')))
-        training_labels = list(np.load(os.path.join(sb_save_dir,'training_labels.npy')))
-        
-    except:
-        taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices()
-        
-        np.save(os.path.join(sb_save_dir,'taste_unique_categories.npy'),\
-                np.array(taste_unique_categories))
-        np.save(os.path.join(sb_save_dir,'training_matrices.npy'),\
-                np.array(training_matrices))
-        np.save(os.path.join(sb_save_dir,'training_labels.npy'),\
-                np.array(training_labels))
-            
-        lstm.lstm_cross_validation(training_matrices,\
-                                training_labels,taste_unique_categories,\
-                                    sb_save_dir)
-        
-        fold_dict = np.load(os.path.join(sb_save_dir,'fold_dict.npy'),allow_pickle=True).item()
-        
-    #Best size calculation
-    best_latent_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,sb_save_dir)
-    best_dims.append(best_latent_dim)
-    score_curves.append(score_curve)
-    latent_dims.append(tested_latent_dim)
+#Best size calculation
+best_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,cv_save_dir)
+
     
 # plot across start times the score curves and best dims
-lstm.cross_start_scores(start_bin_array, score_curves, latent_dims, \
+lstm.cross_start_scores(score_curves, latent_dims, \
                            best_dims, lstm_dir)
 
-# Run testing
+#%% Run testing
 
 # Collect decodes across start bins for democratic assignment
 
