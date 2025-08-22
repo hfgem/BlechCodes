@@ -240,8 +240,6 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
     null_dev_matrices = dict()
     
     for s_ind, s_i in tqdm.tqdm(enumerate(segments_to_analyze)):
-        seg_dev_matrices = []
-        
         seg_spikes = segment_spike_times[s_i]
         seg_start = int(start_end_times[s_ind][0])
         seg_end = int(start_end_times[s_ind][1])
@@ -277,6 +275,7 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
         std_fr = np.nanstd(seg_fr, 1)
         
         #Now pull deviation matrices
+        seg_dev_matrices = []
         seg_dev = deviations[s_ind]
         seg_dev[0] = 0
         seg_dev[-1] = 0
@@ -301,7 +300,37 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
             seg_dev_matrices.append(z_dev_fr_mat)
         dev_matrices[s_ind] = np.array(seg_dev_matrices)
         
-    return dev_matrices
+        #Create null deviation matrices
+        seg_non_dev_matrices = []
+        mean_len = np.nanmean(end_dev_bouts - start_dev_bouts)
+        std_len = np.nanstd(end_dev_bouts - start_dev_bouts)
+        non_dev = np.ones(len(seg_dev)) - seg_dev
+        non_dev[0] = 0
+        non_dev[-1] = 0
+        change_inds = np.diff(non_dev)
+        start_non_dev_bouts = np.where(change_inds == 1)[0] + 1
+        end_non_dev_bouts = np.where(change_inds == -1)[0]
+        null_dev_made = 0
+        while null_dev_made < len(start_dev_bouts):
+            nondev_s_i = start_non_dev_bouts[b_i]
+            nondev_e_i = end_non_dev_bouts[b_i]
+            nondev_len = (np.ceil(std_len*np.random.randn() + mean_len)).astype('int')
+            
+            nondev_rast_i = spikes_bin[:, nondev_s_i:nondev_e_i]
+            
+            bin_starts = np.ceil(np.linspace(0,nondev_len,num_bins+2)).astype('int')
+            
+            nondev_fr_mat = np.zeros((num_neur,num_bins))
+            for nb_i in range(num_bins):
+                bs_i = bin_starts[nb_i]
+                be_i = bin_starts[nb_i+2]
+                nondev_fr_mat[:,nb_i] = np.sum(nondev_rast_i[:,bs_i:be_i],1)/((be_i-bs_i)/1000)
+            z_nondev_fr_mat = (nondev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+            seg_non_dev_matrices.append(z_nondev_fr_mat)
+            null_dev_made += 1
+        null_dev_matrices[s_ind] = np.array(seg_non_dev_matrices)
+        
+    return dev_matrices, null_dev_matrices
 
 def lstm_cross_validation(training_matrices,training_labels,\
                           taste_unique_categories,savedir):

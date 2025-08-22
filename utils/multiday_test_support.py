@@ -228,9 +228,12 @@ for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
 # get deviation matrices
 try:
     dev_matrices = np.load(os.path.join(lstm_dir,'dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
+    null_dev_matrices = np.load(os.path.join(lstm_dir,'null_dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
+
 except:
-    dev_matrices = lstm.create_dev_matrices(day_vars, segment_deviations, z_bin_dt, num_bins)
+    dev_matrices, null_dev_matrices = lstm.create_dev_matrices(day_vars, segment_deviations, z_bin_dt, num_bins)
     np.save(os.path.join(lstm_dir,'dev_fr_vecs_zscore.npy'),dev_matrices,allow_pickle=True)
+    np.save(os.path.join(lstm_dir,'null_dev_fr_vecs_zscore.npy'),null_dev_matrices,allow_pickle=True)
 
 # get_taste_response_matrices
 

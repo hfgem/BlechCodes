@@ -200,12 +200,14 @@ class run_multiday_lstm_analysis():
                 data = json.loads(json_str)
                 segment_deviations.append(data)
 
-        # get deviation matrices
+        # get deviation matrices        
         try:
             dev_matrices = np.load(os.path.join(self.lstm_dir,'dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
+            null_dev_matrices = np.load(os.path.join(self.lstm_dir,'null_dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
         except:
-            dev_matrices = lstm.create_dev_matrices(self.day_vars, segment_deviations, self.z_bin_dt, self.num_bins)
+            dev_matrices, null_dev_matrices = lstm.create_dev_matrices(self.day_vars, segment_deviations, self.z_bin_dt, self.num_bins)
             np.save(os.path.join(self.lstm_dir,'dev_fr_vecs_zscore.npy'),dev_matrices,allow_pickle=True)
+            np.save(os.path.join(self.lstm_dir,'null_dev_fr_vecs_zscore.npy'),null_dev_matrices,allow_pickle=True)
         
         self.dev_matrices = dev_matrices
         
