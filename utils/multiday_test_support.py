@@ -157,6 +157,8 @@ for n_i in range(num_days):
     day_vars[n_i]['post_taste_dt'] = np.ceil(day_vars[n_i]['pre_taste']*1000).astype('int')
     day_vars[n_i]['segments_to_analyze'] = metadata[n_i]['params_dict']['segments_to_analyze']
     day_vars[n_i]['epochs_to_analyze'] = metadata[n_i]['params_dict']['epochs_to_analyze']
+    day_vars[n_i]['min_dev_size'] = metadata[n_i]['params_dict']['min_dev_size']
+    day_vars[n_i]['local_size'] = metadata[n_i]['params_dict']['local_size']
     day_vars[n_i]['segment_names'] = data_dict[n_i]['segment_names']
     day_vars[n_i]['num_segments'] = len(day_vars[n_i]['segment_names'])
     day_vars[n_i]['segment_times'] = data_dict[n_i]['segment_times']
@@ -232,7 +234,7 @@ except:
 
 # get_taste_response_matrices
 
-def get_taste_response_matrices():
+def get_taste_response_matrices(null_taste):
     day_1_tastes = day_vars[0]['dig_in_names']
     all_dig_in_names = []
     all_dig_in_names.extend([d1 + '_0' for d1 in day_1_tastes])
@@ -244,7 +246,7 @@ def get_taste_response_matrices():
                                  len(np.intersect1d(np.array([ndt.split('_')]),np.array(day_1_tastes))) == 0])
         
     taste_unique_categories, training_matrices, training_labels = lstm.create_taste_matrices(\
-                           day_vars, all_dig_in_names, num_bins, z_bin_dt)
+                           day_vars, null_taste, all_dig_in_names, num_bins, z_bin_dt)
     
     return taste_unique_categories, training_matrices, training_labels
 
@@ -255,9 +257,10 @@ if not os.path.isdir(cv_save_dir):
 
 #Cross-validation
 try:
-    fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict.npy'),allow_pickle=True).item()
+    fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict_thwart.npy'),allow_pickle=True).item()
+    
 except:
-    taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices()
+    taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(null_taste)
     
     lstm.lstm_cross_validation(training_matrices,\
                             training_labels,taste_unique_categories,\

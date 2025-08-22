@@ -21,12 +21,14 @@ from scipy.optimize import curve_fit
 from matplotlib import colormaps
 os.environ["OMP_NUM_THREADS"] = "4"
 
-def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt):
+def create_taste_matrices(day_vars, segment_deviations, all_dig_in_names, num_bins, z_bin_dt):
     """Function to take spike times following taste delivery and create 
     matrices of timeseries firing trajectories"""
     
     print("\n--- Creating Taste Matrices ---")
     half_z_bin = np.floor(z_bin_dt/2).astype('int')
+    bin_starts = np.ceil(np.linspace(0,2000,num_bins+1)).astype('int')
+    num_neur = len(day_vars[0]['keep_neur'])
     
     #Get whole-experiment mean rate info
     exp_len = 0
@@ -49,29 +51,12 @@ def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt):
         neur_spike_counts += np.sum(segment_spike_times_s_i_bin,1)
     all_neur_mean_fr = (np.sum(neur_spike_counts)/(exp_len/1000))/num_neur
     
-    #Create storage matrices and outputs
-    taste_unique_categories = list(all_dig_in_names)
-    training_matrices = []
-    training_labels = []
-    deliv_counts = []
-    taste_neur_mean_fr = np.zeros(len(all_dig_in_names))
-    #Get individual taste responses
-    for t_i, t_name in tqdm.tqdm(enumerate(all_dig_in_names)):
-        taste, day = t_name.split('_')
-        day = int(day)
-        t_i_day = np.where(np.array(day_vars[day]['dig_in_names']) == taste)[0][0]
-        
+    #Get taste segment z-score info
+    day_zscore = dict()
+    for day in range(len(day_vars)):
         segment_names = day_vars[day]['segment_names']
         segment_times = day_vars[day]['segment_times']
         segment_spike_times = day_vars[day]['segment_spike_times']
-        tastant_spike_times = day_vars[day]['tastant_spike_times']
-        num_neur = len(tastant_spike_times[0][0])
-        start_dig_in_times = day_vars[day]['start_dig_in_times']
-        bin_starts = np.ceil(np.linspace(0,2000,num_bins+1)).astype('int')
-        num_deliv = len(tastant_spike_times[t_i_day])
-        deliv_counts.append(num_deliv)
-        
-        #Get taste segment z-score info
         s_i_taste = np.nan*np.ones(1)
         for s_i in range(len(segment_names)):
             if segment_names[s_i].lower() == 'taste':
@@ -96,11 +81,34 @@ def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt):
             mean_fr = np.mean(tb_fr, 1)
             std_fr = np.std(tb_fr, 1)
         else:
-            mean_fr = np.zeros(num_neur)
-            std_fr = np.zeros(num_neur)
+            mean_fr = np.nan*np.ones(num_neur)
+            std_fr = np.nan*np.ones(num_neur)
+        day_zscore[day] = dict()
+        day_zscore[day]['mean_fr'] = mean_fr
+        day_zscore[day]['std_fr'] = std_fr
+    
+    #Create storage matrices and outputs
+    taste_unique_categories = list(all_dig_in_names)
+    training_matrices = []
+    training_labels = []
+    deliv_counts = []
+    taste_pop_fr = []
+    #Get individual taste responses
+    for t_i, t_name in tqdm.tqdm(enumerate(all_dig_in_names)):
+        taste, day = t_name.split('_')
+        day = int(day)
+        t_i_day = np.where(np.array(day_vars[day]['dig_in_names']) == taste)[0][0]
+        mean_fr = day_zscore[day]['mean_fr']
+        std_fr = day_zscore[day]['std_fr']
+        
+        segment_times = day_vars[day]['segment_times']
+        segment_spike_times = day_vars[day]['segment_spike_times']
+        tastant_spike_times = day_vars[day]['tastant_spike_times']
+        start_dig_in_times = day_vars[day]['start_dig_in_times']
+        num_deliv = len(tastant_spike_times[t_i_day])
+        deliv_counts.append(num_deliv)
         
         #Generate response matrices
-        total_neuron_counts = np.zeros(num_neur)
         for d_i in range(num_deliv):  # index for that taste
             raster_times = tastant_spike_times[t_i_day][d_i]
             start_taste_i = start_dig_in_times[t_i_day][d_i]
@@ -110,7 +118,8 @@ def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt):
             bin_post_taste = np.zeros((num_neur, 2000))
             for n_i in range(num_neur):
                 bin_post_taste[n_i, times_post_taste[n_i]] += 1
-            total_neuron_counts += np.sum(bin_post_taste,1)
+            taste_pop_fr.append(np.sum(bin_post_taste)/(2000/1000))
+            
             #Calculate binned firing rate matrix
             fr_mat = np.zeros((num_neur,num_bins))
             for bin_i in range(num_bins):
@@ -122,16 +131,100 @@ def create_taste_matrices(day_vars, all_dig_in_names, num_bins, z_bin_dt):
             fr_z_mat = (fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
             training_matrices.append(fr_z_mat)
             training_labels.append(t_i)
-        taste_neur_mean_fr[t_i] = (np.sum(total_neuron_counts)/num_deliv/num_neur)/2
-    
-    # #Generate random responses
-    # min_deliv = min(deliv_counts)
-    # for d_i in range(min_deliv):
-    #     spikes_bin = np.zeros((num_neur,2000))
-        
-        
+            
+    # Generate random responses
+    null_taste = get_null_controls(day_vars,segment_deviations) #Get binary matrices
+    mean_pop_fr = np.nanmean(taste_pop_fr)
+    std_pop_fr = np.nanstd(taste_pop_fr)
+    mean_fr = day_zscore[0]['mean_fr']
+    std_fr = day_zscore[0]['std_fr']
+    for null_i in range(len(null_taste)):
+        #Calculate scaling factor to bring null to taste range
+        null_pop_fr = np.sum(null_taste[null_i])/(2000/1000)
+        scale = (std_pop_fr*np.random.randn() + mean_pop_fr)/null_pop_fr
+        #Create binned null taste response
+        fr_mat = np.zeros((num_neur,num_bins))
+        for bin_i in range(num_bins):
+            bs_i = bin_starts[bin_i]
+            be_i = bin_starts[bin_i+1]
+            b_len = (be_i - bs_i)/1000
+            fr_mat[:,bin_i] = np.sum(null_taste[null_i][:,bs_i:be_i],1)/b_len
+        rescaled_fr_mat = (fr_mat*scale - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+        training_matrices.append(fr_z_mat)
+        training_labels.append(len(all_dig_in_names))
+    taste_unique_categories.append('null')
     
     return taste_unique_categories, training_matrices, training_labels
+
+def get_null_controls(day_vars,segment_deviations):
+    """Function to find periods of the pre-taste interval where deviation events
+    don't occur to get control tastes and deviation events"""
+    segment_spike_times = day_vars[0]['segment_spike_times']
+    segments_to_analyze = day_vars[0]['segments_to_analyze']
+    segment_names = day_vars[0]['segment_names']
+    segment_times = day_vars[0]['segment_times']
+    segment_spike_times = day_vars[0]['segment_spike_times']
+    tastant_spike_times = day_vars[0]['tastant_spike_times']
+    num_null_taste = max([len(tastant_spike_times[i]) for i in range(len(tastant_spike_times))])
+    num_neur = len(day_vars[0]['keep_neur'])
+    min_dev_size = day_vars[0]['min_dev_size']
+    local_size = day_vars[0]['local_size']
+    half_min_dev_size = int(np.ceil(min_dev_size/2))
+    half_local_size = int(np.ceil(local_size/2))
+    
+    #Get index of pre-taste interval
+    pre_ind = np.nan*np.ones(1)
+    for s_i in range(len(segment_names)):
+        if segment_names[s_i].lower()[:3] == 'pre':
+            pre_ind[0] = s_i
+    
+    #Create taste and deviation storage
+    null_taste = dict()
+    #Calculate non-dev periods
+    if not np.isnan(pre_ind[0]):
+        pre_ind = int(pre_ind[0])
+        pre_deviations = segment_deviations[pre_ind]
+        pre_deviations[0] = 0
+        pre_deviations[-1] = 0
+        dev_starts = np.where(np.diff(pre_deviations) == 1)[0] + 1
+        pre_non_dev = np.ones(len(pre_deviations)) - pre_deviations
+        pre_non_dev[0] = 0
+        pre_non_dev[-1] = 0
+        num_null_dev = len(dev_starts)
+        
+        seg_start = segment_times[pre_ind]
+        seg_end = segment_times[pre_ind+1]
+        seg_len = seg_end - seg_start
+        segment_spike_times_s_i = segment_spike_times[pre_ind]
+        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in range(num_neur):
+            n_i_spike_times = (np.array(
+                segment_spike_times_s_i[n_i]) - seg_start).astype('int')
+            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
+        spike_sum = np.nansum(segment_spike_times_s_i_bin,0)
+        
+        change_inds = np.diff(pre_non_dev)
+        start_nondev_bouts = np.where(change_inds == 1)[0] + 1
+        end_nondev_bouts = np.where(change_inds == -1)[0]
+        
+        num_choice = min([len(start_nondev_bouts),num_null_taste])
+        rand_inds = np.random.choice(np.arange(len(start_nondev_bouts)),len(start_nondev_bouts),replace=False)
+        taste_done = 0
+        ri = 0
+        while taste_done < num_choice:
+            s_i = start_nondev_bouts[ri]
+            e_i = end_nondev_bouts[ri]
+            len_i = e_i - s_i
+            if len_i > 2000:
+                null_taste[taste_done] = segment_spike_times_s_i_bin[:,s_i:s_i+2000]
+                taste_done += 1
+            ri += 1
+            
+    else:
+        print("ERROR: no pre-taste interval found in segment names.")
+        
+    return null_taste
+            
     
 def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
     """Function to take spike times during deviation events and create 
@@ -144,6 +237,7 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
     
     half_z_bin = np.floor(z_bin_dt/2).astype('int')
     dev_matrices = dict()
+    null_dev_matrices = dict()
     
     for s_ind, s_i in tqdm.tqdm(enumerate(segments_to_analyze)):
         seg_dev_matrices = []

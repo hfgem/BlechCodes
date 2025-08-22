@@ -85,6 +85,8 @@ class run_multiday_lstm_analysis():
             day_vars[n_i]['post_taste_dt'] = np.ceil(day_vars[n_i]['pre_taste']*1000).astype('int')
             day_vars[n_i]['segments_to_analyze'] = self.metadata[n_i]['params_dict']['segments_to_analyze']
             day_vars[n_i]['epochs_to_analyze'] = self.metadata[n_i]['params_dict']['epochs_to_analyze']
+            day_vars[n_i]['min_dev_size'] = self.metadata[n_i]['params_dict']['min_dev_size']
+            day_vars[n_i]['local_size'] = self.metadata[n_i]['params_dict']['local_size']
             day_vars[n_i]['segment_names'] = self.data_dict[n_i]['segment_names']
             day_vars[n_i]['num_segments'] = len(day_vars[n_i]['segment_names'])
             day_vars[n_i]['segment_times'] = self.data_dict[n_i]['segment_times']
@@ -162,7 +164,7 @@ class run_multiday_lstm_analysis():
             
         return keep_segment_spike_times, keep_tastant_spike_times
     
-    def get_taste_response_matrices(self,):
+    def get_taste_response_matrices(self,null_taste):
         day_1_tastes = self.day_vars[0]['dig_in_names']
         all_dig_in_names = []
         all_dig_in_names.extend([d1 + '_0' for d1 in day_1_tastes])
@@ -174,7 +176,8 @@ class run_multiday_lstm_analysis():
                                      len(np.intersect1d(np.array([ndt.split('_')]),np.array(day_1_tastes))) == 0])
             
         taste_unique_categories, training_matrices, training_labels = lstm.create_taste_matrices(\
-                               self.day_vars, all_dig_in_names, self.num_bins, self.z_bin_dt, start_bins=0)
+                               self.day_vars, null_taste, all_dig_in_names, \
+                                   self.num_bins, self.z_bin_dt, start_bins=0)
         
         self.taste_unique_categories = taste_unique_categories
         self.training_matrices = training_matrices
