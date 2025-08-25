@@ -12,6 +12,7 @@ are timeseries of firing rates.
 import os
 import tqdm
 import itertools
+import umap
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -224,7 +225,56 @@ def get_null_controls(day_vars,segment_deviations):
         print("ERROR: no pre-taste interval found in segment names.")
         
     return null_taste
-            
+    
+def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,training_labels):
+    """Calculate the variance of each category for LSTM training to get a sense
+    of the optimization landscape. Plot some reduced form of the responses to 
+    visualize similarity/difference"""
+    
+    num_cat = len(taste_unique_categories)
+    num_train, num_neur, num_bins = np.shape(np.array(training_matrices))
+    reshape_training_data = []
+    for n_i in range(num_train):
+        reshape_training_data.extend(list(training_matrices[n_i].T))
+    reshape_training_data = np.array(reshape_training_data)
+    
+    reducer = umap.UMAP()
+    embedding = reducer.fit_transform(reshape_training_data)
+    
+    reshape_embedding = np.reshape(embedding,(num_train,num_bins,2))
+    
+    cat_points = dict()
+    for c_i in range(num_cat):
+        cat_points[c_i] = []
+    
+    f_umap, ax_umap = plt.subplots(nrows = 1, ncols = num_bins,\
+                                   figsize = (num_bins*5,5))
+    #Plot individual points
+    for nb_i in range(num_bins):
+        for nt_i in range(num_train):
+            c_i = training_labels[nt_i]
+            cat_points[c_i].append(np.squeeze(reshape_embedding[nt_i,:,:]))
+            ax_umap[nb_i].scatter(reshape_embedding[nt_i,nb_i,0],reshape_embedding[nt_i,nb_i,1],\
+                                  alpha=0.1,c = colormaps['tab10'](c_i),label='_')
+    #Plot averages
+    for c_i in range(num_cat):
+        cat_array = np.array(cat_points[c_i])
+        for nb_i in range(num_bins):
+            mean_point = np.nanmean(np.squeeze(cat_array[:,nb_i,:]),0)
+            std_point = np.nanstd(np.squeeze(cat_array[:,nb_i,:]),0)
+            ax_umap[nb_i].scatter(mean_point[0],mean_point[1],\
+                                  c = colormaps['tab10'](c_i),\
+                                      label=taste_unique_categories[c_i])
+            ax_umap[nb_i].plot([mean_point[0]-std_point[0],mean_point[0]+std_point[0]],\
+                               [mean_point[1],mean_point[1]],c = colormaps['tab10'](c_i),\
+                                   label='_')
+            ax_umap[nb_i].plot([mean_point[0],mean_point[0]],\
+                               [mean_point[1]-std_point[1],mean_point[1]+std_point[1]],\
+                                   c = colormaps['tab10'](c_i),\
+                                   label='_')
+    
+    ax_umap[0].legend(loc='upper left')
+    
     
 def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
     """Function to take spike times during deviation events and create 
