@@ -249,7 +249,7 @@ def get_taste_response_matrices(null_taste):
                                  len(np.intersect1d(np.array([ndt.split('_')]),np.array(day_1_tastes))) == 0])
         
     taste_unique_categories, training_matrices, training_labels = lstm.create_taste_matrices(\
-                           day_vars, null_taste, all_dig_in_names, num_bins, z_bin_dt)
+                           day_vars, segment_deviations, all_dig_in_names, num_bins, z_bin_dt)
     
     return taste_unique_categories, training_matrices, training_labels
 
@@ -261,9 +261,15 @@ if not os.path.isdir(cv_save_dir):
 #Cross-validation
 try:
     fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict_thwart.npy'),allow_pickle=True).item()
-    
+    taste_unique_categories = np.load(os.path.join(lstm_dir,'taste_unique_categories.npy'))
+    training_matrices = list(np.load(os.path.join(lstm_dir,'training_matrices.npy')))
+    training_labels = list(np.load(os.path.join(lstm_dir,'training_labels.npy')))
 except:
     taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(null_taste)
+    np.save(os.path.join(lstm_dir,'taste_unique_categories.npy'), np.array(taste_unique_categories))
+    np.save(os.path.join(lstm_dir,'training_matrices.npy'),np.array(training_matrices))
+    np.save(os.path.join(lstm_dir,'training_labels.npy'),np.array(training_labels))
+    
     
     lstm.lstm_cross_validation(training_matrices,\
                             training_labels,taste_unique_categories,\
@@ -274,10 +280,6 @@ except:
 #Best size calculation
 best_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,cv_save_dir)
 
-    
-# plot across start times the score curves and best dims
-lstm.cross_start_scores(score_curves, latent_dims, \
-                           best_dims, lstm_dir)
 
 #%% Run testing
 
@@ -286,32 +288,27 @@ lstm.cross_start_scores(score_curves, latent_dims, \
 segments_to_analyze = day_vars[0]['segments_to_analyze']
 segment_names = [day_vars[0]['segment_names'][i] for i in segments_to_analyze]
 
-all_seg_predictions = dict()
-for sb_i, sb in enumerate(start_bin_array):
+try:
+    predictions = np.load(os.path.join(lstm_dir,'predictions.npy'),allow_pickle=True).item()
+    null_predictions = np.load(os.path.join(lstm_dir,'null_predictions.npy'),allow_pickle=True).item()
+except:
+    taste_unique_categories = np.load(os.path.join(lstm_dir,'taste_unique_categories.npy'))
+    training_matrices = list(np.load(os.path.join(lstm_dir,'training_matrices.npy')))
+    training_labels = list(np.load(os.path.join(lstm_dir,'training_labels.npy')))
     
-    sb_save_dir = os.path.join(lstm_dir,'start_t_' + str(sb))
-    
-    try:
-        predictions = np.load(os.path.join(sb_save_dir,'predictions.npy'),allow_pickle=True)
-    except:
-        taste_unique_categories = np.load(os.path.join(sb_save_dir,'taste_unique_categories.npy'))
-        training_matrices = list(np.load(os.path.join(sb_save_dir,'training_matrices.npy')))
-        training_labels = list(np.load(os.path.join(sb_save_dir,'training_labels.npy')))
+    #Run decoding
+    predictions = lstm.lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
+                          best_dim, taste_unique_categories, lstm_dir)
+    predictions['taste_unique_categories'] = taste_unique_categories
         
-        #Run decoding
-        
-        predictions = lstm.lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
-                              best_dims[sb_i], taste_unique_categories, sb_save_dir)
-        predictions['taste_unique_categories'] = taste_unique_categories
-            
-        np.save(os.path.join(sb_save_dir,'predictions.npy'),predictions,allow_pickle=True)
-        all_seg_predictions[sb_i] = dict()
-        all_seg_predictions[sb_i]['predictions'] = predictions
-        all_seg_predictions[sb_i]['start_bin'] = sb
+    np.save(os.path.join(lstm_dir,'predictions.npy'),predictions,allow_pickle=True)
     
-np.save(os.path.join(lstm_dir,'all_seg_predictions.npy'),all_seg_predictions,allow_pickle=True)
+    #Run control decoding
+    null_predictions = lstm.lstm_dev_decoding(null_dev_matrices, training_matrices, training_labels,\
+                          best_dim, taste_unique_categories, lstm_dir)
+    null_predictions['taste_unique_categories'] = taste_unique_categories
+        
+    np.save(os.path.join(lstm_dir,'null_predictions.npy'),null_predictions,allow_pickle=True)
 
-
-seg_predictions = lstm.lstm_prediction_democratization(all_seg_predictions,segment_names,lstm_dir)
-
-lstm.plot_lstm_predictions(seg_predictions,segment_names,lstm_dir)
+thresholded_predictions = lstm.prediction_plots(predictions,segment_names,lstm_dir,'true')
+null_thresholded_predictions = lstm.prediction_plots(null_predictions,segment_names,lstm_dir,'null')

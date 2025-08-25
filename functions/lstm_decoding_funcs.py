@@ -470,8 +470,7 @@ def get_best_size(fold_dict, savedir):
     num_tested = len(list(fold_dict.keys()))
     class_names = fold_dict[0]["taste_unique_categories"]
     num_classes = len(class_names)
-    strong_cutoff = 1.1*(1/(num_classes - 1))
-    true_taste_inds = [i for i in range(num_classes) if class_names[i].split('_')[0] != 'none']
+    true_taste_inds = [i for i in range(num_classes) if (class_names[i].split('_')[0] != 'none') and (class_names[i].split('_')[0] != 'null')]
     tested_latent_dim = np.array([fold_dict[l_i]["latent_dim"] for l_i in range(num_tested)])
     
     accuracy = np.nan*np.ones((num_tested,num_classes))
@@ -489,8 +488,13 @@ def get_best_size(fold_dict, savedir):
             class_inds = np.where(true_inds == c_i)[0]
             predicted_inds = np.intersect1d(class_inds,matching_predictions)
             accuracy[l_i,c_i] = len(predicted_inds)/len(class_inds)
-            #Calculate strong accuracy of prediction
-            strong_accuracy[l_i,c_i] = len(np.where(predictions[predicted_inds,c_i] >= strong_cutoff)[0])/len(class_inds)
+            #Calculate strong accuracy of prediction - at least double that of next category
+            strong_inds = []
+            for pi in predicted_inds:
+                val_order = np.argsort(predictions[pi,:])
+                if predictions[pi,val_order[-1]] >= 2*predictions[pi,val_order[-2]]:
+                    strong_inds.append(pi)
+            strong_accuracy[l_i,c_i] = len(strong_inds)/len(class_inds)
             #Confusion matrix population
             predicted_classes = argmax_predictions[class_inds]
             confusion_matrices[l_i,c_i,:] = np.array([len(np.where(predicted_classes == c_i2)[0])/len(class_inds) for c_i2 in range(num_classes)])
@@ -515,7 +519,7 @@ def get_best_size(fold_dict, savedir):
     ax_accuracy[0,1].set_xticks(np.arange(num_classes),class_names,rotation=45)
     ax_accuracy[0,1].set_yticks(np.arange(num_tested),tested_latent_dim)
     img.set_clim(0, 1)
-    ax_accuracy[0,1].set_title('Accurate Predictions w Probability >= ' + str(np.round(strong_cutoff,2)))
+    ax_accuracy[0,1].set_title('Accurate Predictions w Probability >= 2x next decoded')
     plt.colorbar(mappable=img,ax=ax_accuracy[0,1])
     #Plot average accuracy by size
     img = ax_accuracy[1,0].imshow(accuracy - strong_accuracy,aspect='auto',cmap='viridis')
@@ -623,10 +627,11 @@ def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
     
     return seg_predictions
 
-def prediction_plots(seg_predictions,taste_unique_categories,segment_names,savedir):
+def prediction_plots(seg_predictions,segment_names,savedir,savename):
     """Take predictions from all models and create a democratic prediction"""
     
-    num_seg = len(seg_predictions)
+    taste_unique_categories = seg_predictions["taste_unique_categories"]
+    num_seg = len(seg_predictions) - 1
     num_classes = len(taste_unique_categories)
     # strong_cutoff = 1.1*(1/(num_classes - 1))
     true_taste_inds = [c for c in range(num_classes) if taste_unique_categories[c].split('_')[0] != 'none']
@@ -662,9 +667,11 @@ def prediction_plots(seg_predictions,taste_unique_categories,segment_names,saved
         
     np.save(os.path.join(savedir,'thresholded_predictions.npy'),thresholded_predictions,allow_pickle=True)
     
-    return seg_predictions
+    plot_lstm_predictions(thresholded_predictions,segment_names,savedir,savename)
+    
+    return thresholded_predictions
         
-def plot_lstm_predictions(thresholded_predictions,segment_names,savedir):
+def plot_lstm_predictions(thresholded_predictions,segment_names,savedir,savename):
     
     num_seg = len(thresholded_predictions) - 1
     categories = thresholded_predictions["variables"]["categories"]
@@ -688,8 +695,8 @@ def plot_lstm_predictions(thresholded_predictions,segment_names,savedir):
         
     plt.suptitle('Democratic decoding histograms')
     plt.tight_layout()
-    seg_pred_hist.savefig(os.path.join(savedir,'democratic_decoding_histograms.png'))
-    seg_pred_hist.savefig(os.path.join(savedir,'democratic_decoding_histograms.svg'))
+    seg_pred_hist.savefig(os.path.join(savedir,savename + '_democratic_decoding_histograms.png'))
+    seg_pred_hist.savefig(os.path.join(savedir,savename + '_democratic_decoding_histograms.svg'))
     plt.close(seg_pred_hist)
     
     #Plot ratios of decoding across segments
@@ -711,6 +718,6 @@ def plot_lstm_predictions(thresholded_predictions,segment_names,savedir):
                                        categories[t_i2])
     plt.suptitle('True Taste Decoding Ratios')
     plt.tight_layout()
-    f_pred_ratios.savefig(os.path.join(savedir,'democratic_decoding_ratios.png'))
-    f_pred_ratios.savefig(os.path.join(savedir,'democratic_decoding_ratios.svg'))
+    f_pred_ratios.savefig(os.path.join(savedir,savename + '_democratic_decoding_ratios.png'))
+    f_pred_ratios.savefig(os.path.join(savedir,savename + '_democratic_decoding_ratios.svg'))
     plt.close(f_pred_ratios)
