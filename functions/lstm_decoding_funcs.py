@@ -151,7 +151,7 @@ def create_taste_matrices(day_vars, segment_deviations, all_dig_in_names, num_bi
             b_len = (be_i - bs_i)/1000
             fr_mat[:,bin_i] = np.sum(null_taste[null_i][:,bs_i:be_i],1)/b_len
         rescaled_fr_mat = (fr_mat*scale - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
-        training_matrices.append(fr_z_mat)
+        training_matrices.append(rescaled_fr_mat)
         training_labels.append(len(all_dig_in_names))
     taste_unique_categories.append('null')
     
@@ -226,7 +226,8 @@ def get_null_controls(day_vars,segment_deviations):
         
     return null_taste
     
-def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,training_labels):
+def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,\
+                                      training_labels,savedir):
     """Calculate the variance of each category for LSTM training to get a sense
     of the optimization landscape. Plot some reduced form of the responses to 
     visualize similarity/difference"""
@@ -248,19 +249,23 @@ def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,
         cat_points[c_i] = []
     
     f_umap, ax_umap = plt.subplots(nrows = 1, ncols = num_bins,\
-                                   figsize = (num_bins*5,5))
+                                   figsize = (num_bins*5,5),\
+                                       sharex = True, sharey = True)
     #Plot individual points
     for nb_i in range(num_bins):
         for nt_i in range(num_train):
             c_i = training_labels[nt_i]
-            cat_points[c_i].append(np.squeeze(reshape_embedding[nt_i,:,:]))
+            if nb_i == 0:
+                cat_points[c_i].append(np.squeeze(reshape_embedding[nt_i,:,:]))
             ax_umap[nb_i].scatter(reshape_embedding[nt_i,nb_i,0],reshape_embedding[nt_i,nb_i,1],\
                                   alpha=0.1,c = colormaps['tab10'](c_i),label='_')
+    mean_points = np.zeros((num_cat,num_bins,2))
     #Plot averages
     for c_i in range(num_cat):
         cat_array = np.array(cat_points[c_i])
         for nb_i in range(num_bins):
             mean_point = np.nanmean(np.squeeze(cat_array[:,nb_i,:]),0)
+            mean_points[c_i,nb_i,:] = mean_point
             std_point = np.nanstd(np.squeeze(cat_array[:,nb_i,:]),0)
             ax_umap[nb_i].scatter(mean_point[0],mean_point[1],\
                                   c = colormaps['tab10'](c_i),\
@@ -272,8 +277,39 @@ def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,
                                [mean_point[1]-std_point[1],mean_point[1]+std_point[1]],\
                                    c = colormaps['tab10'](c_i),\
                                    label='_')
-    
     ax_umap[0].legend(loc='upper left')
+    plt.suptitle('UMAP Category Bins')
+    plt.tight_layout()
+    f_umap.savefig(os.path.join(savedir,'UMAP_bin_scatter.png'))
+    f_umap.savefig(os.path.join(savedir,'UMAP_bin_scatter.svg'))    
+    
+    f_worm = plt.figure()
+    #Plot average trajectories
+    for c_i in range(num_cat):
+        plt.plot(np.squeeze(mean_points[c_i,:,0]),np.squeeze(mean_points[c_i,:,1]),\
+                 c = colormaps['tab10'](c_i),label=taste_unique_categories[c_i])
+    
+    plt.legend(loc='lower right')
+    plt.title('Average UMAP Trajectories')
+    plt.tight_layout()
+    f_worm.savefig(os.path.join(savedir,'UMAP_avg_worm.png'))
+    f_worm.savefig(os.path.join(savedir,'UMAP_avg_worm.svg'))
+    
+    f_worm_cat, ax_worm_cat = plt.subplots(ncols = num_cat, figsize = (5*num_cat, 5),\
+                                           sharex = True, sharey = True)
+    for c_i in range(num_cat):
+        cat_array = np.array(cat_points[c_i])
+        num_point, _, _ = np.shape(cat_array)
+        for np_i in range(num_point):
+            ax_worm_cat[c_i].plot(np.squeeze(cat_array[np_i,:,0]),np.squeeze(cat_array[np_i,:,1]),\
+                     c = colormaps['tab10'](c_i),alpha=0.2)
+        ax_worm_cat[c_i].plot(np.squeeze(mean_points[c_i,:,0]),np.squeeze(mean_points[c_i,:,1]),\
+                 c = colormaps['tab10'](c_i))
+        ax_worm_cat[c_i].set_title(taste_unique_categories[c_i])
+    plt.tight_layout()
+    plt.suptitle('Taste UMAP Trajectories')
+    f_worm_cat.savefig(os.path.join(savedir,'UMAP_all_worm.png'))
+    f_worm_cat.savefig(os.path.join(savedir,'UMAP_all_worm.svg'))
     
     
 def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):

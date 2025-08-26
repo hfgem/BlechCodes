@@ -237,7 +237,7 @@ except:
 
 # get_taste_response_matrices
 
-def get_taste_response_matrices(null_taste):
+def get_taste_response_matrices():
     day_1_tastes = day_vars[0]['dig_in_names']
     all_dig_in_names = []
     all_dig_in_names.extend([d1 + '_0' for d1 in day_1_tastes])
@@ -265,11 +265,17 @@ try:
     training_matrices = list(np.load(os.path.join(lstm_dir,'training_matrices.npy')))
     training_labels = list(np.load(os.path.join(lstm_dir,'training_labels.npy')))
 except:
-    taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices(null_taste)
+    taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices()
     np.save(os.path.join(lstm_dir,'taste_unique_categories.npy'), np.array(taste_unique_categories))
     np.save(os.path.join(lstm_dir,'training_matrices.npy'),np.array(training_matrices))
     np.save(os.path.join(lstm_dir,'training_labels.npy'),np.array(training_labels))
     
+    #Plot taste categories
+    plot_dir = os.path.join(lstm_dir,'training_data')
+    if not os.path.isdir(plot_dir):
+        os.mkdir(plot_dir)
+    lstm.get_taste_distributions_and_plots(taste_unique_categories,training_matrices,\
+                                          training_labels,plot_dir)
     
     lstm.lstm_cross_validation(training_matrices,\
                             training_labels,taste_unique_categories,\
