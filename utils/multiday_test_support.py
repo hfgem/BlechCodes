@@ -286,6 +286,13 @@ except:
 #Best size calculation
 best_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,cv_save_dir)
 
+#Test rescaled taste responses
+rescale_control_dir = os.path.join(lstm_dir,'rescaled_control')
+if not os.path.isdir(rescale_control_dir):
+    os.mkdir(rescale_control_dir)
+rescaled_training_matrices = lstm.rescale_taste_to_dev(dev_matrices,training_matrices)
+rescaled_predictions = lstm.lstm_rescaled_decoding(rescaled_training_matrices, training_matrices, training_labels,\
+                      best_dim, taste_unique_categories, rescale_control_dir)
 
 #%% Run testing
 

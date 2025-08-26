@@ -15,6 +15,7 @@ import itertools
 import umap
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 from sklearn.model_selection import StratifiedKFold
@@ -128,9 +129,10 @@ def create_taste_matrices(day_vars, segment_deviations, all_dig_in_names, num_bi
                 be_i = bin_starts[bin_i+1]
                 b_len = (be_i - bs_i)/1000
                 fr_mat[:,bin_i] = np.sum(bin_post_taste[:,bs_i:be_i],1)/b_len
+            training_matrices.append(fr_mat)
             #Convert to z-scored matrix
-            fr_z_mat = (fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
-            training_matrices.append(fr_z_mat)
+            # fr_z_mat = (fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+            # training_matrices.append(fr_z_mat)
             training_labels.append(t_i)
             
     # Generate random responses
@@ -150,7 +152,8 @@ def create_taste_matrices(day_vars, segment_deviations, all_dig_in_names, num_bi
             be_i = bin_starts[bin_i+1]
             b_len = (be_i - bs_i)/1000
             fr_mat[:,bin_i] = np.sum(null_taste[null_i][:,bs_i:be_i],1)/b_len
-        rescaled_fr_mat = (fr_mat*scale - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+        rescaled_fr_mat = fr_mat*scale
+        #rescaled_fr_mat = (fr_mat*scale - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
         training_matrices.append(rescaled_fr_mat)
         training_labels.append(len(all_dig_in_names))
     taste_unique_categories.append('null')
@@ -248,7 +251,10 @@ def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,
     for c_i in range(num_cat):
         cat_points[c_i] = []
     
-    f_umap, ax_umap = plt.subplots(nrows = 1, ncols = num_bins,\
+    f_umap_cross, ax_umap_cross = plt.subplots(nrows = 1, ncols = num_bins,\
+                                   figsize = (num_bins*5,5),\
+                                       sharex = True, sharey = True)
+    f_umap_ellipse, ax_umap_ellipse = plt.subplots(nrows = 1, ncols = num_bins,\
                                    figsize = (num_bins*5,5),\
                                        sharex = True, sharey = True)
     #Plot individual points
@@ -257,9 +263,12 @@ def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,
             c_i = training_labels[nt_i]
             if nb_i == 0:
                 cat_points[c_i].append(np.squeeze(reshape_embedding[nt_i,:,:]))
-            ax_umap[nb_i].scatter(reshape_embedding[nt_i,nb_i,0],reshape_embedding[nt_i,nb_i,1],\
+            ax_umap_cross[nb_i].scatter(reshape_embedding[nt_i,nb_i,0],reshape_embedding[nt_i,nb_i,1],\
+                                  alpha=0.1,c = colormaps['tab10'](c_i),label='_')
+            ax_umap_ellipse[nb_i].scatter(reshape_embedding[nt_i,nb_i,0],reshape_embedding[nt_i,nb_i,1],\
                                   alpha=0.1,c = colormaps['tab10'](c_i),label='_')
     mean_points = np.zeros((num_cat,num_bins,2))
+    std_points = np.zeros((num_cat,num_bins,2))
     #Plot averages
     for c_i in range(num_cat):
         cat_array = np.array(cat_points[c_i])
@@ -267,33 +276,84 @@ def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,
             mean_point = np.nanmean(np.squeeze(cat_array[:,nb_i,:]),0)
             mean_points[c_i,nb_i,:] = mean_point
             std_point = np.nanstd(np.squeeze(cat_array[:,nb_i,:]),0)
-            ax_umap[nb_i].scatter(mean_point[0],mean_point[1],\
-                                  c = colormaps['tab10'](c_i),\
-                                      label=taste_unique_categories[c_i])
-            ax_umap[nb_i].plot([mean_point[0]-std_point[0],mean_point[0]+std_point[0]],\
+            std_points[c_i,nb_i,:] = std_point
+            #Cross
+            ax_umap_cross[nb_i].plot([mean_point[0]-std_point[0],mean_point[0]+std_point[0]],\
                                [mean_point[1],mean_point[1]],c = colormaps['tab10'](c_i),\
                                    label='_')
-            ax_umap[nb_i].plot([mean_point[0],mean_point[0]],\
+            ax_umap_cross[nb_i].plot([mean_point[0],mean_point[0]],\
                                [mean_point[1]-std_point[1],mean_point[1]+std_point[1]],\
                                    c = colormaps['tab10'](c_i),\
                                    label='_')
-    ax_umap[0].legend(loc='upper left')
+            #Ellipse
+            width = 2*std_point[0]
+            height = 2*std_point[1]
+            angle = 0
+            ellipse = Ellipse(mean_point, width, height, angle, alpha=0.1, \
+                              color=colormaps['tab10'](c_i),label='_')
+            ax_umap_ellipse[nb_i].add_patch(ellipse)
+            #Points
+            ax_umap_cross[nb_i].scatter(mean_point[0],mean_point[1],\
+                                  c = colormaps['tab10'](c_i),\
+                                      label=taste_unique_categories[c_i])
+            ax_umap_ellipse[nb_i].scatter(mean_point[0],mean_point[1],\
+                                  c = colormaps['tab10'](c_i),\
+                                      label=taste_unique_categories[c_i])
+    ax_umap_cross[0].legend(loc='upper left')
     plt.suptitle('UMAP Category Bins')
     plt.tight_layout()
-    f_umap.savefig(os.path.join(savedir,'UMAP_bin_scatter.png'))
-    f_umap.savefig(os.path.join(savedir,'UMAP_bin_scatter.svg'))    
+    f_umap_cross.savefig(os.path.join(savedir,'UMAP_bin_scatter_cross.png'))
+    f_umap_cross.savefig(os.path.join(savedir,'UMAP_bin_scatter_cross.svg'))  
+    ax_umap_ellipse[0].legend(loc='upper left')
+    plt.suptitle('UMAP Category Bins')
+    plt.tight_layout()
+    f_umap_ellipse.savefig(os.path.join(savedir,'UMAP_bin_scatter_ellipse.png'))
+    f_umap_ellipse.savefig(os.path.join(savedir,'UMAP_bin_scatter_ellipse.svg'))  
     
-    f_worm = plt.figure()
+    f_worm_ellipse, ax_worm_ellipse = plt.subplots()
+    f_worm_cross, ax_worm_cross = plt.subplots()
     #Plot average trajectories
     for c_i in range(num_cat):
-        plt.plot(np.squeeze(mean_points[c_i,:,0]),np.squeeze(mean_points[c_i,:,1]),\
+        #Add ellipse at each point for std
+        for b_i in range(num_bins):
+            center = np.squeeze(mean_points[c_i,b_i,:])
+            width = 2*np.squeeze(std_points[c_i,b_i,0])
+            height = 2*np.squeeze(std_points[c_i,b_i,1])
+            angle = 0
+            ellipse = Ellipse(center, width, height, angle, alpha=0.1, \
+                              color=colormaps['tab10'](c_i),label='_')
+            ax_worm_ellipse.add_patch(ellipse)
+        #Add cross at each point for std
+        #X-std
+        for b_i in range(num_bins):
+            x_vals = [np.squeeze(mean_points[c_i,b_i,0]) - np.squeeze(std_points[c_i,b_i,0]),\
+                      np.squeeze(mean_points[c_i,b_i,0]) + np.squeeze(std_points[c_i,b_i,0])]
+            y_vals = [np.squeeze(mean_points[c_i,b_i,1]),np.squeeze(mean_points[c_i,b_i,1])]
+            plt.plot(x_vals,y_vals,c = colormaps['tab10'](c_i),label='_',alpha=0.5)
+        #Y-std
+        for b_i in range(num_bins):
+            x_vals = [np.squeeze(mean_points[c_i,b_i,0]),np.squeeze(mean_points[c_i,b_i,0])]
+            y_vals = [np.squeeze(mean_points[c_i,b_i,1]) - np.squeeze(std_points[c_i,b_i,1]),\
+                      np.squeeze(mean_points[c_i,b_i,1]) + np.squeeze(std_points[c_i,b_i,1])]
+            plt.plot(x_vals,y_vals,c = colormaps['tab10'](c_i),label='_',alpha=0.5)
+        #Plot average trajectory
+        ax_worm_ellipse.plot(np.squeeze(mean_points[c_i,:,0]),np.squeeze(mean_points[c_i,:,1]),\
+                 c = colormaps['tab10'](c_i),label=taste_unique_categories[c_i])
+        ax_worm_cross.plot(np.squeeze(mean_points[c_i,:,0]),np.squeeze(mean_points[c_i,:,1]),\
                  c = colormaps['tab10'](c_i),label=taste_unique_categories[c_i])
     
+    plt.figure(f_worm_ellipse)
     plt.legend(loc='lower right')
     plt.title('Average UMAP Trajectories')
     plt.tight_layout()
-    f_worm.savefig(os.path.join(savedir,'UMAP_avg_worm.png'))
-    f_worm.savefig(os.path.join(savedir,'UMAP_avg_worm.svg'))
+    f_worm_ellipse.savefig(os.path.join(savedir,'UMAP_avg_worm_ellipse.png'))
+    f_worm_ellipse.savefig(os.path.join(savedir,'UMAP_avg_worm_ellipse.svg'))
+    plt.figure(f_worm_cross)
+    plt.legend(loc='lower right')
+    plt.title('Average UMAP Trajectories')
+    plt.tight_layout()
+    f_worm_cross.savefig(os.path.join(savedir,'UMAP_avg_worm_cross.png'))
+    f_worm_cross.savefig(os.path.join(savedir,'UMAP_avg_worm_cross.svg'))
     
     f_worm_cat, ax_worm_cat = plt.subplots(ncols = num_cat, figsize = (5*num_cat, 5),\
                                            sharex = True, sharey = True)
@@ -302,7 +362,7 @@ def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,
         num_point, _, _ = np.shape(cat_array)
         for np_i in range(num_point):
             ax_worm_cat[c_i].plot(np.squeeze(cat_array[np_i,:,0]),np.squeeze(cat_array[np_i,:,1]),\
-                     c = colormaps['tab10'](c_i),alpha=0.2)
+                     c = colormaps['tab10'](c_i),alpha=0.05)
         ax_worm_cat[c_i].plot(np.squeeze(mean_points[c_i,:,0]),np.squeeze(mean_points[c_i,:,1]),\
                  c = colormaps['tab10'](c_i))
         ax_worm_cat[c_i].set_title(taste_unique_categories[c_i])
@@ -310,7 +370,6 @@ def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,
     plt.suptitle('Taste UMAP Trajectories')
     f_worm_cat.savefig(os.path.join(savedir,'UMAP_all_worm.png'))
     f_worm_cat.savefig(os.path.join(savedir,'UMAP_all_worm.svg'))
-    
     
 def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
     """Function to take spike times during deviation events and create 
@@ -337,24 +396,8 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
                 'int') - seg_start
             spikes_bin[n_i, neur_spikes] = 1
         # Calculate z-score mean and std
-        time_bin_starts = np.arange(
-            seg_start+half_z_bin, seg_end-half_z_bin, z_bin_dt)
-        segment_spike_times_s_i = segment_spike_times[s_i]
-        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
-        for n_i in range(num_neur):
-            n_i_spike_times = (np.array(
-                segment_spike_times_s_i[n_i]) - seg_start).astype('int')
-            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
-        num_dt = len(time_bin_starts)
-        tb_fr = np.zeros((num_neur, num_dt))
-        for tb_i, tb in enumerate(time_bin_starts):
-            tb_fr[:, tb_i] = np.sum(segment_spike_times_s_i_bin[:, tb-seg_start -
-                                    half_z_bin:tb+half_z_bin-seg_start], 1)/(2*half_z_bin*(1/1000))
-        mean_fr = np.mean(tb_fr, 1)
-        std_fr = np.std(tb_fr, 1)
-        
         seg_fr = np.zeros(np.shape(spikes_bin))
-        for tb_i in range(num_dt - z_bin_dt):
+        for tb_i in range(seg_len - z_bin_dt):
             seg_fr[:, tb_i] = np.sum(
                 spikes_bin[:, tb_i:tb_i+z_bin_dt], 1)/(z_bin_dt/1000)
         mean_fr = np.nanmean(seg_fr, 1)
@@ -382,8 +425,9 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
                 bs_i = bin_starts[nb_i]
                 be_i = bin_starts[nb_i+2]
                 dev_fr_mat[:,nb_i] = np.sum(dev_rast_i[:,bs_i:be_i],1)/((be_i-bs_i)/1000)
-            z_dev_fr_mat = (dev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
-            seg_dev_matrices.append(z_dev_fr_mat)
+            seg_dev_matrices.append(dev_fr_mat)
+            # z_dev_fr_mat = (dev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+            # seg_dev_matrices.append(z_dev_fr_mat)
         dev_matrices[s_ind] = np.array(seg_dev_matrices)
         
         #Create null deviation matrices
@@ -411,12 +455,34 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
                 bs_i = bin_starts[nb_i]
                 be_i = bin_starts[nb_i+2]
                 nondev_fr_mat[:,nb_i] = np.sum(nondev_rast_i[:,bs_i:be_i],1)/((be_i-bs_i)/1000)
-            z_nondev_fr_mat = (nondev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
-            seg_non_dev_matrices.append(z_nondev_fr_mat)
+            seg_non_dev_matrices.append(nondev_fr_mat)
+            # z_nondev_fr_mat = (nondev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+            # seg_non_dev_matrices.append(z_nondev_fr_mat)
             null_dev_made += 1
         null_dev_matrices[s_ind] = np.array(seg_non_dev_matrices)
         
     return dev_matrices, null_dev_matrices
+
+def rescale_taste_to_dev(dev_matrices,training_matrices):
+    """Rescale taste responses to deviation rates to test LSTM imperviance to
+    rate scales"""
+    
+    num_seg = len(dev_matrices)
+    all_dev_matrices = []
+    for s_i in range(num_seg):
+        all_dev_matrices.extend(list(dev_matrices[s_i]))
+    all_dev_matrices_array = np.array(all_dev_matrices)
+    mean_dev = np.nanmean(all_dev_matrices_array)
+    
+    training_array = np.array(training_matrices)
+    mean_train = np.nanmean(training_array)
+    
+    scale = mean_dev/mean_train
+    
+    rescaled_training_matrices = list(scale*training_array)
+    
+    return rescaled_training_matrices
+    
 
 def lstm_cross_validation(training_matrices,training_labels,\
                           taste_unique_categories,savedir):
@@ -436,7 +502,10 @@ def lstm_cross_validation(training_matrices,training_labels,\
     kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     
     fold_dict = dict() #For each size return fold matrix
+    print("\n--- Beginning Cross-Validation ---")
     for l_i, latent_dim in enumerate(latent_dim_sizes):
+        print("\t Dim = " + str(latent_dim))
+        
         fold_dict[l_i] = dict()
         fold_dict[l_i]["latent_dim"] = latent_dim
         fold_dict[l_i]["taste_unique_categories"] = taste_unique_categories
@@ -444,8 +513,9 @@ def lstm_cross_validation(training_matrices,training_labels,\
         histories = []                # To store training history (loss, accuracy) per fold
         val_accuracy_per_fold = []     # To store final validation loss and accuracy per fold
         val_loss_per_fold = []
-        prediction_probabilities = np.zeros((num_samples,num_classes))
-        state_cs = np.zeros((num_samples,latent_dim))
+        prediction_probabilities = np.nan*np.ones((num_samples,num_classes))
+        state_cs = np.nan*np.ones((num_samples,latent_dim))
+        val_inds = []
         
         for fold, (train_index, val_index) in enumerate(kf.split(X,training_labels)):
             # Split data into training and validation sets for the current fold
@@ -465,27 +535,29 @@ def lstm_cross_validation(training_matrices,training_labels,\
             val_loss_per_fold.append(val_loss)
             prediction_probabilities[val_index_rand,:] = predictions
             state_cs[val_index_rand,:] = state_c
+            val_inds.extend(list(val_index_rand))
             
+        val_inds = np.sort(np.array(val_inds))   
         fold_dict[l_i]["histories"] = histories
         fold_dict[l_i]["val_accuracy_per_fold"] = val_accuracy_per_fold
         fold_dict[l_i]["val_loss_per_fold"] = val_loss_per_fold
-        fold_dict[l_i]["predictions"] = prediction_probabilities
-        fold_dict[l_i]["true_labels"] = Y
+        fold_dict[l_i]["predictions"] = prediction_probabilities[val_inds,:]
+        fold_dict[l_i]["true_labels"] = Y[val_inds,:]
         
         argmax_predict = np.argmax(prediction_probabilities,1)
         predict_onehot = np.array(tf.one_hot(argmax_predict, np.shape(prediction_probabilities)[1]))
         
         #Plot predictions
         f, ax = plt.subplots(ncols=3)
-        ax[0].imshow(Y,aspect='auto')
+        ax[0].imshow(Y[val_inds,:],aspect='auto')
         ax[0].set_title('Categories')
         ax[0].set_xticks(np.arange(num_classes),taste_unique_categories,
                          rotation=45)
-        ax[1].imshow(prediction_probabilities,aspect='auto')
+        ax[1].imshow(prediction_probabilities[val_inds,:],aspect='auto')
         ax[1].set_title('Predictions')
         ax[1].set_xticks(np.arange(num_classes),taste_unique_categories,
                          rotation=45)
-        ax[2].imshow(predict_onehot,aspect='auto')
+        ax[2].imshow(predict_onehot[val_inds,:],aspect='auto')
         ax[2].set_title('One-hot predictions')
         ax[2].set_xticks(np.arange(num_classes),taste_unique_categories,
                          rotation=45)
@@ -501,7 +573,7 @@ def lstm_cross_validation(training_matrices,training_labels,\
             avg_state.append(np.nanmean(state_cs[class_inds,:],0))
             
         f_state, ax_state = plt.subplots(ncols=2)
-        ax_state[0].imshow(state_cs,aspect='auto')
+        ax_state[0].imshow(state_cs[val_inds,:],aspect='auto')
         ax_state[0].set_title('Test LSTM Hidden State')
         for class_i, class_n in enumerate(taste_unique_categories):
             ax_state[1].plot(np.arange(latent_dim),avg_state[class_i],\
@@ -560,6 +632,7 @@ def get_best_size(fold_dict, savedir):
     tested_latent_dim = np.array([fold_dict[l_i]["latent_dim"] for l_i in range(num_tested)])
     
     accuracy = np.nan*np.ones((num_tested,num_classes))
+    precision = np.nan*np.ones((num_tested,num_classes))
     strong_accuracy = np.nan*np.ones((num_tested,num_classes))
     confusion_matrices = np.nan*np.ones((num_tested,num_classes,num_classes))
     
@@ -574,6 +647,7 @@ def get_best_size(fold_dict, savedir):
             class_inds = np.where(true_inds == c_i)[0]
             predicted_inds = np.intersect1d(class_inds,matching_predictions)
             accuracy[l_i,c_i] = len(predicted_inds)/len(class_inds)
+            precision[l_i,c_i] = len(predicted_inds)/len(np.where(argmax_predictions == c_i)[0])
             #Calculate strong accuracy of prediction - at least double that of next category
             strong_inds = []
             for pi in predicted_inds:
@@ -584,6 +658,18 @@ def get_best_size(fold_dict, savedir):
             #Confusion matrix population
             predicted_classes = argmax_predictions[class_inds]
             confusion_matrices[l_i,c_i,:] = np.array([len(np.where(predicted_classes == c_i2)[0])/len(class_inds) for c_i2 in range(num_classes)])
+        
+        #Plot precision/accuracy
+        f_prec_acc = plt.figure()
+        plt.plot(np.arange(num_classes),accuracy[l_i,:],label='Accuracy')
+        plt.plot(np.arange(num_classes),precision[l_i,:],label='Precision')
+        plt.ylim([0,1])
+        plt.legend(loc='upper right')
+        plt.xticks(np.arange(num_classes),class_names)
+        plt.tight_layout()
+        f_prec_acc.savefig(os.path.join(savedir,'latent_' + str(latent_dim) + '_prec_acc.png'))
+        f_prec_acc.savefig(os.path.join(savedir,'latent_' + str(latent_dim) + '_prec_acc.svg'))
+        plt.close(f_prec_acc)
     
     average_accuracy = np.nanmean(accuracy,1)
     average_strong_accuracy = np.nanmean(strong_accuracy,1)
@@ -672,6 +758,87 @@ def get_best_size(fold_dict, savedir):
     
 # def shifted_log_func(x, a, b, c):
 #         return a * np.log(x + c) + b
+
+def lstm_rescaled_decoding(rescaled_training_matrices, training_matrices, training_labels,\
+                      latent_dim, taste_unique_categories, savedir):
+    """Function to run the best model on classifying the deviation events"""
+    
+    training_labels = np.array(training_labels)
+    num_classes = len(np.unique(training_labels))
+    class_inds = [np.where(training_labels == i)[0] for i in range(num_classes)]     
+    ex_per_class = [len(ci) for ci in class_inds]
+    min_count = np.min(ex_per_class)
+    # none_ind = np.where(np.array(taste_unique_categories) == 'none_0')[0][0]
+    # null_ind = np.where(np.array(taste_unique_categories) == 'null')[0][0]
+    
+    #Equalize the data to be the same number of samples per class
+    keep_class_inds = []
+    for i in range(num_classes):
+        keep_class_inds.extend(list(np.random.choice(class_inds[i],min_count,replace=False)))
+    #Shuffle
+    keep_class_inds = list(np.random.choice(keep_class_inds,len(keep_class_inds),replace=False))
+    
+    X = np.array(training_matrices)[keep_class_inds]
+    train_labels_balanced = training_labels[keep_class_inds]
+    Y = np.array(tf.one_hot(train_labels_balanced, num_classes))
+    
+    num_samples, timesteps, features = X.shape
+    
+    model = _get_lstm_model(np.shape(X[0]),latent_dim,num_classes)
+    
+    history = model.fit(X, Y, epochs = 20, batch_size = 40,\
+                            verbose=0)
+    
+    lstm_output_extractor_model = Model(inputs=model.input,
+                                            outputs=model.get_layer('lstm_layer').output)
+    
+    predictions = model.predict(np.array(rescaled_training_matrices))
+    
+    argmax_predict = np.argmax(predictions,1)
+    predict_onehot = np.array(tf.one_hot(argmax_predict, np.shape(predictions)[1]))
+    true_onehot = tf.one_hot(training_labels, num_classes)
+    predict_ind = np.argmax(predict_onehot,1)
+    accuracy = len(np.where(predict_ind == training_labels)[0])/len(training_labels)
+    by_taste_accuracy = np.zeros(num_classes)
+    by_taste_precision = np.zeros(num_classes)
+    for c_i in range(num_classes):
+        class_ind = np.where(training_labels == c_i)[0]
+        by_taste_accuracy[c_i] = len(np.where(predict_ind[class_ind] == training_labels[class_ind])[0])/len(class_ind)
+        by_taste_precision[c_i] = len(np.where(predict_ind[class_ind] == training_labels[class_ind])[0])/len(np.where(predict_ind == c_i)[0])
+    
+    #Plot predictions
+    f, ax = plt.subplots(ncols=3)
+    ax[0].imshow(true_onehot,aspect='auto')
+    ax[0].set_title('Categories')
+    ax[0].set_xticks(np.arange(num_classes),taste_unique_categories,
+                     rotation=45)
+    ax[1].imshow(predictions,aspect='auto')
+    ax[1].set_title('Predictions')
+    ax[1].set_xticks(np.arange(num_classes),taste_unique_categories,
+                     rotation=45)
+    ax[2].imshow(predict_onehot,aspect='auto')
+    ax[2].set_title('One-hot predictions')
+    ax[2].set_xticks(np.arange(num_classes),taste_unique_categories,
+                     rotation=45)
+    plt.tight_layout()
+    f.savefig(os.path.join(savedir,'rescaled_predictions.png'))
+    f.savefig(os.path.join(savedir,'rescaled_predictions.svg'))
+    plt.close(f)
+    
+    #Plot accuracy and precision
+    f_accuracy = plt.figure()
+    plt.plot(np.arange(num_classes),by_taste_accuracy,label='Accuracy')
+    plt.plot(np.arange(num_classes),by_taste_precision,label='Precision')
+    plt.ylim([0,1])
+    plt.legend(loc='upper right')
+    plt.xticks(np.arange(num_classes),taste_unique_categories)
+    plt.tight_layout()
+    f_accuracy.savefig(os.path.join(savedir,'rescaled_prediction_accuracy_precision.png'))
+    f_accuracy.savefig(os.path.join(savedir,'rescaled_prediction_accuracy_precision.svg'))
+    plt.close(f_accuracy)
+    
+    return predictions
+
 
 def lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
                       latent_dim, taste_unique_categories, savedir):
