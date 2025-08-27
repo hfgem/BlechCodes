@@ -158,7 +158,8 @@ def create_taste_matrices(day_vars, segment_deviations, all_dig_in_names, num_bi
         training_labels.append(len(all_dig_in_names))
     taste_unique_categories.append('null')
     
-    return taste_unique_categories, training_matrices, training_labels
+    return taste_unique_categories, training_matrices, training_labels, \
+        mean_pop_fr, std_pop_fr
 
 def get_null_controls(day_vars,segment_deviations):
     """Function to find periods of the pre-taste interval where deviation events
@@ -371,7 +372,7 @@ def get_taste_distributions_and_plots(taste_unique_categories,training_matrices,
     f_worm_cat.savefig(os.path.join(savedir,'UMAP_all_worm.png'))
     f_worm_cat.savefig(os.path.join(savedir,'UMAP_all_worm.svg'))
     
-def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
+def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins, mean_taste_pop_fr):
     """Function to take spike times during deviation events and create 
     matrices of timeseries firing trajectories the same size as taste trajectories"""
     
@@ -382,6 +383,7 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
     
     half_z_bin = np.floor(z_bin_dt/2).astype('int')
     dev_matrices = dict()
+    scaled_dev_matrices = dict()
     null_dev_matrices = dict()
     
     for s_ind, s_i in tqdm.tqdm(enumerate(segments_to_analyze)):
@@ -411,12 +413,17 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
         change_inds = np.diff(seg_dev)
         start_dev_bouts = np.where(change_inds == 1)[0] + 1
         end_dev_bouts = np.where(change_inds == -1)[0]
+        seg_dev_pop_fr = []
         for b_i in range(len(start_dev_bouts)):
             dev_s_i = start_dev_bouts[b_i]
             dev_e_i = end_dev_bouts[b_i]
             dev_len = dev_e_i - dev_s_i
             
             dev_rast_i = spikes_bin[:, dev_s_i:dev_e_i]
+            
+            #Calculate population rate for rescaling to taste levels
+            dev_pop_fr = np.sum(dev_rast_i)/(dev_len/1000)
+            seg_dev_pop_fr.append(dev_pop_fr)
             
             bin_starts = np.ceil(np.linspace(0,dev_len,num_bins+2)).astype('int')
             
@@ -428,7 +435,13 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
             seg_dev_matrices.append(dev_fr_mat)
             # z_dev_fr_mat = (dev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
             # seg_dev_matrices.append(z_dev_fr_mat)
+        
+        #Calculate scaling to bring to taste levels
+        seg_dev_mean_pop_fr = np.nanmean(np.array(seg_dev_pop_fr))
+        scale = mean_taste_pop_fr/seg_dev_mean_pop_fr
+        
         dev_matrices[s_ind] = np.array(seg_dev_matrices)
+        scaled_dev_matrices[s_ind] = scale*np.array(seg_dev_matrices)
         
         #Create null deviation matrices
         seg_non_dev_matrices = []
@@ -441,12 +454,15 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
         start_non_dev_bouts = np.where(change_inds == 1)[0] + 1
         end_non_dev_bouts = np.where(change_inds == -1)[0]
         null_dev_made = 0
+        null_pop_fr = []
         while null_dev_made < len(start_dev_bouts):
             nondev_s_i = start_non_dev_bouts[b_i]
             nondev_e_i = end_non_dev_bouts[b_i]
             nondev_len = (np.ceil(std_len*np.random.randn() + mean_len)).astype('int')
             
             nondev_rast_i = spikes_bin[:, nondev_s_i:nondev_e_i]
+            nondev_pop_fr = np.sum(dev_rast_i)/(dev_len/1000)
+            null_pop_fr.append(nondev_pop_fr)
             
             bin_starts = np.ceil(np.linspace(0,nondev_len,num_bins+2)).astype('int')
             
@@ -459,9 +475,10 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins):
             # z_nondev_fr_mat = (nondev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
             # seg_non_dev_matrices.append(z_nondev_fr_mat)
             null_dev_made += 1
+        
         null_dev_matrices[s_ind] = np.array(seg_non_dev_matrices)
         
-    return dev_matrices, null_dev_matrices
+    return dev_matrices, scaled_dev_matrices, null_dev_matrices
 
 def rescale_taste_to_dev(dev_matrices,training_matrices):
     """Rescale taste responses to deviation rates to test LSTM imperviance to
@@ -939,13 +956,17 @@ def plot_lstm_predictions(thresholded_predictions,segment_names,savedir,savename
                                               figsize=(num_seg*5,5))
     for seg_i in range(num_seg):
         cat_predictions = thresholded_predictions[seg_i]
+        num_dev = len(cat_predictions)
         try:
-            ax_seg_pred[seg_i].hist(cat_predictions[cat_predictions != np.nan])
-            ax_seg_pred[seg_i].set_xticks(np.arange(num_classes),categories)
+            hist_vals = ax_seg_pred[seg_i].hist(cat_predictions[cat_predictions != np.nan],\
+                                                bins = np.arange(num_classes+1))
+            for c_i in range(num_classes):
+                ax_seg_pred[seg_i].text(c_i,hist_vals[0][c_i] + 5,str(hist_vals[0][c_i]))
+            ax_seg_pred[seg_i].set_xticks(np.arange(num_classes)+0.5,categories)
             ax_seg_pred[seg_i].set_title(segment_names[seg_i])
         except:
             ax_seg_pred[seg_i].set_title(segment_names[seg_i] + '\nAll NaN.')
-        
+        ax_seg_pred[seg_i].set_ylim([0,num_dev])
     plt.suptitle('Democratic decoding histograms')
     plt.tight_layout()
     seg_pred_hist.savefig(os.path.join(savedir,savename + '_democratic_decoding_histograms.png'))

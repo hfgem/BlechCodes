@@ -225,16 +225,6 @@ for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
         data = json.loads(json_str)
         segment_deviations.append(data)
    
-# get deviation matrices
-try:
-    dev_matrices = np.load(os.path.join(lstm_dir,'dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
-    null_dev_matrices = np.load(os.path.join(lstm_dir,'null_dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
-
-except:
-    dev_matrices, null_dev_matrices = lstm.create_dev_matrices(day_vars, segment_deviations, z_bin_dt, num_bins)
-    np.save(os.path.join(lstm_dir,'dev_fr_vecs_zscore.npy'),dev_matrices,allow_pickle=True)
-    np.save(os.path.join(lstm_dir,'null_dev_fr_vecs_zscore.npy'),null_dev_matrices,allow_pickle=True)
-
 # get_taste_response_matrices
 
 def get_taste_response_matrices():
@@ -248,10 +238,11 @@ def get_taste_response_matrices():
         all_dig_in_names.extend([ndt + '_' + str(n_i) for ndt in new_day_tastes if 
                                  len(np.intersect1d(np.array([ndt.split('_')]),np.array(day_1_tastes))) == 0])
         
-    taste_unique_categories, training_matrices, training_labels = lstm.create_taste_matrices(\
+    taste_unique_categories, training_matrices, training_labels, \
+        mean_taste_pop_fr, std_taste_pop_fr = lstm.create_taste_matrices(\
                            day_vars, segment_deviations, all_dig_in_names, num_bins, z_bin_dt)
     
-    return taste_unique_categories, training_matrices, training_labels
+    return taste_unique_categories, training_matrices, training_labels, mean_taste_pop_fr, std_taste_pop_fr
 
 #%%  run training
 cv_save_dir = os.path.join(lstm_dir,'cross_validation')
@@ -260,15 +251,19 @@ if not os.path.isdir(cv_save_dir):
 
 #Cross-validation
 try:
-    fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict_thwart.npy'),allow_pickle=True).item()
+    fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict.npy'),allow_pickle=True).item()
     taste_unique_categories = np.load(os.path.join(lstm_dir,'taste_unique_categories.npy'))
     training_matrices = list(np.load(os.path.join(lstm_dir,'training_matrices.npy')))
     training_labels = list(np.load(os.path.join(lstm_dir,'training_labels.npy')))
+    taste_pop_fr_stats = np.load(os.path.join(lstm_dir,'taste_pop_fr.npy'))
+    mean_taste_pop_fr = taste_pop_fr_stats[0]
 except:
-    taste_unique_categories, training_matrices, training_labels = get_taste_response_matrices()
+    taste_unique_categories, training_matrices, training_labels, \
+        mean_taste_pop_fr, std_taste_pop_fr = get_taste_response_matrices()
     np.save(os.path.join(lstm_dir,'taste_unique_categories.npy'), np.array(taste_unique_categories))
     np.save(os.path.join(lstm_dir,'training_matrices.npy'),np.array(training_matrices))
     np.save(os.path.join(lstm_dir,'training_labels.npy'),np.array(training_labels))
+    np.save(os.path.join(lstm_dir,'taste_pop_fr.npy'),np.array([mean_taste_pop_fr, std_taste_pop_fr]))
     
     #Plot taste categories
     plot_dir = os.path.join(lstm_dir,'training_data')
@@ -296,6 +291,20 @@ rescaled_predictions = lstm.lstm_rescaled_decoding(rescaled_training_matrices, t
 
 #%% Run testing
 
+# get deviation matrices
+try:
+    dev_matrices = np.load(os.path.join(lstm_dir,'dev_fr_vecs.npy'),allow_pickle=True).item()
+    scaled_dev_matrices = np.load(os.path.join(lstm_dir,'scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
+    null_dev_matrices = np.load(os.path.join(lstm_dir,'null_dev_fr_vecs.npy'),allow_pickle=True).item()
+
+except:
+    dev_matrices, scaled_dev_matrices, null_dev_matrices = lstm.create_dev_matrices(day_vars, \
+                                        segment_deviations, z_bin_dt, num_bins, \
+                                            mean_taste_pop_fr)
+    np.save(os.path.join(lstm_dir,'dev_fr_vecs.npy'),dev_matrices,allow_pickle=True)
+    np.save(os.path.join(lstm_dir,'scaled_dev_fr_vecs.npy'),scaled_dev_matrices,allow_pickle=True)
+    np.save(os.path.join(lstm_dir,'null_dev_fr_vecs.npy'),null_dev_matrices,allow_pickle=True)
+
 # Collect decodes across start bins for democratic assignment
 
 segments_to_analyze = day_vars[0]['segments_to_analyze']
@@ -316,6 +325,13 @@ except:
         
     np.save(os.path.join(lstm_dir,'predictions.npy'),predictions,allow_pickle=True)
     
+    #Run scaled decoding
+    scaled_predictions = lstm.lstm_dev_decoding(scaled_dev_matrices, training_matrices, training_labels,\
+                          best_dim, taste_unique_categories, lstm_dir)
+    scaled_predictions['taste_unique_categories'] = taste_unique_categories
+        
+    np.save(os.path.join(lstm_dir,'scaled_predictions.npy'),scaled_predictions,allow_pickle=True)
+    
     #Run control decoding
     null_predictions = lstm.lstm_dev_decoding(null_dev_matrices, training_matrices, training_labels,\
                           best_dim, taste_unique_categories, lstm_dir)
@@ -324,4 +340,5 @@ except:
     np.save(os.path.join(lstm_dir,'null_predictions.npy'),null_predictions,allow_pickle=True)
 
 thresholded_predictions = lstm.prediction_plots(predictions,segment_names,lstm_dir,'true')
+scaled_thresholded_predictions = lstm.prediction_plots(scaled_predictions,segment_names,lstm_dir,'scaled')
 null_thresholded_predictions = lstm.prediction_plots(null_predictions,segment_names,lstm_dir,'null')
