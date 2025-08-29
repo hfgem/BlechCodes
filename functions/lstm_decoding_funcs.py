@@ -51,7 +51,6 @@ def create_taste_matrices(day_vars, segment_deviations, all_dig_in_names, num_bi
                 segment_spike_times_s_i[n_i]) - seg_start).astype('int')
             segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
         neur_spike_counts += np.sum(segment_spike_times_s_i_bin,1)
-    all_neur_mean_fr = (np.sum(neur_spike_counts)/(exp_len/1000))/num_neur
     
     #Get taste segment z-score info
     day_zscore = dict()
@@ -499,6 +498,86 @@ def rescale_taste_to_dev(dev_matrices,training_matrices):
     rescaled_training_matrices = list(scale*training_array)
     
     return rescaled_training_matrices
+
+def time_shuffled_dev_controls(day_vars, deviations, z_bin_dt, num_bins, mean_taste_pop_fr):
+    """Function to take spike times during deviation events and create 
+    time-shuffled matrices of timeseries firing trajectories the same size as 
+    taste trajectories"""
+    
+    print("\n--- Creating Deviation Matrices ---")
+    segment_spike_times = day_vars[0]['segment_spike_times']
+    segments_to_analyze = day_vars[0]['segments_to_analyze']
+    start_end_times = np.array(day_vars[0]['segment_times_reshaped'])[segments_to_analyze]
+    
+    half_z_bin = np.floor(z_bin_dt/2).astype('int')
+    shuffled_dev_matrices = dict()
+    shuffled_scaled_dev_matrices = dict()
+    null_dev_matrices = dict()
+    
+    for s_ind, s_i in tqdm.tqdm(enumerate(segments_to_analyze)):
+        seg_spikes = segment_spike_times[s_i]
+        seg_start = int(start_end_times[s_ind][0])
+        seg_end = int(start_end_times[s_ind][1])
+        seg_len = seg_end - seg_start
+        num_neur = len(seg_spikes)
+        spikes_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in range(num_neur):
+            neur_spikes = np.array(seg_spikes[n_i]).astype(
+                'int') - seg_start
+            spikes_bin[n_i, neur_spikes] = 1
+        # Calculate z-score mean and std
+        seg_fr = np.zeros(np.shape(spikes_bin))
+        for tb_i in range(seg_len - z_bin_dt):
+            seg_fr[:, tb_i] = np.sum(
+                spikes_bin[:, tb_i:tb_i+z_bin_dt], 1)/(z_bin_dt/1000)
+        mean_fr = np.nanmean(seg_fr, 1)
+        std_fr = np.nanstd(seg_fr, 1)
+        
+        #Now pull deviation matrices
+        seg_dev_matrices = []
+        seg_dev = deviations[s_ind]
+        seg_dev[0] = 0
+        seg_dev[-1] = 0
+        change_inds = np.diff(seg_dev)
+        start_dev_bouts = np.where(change_inds == 1)[0] + 1
+        end_dev_bouts = np.where(change_inds == -1)[0]
+        seg_dev_pop_fr = []
+        for b_i in range(len(start_dev_bouts)):
+            dev_s_i = start_dev_bouts[b_i]
+            dev_e_i = end_dev_bouts[b_i]
+            dev_len = dev_e_i - dev_s_i
+            
+            dev_rast_i = spikes_bin[:, dev_s_i:dev_e_i]
+            
+            dev_shuffle_rast_i = np.zeros(np.shape(dev_rast_i))
+            #Shuffle spike times in raster
+            for n_i in range(num_neur):
+                n_dev_t = len(np.where(dev_rast_i[n_i,:] == 1)[0])
+                dev_shuffle_rast_i[n_i,np.random.choice(np.arange(dev_len),n_dev_t,replace=False)] = 1
+            
+            #Calculate population rate for rescaling to taste levels
+            dev_pop_fr = np.sum(dev_rast_i)/(dev_len/1000)
+            seg_dev_pop_fr.append(dev_pop_fr)
+            
+            bin_starts = np.ceil(np.linspace(0,dev_len,num_bins+2)).astype('int')
+            
+            dev_fr_mat = np.zeros((num_neur,num_bins))
+            for nb_i in range(num_bins):
+                bs_i = bin_starts[nb_i]
+                be_i = bin_starts[nb_i+2]
+                dev_fr_mat[:,nb_i] = np.sum(dev_shuffle_rast_i[:,bs_i:be_i],1)/((be_i-bs_i)/1000)
+            seg_dev_matrices.append(dev_fr_mat)
+            # z_dev_fr_mat = (dev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
+            # seg_dev_matrices.append(z_dev_fr_mat)
+        
+        #Calculate scaling to bring to taste levels
+        seg_dev_mean_pop_fr = np.nanmean(np.array(seg_dev_pop_fr))
+        scale = mean_taste_pop_fr/seg_dev_mean_pop_fr
+        
+        shuffled_dev_matrices[s_ind] = np.array(seg_dev_matrices)
+        shuffled_scaled_dev_matrices[s_ind] = scale*np.array(seg_dev_matrices)
+        
+    return shuffled_dev_matrices, shuffled_scaled_dev_matrices
     
 
 def lstm_cross_validation(training_matrices,training_labels,\
