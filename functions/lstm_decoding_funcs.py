@@ -579,6 +579,22 @@ def time_shuffled_dev_controls(day_vars, deviations, z_bin_dt, num_bins, mean_ta
         
     return shuffled_dev_matrices, shuffled_scaled_dev_matrices
     
+def time_shuffled_taste_controls(training_matrices):
+    """Function to take spike times during deviation events and create 
+    time-shuffled matrices of timeseries firing trajectories the same size as 
+    taste trajectories"""
+    
+    print("\n--- Creating Time-Shuffled Taste Matrices ---")
+    num_neur, num_bins = np.shape(training_matrices[0])
+    shuffled_training_matrices = []
+    for t_i in range(len(training_matrices)):
+        t_i_mat = training_matrices[t_i]
+        shuffle_order = np.random.choice(np.arange(num_bins),num_bins,replace=False)
+        while np.product(shuffle_order == np.arange(num_bins)) == 1:
+            shuffle_order = np.random.choice(np.arange(num_bins),num_bins,replace=False)
+        shuffled_training_matrices.append(t_i_mat[:,shuffle_order])
+    
+    return shuffled_training_matrices
 
 def lstm_cross_validation(training_matrices,training_labels,\
                           taste_unique_categories,savedir):
@@ -855,9 +871,11 @@ def get_best_size(fold_dict, savedir):
 # def shifted_log_func(x, a, b, c):
 #         return a * np.log(x + c) + b
 
-def lstm_rescaled_decoding(rescaled_training_matrices, training_matrices, training_labels,\
-                      latent_dim, taste_unique_categories, savedir):
+def lstm_control_decoding(test_training_matrices, training_matrices, training_labels,\
+                      latent_dim, taste_unique_categories, type_pred, savedir):
     """Function to run the best model on classifying the deviation events"""
+    
+    print("\n ---Running " + (' ').join(type_pred.split('_')) + " decoding.---")
     
     training_labels = np.array(training_labels)
     num_classes = len(np.unique(training_labels))
@@ -888,11 +906,14 @@ def lstm_rescaled_decoding(rescaled_training_matrices, training_matrices, traini
     lstm_output_extractor_model = Model(inputs=model.input,
                                             outputs=model.get_layer('lstm_layer').output)
     
-    predictions = model.predict(np.array(rescaled_training_matrices))
+    predictions = model.predict(np.array(test_training_matrices))
+    np.save(os.path.join(savedir,type_pred + '_predictions.npy'),predictions)
+    
     
     argmax_predict = np.argmax(predictions,1)
     predict_onehot = np.array(tf.one_hot(argmax_predict, np.shape(predictions)[1]))
     true_onehot = tf.one_hot(training_labels, num_classes)
+    np.save(os.path.join(savedir,'true_labels.npy'),true_onehot)
     predict_ind = np.argmax(predict_onehot,1)
     accuracy = len(np.where(predict_ind == training_labels)[0])/len(training_labels)
     by_taste_accuracy = np.zeros(num_classes)
@@ -917,8 +938,8 @@ def lstm_rescaled_decoding(rescaled_training_matrices, training_matrices, traini
     ax[2].set_xticks(np.arange(num_classes),taste_unique_categories,
                      rotation=45)
     plt.tight_layout()
-    f.savefig(os.path.join(savedir,'rescaled_predictions.png'))
-    f.savefig(os.path.join(savedir,'rescaled_predictions.svg'))
+    f.savefig(os.path.join(savedir,type_pred + '_predictions.png'))
+    f.savefig(os.path.join(savedir,type_pred + '_predictions.svg'))
     plt.close(f)
     
     #Plot accuracy and precision
@@ -929,8 +950,8 @@ def lstm_rescaled_decoding(rescaled_training_matrices, training_matrices, traini
     plt.legend(loc='upper right')
     plt.xticks(np.arange(num_classes),taste_unique_categories)
     plt.tight_layout()
-    f_accuracy.savefig(os.path.join(savedir,'rescaled_prediction_accuracy_precision.png'))
-    f_accuracy.savefig(os.path.join(savedir,'rescaled_prediction_accuracy_precision.svg'))
+    f_accuracy.savefig(os.path.join(savedir,type_pred + '_prediction_accuracy_precision.png'))
+    f_accuracy.savefig(os.path.join(savedir,type_pred + '_prediction_accuracy_precision.svg'))
     plt.close(f_accuracy)
     
     return predictions
@@ -1014,7 +1035,7 @@ def prediction_plots(seg_predictions,segment_names,savedir,savename):
         
         thresholded_predictions[seg_i] = cat_predictions
         
-    np.save(os.path.join(savedir,'thresholded_predictions.npy'),thresholded_predictions,allow_pickle=True)
+    np.save(os.path.join(savedir,savename + '_thresholded_predictions.npy'),thresholded_predictions,allow_pickle=True)
     
     plot_lstm_predictions(thresholded_predictions,segment_names,savedir,savename)
     

@@ -309,8 +309,16 @@ rescale_control_dir = os.path.join(lstm_dir,'rescaled_control')
 if not os.path.isdir(rescale_control_dir):
     os.mkdir(rescale_control_dir)
 rescaled_training_matrices = lstm.rescale_taste_to_dev(dev_matrices,training_matrices)
-rescaled_predictions = lstm.lstm_rescaled_decoding(rescaled_training_matrices, training_matrices, training_labels,\
-                      best_dim, taste_unique_categories, rescale_control_dir)
+rescaled_predictions = lstm.lstm_control_decoding(rescaled_training_matrices, training_matrices, training_labels,\
+                      best_dim, taste_unique_categories, 'rescaled', rescale_control_dir)
+
+#Test shuffled taste response
+shuffle_control_dir = os.path.join(lstm_dir,'time_shuffled_control')
+if not os.path.isdir(shuffle_control_dir):
+    os.mkdir(shuffle_control_dir)
+shuffled_training_matrices = lstm.time_shuffled_taste_controls(training_matrices)
+shuffled_predictions = lstm.lstm_control_decoding(shuffled_training_matrices, training_matrices, training_labels,\
+                      best_dim, taste_unique_categories, 'time_shuffled', shuffle_control_dir)
 
 # Collect decodes across start bins for democratic assignment
 
