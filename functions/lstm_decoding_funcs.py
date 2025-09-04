@@ -455,8 +455,8 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins, mean_taste_pop
         null_dev_made = 0
         null_pop_fr = []
         while null_dev_made < len(start_dev_bouts):
-            nondev_s_i = start_non_dev_bouts[b_i]
-            nondev_e_i = end_non_dev_bouts[b_i]
+            nondev_s_i = start_non_dev_bouts[null_dev_made]
+            nondev_e_i = end_non_dev_bouts[null_dev_made]
             nondev_len = (np.ceil(std_len*np.random.randn() + mean_len)).astype('int')
             
             nondev_rast_i = spikes_bin[:, nondev_s_i:nondev_e_i]
