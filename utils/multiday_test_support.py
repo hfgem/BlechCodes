@@ -244,7 +244,7 @@ def get_taste_response_matrices():
     
     return taste_unique_categories, training_matrices, training_labels, mean_taste_pop_fr, std_taste_pop_fr
 
-#%%  run training
+#  run training
 cv_save_dir = os.path.join(lstm_dir,'cross_validation')
 if not os.path.isdir(cv_save_dir):
     os.mkdir(cv_save_dir)
@@ -281,11 +281,11 @@ except:
 #Best size calculation
 best_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,cv_save_dir)
 
-#%% Run testing
+# Run testing
 
 # get deviation matrices
 try:
-    dev_matrices = np.load(os.path.join(lstm_dir,'dev_fr_vecs.npy'),allow_pickle=True).item()
+    dev_matrices = np.load(os.path.join(lstm_dir,'dev_fr_vecs_thwart.npy'),allow_pickle=True).item()
     scaled_dev_matrices = np.load(os.path.join(lstm_dir,'scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
     null_dev_matrices = np.load(os.path.join(lstm_dir,'null_dev_fr_vecs.npy'),allow_pickle=True).item()
     shuffled_dev_matrices = np.load(os.path.join(lstm_dir,'shuffled_dev_fr_vecs.npy'),allow_pickle=True).item()

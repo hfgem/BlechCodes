@@ -31,8 +31,8 @@ class run_multiday_lstm_analysis():
         self.z_bin_dt = 100
         self.create_save_dir()
         self.gather_variables()
-        self.get_deviation_matrices()
-        self.run_size_tests()
+        self.import_segment_deviations()
+        self.run_cross_validation()
         
     def create_save_dir(self,):
         # Using the directories of the different days find a common root folder and create save dir there
@@ -164,27 +164,7 @@ class run_multiday_lstm_analysis():
             
         return keep_segment_spike_times, keep_tastant_spike_times
     
-    def get_taste_response_matrices(self,null_taste):
-        day_1_tastes = self.day_vars[0]['dig_in_names']
-        all_dig_in_names = []
-        all_dig_in_names.extend([d1 + '_0' for d1 in day_1_tastes])
-        all_segment_times = []
-        all_tastant_spike_times = []
-        for n_i in np.arange(1,self.num_days):
-            new_day_tastes =self.day_vars[n_i]['dig_in_names']
-            all_dig_in_names.extend([ndt + '_' + str(n_i) for ndt in new_day_tastes if 
-                                     len(np.intersect1d(np.array([ndt.split('_')]),np.array(day_1_tastes))) == 0])
-            
-        taste_unique_categories, training_matrices, training_labels = lstm.create_taste_matrices(\
-                               self.day_vars, segment_deviations, all_dig_in_names, \
-                                   self.num_bins, self.z_bin_dt, start_bins=0)
-        
-        self.taste_unique_categories = taste_unique_categories
-        self.training_matrices = training_matrices
-        self.training_labels = training_labels
-        
-    def get_deviation_matrices(self,):
-        
+    def import_segment_deviations(self,):
         num_seg_to_analyze = len(self.day_vars[0]['segments_to_analyze'])
         segment_names_to_analyze = [self.day_vars[0]['segment_names'][i] for i in self.day_vars[0]['segments_to_analyze']]
         segment_times_to_analyze_reshaped = [
@@ -199,18 +179,59 @@ class run_multiday_lstm_analysis():
                 json_str = json_bytes.decode('utf-8')
                 data = json.loads(json_str)
                 segment_deviations.append(data)
-
-        # get deviation matrices        
+                
+        self.segment_deviations = segment_deviations
+    
+    def get_deviation_matrices(self,):
+        
         try:
-            dev_matrices = np.load(os.path.join(self.lstm_dir,'dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
-            null_dev_matrices = np.load(os.path.join(self.lstm_dir,'null_dev_fr_vecs_zscore.npy'),allow_pickle=True).item()
+            dev_matrices = np.load(os.path.join(self.lstm_dir,'dev_fr_vecs.npy'),allow_pickle=True).item()
+            scaled_dev_matrices = np.load(os.path.join(self.lstm_dir,'scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
+            null_dev_matrices = np.load(os.path.join(self.lstm_dir,'null_dev_fr_vecs.npy'),allow_pickle=True).item()
+            shuffled_dev_matrices = np.load(os.path.join(self.lstm_dir,'shuffled_dev_fr_vecs.npy'),allow_pickle=True).item()
+            shuffled_scaled_dev_matrices = np.load(os.path.join(self.lstm_dir,'shuffled_scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
+
         except:
-            dev_matrices, null_dev_matrices = lstm.create_dev_matrices(self.day_vars, segment_deviations, self.z_bin_dt, self.num_bins)
-            np.save(os.path.join(self.lstm_dir,'dev_fr_vecs_zscore.npy'),dev_matrices,allow_pickle=True)
-            np.save(os.path.join(self.lstm_dir,'null_dev_fr_vecs_zscore.npy'),null_dev_matrices,allow_pickle=True)
+            dev_matrices, scaled_dev_matrices, null_dev_matrices = lstm.create_dev_matrices(self.day_vars, \
+                                                self.segment_deviations, self.z_bin_dt, self.num_bins, \
+                                                    self.mean_taste_pop_fr)
+            shuffled_dev_matrices, shuffled_scaled_dev_matrices = lstm.time_shuffled_dev_controls(self.day_vars, \
+                                                self.segment_deviations, self.z_bin_dt, self.num_bins, \
+                                                    self.mean_taste_pop_fr)
+            np.save(os.path.join(self.lstm_dir,'dev_fr_vecs.npy'),dev_matrices,allow_pickle=True)
+            np.save(os.path.join(self.lstm_dir,'scaled_dev_fr_vecs.npy'),scaled_dev_matrices,allow_pickle=True)
+            np.save(os.path.join(self.lstm_dir,'null_dev_fr_vecs.npy'),null_dev_matrices,allow_pickle=True)
+            np.save(os.path.join(self.lstm_dir,'shuffled_dev_fr_vecs.npy'),shuffled_dev_matrices,allow_pickle=True)
+            np.save(os.path.join(self.lstm_dir,'shuffled_scaled_dev_fr_vecs.npy'),shuffled_scaled_dev_matrices,allow_pickle=True)
+
         
         self.dev_matrices = dev_matrices
+        self.scaled_dev_matrices = scaled_dev_matrices
         self.null_dev_matrices = null_dev_matrices
+        self.shuffled_dev_matrices = shuffled_dev_matrices
+        self.shuffled_scaled_dev_matrices = shuffled_scaled_dev_matrices
+        
+    def get_taste_response_matrices(self,null_taste):
+        day_1_tastes = self.day_vars[0]['dig_in_names']
+        all_dig_in_names = []
+        all_dig_in_names.extend([d1 + '_0' for d1 in day_1_tastes])
+        all_segment_times = []
+        all_tastant_spike_times = []
+        for n_i in np.arange(1,self.num_days):
+            new_day_tastes =self.day_vars[n_i]['dig_in_names']
+            all_dig_in_names.extend([ndt + '_' + str(n_i) for ndt in new_day_tastes if 
+                                     len(np.intersect1d(np.array([ndt.split('_')]),np.array(day_1_tastes))) == 0])
+            
+        taste_unique_categories, training_matrices, training_labels, \
+            mean_taste_pop_fr, std_taste_pop_fr  = lstm.create_taste_matrices(\
+                               self.day_vars, self.segment_deviations, all_dig_in_names, \
+                                   self.num_bins, self.z_bin_dt)
+        
+        self.taste_unique_categories = taste_unique_categories
+        self.training_matrices = training_matrices
+        self.training_labels = training_labels
+        self.mean_taste_pop_fr = mean_taste_pop_fr
+        self.std_taste_pop_fr = std_taste_pop_fr
         
     def run_cross_validation(self,):
         
@@ -226,11 +247,22 @@ class run_multiday_lstm_analysis():
             taste_unique_categories = np.load(os.path.join(self.lstm_dir,'taste_unique_categories.npy'))
             training_matrices = list(np.load(os.path.join(self.lstm_dir,'training_matrices.npy')))
             training_labels = list(np.load(os.path.join(self.lstm_dir,'training_labels.npy')))
+            taste_pop_fr_stats = np.load(os.path.join(self.lstm_dir,'taste_pop_fr.npy'))
+            mean_taste_pop_fr = taste_pop_fr_stats[0]
         except:
-            taste_unique_categories, training_matrices, training_labels = self.get_taste_response_matrices()
+            taste_unique_categories, training_matrices, training_labels, \
+                mean_taste_pop_fr, std_taste_pop_fr = self.get_taste_response_matrices()
             np.save(os.path.join(self.lstm_dir,'taste_unique_categories.npy'), np.array(taste_unique_categories))
             np.save(os.path.join(self.lstm_dir,'training_matrices.npy'),np.array(training_matrices))
             np.save(os.path.join(self.lstm_dir,'training_labels.npy'),np.array(training_labels))
+            np.save(os.path.join(self.lstm_dir,'taste_pop_fr.npy'),np.array([mean_taste_pop_fr, std_taste_pop_fr]))
+            
+            #Plot taste categories
+            plot_dir = os.path.join(self.lstm_dir,'training_data')
+            if not os.path.isdir(plot_dir):
+                os.mkdir(plot_dir)
+            lstm.get_taste_distributions_and_plots(taste_unique_categories,training_matrices,\
+                                                  training_labels,plot_dir)
             
             lstm.lstm_cross_validation(training_matrices,\
                                     training_labels,taste_unique_categories,\
@@ -241,36 +273,86 @@ class run_multiday_lstm_analysis():
         #Best size calculation
         best_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,cv_save_dir)
 
+        self.taste_unique_categories = taste_unique_categories
+        self.training_matrices = training_matrices
+        self.training_labels = training_labels
+        self.mean_taste_pop_fr = mean_taste_pop_fr
         self.best_dim = best_dim
         self.score_curve = score_curve
         self.tested_latent_dim = tested_latent_dim
-       
+    
+    def run_control_tests(self,):
+        # Run control taste responses through LSTM
+        
+        #Test rescaled taste responses
+        rescale_control_dir = os.path.join(self.lstm_dir,'rescaled_control')
+        if not os.path.isdir(rescale_control_dir):
+            os.mkdir(rescale_control_dir)
+        rescaled_training_matrices = lstm.rescale_taste_to_dev(self.dev_matrices,self.training_matrices)
+        rescaled_predictions = lstm.lstm_control_decoding(self.rescaled_training_matrices, \
+                                self.training_matrices, self.training_labels, self.best_dim, \
+                                self.taste_unique_categories, 'rescaled', rescale_control_dir)
+
+        #Test shuffled taste response
+        shuffle_control_dir = os.path.join(self.lstm_dir,'time_shuffled_control')
+        if not os.path.isdir(shuffle_control_dir):
+            os.mkdir(shuffle_control_dir)
+        shuffled_training_matrices = lstm.time_shuffled_taste_controls(self.training_matrices)
+        shuffled_predictions = lstm.lstm_control_decoding(self.shuffled_training_matrices, \
+                                self.training_matrices, self.training_labels, self.best_dim, \
+                                self.taste_unique_categories, 'time_shuffled', shuffle_control_dir)
+    
     def run_deviation_decoding(self,):
         # across start times compare the decoding of each event - using a
         # democratic approach to assigning the decoded taste
+        
+        self.get_deviation_matrices()
         
         segments_to_analyze = self.day_vars[0]['segments_to_analyze']
         segment_names = [self.day_vars[0]['segment_names'][i] for i in segments_to_analyze]
 
         try:
             predictions = np.load(os.path.join(self.lstm_dir,'predictions.npy'),allow_pickle=True).item()
+            scaled_predictions = np.load(os.path.join(self.lstm_dir,'scaled_predictions.npy'),allow_pickle=True).item()
             null_predictions = np.load(os.path.join(self.lstm_dir,'null_predictions.npy'),allow_pickle=True).item()
+            shuffled_predictions = np.load(os.path.join(self.lstm_dir,'shuffled_predictions.npy'),allow_pickle=True).item()
+            shuffled_scaled_predictions = np.load(os.path.join(self.lstm_dir,'shuffled_scaled_predictions.npy'),allow_pickle=True).item()
         except:
             taste_unique_categories = np.load(os.path.join(self.lstm_dir,'taste_unique_categories.npy'))
             training_matrices = list(np.load(os.path.join(self.lstm_dir,'training_matrices.npy')))
             training_labels = list(np.load(os.path.join(self.lstm_dir,'training_labels.npy')))
             
             #Run decoding
-            
             predictions = lstm.lstm_dev_decoding(self.dev_matrices, training_matrices, training_labels,\
                                   self.best_dim, taste_unique_categories, self.lstm_dir)
             predictions['taste_unique_categories'] = taste_unique_categories
             np.save(os.path.join(self.lstm_dir,'predictions.npy'),predictions,allow_pickle=True)
             
-            null_predictions = lstm.lstm_dev_decoding(self.null_dev_matrices, training_matrices, training_labels,\
-                                  self.best_dim, taste_unique_categories, self.lstm_dir)
+            #Run scaled decoding
+            scaled_predictions = lstm.lstm_dev_decoding(self.scaled_dev_matrices, \
+                                    self.training_matrices, self.training_labels,\
+                                    self.best_dim, self.taste_unique_categories, self.lstm_dir)
+            scaled_predictions['taste_unique_categories'] = taste_unique_categories
+            np.save(os.path.join(self.lstm_dir,'scaled_predictions.npy'),scaled_predictions,allow_pickle=True)
+            
+            #Run control decoding
+            null_predictions = lstm.lstm_dev_decoding(self.null_dev_matrices, self.training_matrices, \
+                                    self.training_labels, self.best_dim, self.taste_unique_categories, self.lstm_dir)
             null_predictions['taste_unique_categories'] = taste_unique_categories
             np.save(os.path.join(self.lstm_dir,'null_predictions.npy'),null_predictions,allow_pickle=True)
+            
+            #Run time shuffled decoding
+            shuffled_predictions = lstm.lstm_dev_decoding(self.shuffled_dev_matrices, self.training_matrices, \
+                                    self.training_labels, self.best_dim, self.taste_unique_categories, self.lstm_dir)
+            shuffled_predictions['taste_unique_categories'] = taste_unique_categories
+            np.save(os.path.join(self.lstm_dir,'shuffled_predictions.npy'),shuffled_predictions,allow_pickle=True)
+            
+            #Run time shuffled scaled decoding
+            shuffled_scaled_predictions = lstm.lstm_dev_decoding(self.shuffled_scaled_dev_matrices, \
+                                    self.training_matrices, self.training_labels, self.best_dim, \
+                                    self.taste_unique_categories, self.lstm_dir)
+            shuffled_scaled_predictions['taste_unique_categories'] = taste_unique_categories
+            np.save(os.path.join(self.lstm_dir,'shuffled_scaled_predictions.npy'),shuffled_scaled_predictions,allow_pickle=True)
             
         thresholded_predictions = lstm.prediction_plots(predictions,segment_names,self.lstm_dir,'true')
         null_thresholded_predictions = lstm.prediction_plots(null_predictions,segment_names,self.lstm_dir,'null')
