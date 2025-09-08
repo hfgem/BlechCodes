@@ -921,7 +921,10 @@ def lstm_control_decoding(test_training_matrices, training_matrices, training_la
     for c_i in range(num_classes):
         class_ind = np.where(training_labels == c_i)[0]
         by_taste_accuracy[c_i] = len(np.where(predict_ind[class_ind] == training_labels[class_ind])[0])/len(class_ind)
-        by_taste_precision[c_i] = len(np.where(predict_ind[class_ind] == training_labels[class_ind])[0])/len(np.where(predict_ind == c_i)[0])
+        if len(np.where(predict_ind == c_i)[0]) > 0:
+            by_taste_precision[c_i] = len(np.where(predict_ind[class_ind] == training_labels[class_ind])[0])/len(np.where(predict_ind == c_i)[0])
+        else:
+            by_taste_precision[c_i] = 0
     
     #Plot predictions
     f, ax = plt.subplots(ncols=3)
@@ -1095,3 +1098,69 @@ def plot_lstm_predictions(thresholded_predictions,segment_names,savedir,savename
     f_pred_ratios.savefig(os.path.join(savedir,savename + '_democratic_decoding_ratios.png'))
     f_pred_ratios.savefig(os.path.join(savedir,savename + '_democratic_decoding_ratios.svg'))
     plt.close(f_pred_ratios)
+    
+def plot_diff_func(true,true_name,control,control_name,segment_names,\
+                   plot_title,savedir):
+    """Plot difference bar plots of true vs. control data"""
+    
+    num_seg = len(segment_names)
+    try:
+        taste_cat = true["taste_unique_categories"]
+    except:
+        taste_cat = true["variables"]["categories"]
+    num_cat = len(taste_cat)
+    #Create figures
+    f_diff_seg, ax_diff_seg = plt.subplots(ncols = num_seg, sharex = True, sharey = True, \
+                                   figsize = (4*num_seg,5))
+    f_diff_cat, ax_diff_cat = plt.subplots(ncols = num_cat, sharex = True, sharey = False, \
+                                   figsize = (4*num_cat,5))
+    #Set up y-axis labels
+    ax_diff_seg[0].set_ylabel('True - Null\nFraction of All Events')
+    #Plot diffs
+    cat_vals = np.zeros((num_cat,num_seg))
+    for s_i, s_name in enumerate(segment_names):
+        seg_pred = true[s_i]
+        seg_null_pred = control[s_i]
+        if len(np.shape(seg_pred)) > 1:
+            seg_pred_argmax = np.argmax(seg_pred,1)
+            seg_null_pred_argmax = np.argmax(seg_null_pred,1)
+        else:
+            seg_pred_argmax = seg_pred[~np.isnan(seg_pred)]
+            seg_null_pred_argmax = seg_null_pred[~np.isnan(seg_null_pred)]
+        seg_pred_counts = np.array([len(np.where(seg_pred_argmax == t_i)[0]) for t_i in range(len(taste_cat))])
+        seg_null_pred_counts = np.array([len(np.where(seg_null_pred_argmax == t_i)[0]) for t_i in range(len(taste_cat))])
+        diff_frac = (seg_pred_counts - seg_null_pred_counts)/len(seg_pred_argmax)
+        cat_vals[:,s_i] = diff_frac
+        #By segment
+        ax_diff_seg[s_i].axhline(0,linestyle='dashed',alpha=0.5,color='k')
+        ax_diff_seg[s_i].bar(np.arange(len(taste_cat)),diff_frac)
+        ax_diff_seg[s_i].set_xticks(np.arange(len(taste_cat)),taste_cat,rotation=45)
+        ax_diff_seg[s_i].set_title(s_name)
+    if np.max(np.absolute(cat_vals)) > 0.5:
+        ax_diff_seg[0].set_ylim([-1,1])
+        ax_diff_seg[0].text(-1.5,-1,'All ' + control_name,ha='right')
+        ax_diff_seg[0].text(-1.5,1,'All ' + true_name,ha='right')
+    else:
+        ax_diff_seg[0].set_ylim([-0.5,0.5])
+        ax_diff_seg[0].text(-1.5,-0.5,'All ' + control_name,ha='right')
+        ax_diff_seg[0].text(-1.5,0.5,'All ' + true_name,ha='right')
+    plt.figure(f_diff_seg)
+    plt.suptitle(plot_title)
+    plt.tight_layout()
+    savename = ('_').join(plot_title.split(' '))
+    f_diff_seg.savefig(os.path.join(savedir,savename + '_by_segment.png'))
+    f_diff_seg.savefig(os.path.join(savedir,savename + '_by_segment.svg'))
+    plt.close(f_diff_seg)
+    #By category
+    ax_diff_cat[0].set_ylabel('True - Null\nFraction of All Events')
+    for c_i in range(num_cat):
+        ax_diff_cat[c_i].plot(np.arange(num_seg),cat_vals[c_i,:])
+        ax_diff_cat[c_i].set_xticks(np.arange(num_seg),segment_names,rotation=45)
+        ax_diff_cat[c_i].set_title(taste_cat[c_i])
+    plt.figure(f_diff_cat)
+    plt.suptitle(plot_title)
+    plt.tight_layout()
+    savename = ('_').join(plot_title.split(' '))
+    f_diff_cat.savefig(os.path.join(savedir,savename + '_by_category.png'))
+    f_diff_cat.savefig(os.path.join(savedir,savename + '_by_category.svg'))
+    plt.close(f_diff_cat)
