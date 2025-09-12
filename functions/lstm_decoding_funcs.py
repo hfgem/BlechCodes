@@ -20,6 +20,7 @@ import tensorflow as tf
 from tensorflow.keras import layers, Model
 from sklearn.model_selection import StratifiedKFold
 from scipy.optimize import curve_fit
+from scipy.stats import pearsonr
 from matplotlib import colormaps
 os.environ["OMP_NUM_THREADS"] = "4"
 
@@ -1102,6 +1103,14 @@ def plot_lstm_predictions(thresholded_predictions,segment_names,savedir,savename
     f_pred_ratios.savefig(os.path.join(savedir,savename + '_democratic_decoding_ratios.svg'))
     plt.close(f_pred_ratios)
     
+def corr_and_plot_diff(true,true_name,control,control_name,segment_names,\
+                   plot_title,savedir):
+    
+    plot_diff_func(true,true_name,control,control_name,segment_names,\
+                       plot_title,savedir)
+    calc_diff_corr(true,true_name,control,control_name,segment_names,\
+                       plot_title,savedir)
+    
 def plot_diff_func(true,true_name,control,control_name,segment_names,\
                    plot_title,savedir):
     """Plot difference bar plots of true vs. control data"""
@@ -1112,6 +1121,7 @@ def plot_diff_func(true,true_name,control,control_name,segment_names,\
     except:
         taste_cat = true["variables"]["categories"]
     num_cat = len(taste_cat)
+    
     #Create figures
     f_diff_seg, ax_diff_seg = plt.subplots(ncols = num_seg, sharex = True, sharey = True, \
                                    figsize = (4*num_seg,5))
@@ -1167,3 +1177,69 @@ def plot_diff_func(true,true_name,control,control_name,segment_names,\
     f_diff_cat.savefig(os.path.join(savedir,savename + '_by_category.png'))
     f_diff_cat.savefig(os.path.join(savedir,savename + '_by_category.svg'))
     plt.close(f_diff_cat)
+    
+def calc_diff_corr(true,true_name,control,control_name,segment_names,\
+                   plot_title,savedir):
+    """Calculate correlation of predictions between true and control data"""
+    
+    num_seg = len(segment_names)
+    try:
+        taste_cat = true["taste_unique_categories"]
+    except:
+        taste_cat = true["variables"]["categories"]
+    num_cat = len(taste_cat)
+    savename = ('_').join(plot_title.split(' '))
+    
+    #Calculate correlation
+    overall_corr = np.nan*np.ones(num_seg)
+    cat_corr = np.nan*np.ones((num_cat,num_seg))
+    for s_i, s_name in enumerate(segment_names):
+        seg_pred = true[s_i]
+        seg_null_pred = control[s_i]
+        if len(np.shape(seg_pred)) > 1:
+            seg_pred_argmax = np.argmax(seg_pred,1)
+            seg_null_pred_argmax = np.argmax(seg_null_pred,1)
+            overall_corr[s_i] = pearsonr(seg_pred_argmax,seg_null_pred_argmax).statistic
+            for c_i in range(num_cat):
+                cat_corr[c_i,s_i] = pearsonr((seg_pred_argmax == c_i).astype('int'),\
+                                             (seg_null_pred_argmax == c_i).astype('int')).statistic
+        else:
+            seg_pred_argmax = seg_pred[~np.isnan(seg_pred)]
+            seg_null_pred_argmax = seg_null_pred[~np.isnan(seg_null_pred)]
+            all_nan_inds = np.unique(np.concatenate((np.where(np.isnan(seg_pred))[0],\
+                           np.where(np.isnan(seg_null_pred))[0])))
+            non_nan_inds = np.setdiff1d(np.arange(len(seg_pred)),all_nan_inds)
+            non_nan_seg_pred = seg_pred[non_nan_inds]
+            non_nan_seg_null_pred = seg_null_pred[non_nan_inds]
+            overall_corr[s_i] = pearsonr(non_nan_seg_pred,non_nan_seg_null_pred).statistic
+            for c_i in range(num_cat):
+                true_cat_match = (non_nan_seg_pred == c_i).astype('int')
+                control_cat_match = (non_nan_seg_null_pred == c_i).astype('int')
+                if (np.sum(true_cat_match) > 0) and (np.sum(control_cat_match) > 0):
+                    cat_corr[c_i,s_i] = pearsonr((non_nan_seg_pred == c_i).astype('int'),\
+                                                 (non_nan_seg_null_pred == c_i).astype('int')).statistic
+                else:
+                    cat_corr[c_i,s_i] = 0
+    np.save(os.path.join(savedir,savename + '_overall_corr.npy'),overall_corr)
+    np.save(os.path.join(savedir,savename + '_cat_corr.npy'),cat_corr)
+    
+    #Plot results
+    f_corr, ax_corr = plt.subplots(nrows = num_cat+1, ncols = 1,\
+                                   figsize = (4,num_cat*3), sharex = True, \
+                                       sharey=True)
+    for ax_i in range(num_cat+1):
+        ax_corr[ax_i].axhline(0,color='k',linestyle='dashed',alpha=0.2)
+        ax_corr[ax_i].set_ylabel('Correlation')
+    #Plot overall
+    ax_corr[-1].scatter(np.arange(num_seg),overall_corr,color='g')
+    ax_corr[-1].set_xticks(np.arange(num_seg),segment_names)
+    ax_corr[-1].set_title('Overall Correlation')
+    ax_corr[-1].set_xlabel('Segment')
+    #Plot by category
+    for ax_i in range(num_cat):
+        ax_corr[ax_i].scatter(np.arange(num_seg),cat_corr[ax_i,:],color='g')
+        ax_corr[ax_i].set_title(taste_cat[ax_i])
+    plt.tight_layout()
+    f_corr.savefig(os.path.join(savedir,savename+'_corr_scatter.png'))
+    f_corr.savefig(os.path.join(savedir,savename+'_corr_scatter.svg'))
+    plt.close(f_corr)

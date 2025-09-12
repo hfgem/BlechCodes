@@ -11,6 +11,9 @@ analysis pipeline
 
 #%% Import metadata and data files
 
+z_bin_dt = 100
+num_bins = 2
+
 import os
 import csv
 import numpy as np
@@ -207,8 +210,8 @@ for n_i in range(num_days):
 # import deviations
 import functions.lstm_decoding_funcs as lstm
 
-z_bin_dt = 100
-num_bins = 2
+# z_bin_dt = 100
+# num_bins = 2
 
 bin_dir = os.path.join(lstm_dir,str(num_bins) +'_bins')
 if not os.path.isdir(bin_dir):
@@ -412,15 +415,16 @@ shuffled_scaled_predictions = np.load(os.path.join(bin_dir,'shuffled_scaled_pred
 # lstm.plot_diff_func(true,true_name,control,control_name,segment_names,\
 #                    plot_title,savedir)
     
-lstm.plot_diff_func(predictions,'unscaled dev',null_predictions,\
+lstm.corr_and_plot_diff(predictions,'unscaled dev',null_predictions,\
                'unscaled null dev',segment_names,\
                 'Unscaled Dev Predictions',lstm_fig_dir)
+
     
-lstm.plot_diff_func(predictions,'unscaled dev',shuffled_predictions,\
+lstm.corr_and_plot_diff(predictions,'unscaled dev',shuffled_predictions,\
                'unscaled time shuffled dev',segment_names,\
                 'Unscaled Time-Controlled Dev Predictions',lstm_fig_dir)
     
-lstm.plot_diff_func(scaled_predictions,'scaled dev',shuffled_scaled_predictions,\
+lstm.corr_and_plot_diff(scaled_predictions,'scaled dev',shuffled_scaled_predictions,\
                'scaled time shuffled dev',segment_names,\
                 'Scaled Time-Controlled Dev Predictions',lstm_fig_dir)
 
@@ -431,15 +435,15 @@ null_thresholded_predictions = np.load(os.path.join(bin_dir,'null_thresholded_pr
 shuffled_thresholded_predictions = np.load(os.path.join(bin_dir,'shuffled_thresholded_predictions.npy'),allow_pickle=True).item()
 shuffled_scaled_thresholded_predictions = np.load(os.path.join(bin_dir,'shuffled_scaled_thresholded_predictions.npy'),allow_pickle=True).item()
 
-lstm.plot_diff_func(thresholded_predictions,'unscaled dev',null_thresholded_predictions,\
+lstm.corr_and_plot_diff(thresholded_predictions,'unscaled dev',null_thresholded_predictions,\
                'unscaled null dev',segment_names,\
                 'Thresholded Dev Predictions',lstm_fig_dir)
 
-lstm.plot_diff_func(thresholded_predictions,'unscaled dev',shuffled_thresholded_predictions,\
+lstm.corr_and_plot_diff(thresholded_predictions,'unscaled dev',shuffled_thresholded_predictions,\
                'unscaled time shuffled dev',segment_names,\
                 'Thresholded Time-Controlled Dev Predictions',lstm_fig_dir)
 
-lstm.plot_diff_func(scaled_thresholded_predictions,'scaled dev',shuffled_scaled_thresholded_predictions,\
+lstm.corr_and_plot_diff(scaled_thresholded_predictions,'scaled dev',shuffled_scaled_thresholded_predictions,\
                 'scaled time shuffled dev',segment_names,\
                  'Thresholded Scaled Time-Controlled Dev Predictions',lstm_fig_dir)
    
