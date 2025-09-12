@@ -424,12 +424,12 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins, mean_taste_pop
             dev_pop_fr = np.sum(dev_rast_i)/(dev_len/1000)
             seg_dev_pop_fr.append(dev_pop_fr)
             
-            bin_starts = np.ceil(np.linspace(0,dev_len,num_bins+2)).astype('int')
+            bin_starts = np.ceil(np.linspace(0,dev_len,num_bins+1)).astype('int')
             
             dev_fr_mat = np.zeros((num_neur,num_bins))
             for nb_i in range(num_bins):
                 bs_i = bin_starts[nb_i]
-                be_i = bin_starts[nb_i+2]
+                be_i = bin_starts[nb_i+1]
                 dev_fr_mat[:,nb_i] = np.sum(dev_rast_i[:,bs_i:be_i],1)/((be_i-bs_i)/1000)
             seg_dev_matrices.append(dev_fr_mat)
             # z_dev_fr_mat = (dev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
@@ -759,7 +759,10 @@ def get_best_size(fold_dict, savedir):
             class_inds = np.where(true_inds == c_i)[0]
             predicted_inds = np.intersect1d(class_inds,matching_predictions)
             accuracy[l_i,c_i] = len(predicted_inds)/len(class_inds)
-            precision[l_i,c_i] = len(predicted_inds)/len(np.where(argmax_predictions == c_i)[0])
+            if len(np.where(argmax_predictions == c_i)[0]) > 0:
+                precision[l_i,c_i] = len(predicted_inds)/len(np.where(argmax_predictions == c_i)[0])
+            else:
+                precision[l_i,c_i] = 0
             #Calculate strong accuracy of prediction - at least double that of next category
             strong_inds = []
             for pi in predicted_inds:
