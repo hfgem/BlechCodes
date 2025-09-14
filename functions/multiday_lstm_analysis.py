@@ -196,11 +196,12 @@ class run_multiday_lstm_analysis():
             dev_matrices = np.load(os.path.join(self.bin_dir,'dev_fr_vecs.npy'),allow_pickle=True).item()
             scaled_dev_matrices = np.load(os.path.join(self.bin_dir,'scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
             null_dev_matrices = np.load(os.path.join(self.bin_dir,'null_dev_fr_vecs.npy'),allow_pickle=True).item()
+            scaled_null_dev_matrices = np.load(os.path.join(self.bin_dir,'scaled_null_dev_matrices.npy'),allow_pickle=True).item()
             shuffled_dev_matrices = np.load(os.path.join(self.bin_dir,'shuffled_dev_fr_vecs.npy'),allow_pickle=True).item()
             shuffled_scaled_dev_matrices = np.load(os.path.join(self.bin_dir,'shuffled_scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
 
         except:
-            dev_matrices, scaled_dev_matrices, null_dev_matrices = lstm.create_dev_matrices(self.day_vars, \
+            dev_matrices, scaled_dev_matrices, null_dev_matrices, scaled_null_dev_matrices = lstm.create_dev_matrices(self.day_vars, \
                                                 self.segment_deviations, self.z_bin_dt, self.num_bins, \
                                                     self.mean_taste_pop_fr)
             shuffled_dev_matrices, shuffled_scaled_dev_matrices = lstm.time_shuffled_dev_controls(self.day_vars, \
@@ -209,6 +210,7 @@ class run_multiday_lstm_analysis():
             np.save(os.path.join(self.bin_dir,'dev_fr_vecs.npy'),dev_matrices,allow_pickle=True)
             np.save(os.path.join(self.bin_dir,'scaled_dev_fr_vecs.npy'),scaled_dev_matrices,allow_pickle=True)
             np.save(os.path.join(self.bin_dir,'null_dev_fr_vecs.npy'),null_dev_matrices,allow_pickle=True)
+            np.save(os.path.join(self.bin_dir,'scaled_null_dev_matrices.npy'),scaled_null_dev_matrices,allow_pickle=True)
             np.save(os.path.join(self.bin_dir,'shuffled_dev_fr_vecs.npy'),shuffled_dev_matrices,allow_pickle=True)
             np.save(os.path.join(self.bin_dir,'shuffled_scaled_dev_fr_vecs.npy'),shuffled_scaled_dev_matrices,allow_pickle=True)
 
@@ -216,6 +218,7 @@ class run_multiday_lstm_analysis():
         self.dev_matrices = dev_matrices
         self.scaled_dev_matrices = scaled_dev_matrices
         self.null_dev_matrices = null_dev_matrices
+        self.scaled_null_dev_matrices = scaled_null_dev_matrices
         self.shuffled_dev_matrices = shuffled_dev_matrices
         self.shuffled_scaled_dev_matrices = shuffled_scaled_dev_matrices
         
@@ -323,6 +326,7 @@ class run_multiday_lstm_analysis():
             predictions = np.load(os.path.join(self.bin_dir,'predictions.npy'),allow_pickle=True).item()
             scaled_predictions = np.load(os.path.join(self.bin_dir,'scaled_predictions.npy'),allow_pickle=True).item()
             null_predictions = np.load(os.path.join(self.bin_dir,'null_predictions.npy'),allow_pickle=True).item()
+            scaled_null_predictions = np.load(os.path.join(self.bin_dir,'scaled_null_predictions.npy'),allow_pickle=True).item()
             shuffled_predictions = np.load(os.path.join(self.bin_dir,'shuffled_predictions.npy'),allow_pickle=True).item()
             shuffled_scaled_predictions = np.load(os.path.join(self.bin_dir,'shuffled_scaled_predictions.npy'),allow_pickle=True).item()
         except:
@@ -349,6 +353,13 @@ class run_multiday_lstm_analysis():
             null_predictions['taste_unique_categories'] = taste_unique_categories
             np.save(os.path.join(self.bin_dir,'null_predictions.npy'),null_predictions,allow_pickle=True)
             
+            #Scaled control decoding
+            scaled_null_predictions = lstm.lstm_dev_decoding(scaled_null_dev_matrices, training_matrices, training_labels,\
+                                  best_dim, taste_unique_categories, self.bin_dir)
+            scaled_null_predictions['taste_unique_categories'] = taste_unique_categories
+                
+            np.save(os.path.join(self.bin_dir,'scaled_null_predictions.npy'),scaled_null_predictions,allow_pickle=True)
+            
             #Run time shuffled decoding
             shuffled_predictions = lstm.lstm_dev_decoding(self.shuffled_dev_matrices, self.training_matrices, \
                                     self.training_labels, self.best_dim, self.taste_unique_categories, self.bin_dir)
@@ -368,6 +379,8 @@ class run_multiday_lstm_analysis():
         np.save(os.path.join(self.bin_dir,'scaled_thresholded_predictions.npy'),scaled_thresholded_predictions,allow_pickle=True)
         null_thresholded_predictions = lstm.prediction_plots(null_predictions,segment_names,self.bin_dir,'null')
         np.save(os.path.join(self.bin_dir,'null_thresholded_predictions.npy'),null_thresholded_predictions,allow_pickle=True)
+        scaled_null_thresholded_predictions = lstm.prediction_plots(scaled_null_predictions,segment_names,self.bin_dir,'null')
+        np.save(os.path.join(bin_dir,'scaled_null_thresholded_predictions.npy'),scaled_null_thresholded_predictions,allow_pickle=True)
         shuffled_thresholded_predictions = lstm.prediction_plots(shuffled_predictions,segment_names,self.bin_dir,'shuffled')
         np.save(os.path.join(self.bin_dir,'shuffled_thresholded_predictions.npy'),shuffled_thresholded_predictions,allow_pickle=True)
         shuffled_scaled_thresholded_predictions = lstm.prediction_plots(shuffled_scaled_predictions,segment_names,self.bin_dir,'shuffled_scaled')

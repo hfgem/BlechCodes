@@ -12,7 +12,7 @@ analysis pipeline
 #%% Import metadata and data files
 
 z_bin_dt = 100
-num_bins = 2
+num_bins = 4
 
 import os
 import csv
@@ -295,11 +295,12 @@ try:
     dev_matrices = np.load(os.path.join(bin_dir,'dev_fr_vecs.npy'),allow_pickle=True).item()
     scaled_dev_matrices = np.load(os.path.join(bin_dir,'scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
     null_dev_matrices = np.load(os.path.join(bin_dir,'null_dev_fr_vecs.npy'),allow_pickle=True).item()
+    scaled_null_dev_matrices = np.load(os.path.join(bin_dir,'scaled_null_dev_matrices.npy'),allow_pickle=True).item()
     shuffled_dev_matrices = np.load(os.path.join(bin_dir,'shuffled_dev_fr_vecs.npy'),allow_pickle=True).item()
     shuffled_scaled_dev_matrices = np.load(os.path.join(bin_dir,'shuffled_scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
 
 except:
-    dev_matrices, scaled_dev_matrices, null_dev_matrices = lstm.create_dev_matrices(day_vars, \
+    dev_matrices, scaled_dev_matrices, null_dev_matrices, scaled_null_dev_matrices = lstm.create_dev_matrices(day_vars, \
                                         segment_deviations, z_bin_dt, num_bins, \
                                             mean_taste_pop_fr)
     shuffled_dev_matrices, shuffled_scaled_dev_matrices = lstm.time_shuffled_dev_controls(day_vars, \
@@ -308,6 +309,7 @@ except:
     np.save(os.path.join(bin_dir,'dev_fr_vecs.npy'),dev_matrices,allow_pickle=True)
     np.save(os.path.join(bin_dir,'scaled_dev_fr_vecs.npy'),scaled_dev_matrices,allow_pickle=True)
     np.save(os.path.join(bin_dir,'null_dev_fr_vecs.npy'),null_dev_matrices,allow_pickle=True)
+    np.save(os.path.join(bin_dir,'scaled_null_dev_matrices.npy'),scaled_null_dev_matrices,allow_pickle=True)
     np.save(os.path.join(bin_dir,'shuffled_dev_fr_vecs.npy'),shuffled_dev_matrices,allow_pickle=True)
     np.save(os.path.join(bin_dir,'shuffled_scaled_dev_fr_vecs.npy'),shuffled_scaled_dev_matrices,allow_pickle=True)
 
@@ -338,6 +340,7 @@ try:
     predictions = np.load(os.path.join(bin_dir,'predictions.npy'),allow_pickle=True).item()
     scaled_predictions = np.load(os.path.join(bin_dir,'scaled_predictions.npy'),allow_pickle=True).item()
     null_predictions = np.load(os.path.join(bin_dir,'null_predictions.npy'),allow_pickle=True).item()
+    scaled_null_predictions = np.load(os.path.join(bin_dir,'scaled_null_predictions.npy'),allow_pickle=True).item()
     shuffled_predictions = np.load(os.path.join(bin_dir,'shuffled_predictions.npy'),allow_pickle=True).item()
     shuffled_scaled_predictions = np.load(os.path.join(bin_dir,'shuffled_scaled_predictions.npy'),allow_pickle=True).item()
 except:
@@ -366,6 +369,13 @@ except:
         
     np.save(os.path.join(bin_dir,'null_predictions.npy'),null_predictions,allow_pickle=True)
     
+    #Scaled control decoding
+    scaled_null_predictions = lstm.lstm_dev_decoding(scaled_null_dev_matrices, training_matrices, training_labels,\
+                          best_dim, taste_unique_categories, bin_dir)
+    scaled_null_predictions['taste_unique_categories'] = taste_unique_categories
+        
+    np.save(os.path.join(bin_dir,'scaled_null_predictions.npy'),scaled_null_predictions,allow_pickle=True)
+    
     #Run time shuffled decoding
     shuffled_predictions = lstm.lstm_dev_decoding(shuffled_dev_matrices, training_matrices, training_labels,\
                           best_dim, taste_unique_categories, bin_dir)
@@ -387,6 +397,8 @@ scaled_thresholded_predictions = lstm.prediction_plots(scaled_predictions,segmen
 np.save(os.path.join(bin_dir,'scaled_thresholded_predictions.npy'),scaled_thresholded_predictions,allow_pickle=True)
 null_thresholded_predictions = lstm.prediction_plots(null_predictions,segment_names,bin_dir,'null')
 np.save(os.path.join(bin_dir,'null_thresholded_predictions.npy'),null_thresholded_predictions,allow_pickle=True)
+scaled_null_thresholded_predictions = lstm.prediction_plots(scaled_null_predictions,segment_names,bin_dir,'null')
+np.save(os.path.join(bin_dir,'scaled_null_thresholded_predictions.npy'),scaled_null_thresholded_predictions,allow_pickle=True)
 shuffled_thresholded_predictions = lstm.prediction_plots(shuffled_predictions,segment_names,bin_dir,'shuffled')
 np.save(os.path.join(bin_dir,'shuffled_thresholded_predictions.npy'),shuffled_thresholded_predictions,allow_pickle=True)
 shuffled_scaled_thresholded_predictions = lstm.prediction_plots(shuffled_scaled_predictions,segment_names,bin_dir,'shuffled_scaled')
@@ -396,29 +408,18 @@ np.save(os.path.join(bin_dir,'shuffled_scaled_thresholded_predictions.npy'),shuf
 
 import functions.lstm_decoding_funcs as lstm
 
-lstm_dir = os.path.join(save_dir,'LSTM_Decoding')
-bin_dir = os.path.join(lstm_dir,'2_bins')
-segments_to_analyze = day_vars[0]['segments_to_analyze']
-segment_names = [day_vars[0]['segment_names'][i] for i in segments_to_analyze]
-
 lstm_fig_dir = os.path.join(bin_dir,'Figures')
 if not os.path.isdir(lstm_fig_dir):
     os.mkdir(lstm_fig_dir)
 
 #Unthresholded predictions
-predictions = np.load(os.path.join(bin_dir,'predictions.npy'),allow_pickle=True).item()
-scaled_predictions = np.load(os.path.join(bin_dir,'scaled_predictions.npy'),allow_pickle=True).item()
-null_predictions = np.load(os.path.join(bin_dir,'null_predictions.npy'),allow_pickle=True).item()
-shuffled_predictions = np.load(os.path.join(bin_dir,'shuffled_predictions.npy'),allow_pickle=True).item()
-shuffled_scaled_predictions = np.load(os.path.join(bin_dir,'shuffled_scaled_predictions.npy'),allow_pickle=True).item()
-
-# lstm.plot_diff_func(true,true_name,control,control_name,segment_names,\
-#                    plot_title,savedir)
-    
-lstm.corr_and_plot_diff(predictions,'unscaled dev',null_predictions,\
+lstm.plot_diff_func(predictions,'unscaled dev',null_predictions,\
                'unscaled null dev',segment_names,\
                 'Unscaled Dev Predictions',lstm_fig_dir)
 
+lstm.plot_diff_func(scaled_predictions,'scaled dev',scaled_null_predictions,\
+               'scaled null dev',segment_names,\
+                'Scaled Dev Predictions',lstm_fig_dir)
     
 lstm.corr_and_plot_diff(predictions,'unscaled dev',shuffled_predictions,\
                'unscaled time shuffled dev',segment_names,\
@@ -429,15 +430,13 @@ lstm.corr_and_plot_diff(scaled_predictions,'scaled dev',shuffled_scaled_predicti
                 'Scaled Time-Controlled Dev Predictions',lstm_fig_dir)
 
 #Thresholded predictions
-thresholded_predictions = np.load(os.path.join(bin_dir,'thresholded_predictions.npy'),allow_pickle=True).item()
-scaled_thresholded_predictions = np.load(os.path.join(bin_dir,'scaled_thresholded_predictions.npy'),allow_pickle=True).item()
-null_thresholded_predictions = np.load(os.path.join(bin_dir,'null_thresholded_predictions.npy'),allow_pickle=True).item()
-shuffled_thresholded_predictions = np.load(os.path.join(bin_dir,'shuffled_thresholded_predictions.npy'),allow_pickle=True).item()
-shuffled_scaled_thresholded_predictions = np.load(os.path.join(bin_dir,'shuffled_scaled_thresholded_predictions.npy'),allow_pickle=True).item()
-
-lstm.corr_and_plot_diff(thresholded_predictions,'unscaled dev',null_thresholded_predictions,\
+lstm.plot_diff_func(thresholded_predictions,'unscaled dev',null_thresholded_predictions,\
                'unscaled null dev',segment_names,\
                 'Thresholded Dev Predictions',lstm_fig_dir)
+
+lstm.plot_diff_func(scaled_thresholded_predictions,'scaled dev',\
+                        scaled_null_thresholded_predictions,'scaled null dev',\
+                        segment_names,'Thresholded Scaled Dev Predictions',lstm_fig_dir)
 
 lstm.corr_and_plot_diff(thresholded_predictions,'unscaled dev',shuffled_thresholded_predictions,\
                'unscaled time shuffled dev',segment_names,\

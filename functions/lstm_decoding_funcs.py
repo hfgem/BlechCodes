@@ -385,6 +385,7 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins, mean_taste_pop
     dev_matrices = dict()
     scaled_dev_matrices = dict()
     null_dev_matrices = dict()
+    scaled_null_dev_matrices = dict()
     
     for s_ind, s_i in tqdm.tqdm(enumerate(segments_to_analyze)):
         seg_spikes = segment_spike_times[s_i]
@@ -476,9 +477,13 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins, mean_taste_pop
             # seg_non_dev_matrices.append(z_nondev_fr_mat)
             null_dev_made += 1
         
-        null_dev_matrices[s_ind] = np.array(seg_non_dev_matrices)
+        null_dev_mean_pop_fr = np.nanmean(np.array(null_pop_fr))
+        dev_scale = seg_dev_mean_pop_fr/null_dev_mean_pop_fr
+        taste_scale = mean_taste_pop_fr/null_dev_mean_pop_fr
+        null_dev_matrices[s_ind] = dev_scale*np.array(seg_non_dev_matrices)
+        scaled_null_dev_matrices[s_ind] = taste_scale*np.array(seg_non_dev_matrices)
         
-    return dev_matrices, scaled_dev_matrices, null_dev_matrices
+    return dev_matrices, scaled_dev_matrices, null_dev_matrices, scaled_null_dev_matrices
 
 def rescale_taste_to_dev(dev_matrices,training_matrices):
     """Rescale taste responses to deviation rates to test LSTM imperviance to
