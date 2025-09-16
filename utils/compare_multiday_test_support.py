@@ -281,28 +281,34 @@ for b_i in unique_bin_counts:
                 #Collect data by taste
                 for utc_i, utc in enumerate(unique_training_categories):
                     t_i = np.where(np.array(gn_categories) == utc)[0]
-                    true_inds = np.where(true_argmax == t_i)[0]
-                    null_inds = np.where(null_argmax == t_i)[0]
                     #For each taste, collect fraction of predictions data
-                    true_frac = len(true_inds)/len(true_argmax)
-                    anim_true_data[gn_i,utc_i,s_i] = true_frac
-                    null_frac = len(null_inds)/len(true_argmax)
-                    anim_diff_data[gn_i,utc_i,s_i] = true_frac - null_frac
-                    if len(true_inds) > 0:
-                        #For each taste collect fraction of overlapping to true predictions
-                        intersect_inds = np.intersect1d(true_inds,null_inds)
-                        anim_overlap_data[gn_i,utc_i,s_i] = len(intersect_inds)/len(true_inds)
-                        if len(null_inds) > 0:
-                            #For each taste get correlation of predictions
-                            true_bin = np.zeros(len(true_argmax))
-                            true_bin[true_inds] = 1
-                            null_bin = np.zeros(len(true_argmax))
-                            null_bin[null_inds] = 1
-                            pearson_stat = pearsonr(true_bin,null_bin)
-                            anim_corr_data[gn_i,utc_i,s_i] = pearson_stat.statistic
+                    if len(true_argmax) > 0:
+                        true_inds = np.where(true_argmax == t_i)[0]
+                        null_inds = np.where(null_argmax == t_i)[0]
+                        true_frac = len(true_inds)/len(true_argmax)
+                        anim_true_data[gn_i,utc_i,s_i] = true_frac
+                        null_frac = len(null_inds)/len(true_argmax)
+                        anim_diff_data[gn_i,utc_i,s_i] = true_frac - null_frac
+                        if len(true_inds) > 0:
+                            #For each taste collect fraction of overlapping to true predictions
+                            intersect_inds = np.intersect1d(true_inds,null_inds)
+                            anim_overlap_data[gn_i,utc_i,s_i] = len(intersect_inds)/len(true_inds)
+                            if len(null_inds) > 0:
+                                #For each taste get correlation of predictions
+                                true_bin = np.zeros(len(true_argmax))
+                                true_bin[true_inds] = 1
+                                null_bin = np.zeros(len(true_argmax))
+                                null_bin[null_inds] = 1
+                                pearson_stat = pearsonr(true_bin,null_bin)
+                                anim_corr_data[gn_i,utc_i,s_i] = pearson_stat.statistic
+                            else:
+                                anim_corr_data[gn_i,utc_i,s_i] = 0
                         else:
+                            anim_overlap_data[gn_i,utc_i,s_i] = 0
                             anim_corr_data[gn_i,utc_i,s_i] = 0
                     else:
+                        anim_true_data[gn_i,utc_i,s_i] = 0
+                        anim_diff_data[gn_i,utc_i,s_i] = 0
                         anim_overlap_data[gn_i,utc_i,s_i] = 0
                         anim_corr_data[gn_i,utc_i,s_i] = 0
         #Plot results
