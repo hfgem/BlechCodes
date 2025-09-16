@@ -12,7 +12,7 @@ analysis pipeline
 #%% Import metadata and data files
 
 z_bin_dt = 100
-num_bins = 4
+num_bins = 3
 
 import os
 import csv
@@ -294,7 +294,7 @@ best_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,cv_save_
 try:
     dev_matrices = np.load(os.path.join(bin_dir,'dev_fr_vecs.npy'),allow_pickle=True).item()
     scaled_dev_matrices = np.load(os.path.join(bin_dir,'scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
-    null_dev_matrices = np.load(os.path.join(bin_dir,'null_dev_fr_vecs.npy'),allow_pickle=True).item()
+    null_dev_matrices = np.load(os.path.join(bin_dir,'null_dev_fr_vecs_THWART.npy'),allow_pickle=True).item()
     scaled_null_dev_matrices = np.load(os.path.join(bin_dir,'scaled_null_dev_matrices.npy'),allow_pickle=True).item()
     shuffled_dev_matrices = np.load(os.path.join(bin_dir,'shuffled_dev_fr_vecs.npy'),allow_pickle=True).item()
     shuffled_scaled_dev_matrices = np.load(os.path.join(bin_dir,'shuffled_scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
@@ -340,7 +340,7 @@ try:
     predictions = np.load(os.path.join(bin_dir,'predictions.npy'),allow_pickle=True).item()
     scaled_predictions = np.load(os.path.join(bin_dir,'scaled_predictions.npy'),allow_pickle=True).item()
     null_predictions = np.load(os.path.join(bin_dir,'null_predictions.npy'),allow_pickle=True).item()
-    scaled_null_predictions = np.load(os.path.join(bin_dir,'scaled_null_predictions.npy'),allow_pickle=True).item()
+    scaled_null_predictions = np.load(os.path.join(bin_dir,'scaled_null_predictions_THWART.npy'),allow_pickle=True).item()
     shuffled_predictions = np.load(os.path.join(bin_dir,'shuffled_predictions.npy'),allow_pickle=True).item()
     shuffled_scaled_predictions = np.load(os.path.join(bin_dir,'shuffled_scaled_predictions.npy'),allow_pickle=True).item()
 except:

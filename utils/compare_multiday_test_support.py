@@ -144,6 +144,10 @@ except:
                 bc_i = int(bc.split('_')[0])
                 lstm_dict[dn][bc] = dict()
                 lstm_dict[dn][bc]['num_bins'] = bc_i
+                training_categories = np.load(os.path.join(bc_dir,'taste_unique_categories.npy'))
+                if len(np.where(training_categories == 'salt_1')[0]) > 0:
+                    training_categories[np.where(training_categories == 'salt_1')[0][0]] = 'NaCl_1'
+                lstm_dict[dn][bc]['training_categories'] = training_categories
                 #Get the training data
                 lstm_dict[dn][bc]['training_data'] = dict()
                 lstm_dict[dn][bc]['training_data']['training_matrices'] = np.load(os.path.join(bc_dir,'training_matrices.npy'))
@@ -160,139 +164,283 @@ except:
                 #Get the unscaled predictions
                 lstm_dict[dn][bc]['predictions']['unscaled'] = dict()
                 lstm_dict[dn][bc]['predictions']['unscaled']['true'] = np.load(os.path.join(bc_dir,'predictions.npy'),allow_pickle=True).item()
-                lstm_dict[dn][bc]['predictions']['unscaled']['null'] = np.load(os.path.join(bc_dir,'null_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['unscaled']['control'] = np.load(os.path.join(bc_dir,'null_predictions.npy'),allow_pickle=True).item()
                 #Get the unscaled thresholded predictions
                 lstm_dict[dn][bc]['predictions']['unscaled_thresholded'] = dict()
                 lstm_dict[dn][bc]['predictions']['unscaled_thresholded']['true'] = np.load(os.path.join(bc_dir,'thresholded_predictions.npy'),allow_pickle=True).item()
-                lstm_dict[dn][bc]['predictions']['unscaled_thresholded']['null'] = np.load(os.path.join(bc_dir,'null_thresholded_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['unscaled_thresholded']['control'] = np.load(os.path.join(bc_dir,'null_thresholded_predictions.npy'),allow_pickle=True).item()
                 #Get the scaled predictions
                 lstm_dict[dn][bc]['predictions']['scaled'] = dict()
                 lstm_dict[dn][bc]['predictions']['scaled']['true'] = np.load(os.path.join(bc_dir,'scaled_predictions.npy'),allow_pickle=True).item()
-                lstm_dict[dn][bc]['predictions']['scaled']['null'] = np.load(os.path.join(bc_dir,'scaled_null_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['scaled']['control'] = np.load(os.path.join(bc_dir,'scaled_null_predictions.npy'),allow_pickle=True).item()
                 #Get the scaled thresholded predictions
                 lstm_dict[dn][bc]['predictions']['scaled_thresholded'] = dict()
                 lstm_dict[dn][bc]['predictions']['scaled_thresholded']['true'] = np.load(os.path.join(bc_dir,'scaled_thresholded_predictions.npy'),allow_pickle=True).item()
-                lstm_dict[dn][bc]['predictions']['scaled_thresholded']['null'] = np.load(os.path.join(bc_dir,'scaled_null_thresholded_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['scaled_thresholded']['control'] = np.load(os.path.join(bc_dir,'scaled_null_thresholded_predictions.npy'),allow_pickle=True).item()
                 #Get unscaled time shuffled predictions
                 lstm_dict[dn][bc]['predictions']['unscaled_time_controlled'] = dict()
                 lstm_dict[dn][bc]['predictions']['unscaled_time_controlled']['true'] = np.load(os.path.join(bc_dir,'predictions.npy'),allow_pickle=True).item()
-                lstm_dict[dn][bc]['predictions']['unscaled_time_controlled']['time_shuffled'] = np.load(os.path.join(bc_dir,'shuffled_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['unscaled_time_controlled']['control'] = np.load(os.path.join(bc_dir,'shuffled_predictions.npy'),allow_pickle=True).item()
                 #Get unscaled time shuffled thresholded predictions
                 lstm_dict[dn][bc]['predictions']['unscaled_thresholded_time_controlled'] = dict()
                 lstm_dict[dn][bc]['predictions']['unscaled_thresholded_time_controlled']['true'] = np.load(os.path.join(bc_dir,'thresholded_predictions.npy'),allow_pickle=True).item()
-                lstm_dict[dn][bc]['predictions']['unscaled_thresholded_time_controlled']['time_shuffled'] = np.load(os.path.join(bc_dir,'shuffled_thresholded_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['unscaled_thresholded_time_controlled']['control'] = np.load(os.path.join(bc_dir,'shuffled_thresholded_predictions.npy'),allow_pickle=True).item()
                 #Get scaled time shuffled predictions
                 lstm_dict[dn][bc]['predictions']['scaled_time_controlled'] = dict()
                 lstm_dict[dn][bc]['predictions']['scaled_time_controlled']['true'] = np.load(os.path.join(bc_dir,'scaled_predictions.npy'),allow_pickle=True).item()
-                lstm_dict[dn][bc]['predictions']['scaled_time_controlled']['time_shuffled'] = np.load(os.path.join(bc_dir,'shuffled_scaled_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['scaled_time_controlled']['control'] = np.load(os.path.join(bc_dir,'shuffled_scaled_predictions.npy'),allow_pickle=True).item()
                 #Get scaled time shuffled thresholded predictions
                 lstm_dict[dn][bc]['predictions']['scaled_thresholded_time_controlled'] = dict()
                 lstm_dict[dn][bc]['predictions']['scaled_thresholded_time_controlled']['true'] = np.load(os.path.join(bc_dir,'scaled_thresholded_predictions.npy'),allow_pickle=True).item()
-                lstm_dict[dn][bc]['predictions']['scaled_thresholded_time_controlled']['time_shuffled'] = np.load(os.path.join(bc_dir,'shuffled_scaled_thresholded_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['scaled_thresholded_time_controlled']['control'] = np.load(os.path.join(bc_dir,'shuffled_scaled_thresholded_predictions.npy'),allow_pickle=True).item()
             except: #Some other folder
                 if verbose == True:
                     print("Not a binned decoding folder: " + os.path.join(lstm_dir,bc))
                 
     np.save(lstm_dict_path,lstm_dict,allow_pickle=True)   
     
-#%% find_corr_groupings()
-num_datasets = len(corr_dict)
-unique_given_names = list(corr_dict.keys())
-#Pull unique correlation analysis names
-unique_corr_names = []
-for name in unique_given_names:
-    unique_corr_names.extend(list(corr_dict[name].keys()))
-unique_corr_indices = np.sort(
-    np.unique(unique_corr_names, return_index=True)[1])
-unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
-#Select which corr types to use in the analysis
-unique_corr_names = select_analysis_groups(unique_corr_names)
+#%% find_lstm_groupings()
 
-#Pull unique segment and taste names and max cp
-unique_segment_names = []
-unique_taste_names = []
-max_cp = 0
-for name in unique_given_names:
-    for corr_name in unique_corr_names:
-        seg_names = list(corr_dict[name][corr_name].keys())
-        taste_names = corr_dict[name][corr_name]['tastes']
-        unique_taste_names.extend(list(taste_names))
-        for s_n in seg_names:
-            if type(corr_dict[name][corr_name][s_n]) == dict:
-                unique_segment_names.extend([s_n])
-                try:
-                    num_cp, _ = np.shape(corr_dict[name][corr_name][s_n]['all'][taste_names[0]]['data'])
-                    if num_cp > max_cp:
-                        max_cp = num_cp
-                except:
-                    error = "Unable to grab changepoint count."
-unique_seg_indices = np.sort(
-    np.unique(unique_segment_names, return_index=True)[1])
-unique_segment_names = [unique_segment_names[i] for i in unique_seg_indices]
-#Select which segments to use in the analysis
-unique_segment_names = select_analysis_groups(unique_segment_names)
+print("Finding LSTM decoding groupings")
+num_datasets = len(lstm_dict)
+unique_given_names = list(lstm_dict.keys())
+#Pull unique decode analysis names
+unique_bin_counts = []
+unique_decode_pairs = []
+unique_training_categories = []
+for gn in unique_given_names:
+    bc_names = list(lstm_dict[gn].keys())
+    for bc in bc_names:
+        bc_i = lstm_dict[gn][bc]['num_bins']
+        unique_bin_counts.append(bc_i)
+        unique_decode_pairs.extend(list(lstm_dict[gn][bc]['predictions'].keys()))
+        unique_training_categories.extend(list(lstm_dict[gn][bc]['training_categories']))
+unique_bin_count_inds = np.sort(
+    np.unique(unique_bin_counts, return_index=True)[1])
+unique_bin_counts = np.sort([unique_bin_counts[i] for i in unique_bin_count_inds])
+unique_decode_pair_inds = np.sort(
+    np.unique(unique_decode_pairs, return_index=True)[1])
+unique_decode_pairs = [unique_decode_pairs[i] for i in unique_decode_pair_inds]
+unique_training_cat_inds = np.sort(
+    np.unique(unique_training_categories, return_index=True)[1])
+unique_training_categories = [unique_training_categories[i] for i in unique_training_cat_inds]
 
-unique_taste_indices = np.sort(
-    np.unique(unique_taste_names, return_index=True)[1])
-unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
-#Select which tastes to use in the analysis
-unique_taste_names = select_analysis_groups(unique_taste_names)
+#%% run_lstm_analysis
 
-#%% gather_null_corr_data()
-print("Collecting null correlation data")
-null_corr_dict_path = os.path.join(save_dir,'null_corr_data_dict.npy')
-try:
-    null_corr_dict = np.load(null_corr_dict_path,allow_pickle=True).item()
-except:
-    null_corr_dict = dict()
-    data_names = list(multiday_data_dict.keys())
-    for dn in data_names:
-        print("\tImporting null data for " + dn)
-        null_corr_dict[dn] = dict()
-        data_dir = multiday_data_dict[dn]['data_dir']
-        null_corr_dir = os.path.join(data_dir,'Correlations','Null')
-        null_folders = os.listdir(null_corr_dir)
-        num_null = len(null_folders)
-        null_corr_dict[dn]['num_null'] = num_null
-        #First set up folder structure
-        for sn in unique_segment_names:
-            null_corr_dict[dn][sn] = dict()
-            for tn in unique_taste_names:
-                null_corr_dict[dn][sn][tn] = dict()
-                for cn in unique_corr_names:
-                    null_corr_dict[dn][sn][tn][cn] = dict() 
-                    for cp_i in range(max_cp):
-                        null_corr_dict[dn][sn][tn][cn][cp_i] = [] #Compiled from samples from all null datasets
-        #Now collect correlations across null datasets into this folder structure
-        for cn in unique_corr_names:
-            print('\t\tNow collecting null data for ' + cn)
-            for nf_i, nf in tqdm.tqdm(enumerate(null_folders)):
-                null_data_folder = os.path.join(null_corr_dir,'null_' + str(nf_i),cn)
-                if os.path.isdir(null_data_folder):
-                    null_datasets = os.listdir(null_data_folder)
-                    for sn in unique_segment_names:
-                        for nd_name in null_datasets:
-                            if nd_name.split('_')[0] == sn:
-                                if nd_name.split('_')[-1] == 'dict.npy': #Only save complete correlation datasets
-                                    null_dict = np.load(os.path.join(null_data_folder,\
-                                                             nd_name),allow_pickle=True).item()
-                                    for ndk_i in null_dict.keys():
-                                        tn = null_dict[ndk_i]['name']
-                                        if tn == 'NaCl_1':
-                                            tn_true = 'salt_1'
-                                        else:
-                                            tn_true = tn
-                                        all_cp_data = null_dict[ndk_i]['data']
-                                        num_null_dev = null_dict[ndk_i]['num_dev']
-                                        num_taste_deliv, _ = np.shape(null_dict[ndk_i]['taste_num'])
-                                        for cp_i in range(max_cp):
-                                            try:
-                                                all_cp_data_reshaped = np.reshape(all_cp_data[cp_i],(num_taste_deliv,num_null_dev))
-                                                avg_null_corr = np.nanmean(all_cp_data_reshaped,0) #Average correlation across deliveries
-                                                null_corr_dict[dn][sn][tn_true][cn][cp_i].append(avg_null_corr)
-                                            except:
-                                                skip_taste = 1
-    np.save(null_corr_dict_path,null_corr_dict,allow_pickle=True) 
+#Create plots of decoding count differences between true and control
 
-#%% run_corr_analysis
+#Create plots of decoding difference based on true data decoding - of those 
+#decoded as saccharin, how many are still decoded as saccharin in control? 
+#Include correlation between decode matrices.
 
+#Group none and null as interchangeable categories
+
+from scipy.stats import pearsonr
+import matplotlib.pyplot as plt
+
+num_anim = len(unique_given_names)
+num_tastes = len(unique_training_categories)
+segment_keep_inds = [0,2,4]
+num_seg = len(segment_keep_inds)
+segment_names = ['Pre-Taste', 'Post-Taste', 'Sickness']
+
+lstm_save_dir = os.path.join(save_dir,'LSTM')
+if not os.path.isdir(lstm_save_dir):
+    os.mkdir(lstm_save_dir)
+
+for b_i in unique_bin_counts:
+    #Save dir
+    bin_name = str(b_i) + '_bins'
+    bin_save_dir = os.path.join(lstm_save_dir,bin_name)
+    if not os.path.isdir(bin_save_dir):
+        os.mkdir(bin_save_dir)
+    #Run difference analysis by pair type   
+    for udp_i, udp in enumerate(unique_decode_pairs):
+        anim_true_data = np.nan*np.ones((num_anim,num_tastes,num_seg)) #Fraction of all events
+        anim_diff_data = np.nan*np.ones((num_anim,num_tastes,num_seg)) #Fraction of all events diff (or all nonnan)
+        anim_overlap_data = np.nan*np.ones((num_anim,num_tastes,num_seg)) #Fraction of true decoded
+        anim_corr_data = np.nan*np.ones((num_anim,num_tastes,num_seg)) #Binary vectors of length all events
+        #Collect data
+        for gn_i, gn in enumerate(unique_given_names):
+            gn_categories = lstm_dict[gn][bin_name]['training_categories']
+            gn_data = lstm_dict[gn][bin_name]['predictions'][udp]
+            #gn_data contains null and true data
+            for s_i in range(num_seg):
+                #Pull max indices
+                if len(np.shape(gn_data['true'][s_i])) > 1: #Not yet argmax
+                    true_argmax = np.argmax(gn_data['true'][s_i],1)
+                    null_argmax = np.argmax(gn_data['control'][s_i],1)
+                else: #Already argmax and contains NaNs
+                    true_data = gn_data['true'][s_i]
+                    true_nonnan_inds = np.where(~np.isnan(true_data))[0]
+                    null_data = gn_data['true'][s_i]
+                    null_nonnan_inds = np.where(~np.isnan(null_data))[0]
+                    nonnan_inds = np.intersect1d(true_nonnan_inds,null_nonnan_inds)
+                    true_argmax = true_data[nonnan_inds]
+                    null_argmax = null_data[nonnan_inds]
+                #Collect data by taste
+                for utc_i, utc in enumerate(unique_training_categories):
+                    t_i = np.where(np.array(gn_categories) == utc)[0]
+                    true_inds = np.where(true_argmax == t_i)[0]
+                    null_inds = np.where(null_argmax == t_i)[0]
+                    #For each taste, collect fraction of predictions data
+                    true_frac = len(true_inds)/len(true_argmax)
+                    anim_true_data[gn_i,utc_i,s_i] = true_frac
+                    null_frac = len(null_inds)/len(true_argmax)
+                    anim_diff_data[gn_i,utc_i,s_i] = true_frac - null_frac
+                    if len(true_inds) > 0:
+                        #For each taste collect fraction of overlapping to true predictions
+                        intersect_inds = np.intersect1d(true_inds,null_inds)
+                        anim_overlap_data[gn_i,utc_i,s_i] = len(intersect_inds)/len(true_inds)
+                        if len(null_inds) > 0:
+                            #For each taste get correlation of predictions
+                            true_bin = np.zeros(len(true_argmax))
+                            true_bin[true_inds] = 1
+                            null_bin = np.zeros(len(true_argmax))
+                            null_bin[null_inds] = 1
+                            pearson_stat = pearsonr(true_bin,null_bin)
+                            anim_corr_data[gn_i,utc_i,s_i] = pearson_stat.statistic
+                        else:
+                            anim_corr_data[gn_i,utc_i,s_i] = 0
+                    else:
+                        anim_overlap_data[gn_i,utc_i,s_i] = 0
+                        anim_corr_data[gn_i,utc_i,s_i] = 0
+        #Plot results
+        # True Fractions
+        f_true_seg, ax_true_seg = plt.subplots(ncols = num_seg, figsize = (num_seg*5,5))
+        for s_i in range(num_seg):
+            seg_data = np.squeeze(anim_true_data[:,:,s_i])
+            ax_true_seg[s_i].axhline(0,linestyle='dashed',color='k',alpha=0.5)
+            for gn_i in range(num_anim):
+                ax_true_seg[s_i].scatter(np.arange(num_tastes)+1,seg_data[gn_i,:],color='g',\
+                            alpha=0.5)
+            ax_true_seg[s_i].boxplot(seg_data)
+            ax_true_seg[s_i].set_xticks(np.arange(num_tastes)+1,unique_training_categories)
+            ax_true_seg[s_i].set_ylabel('Fraction True')
+            ax_true_seg[s_i].set_title(segment_names[s_i])
+        plt.suptitle('Decode Fraction by Segment')
+        plt.tight_layout()
+        f_true_seg.savefig(os.path.join(bin_save_dir,udp + '_frac_boxplots_by_seg.png'))
+        f_true_seg.savefig(os.path.join(bin_save_dir,udp + '_frac_boxplots_by_seg.svg'))
+        plt.close(f_true_seg)
+        
+        f_true_taste, ax_true_taste = plt.subplots(ncols = num_tastes, figsize = (num_seg*5,5))
+        for t_i in range(num_tastes):
+            taste_data = np.squeeze(anim_true_data[:,t_i,:])
+            ax_true_taste[t_i].axhline(0,linestyle='dashed',color='k',alpha=0.5)
+            for gn_i in range(num_anim):
+                ax_true_taste[t_i].scatter(np.arange(num_seg)+1,taste_data[gn_i,:],color='g',\
+                            alpha=0.5)
+            ax_true_taste[t_i].boxplot(taste_data)
+            ax_true_taste[t_i].set_xticks(np.arange(num_seg)+1,segment_names)
+            ax_true_taste[t_i].set_ylabel('Fraction True - Fraction Control')
+            ax_true_taste[t_i].set_title(unique_training_categories[t_i])
+        plt.suptitle('Decode Fraction by Taste')
+        plt.tight_layout()
+        f_true_taste.savefig(os.path.join(bin_save_dir,udp + '_frac_boxplots_by_taste.png'))
+        f_true_taste.savefig(os.path.join(bin_save_dir,udp + '_frac_boxplots_by_taste.svg'))
+        plt.close(f_true_taste)
+        
+        #    Difference
+        f_diff_seg, ax_diff_seg = plt.subplots(ncols = num_seg, figsize = (num_seg*5,5))
+        for s_i in range(num_seg):
+            seg_data = np.squeeze(anim_diff_data[:,:,s_i])
+            ax_diff_seg[s_i].axhline(0,linestyle='dashed',color='k',alpha=0.5)
+            for gn_i in range(num_anim):
+                ax_diff_seg[s_i].scatter(np.arange(num_tastes)+1,seg_data[gn_i,:],color='g',\
+                            alpha=0.5)
+            ax_diff_seg[s_i].boxplot(seg_data)
+            ax_diff_seg[s_i].set_xticks(np.arange(num_tastes)+1,unique_training_categories)
+            ax_diff_seg[s_i].set_ylabel('Fraction True')
+            ax_diff_seg[s_i].set_title(segment_names[s_i])
+        plt.suptitle('Decode Fraction by Segment')
+        plt.tight_layout()
+        f_diff_seg.savefig(os.path.join(bin_save_dir,udp + '_diff_boxplots_by_seg.png'))
+        f_diff_seg.savefig(os.path.join(bin_save_dir,udp + '_diff_boxplots_by_seg.svg'))
+        plt.close(f_diff_seg)
+        
+        f_diff_taste, ax_diff_taste = plt.subplots(ncols = num_tastes, figsize = (num_seg*5,5))
+        for t_i in range(num_tastes):
+            taste_data = np.squeeze(anim_diff_data[:,t_i,:])
+            ax_diff_taste[t_i].axhline(0,linestyle='dashed',color='k',alpha=0.5)
+            for gn_i in range(num_anim):
+                ax_diff_taste[t_i].scatter(np.arange(num_seg)+1,taste_data[gn_i,:],color='g',\
+                            alpha=0.5)
+            ax_diff_taste[t_i].boxplot(taste_data)
+            ax_diff_taste[t_i].set_xticks(np.arange(num_seg)+1,segment_names)
+            ax_diff_taste[t_i].set_ylabel('Fraction True - Fraction Control')
+            ax_diff_taste[t_i].set_title(unique_training_categories[t_i])
+        plt.suptitle('Decode Fraction by Taste')
+        plt.tight_layout()
+        f_diff_taste.savefig(os.path.join(bin_save_dir,udp + '_diff_boxplots_by_taste.png'))
+        f_diff_taste.savefig(os.path.join(bin_save_dir,udp + '_diff_boxplots_by_taste.svg'))
+        plt.close(f_diff_taste)
+        
+        #    Overlap Fraction
+        f_overlap_seg, ax_overlap_seg = plt.subplots(ncols = num_seg, figsize = (num_seg*5,5))
+        for s_i in range(num_seg):
+            seg_data = np.squeeze(anim_overlap_data[:,:,s_i])
+            ax_overlap_seg[s_i].set_ylim([0,1])
+            for gn_i in range(num_anim):
+                ax_overlap_seg[s_i].scatter(np.arange(num_tastes)+1,seg_data[gn_i,:],color='g',\
+                            alpha=0.5)
+            ax_overlap_seg[s_i].boxplot(seg_data)
+            ax_overlap_seg[s_i].set_xticks(np.arange(num_tastes)+1,unique_training_categories)
+            ax_overlap_seg[s_i].set_ylabel('Num Overlap / Num True')
+            ax_overlap_seg[s_i].set_title(segment_names[s_i])
+        plt.suptitle('Overlap Fraction by Segment')
+        plt.tight_layout()
+        f_overlap_seg.savefig(os.path.join(bin_save_dir,udp + '_overlap_boxplots_by_seg.png'))
+        f_overlap_seg.savefig(os.path.join(bin_save_dir,udp + '_overlap_boxplots_by_seg.svg'))
+        plt.close(f_overlap_seg)
+        
+        f_overlap_taste, ax_overlap_taste = plt.subplots(ncols = num_tastes, figsize = (num_seg*5,5))
+        for t_i in range(num_tastes):
+            taste_data = np.squeeze(anim_overlap_data[:,t_i,:])
+            for gn_i in range(num_anim):
+                ax_overlap_taste[t_i].scatter(np.arange(num_seg)+1,taste_data[gn_i,:],color='g',\
+                            alpha=0.5)
+            ax_overlap_taste[t_i].boxplot(taste_data)
+            ax_overlap_taste[t_i].set_xticks(np.arange(num_seg)+1,segment_names)
+            ax_overlap_taste[t_i].set_ylabel('Num Overlap / Num True')
+            ax_overlap_taste[t_i].set_title(unique_training_categories[t_i])
+        plt.suptitle('Overlap Fraction by Taste')
+        plt.tight_layout()
+        f_overlap_taste.savefig(os.path.join(bin_save_dir,udp + '_overlap_boxplots_by_taste.png'))
+        f_overlap_taste.savefig(os.path.join(bin_save_dir,udp + '_overlap_boxplots_by_taste.svg'))
+        plt.close(f_overlap_taste)    
+        
+        #    Correlation
+        f_corr_seg, ax_corr_seg = plt.subplots(ncols = num_seg, figsize = (num_seg*5,5))
+        for s_i in range(num_seg):
+            seg_data = np.squeeze(anim_corr_data[:,:,s_i])
+            ax_corr_seg[s_i].axhline(0,linestyle='dashed',color='k',alpha=0.5)
+            for gn_i in range(num_anim):
+                ax_corr_seg[s_i].scatter(np.arange(num_tastes)+1,seg_data[gn_i,:],color='g',\
+                            alpha=0.5)
+            ax_corr_seg[s_i].boxplot(seg_data)
+            ax_corr_seg[s_i].set_xticks(np.arange(num_tastes)+1,unique_training_categories)
+            ax_corr_seg[s_i].set_ylabel('Pearson R Correlation')
+            ax_corr_seg[s_i].set_title(segment_names[s_i])
+        plt.suptitle('Correlation by Segment')
+        plt.tight_layout()
+        f_corr_seg.savefig(os.path.join(bin_save_dir,udp + '_corr_boxplots_by_seg.png'))
+        f_corr_seg.savefig(os.path.join(bin_save_dir,udp + '_corr_boxplots_by_seg.svg'))
+        plt.close(f_corr_seg)
+        
+        f_corr_taste, ax_corr_taste = plt.subplots(ncols = num_tastes, figsize = (num_seg*5,5))
+        for t_i in range(num_tastes):
+            taste_data = np.squeeze(anim_corr_data[:,t_i,:])
+            ax_corr_taste[t_i].axhline(0,linestyle='dashed',color='k',alpha=0.5)
+            for gn_i in range(num_anim):
+                ax_corr_taste[t_i].scatter(np.arange(num_seg)+1,taste_data[gn_i,:],color='g',\
+                            alpha=0.5)
+            ax_corr_taste[t_i].boxplot(taste_data)
+            ax_corr_taste[t_i].set_xticks(np.arange(num_seg)+1,segment_names)
+            ax_corr_taste[t_i].set_ylabel('Pearson R Correlation')
+            ax_corr_taste[t_i].set_title(unique_training_categories[t_i])
+        plt.suptitle('Correlation by Taste')
+        plt.tight_layout()
+        f_corr_taste.savefig(os.path.join(bin_save_dir,udp + '_corr_boxplots_by_taste.png'))
+        f_corr_taste.savefig(os.path.join(bin_save_dir,udp + '_corr_boxplots_by_taste.svg'))
+        plt.close(f_corr_taste)    

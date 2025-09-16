@@ -454,15 +454,16 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins, mean_taste_pop
         change_inds = np.diff(non_dev)
         start_non_dev_bouts = np.where(change_inds == 1)[0] + 1
         end_non_dev_bouts = np.where(change_inds == -1)[0]
-        null_dev_made = 0
+        num_non_dev_bouts = len(start_non_dev_bouts)
+        non_dev_inds_to_sample = np.random.randint(0,len(start_non_dev_bouts),len(start_dev_bouts))
         null_pop_fr = []
-        while null_dev_made < len(start_non_dev_bouts):
-            nondev_s_i = start_non_dev_bouts[null_dev_made]
-            nondev_e_i = end_non_dev_bouts[null_dev_made]
+        for ndi in non_dev_inds_to_sample:
+            nondev_s_i = start_non_dev_bouts[ndi]
             nondev_len = (np.ceil(std_len*np.random.randn() + mean_len)).astype('int')
+            nondev_e_i = nondev_s_i + nondev_len
             
             nondev_rast_i = spikes_bin[:, nondev_s_i:nondev_e_i]
-            nondev_pop_fr = np.sum(dev_rast_i)/(dev_len/1000)
+            nondev_pop_fr = np.sum(nondev_rast_i)/(nondev_len/1000)
             null_pop_fr.append(nondev_pop_fr)
             
             bin_starts = np.ceil(np.linspace(0,nondev_len,num_bins+2)).astype('int')
@@ -475,7 +476,6 @@ def create_dev_matrices(day_vars, deviations, z_bin_dt, num_bins, mean_taste_pop
             seg_non_dev_matrices.append(nondev_fr_mat)
             # z_nondev_fr_mat = (nondev_fr_mat - np.expand_dims(mean_fr,1))/np.expand_dims(std_fr,1)
             # seg_non_dev_matrices.append(z_nondev_fr_mat)
-            null_dev_made += 1
         
         null_dev_mean_pop_fr = np.nanmean(np.array(null_pop_fr))
         dev_scale = seg_dev_mean_pop_fr/null_dev_mean_pop_fr
