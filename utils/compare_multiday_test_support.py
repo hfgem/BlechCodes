@@ -273,7 +273,7 @@ for b_i in unique_bin_counts:
                 else: #Already argmax and contains NaNs
                     true_data = gn_data['true'][s_i]
                     true_nonnan_inds = np.where(~np.isnan(true_data))[0]
-                    null_data = gn_data['true'][s_i]
+                    null_data = gn_data['control'][s_i]
                     null_nonnan_inds = np.where(~np.isnan(null_data))[0]
                     nonnan_inds = np.intersect1d(true_nonnan_inds,null_nonnan_inds)
                     true_argmax = true_data[nonnan_inds]
