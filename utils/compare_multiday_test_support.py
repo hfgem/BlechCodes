@@ -339,7 +339,7 @@ for b_i in unique_bin_counts:
                             alpha=0.5)
             ax_true_taste[t_i].boxplot(taste_data)
             ax_true_taste[t_i].set_xticks(np.arange(num_seg)+1,segment_names)
-            ax_true_taste[t_i].set_ylabel('Fraction True - Fraction Control')
+            ax_true_taste[t_i].set_ylabel('Fraction True')
             ax_true_taste[t_i].set_title(unique_training_categories[t_i])
         plt.suptitle('Decode Fraction by Taste')
         plt.tight_layout()
