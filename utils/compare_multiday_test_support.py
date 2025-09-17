@@ -256,12 +256,24 @@ for gn_i, gn in enumerate(unique_given_names):
     for bc_i in unique_bin_counts:
         bc_name = str(bc_i) + '_bins'
         training_categories = lstm_dict[gn][bc_name]['training_categories']
+        true_cat = np.array([i for i in range(len(training_categories)) if \
+                           (training_categories[i][:4] != 'none')*(training_categories[i][:4] != 'null')])
+        control_cat = np.setdiff1d(np.arange(len(training_categories)),true_cat)
         cross_val_dict = lstm_dict[gn][bc]['cross_validation']
         num_layer_sizes = len(cross_val_dict)
         layer_sizes = np.zeros(num_layer_sizes) #Store latent dim sizes
+        true_accuracy = np.zeros(num_layer_sizes)
+        total_accuracy = np.zeros(num_layer_sizes)
         for l_i in range(num_layer_sizes):
             layer_sizes[l_i] = cross_val_dict[l_i]['latent_dim']
             predictions = cross_val_dict[l_i]['predictions']
+            argmax_predictions = np.argmax(predictions,1)
             true_labels = cross_val_dict[l_i]['true_labels']
+            true_label_inds = np.argmax(true_labels,1)
+            #Calculate true taste accuracy
+            for t_i in true_cat:
+                true_i = np.where(true_label_inds == t_i)[0]
+            #Calculate control accuracy
+            
             
         
