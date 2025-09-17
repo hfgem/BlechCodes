@@ -271,9 +271,21 @@ for gn_i, gn in enumerate(unique_given_names):
             true_labels = cross_val_dict[l_i]['true_labels']
             true_label_inds = np.argmax(true_labels,1)
             #Calculate true taste accuracy
+            total_true_correct = 0
+            total_true = 0
             for t_i in true_cat:
                 true_i = np.where(true_label_inds == t_i)[0]
+                total_true += len(true_i)
+                total_true_correct += len(np.where(argmax_predictions[true_i] == t_i)[0])
             #Calculate control accuracy
-            
+            control_inds = []
+            for c_i in control_cat:
+                control_inds.extend(list(np.where(true_label_inds == c_i)[0]))
+            control_inds = np.array(control_inds)
+            total_control = len(control_inds)
+            total_true_control = 0
+            for pc in argmax_predictions[control_inds]:
+                if len(np.where(control_cat == pc)[0]) > 0:
+                    total_true_control += 1
             
         
