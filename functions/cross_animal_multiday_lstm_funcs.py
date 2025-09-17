@@ -6,6 +6,10 @@ Created on Wed Sep 17 09:36:26 2025
 @author: hannahgermaine
 """
 
+from scipy.stats import pearsonr
+import matplotlib.pyplot as plt
+import numpy as np
+
 def run_analysis_plots_by_decode_pair(unique_given_names,unique_training_categories,\
                                       unique_bin_counts, lstm_save_dir):
     
@@ -82,11 +86,11 @@ def run_analysis_plots_by_decode_pair(unique_given_names,unique_training_categor
             #Plot data
             plot_diff_data(anim_true_data, anim_diff_data, anim_overlap_data, \
                            anim_corr_data, segment_names, unique_training_categories, \
-                           bin_save_dir)
+                           udp, bin_save_dir)
 
 def plot_diff_data(anim_true_data, anim_diff_data, anim_overlap_data, \
                anim_corr_data, segment_names, unique_training_categories, \
-               bin_save_dir):
+               udp, bin_save_dir):
     
     #Plot results
     # True Fractions
