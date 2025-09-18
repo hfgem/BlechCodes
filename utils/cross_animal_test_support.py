@@ -89,9 +89,6 @@ else:
         del data_dict, data_name, given_name, metadata, dig_in_names
     del nc
     
-min_best_cutoff = 0.5
-
-
 import os
 import warnings
 import easygui

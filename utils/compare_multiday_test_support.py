@@ -123,168 +123,135 @@ os.chdir(blech_codes_path)
 
 warnings.filterwarnings("ignore")
 
-#%% gather_corr_data()
+#%% gather_lstm_data()
+verbose = False
 
-corr_dict_path = os.path.join(save_dir,'corr_data_dict.npy')
+lstm_dict_path = os.path.join(save_dir,'lstm_data_dict.npy')
 #Start with real corr data
 try:
-    corr_dict = np.load(corr_dict_path,allow_pickle=True).item()
+    lstm_dict = np.load(lstm_dict_path,allow_pickle=True).item()
 except:
-    corr_dict = dict()
+    lstm_dict = dict()
     data_names = list(multiday_data_dict.keys())
     for nc_i, dn in enumerate(data_names):
-        corr_dict[dn] = dict()
+        lstm_dict[dn] = dict()
         data_dir = multiday_data_dict[dn]['data_dir']
-        corr_dir = os.path.join(data_dir,'Correlations')
-        corr_types = os.listdir(corr_dir)
-        for ct in corr_types:
-            if ct == 'Null':
-                skip = 1
-            else: #Regular data
-                corr_dict[dn][ct] = dict()
-                corr_type_files = os.listdir(os.path.join(corr_dir,ct))
-                for f in corr_type_files:
-                    if f.split('.')[-1] == 'npy':
-                        f_name = f.split('.')[0]
-                        if f_name == 'all_taste_names':
-                            taste_names = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
-                            taste_name_list = []
-                            for tn in taste_names:
-                                if tn == 'NaCl_1':
-                                    taste_name_list.append('salt_1')
-                                else:
-                                    taste_name_list.append(tn)
-                            
-                            corr_dict[dn][ct]['tastes'] = taste_name_list
-                        else:
-                            seg_name = f_name.split('_')[0]
-                            corr_dict_keys = list(corr_dict[dn][ct].keys())
-                            if len(np.where(np.array(corr_dict_keys) == seg_name)[0]) == 0: #Segment not stored yet
-                                corr_dict[dn][ct][seg_name] = dict()
-                                
-                            if f_name.split('_')[-1] == 'dict': #Dictionary of all correlation values
-                                f_data = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True).item()
-                                corr_dict[dn][ct][seg_name]['all'] = dict()
-                                num_tastes = len(f_data)
-                                for nt_i in range(num_tastes):
-                                    taste_name = f_data[nt_i]['name']
-                                    if taste_name == 'NaCl_1':
-                                        taste_name = 'salt_1'
-                                    num_cp = len(f_data[nt_i]['data'])
-                                    num_points = len(f_data[nt_i]['data'][0])
-                                    data_concat = np.zeros((num_cp,num_points))
-                                    for cp_i in range(num_cp):
-                                        data_concat[cp_i,:] = np.array(f_data[nt_i]['data'][cp_i])
-                                    corr_dict[dn][ct][seg_name]['all'][taste_name] = dict()
-                                    corr_dict[dn][ct][seg_name]['all'][taste_name]['data'] = data_concat
-                                    try:
-                                        corr_dict[dn][ct][seg_name]['all'][taste_name]['num_dev'] = f_data[nt_i]['num_dev']
-                                        corr_dict[dn][ct][seg_name]['all'][taste_name]['taste_num_deliv'] = f_data[nt_i]['taste_num_deliv']
-                                    except:
-                                        skip_val = 1 #Place holder skip
-                            else: #best correlations file
-                                f_data = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
-                                corr_dict[dn][ct][seg_name]['best'] = f_data
-    np.save(corr_dict_path,corr_dict,allow_pickle=True)   
+        lstm_dir = os.path.join(data_dir,'LSTM_Decoding')
+        bin_counts = os.listdir(lstm_dir)
+        for bc in bin_counts:
+            bc_dir = os.path.join(lstm_dir,bc)
+            try: #Regular data
+                bc_i = int(bc.split('_')[0])
+                lstm_dict[dn][bc] = dict()
+                lstm_dict[dn][bc]['num_bins'] = bc_i
+                training_categories = np.load(os.path.join(bc_dir,'taste_unique_categories.npy'))
+                if len(np.where(training_categories == 'salt_1')[0]) > 0:
+                    training_categories[np.where(training_categories == 'salt_1')[0][0]] = 'NaCl_1'
+                lstm_dict[dn][bc]['training_categories'] = training_categories
+                #Get the training data
+                lstm_dict[dn][bc]['training_data'] = dict()
+                lstm_dict[dn][bc]['training_data']['training_matrices'] = np.load(os.path.join(bc_dir,'training_matrices.npy'))
+                lstm_dict[dn][bc]['training_data']['training_labels'] = np.load(os.path.join(bc_dir,'training_labels.npy'))
+                #Get cross validation data
+                lstm_dict[dn][bc]['cross_validation'] = np.load(os.path.join(bc_dir,'cross_validation','fold_dict.npy'),allow_pickle=True).item()
+                #Get the deviation data
+                lstm_dict[dn][bc]['vectors'] = dict()
+                lstm_dict[dn][bc]['vectors']['dev_fr_vecs'] = np.load(os.path.join(bc_dir,'dev_fr_vecs.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['vectors']['null_dev_fr_vecs'] = np.load(os.path.join(bc_dir,'null_dev_fr_vecs.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['vectors']['scaled_dev_fr_vecs'] = np.load(os.path.join(bc_dir,'scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['vectors']['scaled_null_dev_fr_vecs'] = np.load(os.path.join(bc_dir,'scaled_null_dev_matrices.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['vectors']['shuffled_dev_fr_vecs'] = np.load(os.path.join(bc_dir,'shuffled_dev_fr_vecs.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['vectors']['shuffled_scaled_dev_fr_vecs'] = np.load(os.path.join(bc_dir,'shuffled_scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions'] = dict()
+                #Get the unscaled predictions
+                lstm_dict[dn][bc]['predictions']['unscaled'] = dict()
+                lstm_dict[dn][bc]['predictions']['unscaled']['true'] = np.load(os.path.join(bc_dir,'predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['unscaled']['control'] = np.load(os.path.join(bc_dir,'null_predictions.npy'),allow_pickle=True).item()
+                #Get the unscaled thresholded predictions
+                lstm_dict[dn][bc]['predictions']['unscaled_thresholded'] = dict()
+                lstm_dict[dn][bc]['predictions']['unscaled_thresholded']['true'] = np.load(os.path.join(bc_dir,'thresholded_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['unscaled_thresholded']['control'] = np.load(os.path.join(bc_dir,'null_thresholded_predictions.npy'),allow_pickle=True).item()
+                #Get the scaled predictions
+                lstm_dict[dn][bc]['predictions']['scaled'] = dict()
+                lstm_dict[dn][bc]['predictions']['scaled']['true'] = np.load(os.path.join(bc_dir,'scaled_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['scaled']['control'] = np.load(os.path.join(bc_dir,'scaled_null_predictions.npy'),allow_pickle=True).item()
+                #Get the scaled thresholded predictions
+                lstm_dict[dn][bc]['predictions']['scaled_thresholded'] = dict()
+                lstm_dict[dn][bc]['predictions']['scaled_thresholded']['true'] = np.load(os.path.join(bc_dir,'scaled_thresholded_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['scaled_thresholded']['control'] = np.load(os.path.join(bc_dir,'scaled_null_thresholded_predictions.npy'),allow_pickle=True).item()
+                #Get unscaled time shuffled predictions
+                lstm_dict[dn][bc]['predictions']['unscaled_time_controlled'] = dict()
+                lstm_dict[dn][bc]['predictions']['unscaled_time_controlled']['true'] = np.load(os.path.join(bc_dir,'predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['unscaled_time_controlled']['control'] = np.load(os.path.join(bc_dir,'shuffled_predictions.npy'),allow_pickle=True).item()
+                #Get unscaled time shuffled thresholded predictions
+                lstm_dict[dn][bc]['predictions']['unscaled_thresholded_time_controlled'] = dict()
+                lstm_dict[dn][bc]['predictions']['unscaled_thresholded_time_controlled']['true'] = np.load(os.path.join(bc_dir,'thresholded_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['unscaled_thresholded_time_controlled']['control'] = np.load(os.path.join(bc_dir,'shuffled_thresholded_predictions.npy'),allow_pickle=True).item()
+                #Get scaled time shuffled predictions
+                lstm_dict[dn][bc]['predictions']['scaled_time_controlled'] = dict()
+                lstm_dict[dn][bc]['predictions']['scaled_time_controlled']['true'] = np.load(os.path.join(bc_dir,'scaled_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['scaled_time_controlled']['control'] = np.load(os.path.join(bc_dir,'shuffled_scaled_predictions.npy'),allow_pickle=True).item()
+                #Get scaled time shuffled thresholded predictions
+                lstm_dict[dn][bc]['predictions']['scaled_thresholded_time_controlled'] = dict()
+                lstm_dict[dn][bc]['predictions']['scaled_thresholded_time_controlled']['true'] = np.load(os.path.join(bc_dir,'scaled_thresholded_predictions.npy'),allow_pickle=True).item()
+                lstm_dict[dn][bc]['predictions']['scaled_thresholded_time_controlled']['control'] = np.load(os.path.join(bc_dir,'shuffled_scaled_thresholded_predictions.npy'),allow_pickle=True).item()
+            except: #Some other folder
+                if verbose == True:
+                    print("Not a binned decoding folder: " + os.path.join(lstm_dir,bc))
+                
+    np.save(lstm_dict_path,lstm_dict,allow_pickle=True)   
     
-#%% find_corr_groupings()
-num_datasets = len(corr_dict)
-unique_given_names = list(corr_dict.keys())
-#Pull unique correlation analysis names
-unique_corr_names = []
-for name in unique_given_names:
-    unique_corr_names.extend(list(corr_dict[name].keys()))
-unique_corr_indices = np.sort(
-    np.unique(unique_corr_names, return_index=True)[1])
-unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
-#Select which corr types to use in the analysis
-unique_corr_names = select_analysis_groups(unique_corr_names)
+#%% find_lstm_groupings()
 
-#Pull unique segment and taste names and max cp
-unique_segment_names = []
-unique_taste_names = []
-max_cp = 0
-for name in unique_given_names:
-    for corr_name in unique_corr_names:
-        seg_names = list(corr_dict[name][corr_name].keys())
-        taste_names = corr_dict[name][corr_name]['tastes']
-        unique_taste_names.extend(list(taste_names))
-        for s_n in seg_names:
-            if type(corr_dict[name][corr_name][s_n]) == dict:
-                unique_segment_names.extend([s_n])
-                try:
-                    num_cp, _ = np.shape(corr_dict[name][corr_name][s_n]['all'][taste_names[0]]['data'])
-                    if num_cp > max_cp:
-                        max_cp = num_cp
-                except:
-                    error = "Unable to grab changepoint count."
-unique_seg_indices = np.sort(
-    np.unique(unique_segment_names, return_index=True)[1])
-unique_segment_names = [unique_segment_names[i] for i in unique_seg_indices]
-#Select which segments to use in the analysis
-unique_segment_names = select_analysis_groups(unique_segment_names)
+print("Finding LSTM decoding groupings")
+num_datasets = len(lstm_dict)
+unique_given_names = list(lstm_dict.keys())
+#Pull unique decode analysis names
+unique_bin_counts = []
+unique_decode_pairs = []
+unique_training_categories = []
+for gn in unique_given_names:
+    bc_names = list(lstm_dict[gn].keys())
+    for bc in bc_names:
+        bc_i = lstm_dict[gn][bc]['num_bins']
+        unique_bin_counts.append(bc_i)
+        unique_decode_pairs.extend(list(lstm_dict[gn][bc]['predictions'].keys()))
+        unique_training_categories.extend(list(lstm_dict[gn][bc]['training_categories']))
+unique_bin_count_inds = np.sort(
+    np.unique(unique_bin_counts, return_index=True)[1])
+unique_bin_counts = np.sort([unique_bin_counts[i] for i in unique_bin_count_inds])
+unique_decode_pair_inds = np.sort(
+    np.unique(unique_decode_pairs, return_index=True)[1])
+unique_decode_pairs = [unique_decode_pairs[i] for i in unique_decode_pair_inds]
+unique_training_cat_inds = np.sort(
+    np.unique(unique_training_categories, return_index=True)[1])
+unique_training_categories = [unique_training_categories[i] for i in unique_training_cat_inds]
 
-unique_taste_indices = np.sort(
-    np.unique(unique_taste_names, return_index=True)[1])
-unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
-#Select which tastes to use in the analysis
-unique_taste_names = select_analysis_groups(unique_taste_names)
+#%% run_lstm_analysis
 
-#%% gather_null_corr_data()
-print("Collecting null correlation data")
-null_corr_dict_path = os.path.join(save_dir,'null_corr_data_dict.npy')
-try:
-    null_corr_dict = np.load(null_corr_dict_path,allow_pickle=True).item()
-except:
-    null_corr_dict = dict()
-    data_names = list(multiday_data_dict.keys())
-    for dn in data_names:
-        print("\tImporting null data for " + dn)
-        null_corr_dict[dn] = dict()
-        data_dir = multiday_data_dict[dn]['data_dir']
-        null_corr_dir = os.path.join(data_dir,'Correlations','Null')
-        null_folders = os.listdir(null_corr_dir)
-        num_null = len(null_folders)
-        null_corr_dict[dn]['num_null'] = num_null
-        #First set up folder structure
-        for sn in unique_segment_names:
-            null_corr_dict[dn][sn] = dict()
-            for tn in unique_taste_names:
-                null_corr_dict[dn][sn][tn] = dict()
-                for cn in unique_corr_names:
-                    null_corr_dict[dn][sn][tn][cn] = dict() 
-                    for cp_i in range(max_cp):
-                        null_corr_dict[dn][sn][tn][cn][cp_i] = [] #Compiled from samples from all null datasets
-        #Now collect correlations across null datasets into this folder structure
-        for cn in unique_corr_names:
-            print('\t\tNow collecting null data for ' + cn)
-            for nf_i, nf in tqdm.tqdm(enumerate(null_folders)):
-                null_data_folder = os.path.join(null_corr_dir,'null_' + str(nf_i),cn)
-                if os.path.isdir(null_data_folder):
-                    null_datasets = os.listdir(null_data_folder)
-                    for sn in unique_segment_names:
-                        for nd_name in null_datasets:
-                            if nd_name.split('_')[0] == sn:
-                                if nd_name.split('_')[-1] == 'dict.npy': #Only save complete correlation datasets
-                                    null_dict = np.load(os.path.join(null_data_folder,\
-                                                             nd_name),allow_pickle=True).item()
-                                    for ndk_i in null_dict.keys():
-                                        tn = null_dict[ndk_i]['name']
-                                        if tn == 'NaCl_1':
-                                            tn_true = 'salt_1'
-                                        else:
-                                            tn_true = tn
-                                        all_cp_data = null_dict[ndk_i]['data']
-                                        num_null_dev = null_dict[ndk_i]['num_dev']
-                                        num_taste_deliv, _ = np.shape(null_dict[ndk_i]['taste_num'])
-                                        for cp_i in range(max_cp):
-                                            try:
-                                                all_cp_data_reshaped = np.reshape(all_cp_data[cp_i],(num_taste_deliv,num_null_dev))
-                                                avg_null_corr = np.nanmean(all_cp_data_reshaped,0) #Average correlation across deliveries
-                                                null_corr_dict[dn][sn][tn_true][cn][cp_i].append(avg_null_corr)
-                                            except:
-                                                skip_taste = 1
-    np.save(null_corr_dict_path,null_corr_dict,allow_pickle=True) 
+#Create plots of decoding count differences between true and control
 
-#%% run_corr_analysis
+#Create plots of decoding difference based on true data decoding - of those 
+#decoded as saccharin, how many are still decoded as saccharin in control? 
+#Include correlation between decode matrices.
 
+#Group none and null as interchangeable categories
+
+num_anim = len(unique_given_names)
+num_tastes = len(unique_training_categories)
+true_tastes = np.array([unique_training_categories[i] for i in range(len(unique_training_categories)) if \
+                   (unique_training_categories[i][:4] != 'none')*(unique_training_categories[i][:4] != 'null')])
+num_bins = len(unique_bin_counts)
+segment_keep_inds = [0,2,4]
+num_seg = len(segment_keep_inds)
+segment_names = ['Pre-Taste', 'Post-Taste', 'Sickness']
+
+lstm_save_dir = os.path.join(save_dir,'LSTM')
+if not os.path.isdir(lstm_save_dir):
+    os.mkdir(lstm_save_dir)
+    
+import functions.cross_animal_multiday_lstm_funcs as ca_lstm
+ca_lstm.run_analysis_plots_by_decode_pair(unique_given_names,unique_training_categories,\
+                                      unique_bin_counts, unique_decode_pairs, lstm_save_dir)
+ca_lstm.plot_accuracy_data(lstm_dict,unique_given_names,unique_training_categories,\
+                       unique_bin_counts,lstm_save_dir)

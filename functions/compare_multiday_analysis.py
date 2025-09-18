@@ -324,3 +324,102 @@ class run_compare_multiday_analysis():
                               self.unique_taste_names, self.max_cp, self.save_dir,
                               self.verbose)
         
+    def gather_lstm_data(self,):
+        print("Collecting LSTM decoding data")
+        lstm_dict_path = os.path.join(self.save_dir,'lstm_data_dict.npy')
+        self.lstm_dict_path = lstm_dict_path
+        #Start with real corr data
+        try:
+            self.lstm_dict = np.load(lstm_dict_path,allow_pickle=True).item()
+        except:
+            lstm_dict = dict()
+            data_names = list(self.multiday_data_dict.keys())
+            for nc_i, dn in enumerate(data_names):
+                lstm_dict[dn] = dict()
+                data_dir = self.multiday_data_dict[dn]['data_dir']
+                lstm_dir = os.path.join(data_dir,'LSTM_Decoding')
+                bin_counts = os.listdir(lstm_dir)
+                for bc in bin_counts:
+                    bc_dir = os.path.join(lstm_dir,bc)
+                    try: #Regular data
+                        bc_i = int(bc.split('_')[0])
+                        lstm_dict[dn][bc] = dict()
+                        lstm_dict[dn][bc]['num_bins'] = bc_i
+                        #Get the training data
+                        lstm_dict[dn][bc]['training_data'] = dict()
+                        lstm_dict[dn][bc]['training_data']['training_matrices'] = np.load(os.path.join(bc_dir,'training_matrices.npy'))
+                        lstm_dict[dn][bc]['training_data']['training_labels'] = np.load(os.path.join(bc_dir,'training_labels.npy'))
+                        #Get the deviation data
+                        lstm_dict[dn][bc]['vectors'] = dict()
+                        lstm_dict[dn][bc]['vectors']['dev_fr_vecs'] = np.load(os.path.join(bc_dir,'dev_fr_vecs.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['vectors']['null_dev_fr_vecs'] = np.load(os.path.join(bc_dir,'null_dev_fr_vecs.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['vectors']['scaled_dev_fr_vecs'] = np.load(os.path.join(bc_dir,'scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['vectors']['scaled_null_dev_fr_vecs'] = np.load(os.path.join(bc_dir,'scaled_null_dev_matrices.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['vectors']['shuffled_dev_fr_vecs'] = np.load(os.path.join(bc_dir,'shuffled_dev_fr_vecs.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['vectors']['shuffled_scaled_dev_fr_vecs'] = np.load(os.path.join(bc_dir,'shuffled_scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
+                        #Get the unscaled predictions
+                        lstm_dict[dn][bc]['predictions'] = dict()
+                        lstm_dict[dn][bc]['predictions']['unscaled'] = dict()
+                        lstm_dict[dn][bc]['predictions']['unscaled']['true'] = np.load(os.path.join(bc_dir,'predictions.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['predictions']['unscaled']['null'] = np.load(os.path.join(bc_dir,'null_predictions.npy'),allow_pickle=True).item()
+                        #Get the unscaled thresholded predictions
+                        lstm_dict[dn][bc]['predictions']['unscaled_thresholded'] = dict()
+                        lstm_dict[dn][bc]['predictions']['unscaled_thresholded']['true'] = np.load(os.path.join(bc_dir,'thresholded_predictions.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['predictions']['unscaled_thresholded']['null'] = np.load(os.path.join(bc_dir,'null_thresholded_predictions.npy'),allow_pickle=True).item()
+                        #Get the scaled predictions
+                        lstm_dict[dn][bc]['predictions']['scaled'] = dict()
+                        lstm_dict[dn][bc]['predictions']['scaled']['true'] = np.load(os.path.join(bc_dir,'scaled_predictions.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['predictions']['scaled']['null'] = np.load(os.path.join(bc_dir,'scaled_null_predictions.npy'),allow_pickle=True).item()
+                        #Get the scaled thresholded predictions
+                        lstm_dict[dn][bc]['predictions']['scaled_thresholded'] = dict()
+                        lstm_dict[dn][bc]['predictions']['scaled_thresholded']['true'] = np.load(os.path.join(bc_dir,'scaled_thresholded_predictions.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['predictions']['scaled_thresholded']['null'] = np.load(os.path.join(bc_dir,'scaled_null_thresholded_predictions.npy'),allow_pickle=True).item()
+                        #Get unscaled time shuffled predictions
+                        lstm_dict[dn][bc]['predictions']['unscaled_time_controlled'] = dict()
+                        lstm_dict[dn][bc]['predictions']['unscaled_time_controlled']['true'] = np.load(os.path.join(bc_dir,'predictions.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['predictions']['unscaled_time_controlled']['time_shuffled'] = np.load(os.path.join(bc_dir,'shuffled_predictions.npy'),allow_pickle=True).item()
+                        #Get unscaled time shuffled thresholded predictions
+                        lstm_dict[dn][bc]['predictions']['unscaled_thresholded_time_controlled'] = dict()
+                        lstm_dict[dn][bc]['predictions']['unscaled_thresholded_time_controlled']['true'] = np.load(os.path.join(bc_dir,'thresholded_predictions.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['predictions']['unscaled_thresholded_time_controlled']['time_shuffled'] = np.load(os.path.join(bc_dir,'shuffled_thresholded_predictions.npy'),allow_pickle=True).item()
+                        #Get scaled time shuffled predictions
+                        lstm_dict[dn][bc]['predictions']['scaled_time_controlled'] = dict()
+                        lstm_dict[dn][bc]['predictions']['scaled_time_controlled']['true'] = np.load(os.path.join(bc_dir,'scaled_predictions.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['predictions']['scaled_time_controlled']['time_shuffled'] = np.load(os.path.join(bc_dir,'shuffled_scaled_predictions.npy'),allow_pickle=True).item()
+                        #Get scaled time shuffled thresholded predictions
+                        lstm_dict[dn][bc]['predictions']['scaled_thresholded_time_controlled'] = dict()
+                        lstm_dict[dn][bc]['predictions']['scaled_thresholded_time_controlled']['true'] = np.load(os.path.join(bc_dir,'scaled_thresholded_predictions.npy'),allow_pickle=True).item()
+                        lstm_dict[dn][bc]['predictions']['scaled_thresholded_time_controlled']['time_shuffled'] = np.load(os.path.join(bc_dir,'shuffled_scaled_thresholded_predictions.npy'),allow_pickle=True).item()
+                    except: #Some other folder
+                        if self.verbose == True:
+                            print("Not a binned decoding folder: " + os.path.join(lstm_dir,bc))
+            self.lstm_dict = lstm_dict
+            np.save(lstm_dict_path,lstm_dict,allow_pickle=True)
+        
+    def find_lstm_groupings(self,):
+        print("Finding LSTM decoding groupings")
+        num_datasets = len(self.lstm_dict)
+        unique_given_names = list(self.lstm_dict.keys())
+        #Pull unique decode analysis names
+        unique_bin_counts = []
+        unique_decode_pairs = []
+        for gn in unique_given_names:
+            bc_names = list(self.lstm_dict[gn].keys())
+            for bc in bc_names:
+                bc_i = self.lstm_dict[gn][bc]['num_bins']
+                unique_bin_counts.append(bc_i)
+                unique_decode_pairs.extend(list(self.lstm_dict[gn][bc]['predictions'].keys()))
+        unique_bin_count_inds = np.sort(
+            np.unique(unique_bin_counts, return_index=True)[1])
+        unique_bin_counts = [unique_bin_counts[i] for i in unique_bin_count_inds]
+        unique_decode_pair_inds = np.sort(
+            np.unique(unique_decode_pairs, return_index=True)[1])
+        unique_decode_pairs = [unique_decode_pairs[i] for i in unique_decode_pair_inds]
+        
+        self.unique_given_names = unique_given_names
+        self.unique_bin_counts = unique_bin_counts
+        self.unique_decode_pairs = unique_decode_pairs
+        
+    def run_lstm_analysis(self,):
+        print("Running LSTM analysis")
+        #ADD CODE HERE
