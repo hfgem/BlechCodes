@@ -93,7 +93,6 @@ def create_taste_matrices(day_vars, segment_deviations, all_dig_in_names, num_bi
     taste_unique_categories = list(all_dig_in_names)
     training_matrices = []
     training_labels = []
-    deliv_counts = []
     taste_pop_fr = []
     #Get individual taste responses
     for t_i, t_name in tqdm.tqdm(enumerate(all_dig_in_names)):
@@ -108,7 +107,6 @@ def create_taste_matrices(day_vars, segment_deviations, all_dig_in_names, num_bi
         tastant_spike_times = day_vars[day]['tastant_spike_times']
         start_dig_in_times = day_vars[day]['start_dig_in_times']
         num_deliv = len(tastant_spike_times[t_i_day])
-        deliv_counts.append(num_deliv)
         
         #Generate response matrices
         for d_i in range(num_deliv):  # index for that taste

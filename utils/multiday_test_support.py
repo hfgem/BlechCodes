@@ -99,16 +99,20 @@ while stop_ind == -1:
             new_day_dir_list = os.path.split(day_dir_list[0])
             new_day_dir_list.extend(day_dir_list[1:])
             day_dirs.append(new_day_dir_list)
+
 #Now create the new folder in the shared root path
 root_path = os.path.join(*list(day_dir_array[0,:stop_ind]))
 save_dir = os.path.join(root_path,joint_name)
 if not os.path.isdir(save_dir):
     os.mkdir(save_dir)
     
+corr_dir = os.path.join(save_dir,'Correlations')
+if os.path.isdir(corr_dir) == False:
+    os.mkdir(corr_dir)
     
-lstm_dir = os.path.join(save_dir,'LSTM_Decoding')
-if os.path.isdir(lstm_dir) == False:
-    os.mkdir(lstm_dir)
+bayes_dir = os.path.join(save_dir,'Naive_Bayes_GMM')
+if os.path.isdir(bayes_dir) == False:
+    os.mkdir(bayes_dir)
 
 def get_spike_time_datasets(args):
     segment_times, spike_times, num_neur, keep_neur, start_dig_in_times, \
@@ -205,23 +209,39 @@ for n_i in range(num_days):
         day_vars[n_i]['hdf5_dir'], 'changepoint_data', 'pop_taste_cp_raster_inds')
     day_vars[n_i]['num_pt_cp'] = day_vars[n_i]['num_cp'] + 2
     
-#LSTM Section Below
+#%% Get data for decoding
 
-# import deviations
-import functions.lstm_decoding_funcs as lstm
+all_dig_in_names = []
+for n_i in range(num_days):
+    #Collect tastant names
+    day_names = day_vars[n_i]['dig_in_names']
+    new_day_names = [dn + '_' + str(n_i) for dn in day_names]
+    all_dig_in_names.extend(new_day_names)
 
-# z_bin_dt = 100
-# num_bins = 2
+#decode_groups()
+non_none_tastes = [taste for taste in all_dig_in_names if taste[:4] != 'none']
+non_none_tastes = non_none_tastes
+group_list, group_names = ddf.multiday_decode_groupings_split_identity(day_vars[0]['epochs_to_analyze'],
+                                               all_dig_in_names,
+                                               non_none_tastes)
+#Save the group information for cross-animal use 
+group_dict = dict()
+for gn_i, gn in enumerate(group_names):
+    group_dict[gn] = group_list[gn_i]
+np.save(os.path.join(bayes_dir,'group_dict.npy'),group_dict,allow_pickle=True)
 
-bin_dir = os.path.join(lstm_dir,str(num_bins) +'_bins')
-if not os.path.isdir(bin_dir):
-    os.mkdir(bin_dir)
+#collect categorical training data by group
+group_train_data = ddf.pull_group_training_data(group_list, group_names, \
+                                                all_dig_in_names, day_vars)
+np.save(os.path.join(bayes_dir,'group_train_data.npy'),group_train_data,allow_pickle=True)
 
+#collect deviations
 num_seg_to_analyze = len(day_vars[0]['segments_to_analyze'])
 segment_names_to_analyze = [day_vars[0]['segment_names'][i] for i in day_vars[0]['segments_to_analyze']]
 segment_times_to_analyze_reshaped = [
     [day_vars[0]['segment_times'][i], day_vars[0]['segment_times'][i+1]] for i in day_vars[0]['segments_to_analyze']]
 segment_spike_times_to_analyze = [day_vars[0]['segment_spike_times'][i] for i in day_vars[0]['segments_to_analyze']]
+segment_names_to_analyze = segment_names_to_analyze
 
 segment_deviations = []
 for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
@@ -231,218 +251,24 @@ for s_i in tqdm.tqdm(range(num_seg_to_analyze)):
         json_str = json_bytes.decode('utf-8')
         data = json.loads(json_str)
         segment_deviations.append(data)
-   
-# get_taste_response_matrices
 
-def get_taste_response_matrices():
-    day_1_tastes = day_vars[0]['dig_in_names']
-    all_dig_in_names = []
-    all_dig_in_names.extend([d1 + '_0' for d1 in day_1_tastes])
-    all_segment_times = []
-    all_tastant_spike_times = []
-    for n_i in np.arange(1,num_days):
-        new_day_tastes = day_vars[n_i]['dig_in_names']
-        all_dig_in_names.extend([ndt + '_' + str(n_i) for ndt in new_day_tastes if 
-                                 len(np.intersect1d(np.array([ndt.split('_')]),np.array(day_1_tastes))) == 0])
-        
-    taste_unique_categories, training_matrices, training_labels, \
-        mean_taste_pop_fr, std_taste_pop_fr = lstm.create_taste_matrices(\
-                           day_vars, segment_deviations, all_dig_in_names, num_bins, z_bin_dt)
-    
-    return taste_unique_categories, training_matrices, training_labels, mean_taste_pop_fr, std_taste_pop_fr
+print("\tNow pulling true deviation rasters")
+#Note, these will already reflect the held units
+segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
+    segment_dev_fr_vecs_zscore, _, _ = dev_f.create_dev_rasters(num_seg_to_analyze, 
+                                                        segment_spike_times_to_analyze,
+                                                        np.array(segment_times_to_analyze_reshaped),
+                                                        segment_deviations, day_vars[0]['pre_taste'])
 
-#  run training
-cv_save_dir = os.path.join(bin_dir,'cross_validation')
-if not os.path.isdir(cv_save_dir):
-    os.mkdir(cv_save_dir)
+#get control training data
+control_data = ddf.create_control_dict(group_train_data,day_vars,segment_deviations,segment_dev_rasters)
 
-#Cross-validation
-try:
-    fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict.npy'),allow_pickle=True).item()
-    taste_unique_categories = np.load(os.path.join(bin_dir,'taste_unique_categories.npy'))
-    training_matrices = list(np.load(os.path.join(bin_dir,'training_matrices.npy')))
-    training_labels = list(np.load(os.path.join(bin_dir,'training_labels.npy')))
-    taste_pop_fr_stats = np.load(os.path.join(bin_dir,'taste_pop_fr.npy'))
-    mean_taste_pop_fr = taste_pop_fr_stats[0]
-except:
-    taste_unique_categories, training_matrices, training_labels, \
-        mean_taste_pop_fr, std_taste_pop_fr = get_taste_response_matrices()
-    np.save(os.path.join(bin_dir,'taste_unique_categories.npy'), np.array(taste_unique_categories))
-    np.save(os.path.join(bin_dir,'training_matrices.npy'),np.array(training_matrices))
-    np.save(os.path.join(bin_dir,'training_labels.npy'),np.array(training_labels))
-    np.save(os.path.join(bin_dir,'taste_pop_fr.npy'),np.array([mean_taste_pop_fr, std_taste_pop_fr]))
-    
-    #Plot taste categories
-    plot_dir = os.path.join(bin_dir,'training_data')
-    if not os.path.isdir(plot_dir):
-        os.mkdir(plot_dir)
-    lstm.get_taste_distributions_and_plots(taste_unique_categories,training_matrices,\
-                                          training_labels,plot_dir)
-    
-    lstm.lstm_cross_validation(training_matrices,\
-                            training_labels,taste_unique_categories,\
-                                cv_save_dir)
-        
-    fold_dict = np.load(os.path.join(cv_save_dir,'fold_dict.npy'),allow_pickle=True).item()
-    
-#Best size calculation
-best_dim, score_curve, tested_latent_dim = lstm.get_best_size(fold_dict,cv_save_dir)
+np.save(os.path.join(bayes_dir,'control_data.npy'),control_data,allow_pickle=True)
 
-# Run testing
+#%% Run correlations with groups
 
-# get deviation matrices
-try:
-    dev_matrices = np.load(os.path.join(bin_dir,'dev_fr_vecs.npy'),allow_pickle=True).item()
-    scaled_dev_matrices = np.load(os.path.join(bin_dir,'scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
-    null_dev_matrices = np.load(os.path.join(bin_dir,'null_dev_fr_vecs_THWART.npy'),allow_pickle=True).item()
-    scaled_null_dev_matrices = np.load(os.path.join(bin_dir,'scaled_null_dev_matrices.npy'),allow_pickle=True).item()
-    shuffled_dev_matrices = np.load(os.path.join(bin_dir,'shuffled_dev_fr_vecs.npy'),allow_pickle=True).item()
-    shuffled_scaled_dev_matrices = np.load(os.path.join(bin_dir,'shuffled_scaled_dev_fr_vecs.npy'),allow_pickle=True).item()
 
-except:
-    dev_matrices, scaled_dev_matrices, null_dev_matrices, scaled_null_dev_matrices = lstm.create_dev_matrices(day_vars, \
-                                        segment_deviations, z_bin_dt, num_bins, \
-                                            mean_taste_pop_fr)
-    shuffled_dev_matrices, shuffled_scaled_dev_matrices = lstm.time_shuffled_dev_controls(day_vars, \
-                                        segment_deviations, z_bin_dt, num_bins, \
-                                            mean_taste_pop_fr)
-    np.save(os.path.join(bin_dir,'dev_fr_vecs.npy'),dev_matrices,allow_pickle=True)
-    np.save(os.path.join(bin_dir,'scaled_dev_fr_vecs.npy'),scaled_dev_matrices,allow_pickle=True)
-    np.save(os.path.join(bin_dir,'null_dev_fr_vecs.npy'),null_dev_matrices,allow_pickle=True)
-    np.save(os.path.join(bin_dir,'scaled_null_dev_matrices.npy'),scaled_null_dev_matrices,allow_pickle=True)
-    np.save(os.path.join(bin_dir,'shuffled_dev_fr_vecs.npy'),shuffled_dev_matrices,allow_pickle=True)
-    np.save(os.path.join(bin_dir,'shuffled_scaled_dev_fr_vecs.npy'),shuffled_scaled_dev_matrices,allow_pickle=True)
 
-#Test rescaled taste responses
-rescale_control_dir = os.path.join(bin_dir,'rescaled_control')
-if not os.path.isdir(rescale_control_dir):
-    os.mkdir(rescale_control_dir)
-rescaled_training_matrices = lstm.rescale_taste_to_dev(dev_matrices,training_matrices)
-rescaled_predictions = lstm.lstm_control_decoding(rescaled_training_matrices, training_matrices, training_labels,\
-                      best_dim, taste_unique_categories, 'rescaled', rescale_control_dir)
 
-#Test shuffled taste response
-shuffle_control_dir = os.path.join(bin_dir,'time_shuffled_control')
-if not os.path.isdir(shuffle_control_dir):
-    os.mkdir(shuffle_control_dir)
-shuffled_training_matrices = lstm.time_shuffled_taste_controls(training_matrices)
-shuffled_predictions = lstm.lstm_control_decoding(shuffled_training_matrices, training_matrices, training_labels,\
-                      best_dim, taste_unique_categories, 'time_shuffled', shuffle_control_dir)
+#%% Run decoder
 
-#Collect decodes
-
-import functions.lstm_decoding_funcs as lstm
-
-segments_to_analyze = day_vars[0]['segments_to_analyze']
-segment_names = [day_vars[0]['segment_names'][i] for i in segments_to_analyze]
-
-try:
-    predictions = np.load(os.path.join(bin_dir,'predictions.npy'),allow_pickle=True).item()
-    scaled_predictions = np.load(os.path.join(bin_dir,'scaled_predictions.npy'),allow_pickle=True).item()
-    null_predictions = np.load(os.path.join(bin_dir,'null_predictions.npy'),allow_pickle=True).item()
-    scaled_null_predictions = np.load(os.path.join(bin_dir,'scaled_null_predictions_THWART.npy'),allow_pickle=True).item()
-    shuffled_predictions = np.load(os.path.join(bin_dir,'shuffled_predictions.npy'),allow_pickle=True).item()
-    shuffled_scaled_predictions = np.load(os.path.join(bin_dir,'shuffled_scaled_predictions.npy'),allow_pickle=True).item()
-except:
-    taste_unique_categories = np.load(os.path.join(bin_dir,'taste_unique_categories.npy'))
-    training_matrices = list(np.load(os.path.join(bin_dir,'training_matrices.npy')))
-    training_labels = list(np.load(os.path.join(bin_dir,'training_labels.npy')))
-    
-    #Run decoding
-    predictions = lstm.lstm_dev_decoding(dev_matrices, training_matrices, training_labels,\
-                          best_dim, taste_unique_categories, bin_dir)
-    predictions['taste_unique_categories'] = taste_unique_categories
-        
-    np.save(os.path.join(bin_dir,'predictions.npy'),predictions,allow_pickle=True)
-    
-    #Run scaled decoding
-    scaled_predictions = lstm.lstm_dev_decoding(scaled_dev_matrices, training_matrices, training_labels,\
-                          best_dim, taste_unique_categories, bin_dir)
-    scaled_predictions['taste_unique_categories'] = taste_unique_categories
-        
-    np.save(os.path.join(bin_dir,'scaled_predictions.npy'),scaled_predictions,allow_pickle=True)
-    
-    #Run control decoding
-    null_predictions = lstm.lstm_dev_decoding(null_dev_matrices, training_matrices, training_labels,\
-                          best_dim, taste_unique_categories, bin_dir)
-    null_predictions['taste_unique_categories'] = taste_unique_categories
-        
-    np.save(os.path.join(bin_dir,'null_predictions.npy'),null_predictions,allow_pickle=True)
-    
-    #Scaled control decoding
-    scaled_null_predictions = lstm.lstm_dev_decoding(scaled_null_dev_matrices, training_matrices, training_labels,\
-                          best_dim, taste_unique_categories, bin_dir)
-    scaled_null_predictions['taste_unique_categories'] = taste_unique_categories
-        
-    np.save(os.path.join(bin_dir,'scaled_null_predictions.npy'),scaled_null_predictions,allow_pickle=True)
-    
-    #Run time shuffled decoding
-    shuffled_predictions = lstm.lstm_dev_decoding(shuffled_dev_matrices, training_matrices, training_labels,\
-                          best_dim, taste_unique_categories, bin_dir)
-    shuffled_predictions['taste_unique_categories'] = taste_unique_categories
-        
-    np.save(os.path.join(bin_dir,'shuffled_predictions.npy'),shuffled_predictions,allow_pickle=True)
-    
-    #Run time shuffled scaled decoding
-    shuffled_scaled_predictions = lstm.lstm_dev_decoding(shuffled_scaled_dev_matrices, training_matrices, training_labels,\
-                          best_dim, taste_unique_categories, bin_dir)
-    shuffled_scaled_predictions['taste_unique_categories'] = taste_unique_categories
-        
-    np.save(os.path.join(bin_dir,'shuffled_scaled_predictions.npy'),shuffled_scaled_predictions,allow_pickle=True)
-    
-
-thresholded_predictions = lstm.prediction_plots(predictions,segment_names,bin_dir,'true')
-np.save(os.path.join(bin_dir,'thresholded_predictions.npy'),thresholded_predictions,allow_pickle=True)
-scaled_thresholded_predictions = lstm.prediction_plots(scaled_predictions,segment_names,bin_dir,'scaled')
-np.save(os.path.join(bin_dir,'scaled_thresholded_predictions.npy'),scaled_thresholded_predictions,allow_pickle=True)
-null_thresholded_predictions = lstm.prediction_plots(null_predictions,segment_names,bin_dir,'null')
-np.save(os.path.join(bin_dir,'null_thresholded_predictions.npy'),null_thresholded_predictions,allow_pickle=True)
-scaled_null_thresholded_predictions = lstm.prediction_plots(scaled_null_predictions,segment_names,bin_dir,'null')
-np.save(os.path.join(bin_dir,'scaled_null_thresholded_predictions.npy'),scaled_null_thresholded_predictions,allow_pickle=True)
-shuffled_thresholded_predictions = lstm.prediction_plots(shuffled_predictions,segment_names,bin_dir,'shuffled')
-np.save(os.path.join(bin_dir,'shuffled_thresholded_predictions.npy'),shuffled_thresholded_predictions,allow_pickle=True)
-shuffled_scaled_thresholded_predictions = lstm.prediction_plots(shuffled_scaled_predictions,segment_names,bin_dir,'shuffled_scaled')
-np.save(os.path.join(bin_dir,'shuffled_scaled_thresholded_predictions.npy'),shuffled_scaled_thresholded_predictions,allow_pickle=True)
-
-# Import data for one animal and get difference plots
-
-import functions.lstm_decoding_funcs as lstm
-
-lstm_fig_dir = os.path.join(bin_dir,'Figures')
-if not os.path.isdir(lstm_fig_dir):
-    os.mkdir(lstm_fig_dir)
-
-#Unthresholded predictions
-lstm.plot_diff_func(predictions,'unscaled dev',null_predictions,\
-               'unscaled null dev',segment_names,\
-                'Unscaled Dev Predictions',lstm_fig_dir)
-
-lstm.plot_diff_func(scaled_predictions,'scaled dev',scaled_null_predictions,\
-               'scaled null dev',segment_names,\
-                'Scaled Dev Predictions',lstm_fig_dir)
-    
-lstm.corr_and_plot_diff(predictions,'unscaled dev',shuffled_predictions,\
-               'unscaled time shuffled dev',segment_names,\
-                'Unscaled Time-Controlled Dev Predictions',lstm_fig_dir)
-    
-lstm.corr_and_plot_diff(scaled_predictions,'scaled dev',shuffled_scaled_predictions,\
-               'scaled time shuffled dev',segment_names,\
-                'Scaled Time-Controlled Dev Predictions',lstm_fig_dir)
-
-#Thresholded predictions
-lstm.plot_diff_func(thresholded_predictions,'unscaled dev',null_thresholded_predictions,\
-               'unscaled null dev',segment_names,\
-                'Thresholded Dev Predictions',lstm_fig_dir)
-
-lstm.plot_diff_func(scaled_thresholded_predictions,'scaled dev',\
-                        scaled_null_thresholded_predictions,'scaled null dev',\
-                        segment_names,'Thresholded Scaled Dev Predictions',lstm_fig_dir)
-
-lstm.corr_and_plot_diff(thresholded_predictions,'unscaled dev',shuffled_thresholded_predictions,\
-               'unscaled time shuffled dev',segment_names,\
-                'Thresholded Time-Controlled Dev Predictions',lstm_fig_dir)
-
-lstm.corr_and_plot_diff(scaled_thresholded_predictions,'scaled dev',shuffled_scaled_thresholded_predictions,\
-                'scaled time shuffled dev',segment_names,\
-                 'Thresholded Scaled Time-Controlled Dev Predictions',lstm_fig_dir)
-   

@@ -31,7 +31,7 @@ from random import sample
 from scipy.stats import pearsonr, ks_2samp
 
 def taste_fr_dist(num_neur, tastant_spike_times, cp_raster_inds, fr_bins,
-                  start_dig_in_times, pre_taste_dt, post_taste_dt, trial_start_frac=0):
+                  start_dig_in_times, pre_taste_dt):
     """Calculate the multidimensional distributions of firing rates maintaining
     dependencies between neurons"""
 
@@ -45,13 +45,10 @@ def taste_fr_dist(num_neur, tastant_spike_times, cp_raster_inds, fr_bins,
     del t_i, num_deliv
 
     # If trial_start_frac > 0 use only trials after that threshold
-    trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
-    new_max_num_deliv = (max_num_deliv - trial_start_ind).astype('int')
-
     deliv_taste_index = []
     taste_num_deliv = np.zeros(num_tastes)
     for t_i in range(num_tastes):
-        num_deliv = len(tastant_spike_times[t_i][trial_start_ind:])
+        num_deliv = len(tastant_spike_times[t_i])
         deliv_taste_index.extend(list((t_i*np.ones(num_deliv)).astype('int')))
         taste_num_deliv[t_i] = num_deliv
     del t_i, num_deliv
@@ -60,197 +57,66 @@ def taste_fr_dist(num_neur, tastant_spike_times, cp_raster_inds, fr_bins,
     tastant_fr_dist = dict()  # Population firing rate distributions by epoch
     for t_i in range(num_tastes):
         tastant_fr_dist[t_i] = dict()
-        for d_i in range(new_max_num_deliv):
-            tastant_fr_dist[t_i][d_i-trial_start_ind] = dict()
+        for d_i in range(max_num_deliv):
+            tastant_fr_dist[t_i][d_i] = dict()
             for cp_i in range(num_cp):
-                tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = dict()
-
+                tastant_fr_dist[t_i][d_i][cp_i] = dict()
+                
+    taste_pop_fr = []
+    
     max_hz = 0
     for t_i in range(num_tastes):
         num_deliv = int(taste_num_deliv[t_i])
         taste_cp = cp_raster_inds[t_i]
         for d_i in range(num_deliv):  # index for that taste
-            if d_i >= trial_start_ind:
-                # grab spiking information
-                # length num_neur list of lists
-                raster_times = tastant_spike_times[t_i][d_i]
-                start_taste_i = start_dig_in_times[t_i][d_i]
-                deliv_cp = taste_cp[d_i, :] - pre_taste_dt
-                # Calculate binned firing rate vectors
-                for cp_i in range(num_cp):
-                    # population changepoints
-                    start_epoch = int(deliv_cp[cp_i])
-                    end_epoch = int(deliv_cp[cp_i+1])
-                    sdi = start_taste_i + start_epoch
-                    epoch_len = end_epoch - start_epoch
-                    if epoch_len > 0:
-                        td_i_bin = np.zeros((num_neur, epoch_len+1))
-                        for n_i in range(num_neur):
-                            n_i_spike_times = np.array(
-                                raster_times[n_i] - sdi).astype('int')
-                            keep_spike_times = n_i_spike_times[np.where(
-                                (0 <= n_i_spike_times)*(epoch_len >= n_i_spike_times))[0]]
-                            td_i_bin[n_i, keep_spike_times] = 1
-                        # Calculate the firing rate vectors for these bins
-                        all_tb_fr = []
-                        for fr_bin_size in fr_bins:
-                            # Convert to  milliseconds
-                            fr_half_bin = np.ceil(
-                                fr_bin_size*500).astype('int')
-                            quart_bin = np.ceil(fr_half_bin/2).astype('int')
-                            fr_bin_dt = np.ceil(fr_half_bin*2).astype('int')
-                            new_time_bins = np.arange(
-                                fr_half_bin, epoch_len-fr_half_bin, quart_bin)
-                            if len(new_time_bins) < 1:
-                                tb_fr = list(np.sum(td_i_bin,1)/(np.shape(td_i_bin)[1]/1000))
-                                all_tb_fr.extend([tb_fr])
-                            else:
-                                # Calculate the firing rate vectors for these bins
-                                tb_fr = np.zeros((num_neur, len(new_time_bins)))
-                                for tb_i, tb in enumerate(new_time_bins):
-                                    tb_fr[:, tb_i] = np.sum(
-                                        td_i_bin[:, tb-fr_half_bin:tb+fr_half_bin], 1)/(fr_bin_dt/1000)
-                                all_tb_fr.extend(list(tb_fr.T))
-                        all_tb_fr = np.array(all_tb_fr).T
-                        # Store the firing rate vectors
-                        tastant_fr_dist[t_i][d_i -
-                                             trial_start_ind][cp_i] = all_tb_fr
-                        # Store maximum firing rate
-                        if np.max(all_tb_fr) > max_hz:
-                            max_hz = np.max(all_tb_fr)
+            # grab spiking information
+            # length num_neur list of lists
+            raster_times = tastant_spike_times[t_i][d_i]
+            start_taste_i = start_dig_in_times[t_i][d_i]
+            deliv_cp = taste_cp[d_i, :] - pre_taste_dt
+            # Calculate binned firing rate vectors
+            for cp_i in range(num_cp):
+                # population changepoints
+                start_epoch = int(deliv_cp[cp_i])
+                end_epoch = int(deliv_cp[cp_i+1])
+                sdi = start_taste_i + start_epoch
+                epoch_len = end_epoch - start_epoch
+                if epoch_len > 0:
+                    td_i_bin = np.zeros((num_neur, epoch_len+1))
+                    for n_i in range(num_neur):
+                        n_i_spike_times = np.array(
+                            raster_times[n_i] - sdi).astype('int')
+                        keep_spike_times = n_i_spike_times[np.where(
+                            (0 <= n_i_spike_times)*(epoch_len >= n_i_spike_times))[0]]
+                        td_i_bin[n_i, keep_spike_times] = 1
+                    # Calculate the firing rate vectors for these bins
+                    all_tb_fr = []
+                    for fr_bin_size in fr_bins:
+                        # Convert to  milliseconds
+                        fr_half_bin = np.ceil(
+                            fr_bin_size*500).astype('int')
+                        quart_bin = np.ceil(fr_half_bin/2).astype('int')
+                        fr_bin_dt = np.ceil(fr_half_bin*2).astype('int')
+                        new_time_bins = np.arange(
+                            fr_half_bin, epoch_len-fr_half_bin, quart_bin)
+                        if len(new_time_bins) < 1:
+                            tb_fr = list(np.sum(td_i_bin,1)/(np.shape(td_i_bin)[1]/1000))
+                            all_tb_fr.extend([tb_fr])
+                        else:
+                            # Calculate the firing rate vectors for these bins
+                            tb_fr = np.zeros((num_neur, len(new_time_bins)))
+                            for tb_i, tb in enumerate(new_time_bins):
+                                tb_fr[:, tb_i] = np.sum(
+                                    td_i_bin[:, tb-fr_half_bin:tb+fr_half_bin], 1)/(fr_bin_dt/1000)
+                            all_tb_fr.extend(list(tb_fr.T))
+                    all_tb_fr = np.array(all_tb_fr).T
+                    # Store the firing rate vectors
+                    tastant_fr_dist[t_i][d_i][cp_i] = all_tb_fr
+                    # Store maximum firing rate
+                    if np.max(all_tb_fr) > max_hz:
+                        max_hz = np.max(all_tb_fr)
 
     return tastant_fr_dist, taste_num_deliv, max_hz
-
-
-def taste_fr_dist_zscore(num_neur, tastant_spike_times, segment_spike_times,
-                         segment_names, segment_times, cp_raster_inds, fr_bins,
-                         start_dig_in_times, pre_taste_dt, post_taste_dt, bin_dt, trial_start_frac=0):
-    """This function calculates spike count distributions for each neuron for
-    each taste delivery for each epoch"""
-
-    num_tastes = len(tastant_spike_times)
-    num_cp = np.shape(cp_raster_inds[0])[-1] - 1
-    half_bin = np.floor(bin_dt/2).astype('int')
-    max_num_deliv = 0  # Find the maximum number of deliveries across tastants
-    for t_i in range(num_tastes):
-        num_deliv = len(tastant_spike_times[t_i])
-        if num_deliv > max_num_deliv:
-            max_num_deliv = num_deliv
-    del t_i, num_deliv
-
-    # If trial_start_frac > 0 use only trials after that threshold
-    trial_start_ind = np.floor(max_num_deliv*trial_start_frac).astype('int')
-    new_max_num_deliv = (max_num_deliv - trial_start_ind).astype('int')
-
-    deliv_taste_index = []
-    taste_num_deliv = np.zeros(num_tastes)
-    for t_i in range(num_tastes):
-        num_deliv = len(tastant_spike_times[t_i][trial_start_ind:])
-        deliv_taste_index.extend(list((t_i*np.ones(num_deliv)).astype('int')))
-        taste_num_deliv[t_i] = num_deliv
-    del t_i, num_deliv
-
-    s_i_taste = np.nan*np.ones(1)
-    for s_i in range(len(segment_names)):
-        if segment_names[s_i].lower() == 'taste':
-            s_i_taste[0] = s_i
-
-    if not np.isnan(s_i_taste[0]):
-        s_i = int(s_i_taste[0])
-        seg_start = int(segment_times[s_i])
-        seg_end = int(segment_times[s_i+1])
-        seg_len = seg_end - seg_start
-        time_bin_starts = np.arange(
-            seg_start+half_bin, seg_end-half_bin, bin_dt)
-        segment_spike_times_s_i = segment_spike_times[s_i]
-        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
-        for n_i in range(num_neur):
-            n_i_spike_times = (np.array(
-                segment_spike_times_s_i[n_i]) - seg_start).astype('int')
-            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
-        tb_fr = np.zeros((num_neur, len(time_bin_starts)))
-        for tb_i, tb in enumerate(time_bin_starts):
-            tb_fr[:, tb_i] = np.sum(segment_spike_times_s_i_bin[:, tb-seg_start -
-                                    half_bin:tb+half_bin-seg_start], 1)/(2*half_bin*(1/1000))
-        mean_fr = np.mean(tb_fr, 1)
-        std_fr = np.std(tb_fr, 1)
-    else:
-        mean_fr = np.zeros(num_neur)
-        std_fr = np.zeros(num_neur)
-
-    # Determine the spike fr distributions for each neuron for each taste
-    #print("\tPulling spike fr distributions by taste by neuron")
-    tastant_fr_dist = dict()  # Population firing rate distributions by epoch
-    for t_i in range(num_tastes):
-        tastant_fr_dist[t_i] = dict()
-        for d_i in range(new_max_num_deliv):
-            if d_i >= trial_start_ind:
-                tastant_fr_dist[t_i][d_i-trial_start_ind] = dict()
-                for cp_i in range(num_cp):
-                    tastant_fr_dist[t_i][d_i-trial_start_ind][cp_i] = dict()
-    # ____
-    max_hz = 0
-    min_hz = 0
-    for t_i in range(num_tastes):
-        num_deliv = (taste_num_deliv[t_i]).astype('int')
-        taste_cp = cp_raster_inds[t_i]
-        for d_i in range(num_deliv):  # index for that taste
-            if d_i >= trial_start_ind:
-                raster_times = tastant_spike_times[t_i][d_i]
-                start_taste_i = start_dig_in_times[t_i][d_i]
-                deliv_cp = taste_cp[d_i, :] - pre_taste_dt
-                # Bin the average firing rates following taste delivery start
-                times_post_taste = [(np.array(raster_times[n_i])[np.where((raster_times[n_i] >= start_taste_i)*(
-                    raster_times[n_i] < start_taste_i + post_taste_dt))[0]] - start_taste_i).astype('int') for n_i in range(num_neur)]
-                bin_post_taste = np.zeros((num_neur, post_taste_dt))
-                for n_i in range(num_neur):
-                    bin_post_taste[n_i, times_post_taste[n_i]] += 1
-                for cp_i in range(num_cp):
-                    # population changepoints
-                    start_epoch = int(deliv_cp[cp_i])
-                    end_epoch = int(deliv_cp[cp_i+1])
-                    sdi = start_taste_i + start_epoch
-                    epoch_len = end_epoch - start_epoch
-                    if epoch_len > 0:
-                        td_i_bin = np.zeros((num_neur, epoch_len+1))
-                        for n_i in range(num_neur):
-                            n_i_spike_times = np.array(
-                                raster_times[n_i] - sdi).astype('int')
-                            keep_spike_times = n_i_spike_times[np.where(
-                                (0 <= n_i_spike_times)*(epoch_len >= n_i_spike_times))[0]]
-                            td_i_bin[n_i, keep_spike_times] = 1
-                        all_tb_fr = []
-                        for fr_bin_size in fr_bins:
-                            # Convert to  milliseconds
-                            fr_half_bin = np.ceil(
-                                fr_bin_size*500).astype('int')
-                            quart_bin = np.ceil(fr_half_bin/2).astype('int')
-                            fr_bin_dt = np.ceil(fr_half_bin*2).astype('int')
-                            new_time_bins = np.arange(
-                                fr_half_bin, epoch_len-fr_half_bin, quart_bin)
-                            # Calculate the firing rate vectors for these bins
-                            if len(new_time_bins) < 1:
-                                tb_fr = list(np.sum(td_i_bin,1)/(np.shape(td_i_bin)[1]/1000))
-                                all_tb_fr.extend([tb_fr])
-                            else:
-                                tb_fr = np.zeros((num_neur, len(new_time_bins)))
-                                for tb_i, tb in enumerate(new_time_bins):
-                                    tb_fr[:, tb_i] = np.sum(
-                                        td_i_bin[:, tb-fr_half_bin:tb+fr_half_bin], 1)/(fr_bin_dt/1000)
-                                all_tb_fr.extend(list(tb_fr.T))
-                        all_tb_fr = np.array(all_tb_fr).T
-                        # Z-score firing rates
-                        bst_hz_z = (
-                            np.array(all_tb_fr) - np.expand_dims(mean_fr, 1))/np.expand_dims(std_fr, 1)
-                        # num_neurxall_n
-                        tastant_fr_dist[t_i][d_i -
-                                             trial_start_ind][cp_i] = np.array(bst_hz_z).T
-                        if np.max(bst_hz_z) > max_hz:
-                            max_hz = np.max(bst_hz_z)
-                        if np.min(bst_hz_z) < min_hz:
-                            min_hz = np.min(bst_hz_z)
-
-    return tastant_fr_dist, taste_num_deliv, max_hz, min_hz
 
 def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times, dig_in_names, 
                   segment_times, segment_names, start_dig_in_times, taste_num_deliv,
@@ -258,7 +124,7 @@ def decode_deviations(tastant_fr_dist, tastant_spike_times, segment_spike_times,
                   group_list, group_names, non_none_tastes, decode_dir, 
                   z_score = False, segments_to_analyze=[]):
     """Decode taste from epoch-specific firing rates"""
-    print('\t\tRunning NB Decoder')
+    print('\t\tRunning GMM NB Decoder')
     
     decode_save_dir = os.path.join(decode_dir,'NB_Decoding')
     if not os.path.isdir(decode_save_dir):
@@ -1232,148 +1098,6 @@ def create_null_decode_dataset(segments_to_analyze, segment_times, segment_spike
     
     return shuffled_fr_vecs, segment_spike_times_bin, seg_means, seg_stds
 
-def decode_groupings(epochs_to_analyze,dig_in_names,non_none_tastes):
-    """
-    Create fr vector grouping instructions: list of epoch,taste pairs.
-    
-    Parameters
-    ----------
-    epochs_to_analyze: list
-        list of indices of epochs to be analyzed.
-    dig_in_names: list
-        list of strings of taste names
-    non_none_tastes: list of taste names that are not "none"
-    
-    Returns
-    -------
-    group_list: list
-        list of lists containing tuples (e_i,t_i) of which epoch and taste index
-        belongs to a decoding group.
-    group_names: list
-        list of strings naming the decoding groups.
-    """
-    group_list = []
-    group_list_names = []
-    group_names = []
-    none_group = []
-    palatability_group = []
-    for e_ind, e_i in enumerate(epochs_to_analyze):
-        epoch_group = []
-        epoch_names = []
-        for t_ind, t_name in enumerate(dig_in_names):
-            if np.setdiff1d([t_name],non_none_tastes).size > 0: #None
-                none_group.append((e_i,t_ind))
-            else:
-                #Combine presence data
-                if e_i == 0:
-                    epoch_group.append((e_i, t_ind))
-                    epoch_names.append((e_i, t_name))
-                #Separate identity data
-                if e_i == 1:
-                    group_list.append([(e_i, t_ind)])
-                    group_list_names.append([(e_i,t_name)])
-                    group_names.append(t_name.capitalize() + ' Identity')
-                #Separate palatability data
-                if e_i == 2:
-                    palatability_group.append((e_i,t_ind))
-        if len(epoch_group) > 0:
-            group_list.append(epoch_group)
-            group_list_names.append([(e_i,'all')])
-            group_names.append('Presence')
-    group_list.append(palatability_group)
-    group_list_names.append(['Palatability'])
-    group_names.append('Palatability')
-    group_list.append(none_group)
-    group_list_names.append(['None'])
-    group_names.append('No Taste Control')
-    
-    final_group_list = []
-    final_group_names = []
-    for g_i in range(len(group_list)):
-        if len(group_list[g_i]) > 0:
-            final_group_list.append(group_list[g_i])
-            final_group_names.append(group_names[g_i])
-    
-    return final_group_list, final_group_names
-
-def multiday_decode_groupings(epochs_to_analyze,all_dig_in_names,non_none_tastes):
-    """
-    Create fr vector grouping instructions: list of epoch,taste pairs.
-    
-    Parameters
-    ----------
-    epochs_to_analyze: list
-        list of indices of epochs to be analyzed.
-    all_dig_in_names: list
-        list of strings of taste names across days
-    non_none_tastes: list of taste names that are not "none"
-    
-    Returns
-    -------
-    group_list: list
-        list of lists containing tuples (e_i,t_i) of which epoch and taste index
-        belongs to a decoding group.
-    group_names: list
-        list of strings naming the decoding groups.
-    """
-    #Pull out unique taste names
-    dig_in_first_names = [dn.split('_')[0] for dn in all_dig_in_names]
-    unique_dig_in_names = list(np.unique(dig_in_first_names))
-    dig_in_day_1_names = [dn.split('_')[0] for dn in all_dig_in_names if int(dn.split('_')[1]) == 0]
-    dig_in_later_day_unique = list(np.setdiff1d(unique_dig_in_names,dig_in_day_1_names))
-    
-    group_list = []
-    group_list_names = []
-    group_names = []
-    none_group = []
-    identity_group = []
-    palatability_group = []
-    
-    for e_ind, e_i in enumerate(epochs_to_analyze):
-        epoch_group = []
-        epoch_names = []
-        for t_ind, t_name in enumerate(all_dig_in_names):
-            if int(t_name.split('_')[1]) == 0: #Day 1 data
-                if np.setdiff1d([t_name],non_none_tastes).size > 0: #None
-                    none_group.append((e_i,t_ind))
-                else:
-                    #Combine presence data
-                    if e_i == 0:
-                        epoch_group.append((e_i, t_ind))
-                        epoch_names.append((e_i, t_name))
-                    #Separate identity data
-                    if e_i == 1:
-                        identity_group.append((e_i, t_ind))
-                    #Separate palatability data
-                    if e_i == 2:
-                        palatability_group.append((e_i,t_ind))
-            else: #Day 2+ taste
-                if np.intersect1d(dig_in_later_day_unique,t_name.split('_')[0]).size > 0: #Unique to next day taste
-                    if e_i == 1:
-                        identity_group.append((e_i, t_ind))
-        if len(epoch_group) > 0:
-            group_list.append(epoch_group)
-            group_list_names.append([(e_i,'all')])
-            group_names.append('Presence')
-    group_list.append(identity_group)
-    group_list_names.append(['Identity'])
-    group_names.append('Identity')
-    group_list.append(palatability_group)
-    group_list_names.append(['Palatability'])
-    group_names.append('Palatability')
-    group_list.append(none_group)
-    group_list_names.append(['None'])
-    group_names.append('No Taste Control')
-    
-    final_group_list = []
-    final_group_names = []
-    for g_i in range(len(group_list)):
-        if len(group_list[g_i]) > 0:
-            final_group_list.append(group_list[g_i])
-            final_group_names.append(group_names[g_i])
-    
-    return final_group_list, final_group_names
-
 def multiday_decode_groupings_split_identity(epochs_to_analyze,all_dig_in_names,non_none_tastes):
     """
     Create fr vector grouping instructions: list of epoch,taste pairs.
@@ -1455,6 +1179,207 @@ def multiday_decode_groupings_split_identity(epochs_to_analyze,all_dig_in_names,
             final_group_names.append(group_names[g_i])
     
     return final_group_list, final_group_names
+
+def pull_group_training_data(group_list, group_names, all_dig_in_names, day_vars):
+    group_train_data = dict()
+    for g_i in range(len(group_list)):
+        group_train_data[group_names[g_i]] = dict()
+        gi_pairs = group_list[g_i]
+        group_fr_vecs = []
+        group_pop_fr = []
+        group_lens = []
+        for gp_i in range(len(gi_pairs)): #[e_i,t_i]
+            cp_i, gt_i = gi_pairs[gp_i]
+            di_name = all_dig_in_names[gt_i]
+            di_day = int(di_name.split('_')[1])
+            t_i = int(np.where(np.array(day_vars[di_day]['dig_in_names']) == di_name.split('_')[0])[0])
+            #Collect relevant information
+            num_neur = len(day_vars[di_day]['keep_neur'])
+            tastant_spike_times = day_vars[di_day]['tastant_spike_times']
+            cp_raster_inds = day_vars[di_day]['pop_taste_cp_raster_inds']
+            start_dig_in_times = day_vars[di_day]['start_dig_in_times']
+            pre_taste_dt = day_vars[di_day]['pre_taste_dt']
+            #Calculate firing rate vectors for the given epoch and taste
+            num_deliv = int(len(tastant_spike_times[t_i]))
+            taste_cp = cp_raster_inds[t_i]
+            for d_i in range(num_deliv):
+                raster_times = tastant_spike_times[t_i][d_i]
+                start_taste_i = start_dig_in_times[t_i][d_i]
+                deliv_cp = taste_cp[d_i, :] - pre_taste_dt
+                start_epoch = int(deliv_cp[cp_i])
+                end_epoch = int(deliv_cp[cp_i+1])
+                sdi = start_taste_i + start_epoch
+                epoch_len = end_epoch - start_epoch
+                group_lens.append(epoch_len)
+                if epoch_len > 0:
+                    td_i_bin = np.zeros((num_neur, epoch_len+1))
+                    for n_i in range(num_neur):
+                        n_i_spike_times = np.array(
+                            raster_times[n_i] - sdi).astype('int')
+                        keep_spike_times = n_i_spike_times[np.where(
+                            (0 <= n_i_spike_times)*(epoch_len >= n_i_spike_times))[0]]
+                        td_i_bin[n_i, keep_spike_times] = 1
+                    #Calculate fr vector
+                    d_i_fr_vec = np.sum(td_i_bin,1)/(epoch_len/1000)
+                    group_fr_vecs.append(d_i_fr_vec)
+                    d_i_pop_fr = np.sum(td_i_bin)/(epoch_len/1000)/num_neur
+                    group_pop_fr.append(d_i_pop_fr)
+        group_train_data[group_names[g_i]]['fr_vecs'] = group_fr_vecs
+        group_train_data[group_names[g_i]]['pop_frs'] = group_pop_fr
+        group_train_data[group_names[g_i]]['lengths'] = group_lens
+    
+    return group_train_data
+
+def create_control_dict(group_train_data,day_vars,segment_deviations,segment_dev_rasters):
+    control_data = dict()
+    #Get pre-taste non-dev period controls scaled to taste levels
+    control_data = add_nondev_control_data(control_data,group_train_data,\
+                                           day_vars,segment_deviations)
+    #Get taste responses scaled to dev levels
+    control_data = add_rescaled_taste_control_data(control_data,group_train_data,\
+                                                   day_vars,segment_dev_rasters)
+    
+    return control_data
+
+def add_nondev_control_data(control_data,group_train_data,day_vars,segment_deviations):
+    """Take periods between deviation events from pre-taste at similar lengths
+    as true taste responses and rescale to taste population firing rate levels
+    to create a control group"""
+    
+    null_taste = get_null_controls(day_vars,segment_deviations,group_train_data) #Get binary matrices
+    group_names = list(group_train_data.keys())
+    #Get true avg population fr for rescaling
+    all_true_pop_fr = []
+    all_true_lengths = []
+    for gn_i, gn in enumerate(group_names):
+        if gn[:2] != 'No': #control group
+            all_true_pop_fr.extend(group_train_data[gn]['pop_frs'])
+            all_true_lengths.extend(group_train_data[gn]['lengths'])
+    mean_pop_fr = np.nanmean(np.array(all_true_pop_fr))
+    std_pop_fr = np.nanstd(np.array(all_true_pop_fr))
+    mean_len = np.nanmean(np.array(all_true_lengths))
+    std_len = np.nanstd(np.array(all_true_lengths))
+    #Create rescaled fr vecs of pre-taste non-dev periods
+    null_fr_vecs = []
+    null_pop_frs = []
+    null_lengths = []
+    for null_i in range(len(null_taste)):
+        null_pop_fr = np.sum(null_taste[null_i])/2 #2 second length to convert to hz
+        scale = (std_pop_fr*np.random.randn() + mean_pop_fr)/null_pop_fr
+        null_pop_frs.append(scale*null_pop_fr)
+        null_len = np.ceil(std_len*np.random.randn() + mean_len).astype('int')
+        null_lengths.append(null_len)
+        #Create binned null taste response
+        null_fr_vecs.append(scale*np.sum(null_taste[null_i][:,:null_len],1)/(null_len/1000))
+    control_data['Rescaled Non-Dev Control'] = dict()
+    control_data['Rescaled Non-Dev Control']['fr_vecs'] = null_fr_vecs
+    control_data['Rescaled Non-Dev Control']['pop_frs'] = null_pop_frs
+    control_data['Rescaled Non-Dev Control']['lengths'] = null_lengths
+    
+    return control_data
+
+def add_rescaled_taste_control_data(control_data,group_train_data,day_vars,\
+                                    segment_dev_rasters):
+    """Take taste responses and rescale them to deviation population firing rate
+    levels to create a control group"""
+    
+    num_seg = len(segment_dev_rasters)
+    group_names = list(group_train_data.keys())
+    #Get deviation firing rates for rescaling
+    seg_pop_fr = []
+    for s_i in range(num_seg):
+        seg_rast = segment_dev_rasters[s_i]
+        num_dev = len(seg_rast)
+        for d_i in range(num_dev):
+            num_neur, num_dt = np.shape(seg_rast[d_i])
+            seg_pop_fr.append((np.nansum(seg_rast[d_i])/(num_dt/1000))/num_neur)
+    mean_dev_fr = np.nanmean(seg_pop_fr)
+    std_dev_fr = np.nanstd(seg_pop_fr)
+    #Rescale true vectors
+    for gn_i, gn in enumerate(group_names):
+        if gn[:2] != 'No': #control group
+            control_data['Rescaled ' + gn] = dict()
+            control_data['Rescaled ' + gn]['lengths'] = group_train_data[gn]['lengths']
+            taste_pop_fr = group_train_data[gn]['pop_frs']
+            taste_fr_vecs = group_train_data[gn]['fr_vecs']
+            rescaled_taste_pop_fr = []
+            rescaled_taste_fr_vecs = []
+            for t_i in range(len(taste_pop_fr)):
+                scale = (std_dev_fr*np.random.randn() + mean_dev_fr)/taste_pop_fr[t_i]
+                rescaled_taste_pop_fr.append(scale*taste_pop_fr[t_i])
+                rescaled_taste_fr_vecs.append(scale*taste_fr_vecs[t_i])
+            control_data['Rescaled ' + gn]['pop_frs'] = rescaled_taste_pop_fr
+            control_data['Rescaled ' + gn]['fr_vecs'] = rescaled_taste_fr_vecs
+    
+    return control_data
+
+def get_null_controls(day_vars,segment_deviations,group_train_data):
+    """Function to find periods of the pre-taste interval where deviation events
+    don't occur to get control tastes and deviation events"""
+    segment_spike_times = day_vars[0]['segment_spike_times']
+    segments_to_analyze = day_vars[0]['segments_to_analyze']
+    segment_names = day_vars[0]['segment_names']
+    segment_times = day_vars[0]['segment_times']
+    segment_spike_times = day_vars[0]['segment_spike_times']
+    num_null_taste = max([len(group_train_data[i]['fr_vecs']) for i in list(group_train_data.keys())])
+    num_neur = len(day_vars[0]['keep_neur'])
+    min_dev_size = day_vars[0]['min_dev_size']
+    local_size = day_vars[0]['local_size']
+    half_min_dev_size = int(np.ceil(min_dev_size/2))
+    half_local_size = int(np.ceil(local_size/2))
+    
+    #Get index of pre-taste interval
+    pre_ind = np.nan*np.ones(1)
+    for s_i in range(len(segment_names)):
+        if segment_names[s_i].lower()[:3] == 'pre':
+            pre_ind[0] = s_i
+    
+    #Create taste and deviation storage
+    null_taste = dict()
+    #Calculate non-dev periods
+    if not np.isnan(pre_ind[0]):
+        pre_ind = int(pre_ind[0])
+        pre_deviations = segment_deviations[pre_ind]
+        pre_deviations[0] = 0
+        pre_deviations[-1] = 0
+        dev_starts = np.where(np.diff(pre_deviations) == 1)[0] + 1
+        pre_non_dev = np.ones(len(pre_deviations)) - pre_deviations
+        pre_non_dev[0] = 0
+        pre_non_dev[-1] = 0
+        num_null_dev = len(dev_starts)
+        
+        seg_start = segment_times[pre_ind]
+        seg_end = segment_times[pre_ind+1]
+        seg_len = seg_end - seg_start
+        segment_spike_times_s_i = segment_spike_times[pre_ind]
+        segment_spike_times_s_i_bin = np.zeros((num_neur, seg_len+1))
+        for n_i in range(num_neur):
+            n_i_spike_times = (np.array(
+                segment_spike_times_s_i[n_i]) - seg_start).astype('int')
+            segment_spike_times_s_i_bin[n_i, n_i_spike_times] = 1
+        spike_sum = np.nansum(segment_spike_times_s_i_bin,0)
+        
+        change_inds = np.diff(pre_non_dev)
+        start_nondev_bouts = np.where(change_inds == 1)[0] + 1
+        end_nondev_bouts = np.where(change_inds == -1)[0]
+        
+        num_choice = min([len(start_nondev_bouts),num_null_taste])
+        rand_inds = np.random.choice(np.arange(len(start_nondev_bouts)),len(start_nondev_bouts),replace=False)
+        taste_done = 0
+        ri = 0
+        while taste_done < num_choice:
+            s_i = start_nondev_bouts[ri]
+            e_i = end_nondev_bouts[ri]
+            len_i = e_i - s_i
+            if len_i > 2000:
+                null_taste[taste_done] = segment_spike_times_s_i_bin[:,s_i:s_i+2000]
+                taste_done += 1
+            ri += 1
+            
+    else:
+        print("ERROR: no pre-taste interval found in segment names.")
+        
+    return null_taste
 
 def train_taste_PCA(num_neur,taste_epoch_pairs,non_none_tastes,dig_in_names,
                     taste_num_deliv,tastant_fr_dist):
