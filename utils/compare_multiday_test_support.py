@@ -239,6 +239,9 @@ unique_training_categories = [unique_training_categories[i] for i in unique_trai
 
 num_anim = len(unique_given_names)
 num_tastes = len(unique_training_categories)
+true_tastes = np.array([unique_training_categories[i] for i in range(len(unique_training_categories)) if \
+                   (unique_training_categories[i][:4] != 'none')*(unique_training_categories[i][:4] != 'null')])
+num_bins = len(unique_bin_counts)
 segment_keep_inds = [0,2,4]
 num_seg = len(segment_keep_inds)
 segment_names = ['Pre-Taste', 'Post-Taste', 'Sickness']
@@ -249,43 +252,6 @@ if not os.path.isdir(lstm_save_dir):
     
 import functions.cross_animal_multiday_lstm_funcs as ca_lstm
 ca_lstm.run_analysis_plots_by_decode_pair(unique_given_names,unique_training_categories,\
-                                      unique_bin_counts, lstm_save_dir)
-
-#Build out cross-validation analysis
-for gn_i, gn in enumerate(unique_given_names):
-    for bc_i in unique_bin_counts:
-        bc_name = str(bc_i) + '_bins'
-        training_categories = lstm_dict[gn][bc_name]['training_categories']
-        true_cat = np.array([i for i in range(len(training_categories)) if \
-                           (training_categories[i][:4] != 'none')*(training_categories[i][:4] != 'null')])
-        control_cat = np.setdiff1d(np.arange(len(training_categories)),true_cat)
-        cross_val_dict = lstm_dict[gn][bc]['cross_validation']
-        num_layer_sizes = len(cross_val_dict)
-        layer_sizes = np.zeros(num_layer_sizes) #Store latent dim sizes
-        true_accuracy = np.zeros(num_layer_sizes)
-        total_accuracy = np.zeros(num_layer_sizes)
-        for l_i in range(num_layer_sizes):
-            layer_sizes[l_i] = cross_val_dict[l_i]['latent_dim']
-            predictions = cross_val_dict[l_i]['predictions']
-            argmax_predictions = np.argmax(predictions,1)
-            true_labels = cross_val_dict[l_i]['true_labels']
-            true_label_inds = np.argmax(true_labels,1)
-            #Calculate true taste accuracy
-            total_true_correct = 0
-            total_true = 0
-            for t_i in true_cat:
-                true_i = np.where(true_label_inds == t_i)[0]
-                total_true += len(true_i)
-                total_true_correct += len(np.where(argmax_predictions[true_i] == t_i)[0])
-            #Calculate control accuracy
-            control_inds = []
-            for c_i in control_cat:
-                control_inds.extend(list(np.where(true_label_inds == c_i)[0]))
-            control_inds = np.array(control_inds)
-            total_control = len(control_inds)
-            total_true_control = 0
-            for pc in argmax_predictions[control_inds]:
-                if len(np.where(control_cat == pc)[0]) > 0:
-                    total_true_control += 1
-            
-        
+                                      unique_bin_counts, unique_decode_pairs, lstm_save_dir)
+ca_lstm.plot_accuracy_data(lstm_dict,unique_given_names,unique_training_categories,\
+                       unique_bin_counts,lstm_save_dir)

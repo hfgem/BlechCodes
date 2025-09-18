@@ -6,12 +6,13 @@ Created on Wed Sep 17 09:36:26 2025
 @author: hannahgermaine
 """
 
+import os
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 import numpy as np
 
 def run_analysis_plots_by_decode_pair(unique_given_names,unique_training_categories,\
-                                      unique_bin_counts, lstm_save_dir):
+                                      unique_bin_counts, unique_decode_pairs, lstm_save_dir):
     
     num_anim = len(unique_given_names)
     num_tastes = len(unique_training_categories)
@@ -179,6 +180,126 @@ def plot_by_taste(unique_given_names,unique_training_categories,\
     f_taste.savefig(os.path.join(bin_save_dir,udp + '_' + name_type + '_boxplots_by_taste.svg'))
     plt.close(f_taste)
     
+def plot_accuracy_data(lstm_dict,unique_given_names,unique_training_categories,\
+                       unique_bin_counts,lstm_save_dir):
     
+    num_anim = len(unique_given_names)
+    num_tastes = len(unique_training_categories)
+    true_tastes = np.array([unique_training_categories[i] for i in range(len(unique_training_categories)) if \
+                       (unique_training_categories[i][:4] != 'none')*(unique_training_categories[i][:4] != 'null')])
+    num_bins = len(unique_bin_counts)
     
+    #Build out cross-validation analysis
+    cross_val_save_dir = os.path.join(lstm_save_dir,'cross_validation')
+    if not os.path.isdir(cross_val_save_dir):
+        os.mkdir(cross_val_save_dir)
+    cross_val_max_size_true = np.zeros((num_anim,num_bins))
+    cross_val_max_accuracy_true = np.zeros((num_anim,num_bins))
+    cross_val_max_size_all = np.zeros((num_anim,num_bins))
+    cross_val_max_accuracy_all = np.zeros((num_anim,num_bins))
+    cross_validation_data = dict()
+    for gn_i, gn in enumerate(unique_given_names):
+        cross_validation_data[gn] = dict()
+        for bc_ind, bc_i in enumerate(unique_bin_counts):
+            bc_name = str(bc_i) + '_bins'
+            cross_validation_data[gn][bc_name] = dict()
+            training_categories = lstm_dict[gn][bc_name]['training_categories']
+            true_cat = np.array([i for i in range(len(training_categories)) if \
+                               (training_categories[i][:4] != 'none')*(training_categories[i][:4] != 'null')])
+            control_cat = np.setdiff1d(np.arange(len(training_categories)),true_cat)
+            cross_val_dict = lstm_dict[gn][bc_name]['cross_validation']
+            num_layer_sizes = len(cross_val_dict)
+            layer_sizes = np.zeros(num_layer_sizes) #Store latent dim sizes
+            true_accuracy = np.zeros(num_layer_sizes)
+            total_accuracy = np.zeros(num_layer_sizes)
+            for l_i in range(num_layer_sizes):
+                layer_sizes[l_i] = cross_val_dict[l_i]['latent_dim']
+                predictions = cross_val_dict[l_i]['predictions']
+                argmax_predictions = np.argmax(predictions,1)
+                true_labels = cross_val_dict[l_i]['true_labels']
+                true_label_inds = np.argmax(true_labels,1)
+                #Calculate true taste accuracy
+                total_true_correct = 0
+                total_true = 0
+                for t_i in true_cat:
+                    true_i = np.where(true_label_inds == t_i)[0]
+                    total_true += len(true_i)
+                    total_true_correct += len(np.where(argmax_predictions[true_i] == t_i)[0])
+                #Calculate control accuracy
+                control_inds = []
+                for c_i in control_cat:
+                    control_inds.extend(list(np.where(true_label_inds == c_i)[0]))
+                control_inds = np.array(control_inds)
+                total_control = len(control_inds)
+                total_true_control = 0
+                for pc in argmax_predictions[control_inds]:
+                    if len(np.where(control_cat == pc)[0]) > 0:
+                        total_true_control += 1
+                #Store results        
+                true_accuracy[l_i] = total_true_correct/total_true
+                total_accuracy[l_i] = (total_true_correct+total_true_control)/(total_true+total_control)
+            cross_validation_data[gn][bc_name]['layer_sizes'] = layer_sizes
+            cross_validation_data[gn][bc_name]['true_accuracy'] = true_accuracy
+            cross_validation_data[gn][bc_name]['total_accuracy'] = total_accuracy
+            #Store maximal locations and values
+            true_max_ind = np.argmax(true_accuracy)
+            cross_val_max_size_true[gn_i,bc_ind] = layer_sizes[true_max_ind]
+            cross_val_max_accuracy_true[gn_i,bc_ind] = true_accuracy[true_max_ind]
+            all_max_ind = np.argmax(total_accuracy)
+            cross_val_max_size_all[gn_i,bc_ind] = layer_sizes[all_max_ind]
+            cross_val_max_accuracy_all[gn_i,bc_ind] = total_accuracy[all_max_ind]
+            
+    np.save(os.path.join(cross_val_save_dir,'cross_validation_data.npy'),cross_validation_data,allow_pickle=True)
+    np.save(os.path.join(cross_val_save_dir,'cross_val_max_size_true.npy'),cross_val_max_size_true,allow_pickle=True)
+    np.save(os.path.join(cross_val_save_dir,'cross_val_max_accuracy_true.npy'),cross_val_max_accuracy_true,allow_pickle=True)
+    np.save(os.path.join(cross_val_save_dir,'cross_val_max_size_all.npy'),cross_val_max_size_all,allow_pickle=True)
+    np.save(os.path.join(cross_val_save_dir,'cross_val_max_accuracy_all.npy'),cross_val_max_accuracy_all,allow_pickle=True)
 
+    #Plot
+    f_accuracy, ax_accuracy = plt.subplots(nrows = 2,ncols = 2,figsize=(5,5))
+    #Plot true accuracy
+    ax_accuracy[0,0].axhline(1/len(true_tastes),linestyle='dashed',color='k',alpha=0.3)
+    for gn_i in range(num_anim):
+        ax_accuracy[0,0].scatter(np.arange(num_bins)+1,cross_val_max_accuracy_true[gn_i,:],\
+                                 color='g',alpha=0.5,)
+    ax_accuracy[0,0].boxplot(cross_val_max_accuracy_true)
+    ax_accuracy[0,0].set_title('True Taste Accuracy')
+    ax_accuracy[0,0].set_xticks(np.arange(num_bins)+1,unique_bin_counts)
+    ax_accuracy[0,0].set_ylabel('Accuracy')
+    ax_accuracy[0,0].set_xlabel('Num Bins')
+    #Plot true accuracy best latent dim sizes
+    for gn_i in range(num_anim):
+        ax_accuracy[0,1].scatter(np.arange(num_bins)+1,cross_val_max_size_true[gn_i,:],\
+                                 color='g',alpha=0.5,)
+    ax_accuracy[0,1].boxplot(cross_val_max_size_true)
+    ax_accuracy[0,1].set_title('Best Latent Dim Size')
+    ax_accuracy[0,1].set_xticks(np.arange(num_bins)+1,unique_bin_counts)
+    ax_accuracy[0,1].set_ylabel('True Taste Best\nLatent Dim Size')
+    ax_accuracy[0,1].set_xlabel('Num Bins')
+    #Plot true accuracy
+    ax_accuracy[1,0].axhline(1/len(true_tastes),linestyle='dashed',color='k',alpha=0.3)
+    for gn_i in range(num_anim):
+        ax_accuracy[1,0].scatter(np.arange(num_bins)+1,cross_val_max_accuracy_all[gn_i,:],\
+                                 color='g',alpha=0.5,)
+    ax_accuracy[1,0].boxplot(cross_val_max_accuracy_all)
+    ax_accuracy[1,0].set_title('All Taste Accuracy')
+    ax_accuracy[1,0].set_xticks(np.arange(num_bins)+1,unique_bin_counts)
+    ax_accuracy[1,0].set_ylabel('Accuracy')
+    ax_accuracy[1,0].set_xlabel('Num Bins')
+    #Plot true accuracy best latent dim sizes
+    for gn_i in range(num_anim):
+        ax_accuracy[1,1].scatter(np.arange(num_bins)+1,cross_val_max_size_all[gn_i,:],\
+                                 color='g',alpha=0.5,)
+    ax_accuracy[1,1].boxplot(cross_val_max_size_all)
+    ax_accuracy[1,1].set_title('Best Latent Dim Size')
+    ax_accuracy[1,1].set_xticks(np.arange(num_bins)+1,unique_bin_counts)
+    ax_accuracy[1,1].set_ylabel('All Taste Best\nLatent Dim Size')
+    ax_accuracy[1,1].set_xlabel('Num Bins')
+    #Finish plot
+    plt.suptitle('LSTM Decoding Accuracies')
+    plt.tight_layout()
+    f_accuracy.savefig(os.path.join(cross_val_save_dir,'accuracy_boxplots.png'))
+    f_accuracy.savefig(os.path.join(cross_val_save_dir,'accuracy_boxplots.svg'))
+    plt.close(f_accuracy)
+    
+    
