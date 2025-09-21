@@ -24,10 +24,9 @@ from sklearn.mixture import GaussianMixture as gmm
 from multiprocess import Pool
 
 
-def multiday_dev_analysis(corr_dir,all_dig_in_names,group_train_data,segment_dev_rasters,
-                          segment_dev_times,segment_dev_fr_vecs,segment_dev_fr_vecs_zscore,
-                          segments_to_analyze, segment_times, segment_spike_times,
-                          bin_dt,segment_names_to_analyze):
+def multiday_dev_analysis(corr_dir,all_dig_in_names,group_train_data,control_data,
+                          segment_dev_rasters,segment_dev_times,segment_dev_fr_vecs,
+                          segment_names_to_analyze):
     """
     This function serves as the main function which calls all others for 
     analyses of deviation events from the train day in comparison to taste
@@ -47,8 +46,9 @@ def multiday_dev_analysis(corr_dir,all_dig_in_names,group_train_data,segment_dev
         dev_fr_vecs = segment_dev_fr_vecs[s_i]
         
         #Run correlation analyses
-        correlate_dev_to_taste(num_neur,all_dig_in_names,group_train_data,\
+        correlate_dev_to_taste(num_neur,all_dig_in_names,group_train_data,control_data,\
                                       dev_rast,dev_times,dev_fr_vecs,seg_name,corr_dir)
+        
         
         
 def multiday_null_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
@@ -98,11 +98,15 @@ def multiday_null_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
                                               seg_name,null_i_corr_dir,False)
             
         
-def correlate_dev_to_taste(num_neur,all_dig_in_names,group_train_data,\
+def correlate_dev_to_taste(num_neur,all_dig_in_names,group_train_data,control_data,\
                               dev_rast,dev_times,dev_fr_vecs,seg_name,corr_dir,\
                                   plot_flag=True):
     
-    fr_dir = os.path.join(corr_dir,'true_corrs')
+    seg_dir = os.path.join(corr_dir,seg_name)
+    if not os.path.isdir(seg_dir):
+        os.mkdir(seg_dir)
+    
+    fr_dir = os.path.join(seg_dir,'true_corrs')
     if not os.path.isdir(fr_dir):
         os.mkdir(fr_dir)
         
@@ -114,11 +118,46 @@ def correlate_dev_to_taste(num_neur,all_dig_in_names,group_train_data,\
     num_groups = len(group_names)
     
     #Group correlations
-    corr_dict = dict()
-    avg_corr_by_group = np.nan*np.ones((num_dev,num_groups))
-    for g_i, g_name in enumerate(group_names):
+    try:
+        corr_dict = np.load(os.path.join(corr_dir,seg_name+'_corr_dict.npy'),allow_pickle=True).item()
+        avg_corr_by_group = np.nan*np.ones((num_dev,num_groups))
+        for g_i, g_name in enumerate(group_names):
+            corr_vals_by_response = corr_dict[g_name]['corr_vals_by_response']
+            avg_corr = np.nanmean(corr_vals_by_response,1)
+            avg_corr_by_group[:,g_i] = avg_corr
+    except:
+        corr_dict = dict()
+        avg_corr_by_group = np.nan*np.ones((num_dev,num_groups))
+        for g_i, g_name in enumerate(group_names):
+            corr_dict[g_name] = dict()
+            g_fr_vecs = np.array(group_train_data[g_name]['fr_vecs']) #num_vec x num_neur
+            num_vec, _ = np.shape(g_fr_vecs)
+            
+            #Run all pairwise correlations
+            taste_num = g_fr_vecs - np.expand_dims(np.nanmean(
+                g_fr_vecs,1),1)
+            taste_denom = np.sum(taste_num**2,1)
+            
+            all_corr_vals = []
+            corr_vals_by_response = np.nan*np.ones((num_dev,num_vec))
+            for v_i in range(num_vec):
+                p_num = np.sum(dev_num*(taste_num[v_i,:]*np.ones(np.shape(dev_num))),1)
+                p_denom = np.sqrt(dev_denom*taste_denom[v_i])
+                corr_vec = p_num/p_denom
+                corr_vals_by_response[:,v_i] = corr_vec
+                all_corr_vals.extend(list(corr_vec))
+            avg_corr = np.nanmean(corr_vals_by_response,1)
+            avg_corr_by_group[:,g_i] = avg_corr
+            
+            corr_dict[g_name]['all_corr_vals'] = all_corr_vals
+            corr_dict[g_name]['corr_vals_by_response'] = corr_vals_by_response
+            corr_dict[g_name]['num_dev'] = num_dev
+            corr_dict[g_name]['num_vec'] = num_vec
+                       
+        #Correlate to non-dev control
+        g_name = 'Rescaled Non-Dev Control'
         corr_dict[g_name] = dict()
-        g_fr_vecs = np.array(group_train_data[g_name]['fr_vecs']) #num_vec x num_neur
+        g_fr_vecs = np.array(control_data[g_name]['fr_vecs']) #num_vec x num_neur
         num_vec, _ = np.shape(g_fr_vecs)
         
         #Run all pairwise correlations
@@ -134,19 +173,19 @@ def correlate_dev_to_taste(num_neur,all_dig_in_names,group_train_data,\
             corr_vec = p_num/p_denom
             corr_vals_by_response[:,v_i] = corr_vec
             all_corr_vals.extend(list(corr_vec))
-        avg_corr = np.nanmean(corr_vals_by_response,1)
-        avg_corr_by_group[:,g_i] = avg_corr
+        rescaled_nondev_control_corr = np.nanmean(corr_vals_by_response,1)
         
         corr_dict[g_name]['all_corr_vals'] = all_corr_vals
         corr_dict[g_name]['corr_vals_by_response'] = corr_vals_by_response
         corr_dict[g_name]['num_dev'] = num_dev
         corr_dict[g_name]['num_vec'] = num_vec
-            
-    np.save(os.path.join(fr_dir,seg_name+'_corr_dict.npy'),corr_dict,allow_pickle=True)
-           
+        
+        np.save(os.path.join(corr_dir,seg_name+'_corr_dict.npy'),corr_dict,allow_pickle=True)
+    
     #Now plot
     if plot_flag == True:
-        plot_corr_dist(fr_dir,corr_dict,group_names,seg_name)
+        plot_corr_dist(avg_corr_by_group,rescaled_nondev_control_corr,\
+                       group_names,seg_name,fr_dir)    
     
 def correlate_null_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
                                   taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
@@ -252,143 +291,72 @@ def correlate_null_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
         np.save(os.path.join(fr_z_dir,'all_taste_names.npy'),all_dig_in_names,allow_pickle=True)
             
     #Now plot
-    plot_corr_dist(fr_z_dir,corr_z_dict,all_dig_in_names,max_num_cp,seg_name)
+    plot_corr_dist(avg_corr_by_group,corr_dict,group_names,seg_name,fr_dir)
     
-def plot_corr_dist(fr_dir,corr_dict,group_names,seg_name):
+def plot_corr_dist(avg_corr_by_group,rescaled_nondev_control_corr,group_names,seg_name,fr_dir):
     
     num_groups = len(group_names)
     group_pairs = list(itertools.combinations(np.arange(num_groups),2))
     
-    #Plot groups against each other
-    
-    
-    
+    #Plot all groups against each other
+    f_all = plt.figure(figsize=(5,5))
+    plt.ylim([0,1])
+    plt.xlim([-1,1])
     for g_i, g_name in enumerate(group_names):
-        plt.hist(avg_corr_by_group[:,g_i],bins=100,density=True,cumulative=True,\
+        plt.hist(avg_corr_by_group[:,g_i],bins=1000,density=True,cumulative=True,\
                  histtype='step',label=g_name)
-    plt.legend(loc='lower right')
-    
-    
-    
-    sqrt_taste = np.ceil(np.sqrt(num_tastes)).astype('int')
-    taste_ind_grid = np.reshape(np.arange(sqrt_taste**2),(sqrt_taste,sqrt_taste))
-    f_taste, ax_taste = plt.subplots(nrows = sqrt_taste, ncols = sqrt_taste, 
-                                     sharex = True, sharey = True, figsize=(8,8))
-    ax_taste[0,0].set_xlim([-1,1])
-    ax_taste[0,0].set_ylim([0,1])
-    for t_i, t_name in enumerate(all_dig_in_names):
-        ax_inds = np.where(taste_ind_grid == t_i)
-        r_i = ax_inds[0][0]
-        c_i = ax_inds[1][0]
-        epoch_corrs = []
-        #Plot cumulative distributions
-        for e_i in range(max_num_cp):
-            t_e_corr_data = corr_dict[t_i]['data'][e_i]
-            epoch_corrs.append(t_e_corr_data)
-            ax_taste[r_i,c_i].hist(t_e_corr_data,bins=1000,density=True, 
-                            cumulative=True,histtype='step',label='Epoch ' + str(e_i))
-        ax_taste[r_i,c_i].set_title(t_name)
-        if t_i == 0:
-            ax_taste[r_i,c_i].legend(loc='upper left')
-        if c_i == 0:
-            ax_taste[r_i,c_i].set_ylabel('Cumulative Density')
-        if r_i == sqrt_taste-1:
-            ax_taste[r_i,c_i].set_xlabel('Pearson Correlation')
-        #Calculate pairwise epoch significances
-        ks_sig = np.zeros(len(epoch_pairs))
-        ks_dir = np.zeros(len(epoch_pairs))
-        for ep_ind, e_pair in enumerate(epoch_pairs):
-            e_1 = e_pair[0]
-            e_2 = e_pair[1]
-            ks_res = ks_2samp(epoch_corrs[e_1],epoch_corrs[e_2])
-            if ks_res.pvalue <= 0.05:
-                ks_sig[ep_ind] = 1
-                ks_dir[ep_ind] = ks_res.statistic_sign
-        sig_text = 'Significant Pairs:'
-        if np.sum(ks_sig) > 0:
-            sig_inds = np.where(ks_sig > 0)[0]
-            for sig_i in sig_inds:
-                e_1 = epoch_pairs[sig_i][0]
-                e_2 = epoch_pairs[sig_i][1]
-                e_pair_text = 'Epoch ' + str(e_1)
-                if ks_dir[sig_i] == 1:
-                    e_pair_text += ' < Epoch ' + str(e_2) 
-                if ks_dir[sig_i] == -1:
-                    e_pair_text += ' > Epoch ' + str(e_2)
-                sig_text += '\n' + e_pair_text
-        ax_taste[r_i,c_i].text(-0.75,0.2,sig_text)
-    f_taste.savefig(os.path.join(corr_save_dir,seg_name+'_taste_corr.png'))
-    f_taste.savefig(os.path.join(corr_save_dir,seg_name+'_taste_corr.svg'))
-    plt.close(f_taste)
-    
-    #Plot tastes against each other for each epoch
-    f_epoch, ax_epoch = plt.subplots(nrows = 2, ncols = max_num_cp, 
-                                     gridspec_kw={'height_ratios': [2, 3]},
-                                     sharex = True, sharey = True, figsize=(8,8))
-    ax_epoch[0,0].set_xlim([-1,1])
-    ax_epoch[0,0].set_ylim([0,1])
-    for e_i in range(max_num_cp):
-        taste_corrs = []
-        #Plot cumulative distributions
-        for t_i in range(num_tastes):
-            t_e_corr_data = corr_dict[t_i]['data'][e_i]
-            taste_corrs.append(t_e_corr_data)
-            ax_epoch[0,e_i].hist(t_e_corr_data,bins=1000,density=True, 
-                            cumulative=True,histtype='step',label=all_dig_in_names[t_i])
-        ax_epoch[0,e_i].set_title('Epoch ' + str(e_i))
-        ax_epoch[0,e_i].set_xlabel('Pearson Correlation')
-        if e_i == 0:
-            ax_epoch[0,e_i].legend(loc='upper left')
-            ax_epoch[0,e_i].set_ylabel('Cumulative Density')
-        #Calculate Taste Mean Orders
-        taste_corr_means = [np.nanmean(taste_corrs[tc_i]) for tc_i in range(num_tastes)]
-        taste_mean_order = np.argsort(taste_corr_means)
-        taste_mean_name_order = 'Mean Order: '
-        len_mod = 0
-        for tmo_i, tmo in enumerate(taste_mean_order):
-            if np.floor(len(taste_mean_name_order)/20).astype('int') > len_mod:
-                len_mod = np.floor(len(taste_mean_name_order)/20).astype('int')
-                taste_mean_name_order += '\n'
-            if tmo_i < len(taste_mean_order)-1:
-                taste_mean_name_order += all_dig_in_names[tmo] + ' < '
-            else:
-                taste_mean_name_order += all_dig_in_names[tmo]
-        ax_epoch[1,e_i].set_title(taste_mean_name_order)    
-        #Calculate Taste Percentile Orders
-        taste_corr_90_percentiles = [np.percentile(taste_corrs[tc_i],90) for tc_i in range(num_tastes)]
-        taste_90_order = np.argsort(taste_corr_90_percentiles)
-        taste_90_name_order = '90th Percentile Order \n (min to max):'
-        for tmo in taste_90_order:
-            taste_90_name_order += '\n' + all_dig_in_names[tmo]
-        ax_epoch[1,e_i].text(-0.75,0.1,taste_90_name_order)
-    plt.suptitle(seg_name + ' Dev Correlations')
+    plt.hist(rescaled_nondev_control_corr,bins=1000,density=True,cumulative=True,\
+             histtype='step',label='Non-Dev Control')
+    plt.title('Correlation CDFs - All Groups')
+    plt.legend(loc='upper left')
+    plt.ylabel('Fraction of DE')
+    plt.xlabel('Avg Pearson Correlation Coefficient')
     plt.tight_layout()
-    f_epoch.savefig(os.path.join(corr_save_dir,seg_name+'_epoch_corr.png'))
-    f_epoch.savefig(os.path.join(corr_save_dir,seg_name+'_epoch_corr.svg'))
-    plt.close(f_epoch)
-        #Calculate pairwise epoch significances
-        # ks_sig = np.zeros(len(taste_pairs))
-        # ks_dir = np.zeros(len(taste_pairs))
-        # for tp_ind, t_pair in enumerate(taste_pairs):
-        #     t_1 = t_pair[0]
-        #     t_2 = t_pair[1]
-        #     t_name_1 = all_dig_in_names[t_1]
-        #     t_name_2 = all_dig_in_names[t_2]
-        #     ks_res = ks_2samp(taste_corrs[t_1],taste_corrs[t_2])
-        #     if ks_res.pvalue <= 0.05:
-        #         ks_sig[tp_ind] = 1
-        #         ks_dir[tp_ind] = ks_res.statistic_sign
-        # if np.sum(ks_sig) > 0:
-        #     sig_text = 'Significant Pairs:'
-        #     sig_inds = np.where(ks_sig > 0)[0]
-        #     for sig_i in sig_inds:
-        #         t_1 = taste_pairs[sig_i][0]
-        #         t_2 = taste_pairs[sig_i][1]
-        #         t_pair_text = all_dig_in_names[t_1]
-        #         if ks_dir[sig_i] == 1:
-        #             t_pair_text += ' < ' + all_dig_in_names[t_2]
-        #         if ks_dir[sig_i] == -1:
-        #             t_pair_text += ' > ' + all_dig_in_names[t_2]
-        #         sig_text += '\n' + t_pair_text
-        #     ax_epoch[1,e_i].text(-0.75,0.1,sig_text)
+    f_all.savefig(os.path.join(fr_dir,seg_name + '_all_corr.png'))
+    f_all.savefig(os.path.join(fr_dir,seg_name + '_all_corr.svg'))
     
+    #Pairwise plots + significance
+    for g_1, g_2 in group_pairs:
+        g_1_name = group_names[g_1]
+        g_2_name = group_names[g_2]
+        f_pair = plt.figure(figsize=(5,5))
+        plt.ylim([0,1])
+        plt.xlim([-1,1])
+        plt.hist(avg_corr_by_group[:,g_1],bins=1000,density=True,cumulative=True,\
+                 histtype='step',label=g_1_name)
+        plt.hist(avg_corr_by_group[:,g_2],bins=1000,density=True,cumulative=True,\
+                 histtype='step',label=g_2_name)
+        #Significance
+        p_val = ks_2samp(avg_corr_by_group[:,g_1],avg_corr_by_group[:,g_2]).pvalue
+        if p_val <= 0.05:
+            plt.title(g_1_name + ' x ' + g_2_name + '\nK.S. Sig p = ' + str(np.round(p_val,4)))
+        else:
+            plt.title(g_1_name + ' x ' + g_2_name + '\nK.S. N.S.')
+        plt.legend(loc='upper left')
+        plt.tight_layout()
+        f_pair.savefig(os.path.join(fr_dir,seg_name + '_' + g_1_name \
+                                    + '_x_' + g_2_name + '_corr.png'))
+        f_pair.savefig(os.path.join(fr_dir,seg_name + '_' + g_1_name \
+                                    + '_x_' + g_2_name + '_corr.svg'))
+    
+    #Now plot true groups against control
+    for g_i, g_name in enumerate(group_names):
+        f_control = plt.figure(figsize=(5,5))
+        plt.ylim([0,1])
+        plt.xlim([-1,1])
+        plt.hist(avg_corr_by_group[:,g_i],bins=1000,density=True,cumulative=True,\
+                 histtype='step',label=g_name)
+        plt.hist(rescaled_nondev_control_corr,bins=1000,density=True,cumulative=True,\
+                 histtype='step',label='Non-Dev Control')
+        #Significance
+        p_val = ks_2samp(avg_corr_by_group[:,g_i],rescaled_nondev_control_corr).pvalue
+        if p_val <= 0.05:
+            plt.title(g_name + ' x non-dev control\nK.S. Sig p = ' + str(np.round(p_val,4)))
+        else:
+            plt.title(g_name + ' x non-dev control\nK.S. N.S.')
+        plt.legend(loc='upper left')
+        plt.tight_layout()
+        f_control.savefig(os.path.join(fr_dir,seg_name + '_' + g_name \
+                                    + '_x_nondev_control_corr.png'))
+        f_control.savefig(os.path.join(fr_dir,seg_name + '_' + g_name \
+                                    + '_x_nondev_control_corr.svg'))

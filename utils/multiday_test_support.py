@@ -209,7 +209,7 @@ for n_i in range(num_days):
         day_vars[n_i]['hdf5_dir'], 'changepoint_data', 'pop_taste_cp_raster_inds')
     day_vars[n_i]['num_pt_cp'] = day_vars[n_i]['num_cp'] + 2
     
-#%% Get data for decoding
+#Get data for decoding
 
 all_dig_in_names = []
 for n_i in range(num_days):
@@ -265,7 +265,18 @@ control_data = ddf.create_control_dict(group_train_data,day_vars,segment_deviati
 
 np.save(os.path.join(bayes_dir,'control_data.npy'),control_data,allow_pickle=True)
 
-#%% Run correlations with groups
+# Run correlations with groups
+
+import functions.multiday_dev_functions as mdf
+
+segment_names_to_analyze = [day_vars[0]['segment_names'][i] for i in day_vars[0]['segments_to_analyze']]
+
+print("\tNow calculating correlations")
+mdf.multiday_dev_analysis(corr_dir,all_dig_in_names,group_train_data,control_data,
+                          segment_dev_rasters,segment_dev_times,segment_dev_fr_vecs,
+                          segment_names_to_analyze)
+
+#%% Run null correlations with groups
 
 
 
