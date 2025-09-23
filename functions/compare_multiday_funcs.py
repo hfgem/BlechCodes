@@ -370,8 +370,9 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
     
     warnings.filterwarnings('ignore')
     #non_none_tastes = [taste for taste in unique_taste_names if taste != 'none_0']
-    cc_0_25_ind = np.where(corr_cutoffs >= 0.25)[0][0]
-    cc_top_third_ind = np.where(corr_cutoffs >= 1/3)[0][0]
+    cutoff_val = 0.5
+    cc_0_5_ind = np.where(corr_cutoffs >= cutoff_val)[0][0]
+    cc_top_half_ind = np.where(corr_cutoffs >= cutoff_val)[0][0]
     num_anim = len(unique_given_names)
     num_cutoff = len(corr_cutoffs)
     num_seg = len(unique_segment_names)
@@ -392,7 +393,7 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
                                                  sharex = True, sharey = True)
     f_rate_zoom_split_y, ax_rate_zoom_split_y = plt.subplots(nrows = 1,\
                                    ncols = num_seg, figsize=(num_seg*4,4),\
-                                sharex = True, sharey = True)
+                                sharex = True, sharey = False)
     f_rate_box, ax_rate_box = plt.subplots(nrows = 1, ncols = num_seg, \
                                            figsize=(num_seg*4,num_groups*4),\
                                                sharex = True, sharey = True)
@@ -429,7 +430,7 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
                 plt.close(f_anim)
                 f_anim_zoom = plt.figure()
                 plt.title(g_n)
-                plt.plot(corr_cutoffs[cc_0_25_ind:], animal_true_rates[gn_i,cc_0_25_ind:], label='True')
+                plt.plot(corr_cutoffs[cc_0_5_ind:], animal_true_rates[gn_i,cc_0_5_ind:], label='True')
                 plt.ylabel('Rate (Hz)')
                 plt.xlabel('Pearson Correlation Cutoff')
                 plt.legend(loc='upper right')
@@ -439,15 +440,15 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
             #Average rates
             anim_true_avg_rate = np.nanmean(animal_true_rates,0)
             ax_rate[s_i].plot(corr_cutoffs,anim_true_avg_rate,label=g_name)
-            ax_rate_zoom[s_i].plot(corr_cutoffs[cc_top_third_ind:],anim_true_avg_rate[cc_top_third_ind:],label=g_name)
-            ax_rate_zoom_split_y[s_i].plot(corr_cutoffs[cc_top_third_ind:],anim_true_avg_rate[cc_top_third_ind:],label=g_name)
+            ax_rate_zoom[s_i].plot(corr_cutoffs[cc_top_half_ind:],anim_true_avg_rate[cc_top_half_ind:],label=g_name)
+            ax_rate_zoom_split_y[s_i].plot(corr_cutoffs[cc_top_half_ind:],anim_true_avg_rate[cc_top_half_ind:],label=g_name)
             #0.25 rates box plot
-            anim_25_rates = animal_true_rates[:,cc_0_25_ind].flatten()
-            ax_rate_box[s_i].boxplot(list(anim_25_rates),
+            anim_50_rates = animal_true_rates[:,cc_0_5_ind].flatten()
+            ax_rate_box[s_i].boxplot(list(anim_50_rates),
                                           positions=[gp_i+1],
                                           showmeans=False,showfliers=False)
-            x_locs = gn_i + 1 + 0.1*np.random.randn(num_anim)
-            ax_rate_box[s_i].scatter(x_locs,anim_25_rates,alpha=0.5,color='g')
+            x_locs = gp_i + 1 + 0.1*np.random.randn(num_anim)
+            ax_rate_box[s_i].scatter(x_locs,anim_50_rates,alpha=0.5,color='g')
         ax_rate[s_i].set_title(seg_name)
         ax_rate_zoom[s_i].set_title(seg_name)
         ax_rate_zoom_split_y[s_i].set_title(seg_name)
@@ -468,30 +469,30 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
     ax_rate[0].set_xticks(np.arange(0,1.25,0.25))
     plt.suptitle('Rate of Events Above Cutoff')
     plt.tight_layout()
-    f_rate.savefig(os.path.join(cross_anim_plot_save_dir,seg_name+'_rate_group_by_cutoff.png'))
-    f_rate.savefig(os.path.join(cross_anim_plot_save_dir,seg_name+'_rate_group_by_cutoff.svg'))
+    f_rate.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff.png'))
+    f_rate.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff.svg'))
     plt.close(f_rate)
     plt.figure(f_rate_zoom)
     ax_rate_zoom[0].legend(loc='upper right')
-    ax_rate_zoom[0].set_xticks(np.arange(0.25,1.25,0.25))
+    ax_rate_zoom[0].set_xticks(np.arange(cutoff_val,1.25,0.25))
     plt.suptitle('Rate of Events Above Zoom Cutoff')
     plt.tight_layout()
-    f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,seg_name+'_rate_group_by_cutoff_zoom.png'))
-    f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,seg_name+'_rate_group_by_cutoff_zoom.svg'))
+    f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_zoom.png'))
+    f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_zoom.svg'))
     plt.close(f_rate_zoom)
     plt.figure(f_rate_zoom_split_y)
     ax_rate_zoom_split_y[0].legend(loc='upper right')
-    ax_rate_zoom_split_y[0].set_xticks(np.arange(0.25,1.25,0.25))
+    ax_rate_zoom_split_y[0].set_xticks(np.arange(cutoff_val,1.25,0.25))
     plt.suptitle('Rate of Events Above Zoom Cutoff')
     plt.tight_layout()
-    f_rate_zoom_split_y.savefig(os.path.join(cross_anim_plot_save_dir,seg_name+'_rate_group_by_cutoff_split_y_zoom.png'))
-    f_rate_zoom_split_y.savefig(os.path.join(cross_anim_plot_save_dir,seg_name+'_rate_group_by_cutoff_split_y_zoom.svg'))
+    f_rate_zoom_split_y.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_split_y_zoom.png'))
+    f_rate_zoom_split_y.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_split_y_zoom.svg'))
     plt.close(f_rate_zoom_split_y)
     plt.figure(f_rate_box)
     plt.suptitle('Rate of Events Above 0.25 Cutoff')
     plt.tight_layout()
-    f_rate_box.savefig(os.path.join(cross_anim_plot_save_dir,seg_name+'_rate_group_at_cutoff_box.png'))
-    f_rate_box.savefig(os.path.join(cross_anim_plot_save_dir,seg_name+'_rate_group_at_cutoff_box.svg'))
+    f_rate_box.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_at_cutoff_box.png'))
+    f_rate_box.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_at_cutoff_box.svg'))
     plt.close(f_rate_box)
         
 def compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
