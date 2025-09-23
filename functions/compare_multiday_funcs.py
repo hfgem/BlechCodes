@@ -385,15 +385,15 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
         os.mkdir(cross_anim_plot_save_dir)
     
     
+    #Store data
+    all_rates = np.nan*np.ones((num_seg,num_groups,num_anim,num_cutoff))
+    
     #Plot all corr values          
     f_rate, ax_rate = plt.subplots(nrows = 1, ncols = num_seg, figsize=(num_seg*4,4),\
                                 sharex = True, sharey = True)
     f_rate_zoom, ax_rate_zoom = plt.subplots(nrows = 1, ncols = num_seg, \
                                              figsize=(num_seg*4,4),\
                                                  sharex = True, sharey = True)
-    f_rate_zoom_split_y, ax_rate_zoom_split_y = plt.subplots(nrows = 1,\
-                                   ncols = num_seg, figsize=(num_seg*4,4),\
-                                sharex = True, sharey = False)
     f_rate_box, ax_rate_box = plt.subplots(nrows = 1, ncols = num_seg, \
                                            figsize=(num_seg*4,num_groups*4),\
                                                sharex = True, sharey = True)
@@ -439,9 +439,9 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
                 plt.close(f_anim_zoom)
             #Average rates
             anim_true_avg_rate = np.nanmean(animal_true_rates,0)
+            all_rates[s_i,gp_i,:,:] = animal_true_rates
             ax_rate[s_i].plot(corr_cutoffs,anim_true_avg_rate,label=g_name)
             ax_rate_zoom[s_i].plot(corr_cutoffs[cc_top_half_ind:],anim_true_avg_rate[cc_top_half_ind:],label=g_name)
-            ax_rate_zoom_split_y[s_i].plot(corr_cutoffs[cc_top_half_ind:],anim_true_avg_rate[cc_top_half_ind:],label=g_name)
             #0.25 rates box plot
             anim_50_rates = animal_true_rates[:,cc_0_5_ind].flatten()
             ax_rate_box[s_i].boxplot(list(anim_50_rates),
@@ -451,19 +451,19 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
             ax_rate_box[s_i].scatter(x_locs,anim_50_rates,alpha=0.5,color='g')
         ax_rate[s_i].set_title(seg_name)
         ax_rate_zoom[s_i].set_title(seg_name)
-        ax_rate_zoom_split_y[s_i].set_title(seg_name)
         ax_rate_box[s_i].set_title(seg_name)
         ax_rate[s_i].set_xlabel('Min. Correlation Cutoff')
         ax_rate_zoom[s_i].set_xlabel('Min. Correlation Cutoff')
-        ax_rate_zoom_split_y[s_i].set_xlabel('Min. Correlation Cutoff')
         ax_rate_box[s_i].set_xlabel('Group')
         ax_rate_box[s_i].set_xticks(np.arange(num_groups)+1,unique_group_names,
                                          horizontalalignment='right',rotation = 45)
         if s_i == 0:
             ax_rate[s_i].set_ylabel('Rate (Hz)')
             ax_rate_zoom[s_i].set_ylabel('Rate (Hz)')
-            ax_rate_zoom_split_y[s_i].set_ylabel('Rate (Hz)')
             ax_rate_box[s_i].set_ylabel('Rate (Hz)')
+    
+    np.save(os.path.join(corr_results_save_dir,'corr_cutoff_rates.npy'),all_rates,allow_pickle=True)
+    
     plt.figure(f_rate)
     ax_rate[0].legend(loc='upper right')
     ax_rate[0].set_xticks(np.arange(0,1.25,0.25))
@@ -480,20 +480,173 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
     f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_zoom.png'))
     f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_zoom.svg'))
     plt.close(f_rate_zoom)
-    plt.figure(f_rate_zoom_split_y)
-    ax_rate_zoom_split_y[0].legend(loc='upper right')
-    ax_rate_zoom_split_y[0].set_xticks(np.arange(cutoff_val,1.25,0.25))
-    plt.suptitle('Rate of Events Above Zoom Cutoff')
-    plt.tight_layout()
-    f_rate_zoom_split_y.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_split_y_zoom.png'))
-    f_rate_zoom_split_y.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_split_y_zoom.svg'))
-    plt.close(f_rate_zoom_split_y)
     plt.figure(f_rate_box)
     plt.suptitle('Rate of Events Above 0.25 Cutoff')
     plt.tight_layout()
     f_rate_box.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_at_cutoff_box.png'))
     f_rate_box.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_at_cutoff_box.svg'))
     plt.close(f_rate_box)
+    
+def plot_corr_rate_diffs(all_rates, unique_given_names, unique_segment_names, 
+                         unique_group_names, corr_cutoffs, 
+                         cross_anim_plot_save_dir, verbose = False):
+    
+    num_seg = len(unique_segment_names)
+    num_anim = len(unique_given_names)
+    num_groups = len(unique_group_names)
+    #all_rates shape is [num_seg,num_groups,num_anim,num_cutoff]
+    
+    cutoff_vals = [0.25,0.5,0.75]
+    cutoff_inds = [np.where(corr_cutoffs >= cv)[0][0] for cv in cutoff_vals]
+    cutoff_zip = list(zip(cutoff_vals, cutoff_inds))
+    
+    #Differences between groups at particular cutoff value
+    seg_save_dir = os.path.join(cross_anim_plot_save_dir,'by_segment')
+    if not os.path.isdir(seg_save_dir):
+        os.mkdir(seg_save_dir)
+    group_inds = np.arange(num_groups)
+    g_pairs = list(combinations(list(group_inds),2))
+    num_pairs = len(g_pairs)
+    sqrt_pairs = np.ceil(np.sqrt(num_pairs)).astype('int')
+    sqr_reference = np.reshape(np.arange(np.square(sqrt_pairs)),(sqrt_pairs,sqrt_pairs))
+    for s_i, seg_name in enumerate(unique_segment_names):
+        for cv, cv_i in cutoff_zip:
+            sup_title = 'Cutoff Value = ' + str(cv)
+            f_pair, ax_pair = plt.subplots(nrows = sqrt_pairs, ncols = sqrt_pairs, \
+                                  sharey = True, figsize=(sqrt_pairs*4,sqrt_pairs*4))
+            
+            f_diff, ax_diff = plt.subplots(figsize = (10,5))
+            diff_ind = 0
+            diff_xtick_labels = []
+            for pair_i, (g_1, g_2) in enumerate(g_pairs):
+                g_1_name = unique_group_names[g_1]
+                g_2_name = unique_group_names[g_2]
+                pair_loc = np.where(sqr_reference == pair_i)
+                r_i = pair_loc[0][0]
+                c_i = pair_loc[1][0]
+                #Get data at cutoff vals
+                data_1 = np.squeeze(all_rates[s_i,g_1,:,cv_i])
+                data_2 = np.squeeze(all_rates[s_i,g_2,:,cv_i])
+                max_val = np.max([np.max(data_1),np.max(data_2)])
+                #Plot the boxplots
+                ax_pair[r_i,c_i].axhline(0,alpha=0.5,linestyle='dashed',color='k')
+                ax_pair[r_i,c_i].boxplot([data_1,data_2], positions = [0,1])
+                ax_pair[r_i,c_i].scatter(np.zeros(num_anim),data_1,alpha=0.5,\
+                                         color='g')
+                ax_pair[r_i,c_i].scatter(np.ones(num_anim),data_2,alpha=0.5,\
+                                         color='g')
+                ax_pair[r_i,c_i].set_xticks(np.arange(2),[g_1_name,g_2_name],\
+                                            rotation=45)
+                #Run a ttest
+                ttpval = ttest_ind(data_1,data_2).pvalue
+                if ttpval <= 0.05:
+                    ax_pair[r_i,c_i].plot([0,1],[1.05*max_val,1.05*max_val],\
+                                          color='k')
+                    ax_pair[r_i,c_i].text(0.5,1.1*max_val,'*',color='k')
+                    #Add to difference plot
+                    ax_diff.boxplot([data_1 - data_2],positions = [diff_ind])
+                    ax_diff.scatter(diff_ind*np.ones(num_anim),data_1 - data_2,\
+                                    alpha=0.5,color='g')
+                    diff_xtick_labels.extend([g_1_name + ' - ' + g_2_name])
+                    diff_ind += 1
+                ax_pair[r_i,c_i].set_title(g_1_name + ' x ' + g_2_name)
+                if c_i == 0:
+                    ax_pair[r_i,c_i].set_ylabel('Rate (Hz)')
+            plt.figure(f_pair)
+            plt.suptitle(sup_title)
+            plt.tight_layout()
+            f_pair.savefig(os.path.join(seg_save_dir,seg_name + \
+                    '_rate_pair_' + ('_').join(str(cv).split('.')) + '.png'))
+            f_pair.savefig(os.path.join(seg_save_dir,seg_name + \
+                    '_rate_pair_' + ('_').join(str(cv).split('.')) + '.svg'))
+            plt.close(f_pair)
+            plt.figure(f_diff)
+            ax_diff.set_xlabel('Rate Difference (Hz)')
+            ax_diff.set_xticks(np.arange(diff_ind),diff_xtick_labels,\
+                               rotation = 45)
+            ax_diff.set_title('Significantly different pairs')
+            plt.suptitle(sup_title)
+            plt.tight_layout()
+            f_diff.savefig(os.path.join(seg_save_dir,seg_name + \
+                    '_rate_sig_diffs_' + ('_').join(str(cv).split('.')) + '.png'))
+            f_diff.savefig(os.path.join(seg_save_dir,seg_name + \
+                    '_rate_sig_diffs_' + ('_').join(str(cv).split('.')) + '.svg'))
+            plt.close(f_diff)
+    
+    #Differences between segments
+    group_save_dir = os.path.join(cross_anim_plot_save_dir,'by_group_pair')
+    if not os.path.isdir(group_save_dir):
+        os.mkdir(group_save_dir)
+    seg_inds = np.arange(num_seg)
+    seg_pairs = list(combinations(list(seg_inds),2))
+    num_pairs = len(seg_pairs)
+    sqrt_pairs = np.ceil(np.sqrt(num_pairs)).astype('int')
+    sqr_reference = np.reshape(np.arange(np.square(sqrt_pairs)),(sqrt_pairs,sqrt_pairs))
+    for g_i, g_name in enumerate(unique_group_names):
+        for cv, cv_i in cutoff_zip:
+            sup_title = 'Cutoff Value = ' + str(cv)
+            f_pair, ax_pair = plt.subplots(nrows = sqrt_pairs, ncols = sqrt_pairs, \
+                                  sharey = True, figsize=(sqrt_pairs*4,sqrt_pairs*4))
+            
+            f_diff, ax_diff = plt.subplots(figsize = (10,5))
+            diff_ind = 0
+            diff_xtick_labels = []
+            for pair_i, (s_1, s_2) in enumerate(seg_pairs):
+                seg_name_1 = unique_segment_names[s_1]
+                seg_name_2 = unique_segment_names[s_2]
+                pair_loc = np.where(sqr_reference == pair_i)
+                r_i = pair_loc[0][0]
+                c_i = pair_loc[1][0]
+                #Get data at cutoff vals
+                data_1 = np.squeeze(all_rates[s_1,g_i,:,cv_i])
+                data_2 = np.squeeze(all_rates[s_2,g_i,:,cv_i])
+                max_val = np.max([np.max(data_1),np.max(data_2)])
+                #Plot the boxplots
+                ax_pair[r_i,c_i].axhline(0,alpha=0.5,linestyle='dashed',color='k')
+                ax_pair[r_i,c_i].boxplot([data_1,data_2], positions = [0,1])
+                ax_pair[r_i,c_i].scatter(np.zeros(num_anim),data_1,alpha=0.5,\
+                                         color='g')
+                ax_pair[r_i,c_i].scatter(np.ones(num_anim),data_2,alpha=0.5,\
+                                         color='g')
+                ax_pair[r_i,c_i].set_xticks(np.arange(2),[seg_name_1,seg_name_2],\
+                                            rotation=45)
+                #Run a ttest
+                ttpval = ttest_ind(data_1,data_2).pvalue
+                if ttpval <= 0.05:
+                    ax_pair[r_i,c_i].plot([0,1],[1.05*max_val,1.05*max_val],\
+                                          color='k')
+                    ax_pair[r_i,c_i].text(0.5,1.1*max_val,'*',color='k')
+                    #Add to difference plot
+                    ax_diff.boxplot([data_1 - data_2],positions = [diff_ind])
+                    ax_diff.scatter(diff_ind*np.ones(num_anim),data_1 - data_2,\
+                                    alpha=0.5,color='g')
+                    diff_xtick_labels.extend([seg_name_1 + ' - ' + seg_name_2])
+                    diff_ind += 1
+                ax_pair[r_i,c_i].set_title(seg_name_1 + ' x ' + seg_name_2)
+                if c_i == 0:
+                    ax_pair[r_i,c_i].set_ylabel('Rate (Hz)')
+            plt.figure(f_pair)
+            plt.suptitle(sup_title)
+            plt.tight_layout()
+            f_pair.savefig(os.path.join(cross_anim_plot_save_dir,g_name + \
+                    '_rate_pair_' + ('_').join(str(cv).split('.')) + '.png'))
+            f_pair.savefig(os.path.join(cross_anim_plot_save_dir,g_name + \
+                    '_rate_pair_' + ('_').join(str(cv).split('.')) + '.svg'))
+            plt.close(f_pair)
+            plt.figure(f_diff)
+            ax_diff.set_xlabel('Rate Difference (Hz)')
+            ax_diff.set_xticks(np.arange(diff_ind),diff_xtick_labels,\
+                               rotation = 45)
+            ax_diff.set_title('Significantly different pairs')
+            plt.suptitle(sup_title)
+            plt.tight_layout()
+            f_diff.savefig(os.path.join(cross_anim_plot_save_dir,g_name + \
+                    '_rate_sig_diffs_' + ('_').join(str(cv).split('.')) + '.png'))
+            f_diff.savefig(os.path.join(cross_anim_plot_save_dir,g_name + \
+                    '_rate_sig_diffs_' + ('_').join(str(cv).split('.')) + '.svg'))
+            plt.close(f_diff)
+    
+    
         
 def compare_decode_data(decode_dict, multiday_data_dict, unique_given_names,
                        unique_decode_names, unique_decode_groups, unique_segment_names, 
