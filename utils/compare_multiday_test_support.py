@@ -123,7 +123,7 @@ os.chdir(blech_codes_path)
 
 warnings.filterwarnings("ignore")
 
-#%% gather_lstm_data()
+#%% gather_corr_data()
 verbose = False
 
 print("Collecting correlation data")
@@ -182,8 +182,11 @@ unique_group_names = [unique_group_names[i] for i in unique_group_indices]
 
 #%% run_corr_analysis()
 
+import functions.compare_multiday_funcs as cmf
+
 print("Running correlation analysis")
-cmf.compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, 
-                      unique_given_names, unique_corr_names, 
-                      unique_segment_names, unique_taste_names, 
-                      max_cp, save_dir)
+
+null_corr_dict = dict()
+
+cmf.compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_given_names,
+                      unique_segment_names, unique_group_names, save_dir)
