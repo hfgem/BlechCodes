@@ -375,7 +375,6 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
     warnings.filterwarnings('ignore')
     #non_none_tastes = [taste for taste in unique_taste_names if taste != 'none_0']
     cutoff_val = 0.5
-    cc_0_5_ind = np.where(corr_cutoffs >= cutoff_val)[0][0]
     cc_top_half_ind = np.where(corr_cutoffs >= cutoff_val)[0][0]
     num_anim = len(unique_given_names)
     num_cutoff = len(corr_cutoffs)
@@ -432,20 +431,37 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
                     f_anim.savefig(os.path.join(seg_indiv_dir,g_name+'_'+g_n+'_rate_taste_by_cutoff.png'))
                     f_anim.savefig(os.path.join(seg_indiv_dir,g_name+'_'+g_n+'_rate_taste_by_cutoff.svg'))
                     plt.close(f_anim)
-                    f_anim_zoom = plt.figure()
-                    plt.title(g_n)
-                    plt.plot(corr_cutoffs[cc_0_5_ind:], animal_true_rates[gn_i,cc_0_5_ind:], label='True')
-                    plt.ylabel('Rate (Hz)')
-                    plt.xlabel('Pearson Correlation Cutoff')
-                    plt.legend(loc='upper right')
-                    f_anim_zoom.savefig(os.path.join(seg_indiv_dir,g_name+'_'+g_n+'_rate_taste_by_cutoff_zoom.png'))
-                    f_anim_zoom.savefig(os.path.join(seg_indiv_dir,g_name+'_'+g_n+'_rate_taste_by_cutoff_zoom.svg'))
-                    plt.close(f_anim_zoom)
                 #Average rates
                 anim_true_avg_rate = np.nanmean(animal_true_rates,0)
                 all_rates[s_i,gp_i,:,:] = animal_true_rates
                 ax_rate[s_i].plot(corr_cutoffs,anim_true_avg_rate,label=g_name)
                 ax_rate_zoom[s_i].plot(corr_cutoffs[cc_top_half_ind:],anim_true_avg_rate[cc_top_half_ind:],label=g_name)
+            #ANOVA across groups
+            group_true_rates = np.squeeze(all_rates[s_i,:,:,:]) #num_groups x num_anim x num_cutoff
+            sig_by_cc = np.zeros(num_cutoff + 2)
+            for cc_i in range(num_cutoff):
+                data_list = []
+                for gp_i in range(num_groups):
+                    gp_data = np.squeeze(group_true_rates[gp_i,:,cc_i])
+                    gp_data = gp_data[~np.isnan(gp_data)]
+                    gp_data = gp_data[gp_data > 0]
+                    data_list.append(gp_data)
+                p_val = f_oneway(*data_list).pvalue
+                if p_val <= 0.05:
+                    sig_by_cc[cc_i+1] = 1
+            #Plot where there is significant difference in the population mean
+            start_sig = np.where(np.diff(sig_by_cc) == 1)[0]
+            end_sig = np.where(np.diff(sig_by_cc) == -1)[0] - 1
+            num_sig = len(start_sig)
+            for ns_i in range(num_sig):
+                ss_i = start_sig[ns_i]
+                es_i = end_sig[ns_i]
+                zoom_s_i = np.max([cc_top_half_ind,ss_i])
+                zoom_e_i = np.max([cc_top_half_ind,es_i])
+                ax_rate[s_i].axvspan(corr_cutoffs[ss_i], corr_cutoffs[es_i], \
+                                        color='yellow', alpha=0.3)
+                ax_rate_zoom[s_i].axvspan(corr_cutoffs[zoom_s_i], corr_cutoffs[zoom_e_i], \
+                                        color='yellow', alpha=0.3)
             ax_rate[s_i].set_title(seg_name)
             ax_rate_zoom[s_i].set_title(seg_name)
             ax_rate[s_i].set_xlabel('Min. Correlation Cutoff')
@@ -453,9 +469,9 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
             if s_i == 0:
                 ax_rate[s_i].set_ylabel('Rate (Hz)')
                 ax_rate_zoom[s_i].set_ylabel('Rate (Hz)')
-                
+        #Save the rate matrix
         np.save(os.path.join(corr_results_save_dir,'corr_cutoff_rates.npy'),all_rates,allow_pickle=True)
-        
+        #Finish plotting
         plt.figure(f_rate)
         ax_rate[0].legend(loc='upper right')
         ax_rate[0].set_xticks(np.arange(0,1.25,0.25))
