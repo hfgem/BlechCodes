@@ -1180,6 +1180,89 @@ def multiday_decode_groupings_split_identity(epochs_to_analyze,all_dig_in_names,
     
     return final_group_list, final_group_names
 
+def multiday_decode_groupings_split_identity_keep_day_2_tastes(epochs_to_analyze,all_dig_in_names,non_none_tastes):
+    """
+    Create fr vector grouping instructions: list of epoch,taste pairs.
+    
+    Parameters
+    ----------
+    epochs_to_analyze: list
+        list of indices of epochs to be analyzed.
+    all_dig_in_names: list
+        list of strings of taste names across days
+    non_none_tastes: list of taste names that are not "none"
+    
+    Returns
+    -------
+    group_list: list
+        list of lists containing tuples (e_i,t_i) of which epoch and taste index
+        belongs to a decoding group.
+    group_names: list
+        list of strings naming the decoding groups.
+    """
+    #Pull out unique taste names
+    dig_in_first_names = [dn.split('_')[0] for dn in all_dig_in_names]
+    unique_dig_in_names = list(np.unique(dig_in_first_names))
+    dig_in_day_1_names = [dn.split('_')[0] for dn in all_dig_in_names if int(dn.split('_')[1]) == 0]
+    dig_in_later_day_unique = list(np.setdiff1d(unique_dig_in_names,dig_in_day_1_names))
+    
+    group_list = []
+    group_list_names = []
+    group_names = []
+    none_group = []
+    identity_group = []
+    palatability_group = []
+    
+    for e_ind, e_i in enumerate(epochs_to_analyze):
+        epoch_group = []
+        epoch_names = []
+        for t_ind, t_name in enumerate(all_dig_in_names):
+            if int(t_name.split('_')[1]) == 0: #Day 1 data
+                if np.setdiff1d([t_name],non_none_tastes).size > 0: #None
+                    none_group.append((e_i,t_ind))
+                else:
+                    #Combine presence data
+                    if e_i == 0:
+                        epoch_group.append((e_i, t_ind))
+                        epoch_names.append((e_i, t_name))
+                    #Separate identity data
+                    if e_i == 1:
+                        group_list.append([(e_i, t_ind)])
+                        group_list_names.append([(e_i,t_name)])
+                        group_names.append(t_name.capitalize() + ' Identity')
+                    #Separate palatability data
+                    if e_i == 2:
+                        palatability_group.append((e_i,t_ind))
+            else: #Day 2+ taste
+                if np.setdiff1d([t_name],non_none_tastes).size > 0: #None
+                    this_is_none = "do nothing"
+                elif e_i == 1:
+                    group_list.append([(e_i, t_ind)])
+                    group_list_names.append([(e_i,t_name)])
+                    group_names.append(t_name.capitalize() + ' Identity')
+        if len(epoch_group) > 0:
+            group_list.append(epoch_group)
+            group_list_names.append([(e_i,'all')])
+            group_names.append('Presence')
+    group_list.append(identity_group)
+    group_list_names.append(['Identity'])
+    group_names.append('Identity')
+    group_list.append(palatability_group)
+    group_list_names.append(['Palatability'])
+    group_names.append('Palatability')
+    group_list.append(none_group)
+    group_list_names.append(['None'])
+    group_names.append('No Taste Control')
+    
+    final_group_list = []
+    final_group_names = []
+    for g_i in range(len(group_list)):
+        if len(group_list[g_i]) > 0:
+            final_group_list.append(group_list[g_i])
+            final_group_names.append(group_names[g_i])
+    
+    return final_group_list, final_group_names
+
 def pull_group_training_data(group_list, group_names, all_dig_in_names, day_vars):
     group_train_data = dict()
     for g_i in range(len(group_list)):
@@ -1222,7 +1305,7 @@ def pull_group_training_data(group_list, group_names, all_dig_in_names, day_vars
                     #Calculate fr vector
                     d_i_fr_vec = np.sum(td_i_bin,1)/(epoch_len/1000)
                     group_fr_vecs.append(d_i_fr_vec)
-                    d_i_pop_fr = np.sum(td_i_bin)/(epoch_len/1000)/num_neur
+                    d_i_pop_fr = (np.sum(td_i_bin)/(epoch_len/1000))/num_neur
                     group_pop_fr.append(d_i_pop_fr)
         group_train_data[group_names[g_i]]['fr_vecs'] = group_fr_vecs
         group_train_data[group_names[g_i]]['pop_frs'] = group_pop_fr
@@ -1246,7 +1329,7 @@ def add_nondev_control_data(control_data,group_train_data,day_vars,segment_devia
     as true taste responses and rescale to taste population firing rate levels
     to create a control group"""
     
-    null_taste = get_null_controls(day_vars,segment_deviations,group_train_data) #Get binary matrices
+    null_taste = get_non_dev_controls(day_vars,segment_deviations,group_train_data) #Get binary matrices
     group_names = list(group_train_data.keys())
     #Get true avg population fr for rescaling
     all_true_pop_fr = []
@@ -1259,18 +1342,21 @@ def add_nondev_control_data(control_data,group_train_data,day_vars,segment_devia
     std_pop_fr = np.nanstd(np.array(all_true_pop_fr))
     mean_len = np.nanmean(np.array(all_true_lengths))
     std_len = np.nanstd(np.array(all_true_lengths))
+    num_neur, _ = np.shape(null_taste[0])
     #Create rescaled fr vecs of pre-taste non-dev periods
     null_fr_vecs = []
     null_pop_frs = []
     null_lengths = []
     for null_i in range(len(null_taste)):
-        null_pop_fr = np.sum(null_taste[null_i])/2 #2 second length to convert to hz
-        scale = (std_pop_fr*np.random.randn() + mean_pop_fr)/null_pop_fr
-        null_pop_frs.append(scale*null_pop_fr)
+        # scale = (std_pop_fr*np.random.randn() + mean_pop_fr)/null_pop_fr
+        # null_pop_frs.append(scale*null_pop_fr)
         null_len = np.ceil(std_len*np.random.randn() + mean_len).astype('int')
+        null_pop_fr = (np.nansum(null_taste[null_i][:null_len])/(null_len/1000))/num_neur #2 second length to convert to hz
+        null_pop_frs.append(null_pop_fr)
         null_lengths.append(null_len)
         #Create binned null taste response
-        null_fr_vecs.append(scale*np.sum(null_taste[null_i][:,:null_len],1)/(null_len/1000))
+        # null_fr_vecs.append(scale*np.sum(null_taste[null_i][:,:null_len],1)/(null_len/1000))
+        null_fr_vecs.append((np.sum(null_taste[null_i][:,:null_len],1)/(null_len/1000))/num_neur)
     control_data['Rescaled Non-Dev Control'] = dict()
     control_data['Rescaled Non-Dev Control']['fr_vecs'] = null_fr_vecs
     control_data['Rescaled Non-Dev Control']['pop_frs'] = null_pop_frs
@@ -1313,7 +1399,7 @@ def add_rescaled_taste_control_data(control_data,group_train_data,day_vars,\
     
     return control_data
 
-def get_null_controls(day_vars,segment_deviations,group_train_data):
+def get_non_dev_controls(day_vars,segment_deviations,group_train_data):
     """Function to find periods of the pre-taste interval where deviation events
     don't occur to get control tastes and deviation events"""
     segment_spike_times = day_vars[0]['segment_spike_times']

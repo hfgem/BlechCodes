@@ -14,6 +14,7 @@ import tqdm
 import random
 import numpy as np
 import functions.compare_multiday_funcs as cmf
+import functions.cross_animal_multiday_lstm_funcs as camlf
 from tkinter.filedialog import askdirectory
 from utils.input_funcs import select_analysis_groups
 
@@ -50,56 +51,22 @@ class run_compare_multiday_analysis():
                 corr_dict[dn] = dict()
                 data_dir = self.multiday_data_dict[dn]['data_dir']
                 corr_dir = os.path.join(data_dir,'Correlations')
-                corr_types = os.listdir(corr_dir)
-                for ct in corr_types:
-                    if ct == 'Null':
-                        skip = 1
-                    else: #Regular data
-                        corr_dict[dn][ct] = dict()
-                        corr_type_files = os.listdir(os.path.join(corr_dir,ct))
-                        for f in corr_type_files:
-                            if f.split('.')[-1] == 'npy':
-                                f_name = f.split('.')[0]
-                                if f_name == 'all_taste_names':
-                                    taste_names = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
-                                    taste_name_list = []
-                                    for tn in taste_names:
-                                        if tn == 'NaCl_1':
-                                            taste_name_list.append('salt_1')
-                                        else:
-                                            taste_name_list.append(tn)
-                                    
-                                    corr_dict[dn][ct]['tastes'] = taste_name_list
-                                else:
-                                    seg_name = f_name.split('_')[0]
-                                    corr_dict_keys = list(corr_dict[dn][ct].keys())
-                                    if len(np.where(np.array(corr_dict_keys) == seg_name)[0]) == 0: #Segment not stored yet
-                                        corr_dict[dn][ct][seg_name] = dict()
-                                        
-                                    if f_name.split('_')[-1] == 'dict': #Dictionary of all correlation values
-                                        f_data = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True).item()
-                                        corr_dict[dn][ct][seg_name]['all'] = dict()
-                                        num_tastes = len(f_data)
-                                        for nt_i in range(num_tastes):
-                                            taste_name = f_data[nt_i]['name']
-                                            if taste_name == 'NaCl_1':
-                                                taste_name = 'salt_1'
-                                            num_cp = len(f_data[nt_i]['data'])
-                                            num_points = len(f_data[nt_i]['data'][0])
-                                            data_concat = np.zeros((num_cp,num_points))
-                                            for cp_i in range(num_cp):
-                                                data_concat[cp_i,:] = np.array(f_data[nt_i]['data'][cp_i])
-                                            corr_dict[dn][ct][seg_name]['all'][taste_name] = dict()
-                                            corr_dict[dn][ct][seg_name]['all'][taste_name]['data'] = data_concat
-                                            try:
-                                                corr_dict[dn][ct][seg_name]['all'][taste_name]['num_dev'] = f_data[nt_i]['num_dev']
-                                                corr_dict[dn][ct][seg_name]['all'][taste_name]['taste_num_deliv'] = f_data[nt_i]['taste_num_deliv']
-                                            except:
-                                                skip_val = 1 #Place holder skip
-                                    else: #best correlations file
-                                        f_data = np.load(os.path.join(corr_dir,ct,f),allow_pickle=True)
-                                        corr_dict[dn][ct][seg_name]['best'] = f_data
-            np.save(corr_dict_path,corr_dict,allow_pickle=True)     
+                corr_files = os.listdir(corr_dir)
+                npy_files = [cf for cf in corr_files if cf[-3:] == 'npy']
+                for npy_f in npy_files:
+                    seg_name = npy_f.split('_')[0]
+                    #Regular data
+                    corr_dict[dn][seg_name] = np.load(os.path.join(corr_dir,npy_f),allow_pickle=True).item()
+                    #Fix CM46 naming of salt
+                    try:
+                        salt_data = corr_dict[dn][seg_name]['Salt_1 Identity']
+                        del corr_dict[dn][seg_name]['Salt_1 Identity']
+                        corr_dict[dn][seg_name]['Nacl_1 Identity'] = salt_data
+                    except:
+                        if self.verbose == True:
+                            print("No Salt_1 data to rename for " + dn)
+            
+            np.save(corr_dict_path,corr_dict,allow_pickle=True)   
         self.corr_dict = corr_dict
         
     def find_corr_groupings(self,):
@@ -107,117 +74,28 @@ class run_compare_multiday_analysis():
         num_datasets = len(self.corr_dict)
         unique_given_names = list(self.corr_dict.keys())
         #Pull unique correlation analysis names
-        unique_corr_names = []
-        for name in unique_given_names:
-            unique_corr_names.extend(list(self.corr_dict[name].keys()))
-        unique_corr_indices = np.sort(
-            np.unique(unique_corr_names, return_index=True)[1])
-        unique_corr_names = [unique_corr_names[i] for i in unique_corr_indices]
-        #Select which corr types to use in the analysis
-        print("\nSelect which corr types to use in this analysis.")
-        unique_corr_names = select_analysis_groups(unique_corr_names)
-        
-        #Pull unique segment and taste names and max cp
         unique_segment_names = []
-        unique_taste_names = []
-        max_cp = 0
+        unique_group_names = []
         for name in unique_given_names:
-            for corr_name in unique_corr_names:
-                seg_names = list(self.corr_dict[name][corr_name].keys())
-                taste_names = self.corr_dict[name][corr_name]['tastes']
-                unique_taste_names.extend(list(taste_names))
-                for s_n in seg_names:
-                    if type(self.corr_dict[name][corr_name][s_n]) == dict:
-                        unique_segment_names.extend([s_n])
-                        try:
-                            num_cp, _ = np.shape(self.corr_dict[name][corr_name][s_n]['all'][taste_names[0]]['data'])
-                            if num_cp > max_cp:
-                                max_cp = num_cp
-                        except:
-                            print("Unable to grab changepoint count.")
+            unique_gn_seg_names = list(self.corr_dict[name].keys())
+            unique_segment_names.extend(unique_gn_seg_names)
+            unique_group_names.extend(list(self.corr_dict[name][unique_gn_seg_names[0]].keys()))
         unique_seg_indices = np.sort(
             np.unique(unique_segment_names, return_index=True)[1])
         unique_segment_names = [unique_segment_names[i] for i in unique_seg_indices]
-        #Select which segments to use in the analysis
-        print("\nSelect which segments to use in this analysis.")
-        unique_segment_names = select_analysis_groups(unique_segment_names)
-        
-        unique_taste_indices = np.sort(
-            np.unique(unique_taste_names, return_index=True)[1])
-        unique_taste_names = [unique_taste_names[i] for i in unique_taste_indices]
-        #Select which tastes to use in the analysis
-        print("\nSelect which tastes to use in this analysis.")
-        unique_taste_names = select_analysis_groups(unique_taste_names)
+        unique_group_indices = np.sort(
+            np.unique(unique_group_names, return_index=True)[1])
+        unique_group_names = [unique_group_names[i] for i in unique_group_indices]
             
         self.unique_given_names = unique_given_names
-        self.unique_corr_names = unique_corr_names
+        self.unique_group_names = unique_group_names
         self.unique_segment_names = unique_segment_names
-        self.unique_taste_names = unique_taste_names
-        self.max_cp = max_cp        
-     
-    def gather_null_corr_data(self,):
-        print("Collecting null correlation data")
-        null_corr_dict_path = os.path.join(self.save_dir,'null_corr_data_dict.npy')
-        try:
-            self.null_corr_dict = np.load(null_corr_dict_path,allow_pickle=True).item()
-        except:
-            null_corr_dict = dict()
-            data_names = list(self.multiday_data_dict.keys())
-            for dn in data_names:
-                print("\tImporting null data for " + dn)
-                null_corr_dict[dn] = dict()
-                data_dir = self.multiday_data_dict[dn]['data_dir']
-                null_corr_dir = os.path.join(data_dir,'Correlations','Null')
-                null_folders = os.listdir(null_corr_dir)
-                num_null = len(null_folders)
-                null_corr_dict[dn]['num_null'] = num_null
-                #First set up folder structure
-                for sn in self.unique_segment_names:
-                    null_corr_dict[dn][sn] = dict()
-                    for tn in self.unique_taste_names:
-                        null_corr_dict[dn][sn][tn] = dict()
-                        for cn in self.unique_corr_names:
-                            null_corr_dict[dn][sn][tn][cn] = dict() 
-                            for cp_i in range(self.max_cp):
-                                null_corr_dict[dn][sn][tn][cn][cp_i] = [] #Compiled from samples from all null datasets
-                #Now collect correlations across null datasets into this folder structure
-                for cn in self.unique_corr_names:
-                    print('\t\tNow collecting null data for ' + cn)
-                    for nf_i, nf in tqdm.tqdm(enumerate(null_folders)):
-                        null_data_folder = os.path.join(null_corr_dir,'null_' + str(nf_i),cn)
-                        if os.path.isdir(null_data_folder):
-                            null_datasets = os.listdir(null_data_folder)
-                            for sn in self.unique_segment_names:
-                                for nd_name in null_datasets:
-                                    if nd_name.split('_')[0] == sn:
-                                        if nd_name.split('_')[-1] == 'dict.npy': #Only save complete correlation datasets
-                                            null_dict = np.load(os.path.join(null_data_folder,\
-                                                                     nd_name),allow_pickle=True).item()
-                                            for ndk_i in null_dict.keys():
-                                                tn = null_dict[ndk_i]['name']
-                                                if tn == 'NaCl_1':
-                                                    tn_true = 'salt_1'
-                                                else:
-                                                    tn_true = tn
-                                                all_cp_data = null_dict[ndk_i]['data']
-                                                num_null_dev = null_dict[ndk_i]['num_dev']
-                                                num_taste_deliv, _ = np.shape(null_dict[ndk_i]['taste_num'])
-                                                for cp_i in range(self.max_cp):
-                                                    try:
-                                                        all_cp_data_reshaped = np.reshape(all_cp_data[cp_i],(num_taste_deliv,num_null_dev))
-                                                        avg_null_corr = np.nanmean(all_cp_data_reshaped,0) #Average correlation across deliveries
-                                                        null_corr_dict[dn][sn][tn_true][cn][cp_i].extend(avg_null_corr)
-                                                    except:
-                                                        skip_taste = 1
-            self.null_corr_dict = null_corr_dict
-            np.save(null_corr_dict_path,null_corr_dict,allow_pickle=True)   
     
     def run_corr_analysis(self,):
         print("Running correlation analysis")
-        cmf.compare_corr_data(self.corr_dict, self.null_corr_dict, self.multiday_data_dict, 
-                              self.unique_given_names, self.unique_corr_names, 
-                              self.unique_segment_names, self.unique_taste_names, 
-                              self.max_cp, self.save_dir)
+        cmf.compare_corr_data(self.corr_dict, self.multiday_data_dict, 
+                              self.unique_given_names, self.unique_segment_names, 
+                              self.unique_group_names, self.save_dir)
         
     def gather_decode_data(self,):
         print("Collecting decoding data")
@@ -422,4 +300,7 @@ class run_compare_multiday_analysis():
         
     def run_lstm_analysis(self,):
         print("Running LSTM analysis")
-        #ADD CODE HERE
+        
+        camlf.run_analysis_plots_by_decode_pair(self.lstm_dict, self.unique_given_names,
+                                self.unique_training_categories, self.unique_bin_counts, 
+                                self.unique_decode_pairs, self.lstm_save_dir)

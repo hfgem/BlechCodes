@@ -18,7 +18,7 @@ from itertools import combinations
 from scipy.stats import ks_2samp, ttest_ind, anderson, f_oneway, mannwhitneyu
 from functions.compare_conditions_funcs import int_input, bool_input, int_list_input
 
-def compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_given_names,
+def compare_corr_data(corr_dict, multiday_data_dict, unique_given_names,
                       unique_segment_names, unique_group_names, save_dir):
     
     corr_results_save_dir = os.path.join(save_dir,'Correlations')
@@ -32,11 +32,6 @@ def compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_give
     #Plot all data distributions against each other
     plot_all_dist(corr_dict, unique_given_names, unique_segment_names, 
                   unique_group_names, corr_results_save_dir)
-    
-    #Significance Test all group pairs
-    test_corr_dist_sig_test(corr_dict, unique_given_names, 
-                             unique_segment_names, unique_group_names, 
-                             corr_results_save_dir)
     
     #Calculate indices unique to each correlation combo
     try:
@@ -133,6 +128,10 @@ def test_corr_dist_sig_test(corr_dict, unique_given_names,
                          unique_segment_names, unique_group_names, 
                          corr_results_save_dir, verbose=False):
     """
+    DO NOT USE. THIS DOES NOT ACCOUNT FOR DIFFERENT LENGTHS OF SEGMENTS AND 
+    DIFFERENCES BETWEEN ANIMALS. IT SIMPLY LUMPS ALL CORRELATION VALUES ACROSS
+    DEVIATION EVENTS TOGETHER.
+    
     This function tests pairs of deviation event x taste correlation 
     distributions against each other and against null data.
 
@@ -172,11 +171,47 @@ def test_corr_dist_sig_test(corr_dict, unique_given_names,
     if not os.path.isdir(by_seg_dir):
         os.mkdir(by_seg_dir)
     for s_i, seg_name in enumerate(unique_segment_names):
-        g_pair_sig_text = ["G1, G2, dir, MWU, KS"]
+        #Overall
+        list_group_data = []
+        for gp in unique_group_names:
+            group_data = []
+            for gn in unique_given_names:
+                group_data.extend(list(np.nanmean(corr_dict[gn][seg_name][gp]['corr_vals_by_response'],1)))
+            all_group_data = np.array(group_data)
+            list_group_data.append(list(all_group_data[~np.isnan(all_group_data)]))
+        
+        all_group_test = f_oneway(*list_group_data).pvalue
+        f_all_data, ax_all_data = plt.subplots(ncols=2,figsize=(10,5))
+        ax_all_data[0].axvline(0,linestyle='dashed',alpha=0.5,color='k',label='_')
+        ax_all_data[1].axvline(0,linestyle='dashed',alpha=0.5,color='k',label='_')
+        for gp_i, gp in enumerate(unique_group_names):
+            ax_all_data[0].hist(list_group_data[gp_i],bins=100,density=True,histtype='step',\
+                                 label=gp)
+            ax_all_data[1].hist(list_group_data[gp_i],bins=1000,density=True,cumulative=True,\
+                                 histtype='step',label=gp)
+        ax_all_data[0].set_xlim([-1,1])
+        ax_all_data[0].set_xlabel('Pearson Correlation')
+        ax_all_data[0].set_ylabel('Density')
+        ax_all_data[0].set_title('Probability Density')
+        ax_all_data[0].legend(loc='upper left')
+        ax_all_data[1].set_xlim([-1,1])
+        ax_all_data[1].set_xlabel('Pearson Correlation')
+        ax_all_data[1].set_ylabel('Cumulative Density')
+        ax_all_data[1].set_title('Cumulative Density')
+        #Finish plot
+        title = 'All Groups'
+        plt.suptitle(title + '\n' + 'ANOVA p = ' + str(np.round(all_group_test,4)))
+        plt.tight_layout()
+        f_all_data.savefig(os.path.join(by_seg_dir,seg_name + '_all_curves_ANOVA.png'))
+        f_all_data.savefig(os.path.join(by_seg_dir,seg_name + '_all_curves_ANOVA.svg'))
+        plt.close(f_all_data)
+        
+        #Pairs
+        g_pair_sig_text = ['G1', 'G2', 'dir', 'MWU', 'KS']
         for g_1, g_2 in g_pairs:
             g_1_name = unique_group_names[g_1]
             g_2_name = unique_group_names[g_2]
-            g_pair_sig = g_1_name + ',' + g_2_name + ','
+            g_pair_sig = [g_1_name,g_2_name]
             g_1_data = []
             g_2_data = []
             for gn in unique_given_names:
@@ -190,22 +225,22 @@ def test_corr_dist_sig_test(corr_dict, unique_given_names,
             mwu_result = mannwhitneyu(g_1_data,g_2_data,alternative='two-sided').pvalue
             if ks_result <= 0.05:
                 if np.nanmean(g_1_data) < np.nanmean(g_2_data):
-                    g_pair_sig += '<,'
+                    g_pair_sig.extend(['<'])
                 elif np.nanmean(g_1_data) > np.nanmean(g_2_data):
-                    g_pair_sig += '>,'
+                    g_pair_sig.extend(['>'])
             else:
-                g_pair_sig += '=,'
-            g_pair_sig += str(np.round(mwu_result,4)) + ','
-            g_pair_sig += str(np.round(ks_result,4))
+                g_pair_sig.extend(['='])
+            g_pair_sig.extend([str(np.round(mwu_result,4))])
+            g_pair_sig.extend([str(np.round(ks_result,4))])
             g_pair_sig_text.append(g_pair_sig)
             #Plot data
             f_pair_data, ax_pair_data = plt.subplots(ncols=2,figsize=(10,5))
             #Density PDF
             ax_pair_data[0].axvline(0,linestyle='dashed',alpha=0.5,color='k',label='_')
             ax_pair_data[0].hist(g_1_data,bins=100,density=True,histtype='step',\
-                                 label=g_1_name)
+                                  label=g_1_name)
             ax_pair_data[0].hist(g_2_data,bins=100,density=True,histtype='step',\
-                                 label=g_2_name)
+                                  label=g_2_name)
             ax_pair_data[0].set_xlim([-1,1])
             ax_pair_data[0].set_xlabel('Pearson Correlation')
             ax_pair_data[0].set_ylabel('Density')
@@ -214,19 +249,18 @@ def test_corr_dist_sig_test(corr_dict, unique_given_names,
             #CDF
             ax_pair_data[1].axvline(0,linestyle='dashed',alpha=0.5,color='k',label='_')
             ax_pair_data[1].hist(g_1_data,bins=1000,density=True,cumulative=True,\
-                                 histtype='step',label=g_1_name)
+                                  histtype='step',label=g_1_name)
             ax_pair_data[1].hist(g_2_data,bins=1000,density=True,cumulative=True,\
-                                 histtype='step',label=g_2_name)
+                                  histtype='step',label=g_2_name)
             ax_pair_data[1].set_xlim([-1,1])
             ax_pair_data[1].set_xlabel('Pearson Correlation')
             ax_pair_data[1].set_ylabel('Cumulative Density')
             ax_pair_data[1].set_title('Cumulative Density')
             #Finish plot
             title = g_1_name + ' x ' + g_2_name
-            g_sig_rewrite = g_pair_sig.split(',')
-            plt.suptitle(title + '\n' + 'Dir ' + g_sig_rewrite[2] + \
-                         '; MWUp = ' + g_sig_rewrite[3] + \
-                             ' KSp = ' + g_sig_rewrite[4])
+            plt.suptitle(title + '\n' + 'Dir ' + g_pair_sig[2] + \
+                          '; MWUp = ' + g_pair_sig[3] + \
+                              ' KSp = ' + g_pair_sig[4])
             plt.tight_layout()
             f_pair_data.savefig(os.path.join(by_seg_dir,seg_name + '_' + ('_').join(title.split(' ')) + '.png'))
             f_pair_data.savefig(os.path.join(by_seg_dir,seg_name + '_' + ('_').join(title.split(' ')) + '.svg'))
@@ -275,9 +309,9 @@ def test_corr_dist_sig_test(corr_dict, unique_given_names,
             #Density PDF
             ax_pair_data[0].axvline(0,linestyle='dashed',alpha=0.5,color='k',label='_')
             ax_pair_data[0].hist(s_1_data,bins=100,density=True,histtype='step',\
-                                 label=s_1_name)
+                                  label=s_1_name)
             ax_pair_data[0].hist(s_2_data,bins=100,density=True,histtype='step',\
-                                 label=s_2_name)
+                                  label=s_2_name)
             ax_pair_data[0].set_xlim([-1,1])
             ax_pair_data[0].set_xlabel('Pearson Correlation')
             ax_pair_data[0].set_ylabel('Density')
@@ -286,9 +320,9 @@ def test_corr_dist_sig_test(corr_dict, unique_given_names,
             #CDF
             ax_pair_data[1].axvline(0,linestyle='dashed',alpha=0.5,color='k',label='_')
             ax_pair_data[1].hist(s_1_data,bins=1000,density=True,cumulative=True,\
-                                 histtype='step',label=s_1_name)
+                                  histtype='step',label=s_1_name)
             ax_pair_data[1].hist(s_2_data,bins=1000,density=True,cumulative=True,\
-                                 histtype='step',label=s_2_name)
+                                  histtype='step',label=s_2_name)
             ax_pair_data[1].set_xlim([-1,1])
             ax_pair_data[1].set_xlabel('Pearson Correlation')
             ax_pair_data[1].set_ylabel('Cumulative Density')
@@ -297,8 +331,8 @@ def test_corr_dist_sig_test(corr_dict, unique_given_names,
             title = s_1_name + ' x ' + s_2_name
             s_sig_rewrite = s_pair_sig.split(',')
             plt.suptitle(title + '\n' + 'Dir ' + s_sig_rewrite[2] + \
-                         '; MWUp = ' + s_sig_rewrite[3] + \
-                             ' KSp = ' + s_sig_rewrite[4])
+                          '; MWUp = ' + s_sig_rewrite[3] + \
+                              ' KSp = ' + s_sig_rewrite[4])
             plt.tight_layout()
             f_pair_data.savefig(os.path.join(cross_seg_dir,g_name + '_' + ('_').join(title.split(' ')) + '.png'))
             f_pair_data.savefig(os.path.join(cross_seg_dir,g_name + '_' + ('_').join(title.split(' ')) + '.svg'))
@@ -310,11 +344,6 @@ def test_corr_dist_sig_test(corr_dict, unique_given_names,
             writer = csv.writer(file)
             for row in seg_sig_text:
                 writer.writerow(row)
-                        
-    
-    
-    #Compare groups against null
-    
     
 def calc_ind_dicts(corr_dict, unique_given_names, unique_segment_names, 
                    unique_group_names, corr_cutoffs, verbose=False):
@@ -393,17 +422,7 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
     except:
         #Store data
         all_rates = np.nan*np.ones((num_seg,num_groups,num_anim,num_cutoff))
-        
-        #Plot all corr values          
-        f_rate, ax_rate = plt.subplots(nrows = 1, ncols = num_seg, figsize=(num_seg*4,4),\
-                                    sharex = True, sharey = True)
-        f_rate_zoom, ax_rate_zoom = plt.subplots(nrows = 1, ncols = num_seg, \
-                                                 figsize=(num_seg*4,4),\
-                                                     sharex = True, sharey = True)
         for s_i, seg_name in enumerate(unique_segment_names):
-            seg_indiv_dir = os.path.join(indiv_anim_plot_save_dir,seg_name)
-            if not os.path.isdir(seg_indiv_dir):
-                os.mkdir(seg_indiv_dir)
             for gp_i, g_name in enumerate(unique_group_names):
                 animal_inds = all_corr_dicts[seg_name][g_name]
                 animal_true_rates = np.nan*np.ones((num_anim,num_cutoff))
@@ -421,73 +440,151 @@ def plot_corr_cutoff_groups(all_corr_dicts, corr_dict, multiday_data_dict,
                             ' ' + g_name + ' data.'
                         if verbose == True:
                             print(errormsg)
-                    #Plot individual animal rates in separate folder
-                    f_anim = plt.figure()
-                    plt.title(g_n)
-                    plt.plot(corr_cutoffs, animal_true_rates[gn_i,:], label='True')
-                    plt.ylabel('Rate (Hz)')
-                    plt.xlabel('Pearson Correlation Cutoff')
-                    plt.legend(loc='upper right')
-                    f_anim.savefig(os.path.join(seg_indiv_dir,g_name+'_'+g_n+'_rate_taste_by_cutoff.png'))
-                    f_anim.savefig(os.path.join(seg_indiv_dir,g_name+'_'+g_n+'_rate_taste_by_cutoff.svg'))
-                    plt.close(f_anim)
-                #Average rates
-                anim_true_avg_rate = np.nanmean(animal_true_rates,0)
                 all_rates[s_i,gp_i,:,:] = animal_true_rates
-                ax_rate[s_i].plot(corr_cutoffs,anim_true_avg_rate,label=g_name)
-                ax_rate_zoom[s_i].plot(corr_cutoffs[cc_top_half_ind:],anim_true_avg_rate[cc_top_half_ind:],label=g_name)
-            #ANOVA across groups
-            group_true_rates = np.squeeze(all_rates[s_i,:,:,:]) #num_groups x num_anim x num_cutoff
-            sig_by_cc = np.zeros(num_cutoff + 2)
-            for cc_i in range(num_cutoff):
-                data_list = []
-                for gp_i in range(num_groups):
-                    gp_data = np.squeeze(group_true_rates[gp_i,:,cc_i])
-                    gp_data = gp_data[~np.isnan(gp_data)]
-                    gp_data = gp_data[gp_data > 0]
-                    data_list.append(gp_data)
-                p_val = f_oneway(*data_list).pvalue
-                if p_val <= 0.05:
-                    sig_by_cc[cc_i+1] = 1
-            #Plot where there is significant difference in the population mean
-            start_sig = np.where(np.diff(sig_by_cc) == 1)[0]
-            end_sig = np.where(np.diff(sig_by_cc) == -1)[0] - 1
-            num_sig = len(start_sig)
-            for ns_i in range(num_sig):
-                ss_i = start_sig[ns_i]
-                es_i = end_sig[ns_i]
-                zoom_s_i = np.max([cc_top_half_ind,ss_i])
-                zoom_e_i = np.max([cc_top_half_ind,es_i])
-                ax_rate[s_i].axvspan(corr_cutoffs[ss_i], corr_cutoffs[es_i], \
-                                        color='yellow', alpha=0.3)
-                ax_rate_zoom[s_i].axvspan(corr_cutoffs[zoom_s_i], corr_cutoffs[zoom_e_i], \
-                                        color='yellow', alpha=0.3)
-            ax_rate[s_i].set_title(seg_name)
-            ax_rate_zoom[s_i].set_title(seg_name)
-            ax_rate[s_i].set_xlabel('Min. Correlation Cutoff')
-            ax_rate_zoom[s_i].set_xlabel('Min. Correlation Cutoff')
-            if s_i == 0:
-                ax_rate[s_i].set_ylabel('Rate (Hz)')
-                ax_rate_zoom[s_i].set_ylabel('Rate (Hz)')
-        #Save the rate matrix
         np.save(os.path.join(corr_results_save_dir,'corr_cutoff_rates.npy'),all_rates,allow_pickle=True)
-        #Finish plotting
-        plt.figure(f_rate)
-        ax_rate[0].legend(loc='upper right')
-        ax_rate[0].set_xticks(np.arange(0,1.25,0.25))
-        plt.suptitle('Rate of Events Above Cutoff')
-        plt.tight_layout()
-        f_rate.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff.png'))
-        f_rate.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff.svg'))
-        plt.close(f_rate)
-        plt.figure(f_rate_zoom)
-        ax_rate_zoom[0].legend(loc='upper right')
-        ax_rate_zoom[0].set_xticks(np.arange(cutoff_val,1.25,0.25))
-        plt.suptitle('Rate of Events Above Zoom Cutoff')
-        plt.tight_layout()
-        f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_zoom.png'))
-        f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_zoom.svg'))
-        plt.close(f_rate_zoom)
+        
+    #Plot all corr values by segment  
+    f_rate, ax_rate = plt.subplots(nrows = 1, ncols = num_seg, figsize=(num_seg*4,4),\
+                                sharex = True, sharey = True)
+    f_rate_zoom, ax_rate_zoom = plt.subplots(nrows = 1, ncols = num_seg, \
+                                             figsize=(num_seg*4,4),\
+                                                 sharex = True, sharey = True)
+    for s_i, seg_name in enumerate(unique_segment_names):
+        seg_indiv_dir = os.path.join(indiv_anim_plot_save_dir,seg_name)
+        if not os.path.isdir(seg_indiv_dir):
+            os.mkdir(seg_indiv_dir)
+        for gp_i, g_name in enumerate(unique_group_names):
+            animal_true_rates = np.squeeze(all_rates[s_i,gp_i,:,:])
+            for gn_i, g_n in enumerate(unique_given_names):
+                #Plot individual animal rates in separate folder
+                f_anim = plt.figure()
+                plt.title(g_n)
+                plt.plot(corr_cutoffs, animal_true_rates[gn_i,:], label='True')
+                plt.ylabel('Rate (Hz)')
+                plt.xlabel('Pearson Correlation Cutoff')
+                plt.legend(loc='upper right')
+                f_anim.savefig(os.path.join(seg_indiv_dir,g_name+'_'+g_n+'_rate_taste_by_cutoff.png'))
+                f_anim.savefig(os.path.join(seg_indiv_dir,g_name+'_'+g_n+'_rate_taste_by_cutoff.svg'))
+                plt.close(f_anim)
+            #Average rates
+            anim_true_avg_rate =  np.nanmean(animal_true_rates,0)
+            ax_rate[s_i].plot(corr_cutoffs,anim_true_avg_rate,label=g_name)
+            ax_rate_zoom[s_i].plot(corr_cutoffs[cc_top_half_ind:],anim_true_avg_rate[cc_top_half_ind:],label=g_name)
+        #ANOVA across groups
+        group_true_rates = np.squeeze(all_rates[s_i,:,:,:]) #num_groups x num_anim x num_cutoff
+        sig_by_cc = np.zeros(num_cutoff + 2)
+        for cc_i in range(num_cutoff):
+            data_list = []
+            for gp_i in range(num_groups):
+                gp_data = np.squeeze(group_true_rates[gp_i,:,cc_i])
+                gp_data = gp_data[~np.isnan(gp_data)]
+                gp_data = gp_data[gp_data > 0]
+                data_list.append(gp_data)
+            p_val = f_oneway(*data_list).pvalue
+            if p_val <= 0.05:
+                sig_by_cc[cc_i+1] = 1
+        #Plot where there is significant difference in the population mean
+        start_sig = np.where(np.diff(sig_by_cc) == 1)[0]
+        end_sig = np.where(np.diff(sig_by_cc) == -1)[0] - 1
+        num_sig = len(start_sig)
+        for ns_i in range(num_sig):
+            ss_i = start_sig[ns_i]
+            es_i = end_sig[ns_i]
+            zoom_s_i = np.max([cc_top_half_ind,ss_i])
+            zoom_e_i = np.max([cc_top_half_ind,es_i])
+            ax_rate[s_i].axvspan(corr_cutoffs[ss_i], corr_cutoffs[es_i], \
+                                    color='yellow', alpha=0.3)
+            ax_rate_zoom[s_i].axvspan(corr_cutoffs[zoom_s_i], corr_cutoffs[zoom_e_i], \
+                                    color='yellow', alpha=0.3)
+        ax_rate[s_i].set_title(seg_name)
+        ax_rate_zoom[s_i].set_title(seg_name)
+        ax_rate[s_i].set_xlabel('Min. Correlation Cutoff')
+        ax_rate_zoom[s_i].set_xlabel('Min. Correlation Cutoff')
+        if s_i == 0:
+            ax_rate[s_i].set_ylabel('Rate (Hz)')
+            ax_rate_zoom[s_i].set_ylabel('Rate (Hz)')
+    #Save the rate matrix
+    np.save(os.path.join(corr_results_save_dir,'corr_cutoff_rates.npy'),all_rates,allow_pickle=True)
+    #Finish plotting
+    plt.figure(f_rate)
+    ax_rate[0].legend(loc='upper right')
+    ax_rate[0].set_xticks(np.arange(0,1.25,0.25))
+    plt.suptitle('Rate of Events Above Cutoff')
+    plt.tight_layout()
+    f_rate.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_by_segment.png'))
+    f_rate.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_by_segment.svg'))
+    plt.close(f_rate)
+    plt.figure(f_rate_zoom)
+    ax_rate_zoom[0].legend(loc='upper right')
+    ax_rate_zoom[0].set_xticks(np.arange(cutoff_val,1.25,0.25))
+    plt.suptitle('Rate of Events Above Zoom Cutoff')
+    plt.tight_layout()
+    f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_by_segment_zoom.png'))
+    f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_by_segment_zoom.svg'))
+    plt.close(f_rate_zoom)
+        
+    #Plot all corr values by group   
+    f_rate, ax_rate = plt.subplots(nrows = 1, ncols = num_groups, figsize=(num_groups*4,4),\
+                                sharex = True, sharey = True)
+    f_rate_zoom, ax_rate_zoom = plt.subplots(nrows = 1, ncols = num_groups, \
+                                             figsize=(num_groups*4,4),\
+                                                 sharex = True, sharey = True)
+    for gp_i, g_name in enumerate(unique_group_names):
+        for s_i, seg_name in enumerate(unique_segment_names):
+            mean_rate = np.nanmean(all_rates[s_i,gp_i,:,:],0)
+            ax_rate[gp_i].plot(corr_cutoffs,mean_rate,label=seg_name)
+            ax_rate_zoom[gp_i].plot(corr_cutoffs[cc_top_half_ind:],\
+                                    mean_rate[cc_top_half_ind:],label=seg_name)
+        #ANOVA across groups
+        group_true_rates = np.squeeze(all_rates[:,gp_i,:,:]) #num_seg x num_anim x num_cutoff
+        sig_by_cc = np.zeros(num_cutoff + 2)
+        for cc_i in range(num_cutoff):
+            data_list = []
+            for s_i, seg_name in enumerate(unique_segment_names):
+                seg_data = np.squeeze(group_true_rates[s_i,:,cc_i])
+                seg_data = seg_data[~np.isnan(seg_data)]
+                seg_data = seg_data[seg_data > 0]
+                data_list.append(seg_data)
+            p_val = f_oneway(*data_list).pvalue
+            if p_val <= 0.05:
+                sig_by_cc[cc_i+1] = 1
+        #Plot where there is significant difference in the population mean
+        start_sig = np.where(np.diff(sig_by_cc) == 1)[0]
+        end_sig = np.where(np.diff(sig_by_cc) == -1)[0] - 1
+        num_sig = len(start_sig)
+        for ns_i in range(num_sig):
+            ss_i = start_sig[ns_i]
+            es_i = end_sig[ns_i]
+            zoom_s_i = np.max([cc_top_half_ind,ss_i])
+            zoom_e_i = np.max([cc_top_half_ind,es_i])
+            ax_rate[gp_i].axvspan(corr_cutoffs[ss_i], corr_cutoffs[es_i], \
+                                    color='yellow', alpha=0.3)
+            ax_rate_zoom[gp_i].axvspan(corr_cutoffs[zoom_s_i], corr_cutoffs[zoom_e_i], \
+                                    color='yellow', alpha=0.3)
+        ax_rate[gp_i].set_title(g_name)
+        ax_rate_zoom[gp_i].set_title(g_name)
+        ax_rate[gp_i].set_xlabel('Min. Correlation Cutoff')
+        ax_rate_zoom[gp_i].set_xlabel('Min. Correlation Cutoff')
+        if gp_i == 0:
+            ax_rate[s_i].set_ylabel('Rate (Hz)')
+            ax_rate_zoom[s_i].set_ylabel('Rate (Hz)')
+    #Finish plotting
+    plt.figure(f_rate)
+    ax_rate[0].legend(loc='upper right')
+    ax_rate[0].set_xticks(np.arange(0,1.25,0.25))
+    plt.suptitle('Rate of Events Above Cutoff')
+    plt.tight_layout()
+    f_rate.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_by_group.png'))
+    f_rate.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_by_group.svg'))
+    plt.close(f_rate)
+    plt.figure(f_rate_zoom)
+    ax_rate_zoom[0].legend(loc='upper right')
+    ax_rate_zoom[0].set_xticks(np.arange(cutoff_val,1.25,0.25))
+    plt.suptitle('Rate of Events Above Zoom Cutoff')
+    plt.tight_layout()
+    f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_by_group_zoom.png'))
+    f_rate_zoom.savefig(os.path.join(cross_anim_plot_save_dir,'rate_group_by_cutoff_by_group_zoom.svg'))
+    plt.close(f_rate_zoom)
         
     plot_corr_cutoff_rate_diffs(all_rates, unique_given_names, unique_segment_names, 
                             unique_group_names, corr_cutoffs, 

@@ -11,7 +11,7 @@ from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 import numpy as np
 
-def run_analysis_plots_by_decode_pair(unique_given_names,unique_training_categories,\
+def run_analysis_plots_by_decode_pair(lstm_dict, unique_given_names,unique_training_categories,\
                                       unique_bin_counts, unique_decode_pairs, lstm_save_dir):
     
     num_anim = len(unique_given_names)
@@ -87,11 +87,11 @@ def run_analysis_plots_by_decode_pair(unique_given_names,unique_training_categor
             #Plot data
             plot_diff_data(anim_true_data, anim_diff_data, anim_overlap_data, \
                            anim_corr_data, segment_names, unique_training_categories, \
-                           udp, bin_save_dir)
+                           unique_given_names, udp, bin_save_dir)
 
 def plot_diff_data(anim_true_data, anim_diff_data, anim_overlap_data, \
                anim_corr_data, segment_names, unique_training_categories, \
-               udp, bin_save_dir):
+               unique_given_names, udp, bin_save_dir):
     
     #Plot results
     # True Fractions

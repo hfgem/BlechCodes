@@ -50,54 +50,6 @@ def multiday_dev_analysis(corr_dir,all_dig_in_names,group_train_data,control_dat
                                       dev_rast,dev_times,dev_fr_vecs,seg_name,corr_dir)
         
         
-        
-def multiday_null_dev_analysis(save_dir,all_dig_in_names,tastant_fr_dist_pop,
-                          taste_num_deliv,max_hz_pop,tastant_fr_dist_z_pop,
-                          max_hz_z_pop,min_hz_z_pop,max_num_cp,null_dev_rasters,
-                          null_dev_times,null_segment_dev_fr_vecs,
-                          null_segment_dev_fr_vecs_zscore,segments_to_analyze, 
-                          segment_times_to_analyze_reshaped, 
-                          segment_spike_times_to_analyze,
-                          bin_dt,segment_names_to_analyze):
-    """
-    This function serves as the main function which calls all others for 
-    analyses of deviation events from the train day in comparison to taste
-    responses across days.
-    """
-    
-    corr_dir = os.path.join(save_dir,'Correlations')
-    if not os.path.isdir(corr_dir):
-        os.mkdir(corr_dir)
-    null_corr_dir = os.path.join(corr_dir,'Null')
-    if not os.path.isdir(null_corr_dir):
-        os.mkdir(null_corr_dir)
-        
-    #Variables
-    num_null = len(null_dev_rasters)
-    num_seg = len(null_segment_dev_fr_vecs[0])
-    num_neur = len(null_segment_dev_fr_vecs[0][0][0])
-    num_tastes = len(all_dig_in_names)
-    
-    #Now go through segments and their deviation events and compare
-    print('Correlating Null Deviation Events')
-    for null_i in tqdm.tqdm(range(num_null)):
-        null_i_corr_dir = os.path.join(null_corr_dir,'null_' + str(null_i))
-        if not os.path.isdir(null_i_corr_dir):
-            os.mkdir(null_i_corr_dir)
-        for s_ind, s_i in enumerate(segments_to_analyze):
-            seg_name = segment_names_to_analyze[s_ind]
-            dev_rast = null_dev_rasters[null_i][s_ind]
-            dev_times = null_dev_times[null_i][s_ind]
-            # dev_fr_vecs = null_segment_dev_fr_vecs[null_i][s_ind]
-            null_dev_fr_vecs = null_segment_dev_fr_vecs_zscore[null_i][s_ind]
-            
-            #Run correlation analyses
-            correlate_null_dev_to_taste(num_neur,all_dig_in_names,tastant_fr_dist_z_pop,
-                                              taste_num_deliv,max_hz_z_pop,min_hz_z_pop,
-                                              max_num_cp,dev_rast,dev_times,null_dev_fr_vecs,
-                                              seg_name,null_i_corr_dir,False)
-            
-        
 def correlate_dev_to_taste(num_neur,all_dig_in_names,group_train_data,control_data,\
                               dev_rast,dev_times,dev_fr_vecs,seg_name,corr_dir,\
                                   plot_flag=True):
@@ -173,7 +125,6 @@ def correlate_dev_to_taste(num_neur,all_dig_in_names,group_train_data,control_da
             corr_vec = p_num/p_denom
             corr_vals_by_response[:,v_i] = corr_vec
             all_corr_vals.extend(list(corr_vec))
-        rescaled_nondev_control_corr = np.nanmean(corr_vals_by_response,1)
         
         corr_dict[g_name]['all_corr_vals'] = all_corr_vals
         corr_dict[g_name]['corr_vals_by_response'] = corr_vals_by_response
@@ -182,6 +133,7 @@ def correlate_dev_to_taste(num_neur,all_dig_in_names,group_train_data,control_da
         
         np.save(os.path.join(corr_dir,seg_name+'_corr_dict.npy'),corr_dict,allow_pickle=True)
     
+    rescaled_nondev_control_corr = np.nanmean(corr_vals_by_response,1)
     #Now plot
     if plot_flag == True:
         plot_corr_dist(avg_corr_by_group,rescaled_nondev_control_corr,\
@@ -338,6 +290,7 @@ def plot_corr_dist(avg_corr_by_group,rescaled_nondev_control_corr,group_names,se
                                     + '_x_' + g_2_name + '_corr.png'))
         f_pair.savefig(os.path.join(fr_dir,seg_name + '_' + g_1_name \
                                     + '_x_' + g_2_name + '_corr.svg'))
+        plt.close(f_pair)
     
     #Now plot true groups against control
     for g_i, g_name in enumerate(group_names):
@@ -360,3 +313,4 @@ def plot_corr_dist(avg_corr_by_group,rescaled_nondev_control_corr,group_names,se
                                     + '_x_nondev_control_corr.png'))
         f_control.savefig(os.path.join(fr_dir,seg_name + '_' + g_name \
                                     + '_x_nondev_control_corr.svg'))
+        plt.close(f_control)

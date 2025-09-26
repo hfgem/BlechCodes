@@ -186,7 +186,5 @@ import functions.compare_multiday_funcs as cmf
 
 print("Running correlation analysis")
 
-null_corr_dict = dict()
-
-cmf.compare_corr_data(corr_dict, null_corr_dict, multiday_data_dict, unique_given_names,
+cmf.compare_corr_data(corr_dict, multiday_data_dict, unique_given_names,
                       unique_segment_names, unique_group_names, save_dir)

@@ -209,7 +209,7 @@ for n_i in range(num_days):
         day_vars[n_i]['hdf5_dir'], 'changepoint_data', 'pop_taste_cp_raster_inds')
     day_vars[n_i]['num_pt_cp'] = day_vars[n_i]['num_cp'] + 2
     
-#Get data for decoding
+# Get data for decoding
 
 all_dig_in_names = []
 for n_i in range(num_days):
@@ -221,9 +221,13 @@ for n_i in range(num_days):
 #decode_groups()
 non_none_tastes = [taste for taste in all_dig_in_names if taste[:4] != 'none']
 non_none_tastes = non_none_tastes
-group_list, group_names = ddf.multiday_decode_groupings_split_identity(day_vars[0]['epochs_to_analyze'],
+group_list, group_names = ddf.multiday_decode_groupings_split_identity_keep_day_2_tastes(day_vars[0]['epochs_to_analyze'],
                                                all_dig_in_names,
                                                non_none_tastes)
+bayes_dir = os.path.join(save_dir,'Naive_Bayes_GMM_w_day_2_tastes')
+if os.path.isdir(bayes_dir) == False:
+    os.mkdir(bayes_dir)
+
 #Save the group information for cross-animal use 
 group_dict = dict()
 for gn_i, gn in enumerate(group_names):
