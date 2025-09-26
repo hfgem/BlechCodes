@@ -39,11 +39,10 @@ class run_multiday_analysis():
         self.num_days = len(self.data_dict)
         self.create_save_dir()
         self.gather_variables()
-        self.pull_taste_fr_dist()
-        #Regular deviation analyses first
-        self.import_deviations()
         self.decode_groups()
-        self.multiday_dev_tests()
+        self.import_deviations()
+        self.get_training_data()
+        self.multiday_dev_corr()
         
     def create_save_dir(self,):
         # Using the directories of the different days find a common root folder and create save dir there
@@ -67,13 +66,16 @@ class run_multiday_analysis():
                     new_day_dir_list = os.path.split(day_dir_list[0])
                     new_day_dir_list.extend(day_dir_list[1:])
                     day_dirs.append(new_day_dir_list)
-        #Now create the new folder in the shared root path
+        #Now create the new folders in the shared root path
         root_path = os.path.join(*list(day_dir_array[0,:stop_ind]))
         self.save_dir = os.path.join(root_path,joint_name)
         if not os.path.isdir(self.save_dir):
             os.mkdir(self.save_dir)
+        self.corr_dir = os.path.join(self.save_dir,'Correlations')
+        if os.path.isdir(self.corr_dir) == False:
+            os.mkdir(self.corr_dir)
         self.bayes_dir = os.path.join(self.save_dir,\
-                                      'Deviation_Dependent_Decoding')
+                                      'Naive_Bayes_GMM')
         if os.path.isdir(self.bayes_dir) == False:
             os.mkdir(self.bayes_dir)
         
@@ -173,61 +175,31 @@ class run_multiday_analysis():
             
         return keep_segment_spike_times, keep_tastant_spike_times
     
-    def pull_taste_fr_dist(self,):
-        day_vars = self.day_vars
-        
-        #Here we need to combine tastes across days and pull the distributions for all of them
+    def decode_groups(self,):
+        print("Determine decoding groups")
         all_dig_in_names = []
-        tastant_fr_dist_pop = dict()
-        taste_num_deliv = []
-        max_hz_pop = 0
-        tastant_fr_dist_z_pop = dict()
-        max_hz_z_pop = 0
-        min_hz_z_pop = np.inf
-        max_num_cp = 0
         for n_i in range(self.num_days):
             #Collect tastant names
             day_names = self.day_vars[n_i]['dig_in_names']
-            day_cp = self.day_vars[n_i]['num_cp']
-            if day_cp > max_num_cp:
-                max_num_cp = day_cp
             new_day_names = [dn + '_' + str(n_i) for dn in day_names]
             all_dig_in_names.extend(new_day_names)
-            #Collect firing rate distribution dictionaries
-            tastant_fr_dist_pop_day, taste_num_deliv_day, max_hz_pop_day = ddf.taste_fr_dist(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
-                                                                            	 day_vars[n_i]['pop_taste_cp_raster_inds'], day_vars[n_i]['bayes_fr_bins'],
-                                                                            	 day_vars[n_i]['start_dig_in_times'], day_vars[n_i]['pre_taste_dt'],
-                                                                            	 day_vars[n_i]['post_taste_dt'], day_vars[n_i]['trial_start_frac'])
-            start_update_ind = len(tastant_fr_dist_pop)
-            for tf_i in range(len(tastant_fr_dist_pop_day)):
-                tastant_fr_dist_pop[tf_i+start_update_ind] = tastant_fr_dist_pop_day[tf_i]
-            taste_num_deliv.extend(list(taste_num_deliv_day))
-            if max_hz_pop_day > max_hz_pop:
-                max_hz_pop = max_hz_pop_day
-            tastant_fr_dist_z_pop_day, _, max_hz_z_pop_day, min_hz_z_pop_day = ddf.taste_fr_dist_zscore(len(day_vars[n_i]['keep_neur']), day_vars[n_i]['tastant_spike_times'],
-                                                                                                day_vars[n_i]['segment_spike_times'], day_vars[n_i]['segment_names'],
-                                                                                                day_vars[n_i]['segment_times'], day_vars[n_i]['pop_taste_cp_raster_inds'],
-                                                                                                day_vars[n_i]['bayes_fr_bins'], day_vars[n_i]['start_dig_in_times'],
-                                                                                                day_vars[n_i]['pre_taste_dt'], day_vars[n_i]['post_taste_dt'], 
-                                                                                                day_vars[n_i]['bin_dt'], day_vars[n_i]['trial_start_frac'])
-            start_update_ind = len(tastant_fr_dist_z_pop)
-            for tf_i in range(len(tastant_fr_dist_z_pop_day)):
-                tastant_fr_dist_z_pop[tf_i+start_update_ind] = tastant_fr_dist_z_pop_day[tf_i]
-            if max_hz_z_pop_day > max_hz_z_pop:
-                max_hz_z_pop = max_hz_z_pop_day
-            if min_hz_z_pop_day < min_hz_z_pop:
-                min_hz_z_pop = min_hz_z_pop_day
+        self.all_dig_in_names = all_dig_in_names
         
-        #Ask for user input on which dig-ins are palatable
-        print("\nUSER INPUT REQUESTED: Mark which tastants are palatable.\n")
-        self.tastant_fr_dist_pop = tastant_fr_dist_pop
-        self.taste_num_deliv = taste_num_deliv
-        self.max_hz_pop = max_hz_pop
-        self.tastant_fr_dist_z_pop = tastant_fr_dist_z_pop
-        self.max_hz_z_pop = max_hz_z_pop
-        self.min_hz_z_pop = min_hz_z_pop
-        self.max_num_cp = max_num_cp
-     
+        #Create fr vector grouping instructions: list of epoch,taste pairs
+        non_none_tastes = [taste for taste in self.all_dig_in_names if taste[:4] != 'none']
+        self.non_none_tastes = non_none_tastes
+        group_list, group_names = ddf.decode_groupings(self.day_vars[0]['epochs_to_analyze'],
+                                                       self.all_dig_in_names,
+                                                       self.non_none_tastes)
+        #Save the group information for cross-animal use 
+        group_dict = dict()
+        for gn_i, gn in enumerate(group_names):
+            group_dict[gn] = group_list[gn_i]
+        np.save(os.path.join(self.bayes_dir,'group_dict.npy'),group_dict,allow_pickle=True)
+
+        self.group_list = group_list
+        self.group_names = group_names
+        
     def import_deviations(self,):
         print("\tNow importing calculated deviations for first day")
         
@@ -246,7 +218,8 @@ class run_multiday_analysis():
                 json_str = json_bytes.decode('utf-8')
                 data = json.loads(json_str)
                 segment_deviations.append(data)
-
+        self.segment_deviations = segment_deviations
+        
         print("\tNow pulling true deviation rasters")
         #Note, these will already reflect the held units
         segment_dev_rasters, segment_dev_times, segment_dev_fr_vecs, \
@@ -259,24 +232,18 @@ class run_multiday_analysis():
         self.segment_dev_fr_vecs = segment_dev_fr_vecs
         self.segment_dev_fr_vecs_zscore = segment_dev_fr_vecs_zscore
         
-    def decode_groups(self,):
-        print("Determine decoding groups")
-        #Create fr vector grouping instructions: list of epoch,taste pairs
-        non_none_tastes = [taste for taste in self.all_dig_in_names if taste[:4] != 'none']
-        self.non_none_tastes = non_none_tastes
-        group_list, group_names = ddf.decode_groupings(self.day_vars[0]['epochs_to_analyze'],
-                                                       self.all_dig_in_names,
-                                                       self.non_none_tastes)
-        #Save the group information for cross-animal use 
-        group_dict = dict()
-        for gn_i, gn in enumerate(group_names):
-            group_dict[gn] = group_list[gn_i]
-        np.save(os.path.join(self.bayes_dir,'group_dict.npy'),group_dict,allow_pickle=True)
-
-        self.group_list = group_list
-        self.group_names = group_names
+    def get_training_data(self,):
+        group_train_data = ddf.pull_group_training_data(group_list, group_names, \
+                                                        all_dig_in_names, day_vars)
+        self.group_train_data = group_train_data
+        np.save(os.path.join(self.bayes_dir,'group_train_data.npy'),group_train_data,allow_pickle=True)
         
-    def multiday_dev_tests(self,):
+        control_data = ddf.create_control_dict(group_train_data,day_vars,\
+                                               segment_deviations,segment_dev_rasters)
+        self.control_data = control_data
+        np.save(os.path.join(self.bayes_dir,'control_data.npy'),control_data,allow_pickle=True)
+        
+    def multiday_dev_corr(self,):
         """
         Runs correlation between deviation events and taste responses as well
         as probabilistic decoding of deviation events using taste responses. 
