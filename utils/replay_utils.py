@@ -26,6 +26,8 @@ class import_metadata():
 		self.load_info()
 		
 	def get_dir_name(self,):
+		print("Select directory containing animal HDF5 file.")
+        
 		dir_name = askdirectory()
 		if dir_name[-1] != '/':
 			dir_name += '/'

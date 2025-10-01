@@ -15,12 +15,15 @@ blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
 from functions.data_description_analysis import run_data_description_analysis
+from functions.changepoint_analysis import run_changepoint_detection
+from functions.deviation_analysis import run_find_deviations
+from functions.deviation_null_analysis import run_deviation_null_analysis
+from functions.data_null_analysis import run_data_null_analysis
+
+
 from functions.dependent_bayes_analysis import run_dependent_bayes
 from functions.deviation_correlations import run_deviation_correlations
-from functions.data_null_analysis import run_data_null_analysis
-from functions.deviation_null_analysis import run_deviation_null_analysis
-from functions.deviation_analysis import run_find_deviations
-from functions.changepoint_analysis import run_changepoint_detection
+
 from functions.sliding_correlations import run_sliding_correlations
 from functions.null_deviation_correlations import run_null_deviation_correlations
 from functions.dependent_bayes_deviation_analysis import run_deviation_dependent_bayes
