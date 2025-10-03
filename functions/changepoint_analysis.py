@@ -31,6 +31,7 @@ class run_changepoint_detection():
 		self.test_neuron_taste_selectivity()
 		
 	def get_changepoints(self,):
+		print("Getting changepoint information.")
 		cp_bin = self.metadata['params_dict']['cp_bin']
 		num_cp = self.metadata['params_dict']['num_cp']
 		before_taste = np.ceil(self.metadata['params_dict']['pre_taste']*1000).astype('int') #Milliseconds before taste delivery to plot
@@ -62,6 +63,7 @@ class run_changepoint_detection():
 		self.pop_taste_cp_raster_inds = pop_taste_cp_raster_inds
 
 	def test_taste_similarity(self,):
+		print("Testing taste similarity")
 		hdf5_dir = self.metadata['hdf5_dir']
 		num_tastes = self.data_dict['num_tastes']
 		num_cp = self.metadata['params_dict']['num_cp']
@@ -90,6 +92,7 @@ class run_changepoint_detection():
 	def test_taste_discriminability(self,):
 		"""Run an ANOVA on time and taste to determine neuron-by-neuron taste
 		discriminability across time"""
+		print("Running anova on time and taste for taste discriminability.")
 		#Grab variables
 		hdf5_dir = self.metadata['hdf5_dir']
 		start_dig_in_times = self.data_dict['start_dig_in_times']
@@ -121,6 +124,7 @@ class run_changepoint_detection():
 			hf5.add_data_to_hdf5(hdf5_dir,data_group_name,'discrim_neur',discrim_neur)
 	
 	def test_neuron_taste_selectivity(self,):
+		print("Testing taste selectivity.")
 		hdf5_dir = self.metadata['hdf5_dir']
 		num_tastes = self.data_dict['num_tastes']
 		tastant_spike_times = self.data_dict['tastant_spike_times']

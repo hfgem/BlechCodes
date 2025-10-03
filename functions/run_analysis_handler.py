@@ -15,16 +15,13 @@ blech_codes_path = '/'.join(current_path.split('/')[:-1]) + '/'
 os.chdir(blech_codes_path)
 
 from functions.data_description_analysis import run_data_description_analysis
-from functions.dependent_bayes_analysis import run_dependent_bayes
-from functions.deviation_correlations import run_deviation_correlations
-from functions.data_null_analysis import run_data_null_analysis
-from functions.deviation_null_analysis import run_deviation_null_analysis
-from functions.deviation_analysis import run_find_deviations
 from functions.changepoint_analysis import run_changepoint_detection
+from functions.deviation_analysis import run_find_deviations
+from functions.deviation_null_analysis import run_deviation_null_analysis
 from functions.sliding_correlations import run_sliding_correlations
-from functions.null_deviation_correlations import run_null_deviation_correlations
+
+
 from functions.dependent_bayes_deviation_analysis import run_deviation_dependent_bayes
-from functions.deviation_sequence_analysis import run_deviation_sequence_analysis
 from utils.replay_utils import state_tracker
 
 class run_analysis_steps():
@@ -46,6 +43,7 @@ class run_analysis_steps():
         state = self.state_dict['state']
         state_name = self.state_exec_dict[state]['name']
         state_exec_line = self.state_exec_dict[state]['exec']
+        print('\n\n----------------')
         print('Now beginning execution of analysis state: ' + state_name)
         exec(state_exec_line)
 
@@ -89,19 +87,7 @@ class run_analysis_steps():
         state_exec_dict[2]['name'] = 'Deviation Null Analysis'
         state_exec_dict[2]['exec'] = 'run_deviation_null_analysis([self.metadata,self.data_dict])'
         state_exec_dict[3] = dict()
-        state_exec_dict[3]['name'] = 'Null Deviation x Taste Correlations'
-        state_exec_dict[3]['exec'] = 'run_null_deviation_correlations([self.metadata,self.data_dict])'
-        state_exec_dict[4] = dict()
-        state_exec_dict[4]['name'] = 'Deviation x Taste Correlations'
-        state_exec_dict[4]['exec'] = 'run_deviation_correlations([self.metadata,self.data_dict])'
-        state_exec_dict[5] = dict()
-        state_exec_dict[5]['name'] = 'Sliding Bin Correlations'
-        state_exec_dict[5]['exec'] = 'run_sliding_correlations([self.metadata,self.data_dict])'
-        state_exec_dict[6] = dict()
-        state_exec_dict[6]['name'] = 'Deviation Decoding'
-        state_exec_dict[6]['exec'] = 'run_deviation_dependent_bayes([self.metadata,self.data_dict])'
-        state_exec_dict[7] = dict()
-        state_exec_dict[7]['name'] = 'Split Deviation Decoding'
-        state_exec_dict[7]['exec'] = 'run_deviation_sequence_analysis([self.metadata,self.data_dict])'
+        state_exec_dict[3]['name'] = 'Sliding Bin Correlations'
+        state_exec_dict[3]['exec'] = 'run_sliding_correlations([self.metadata,self.data_dict])'
         
         self.state_exec_dict = state_exec_dict
