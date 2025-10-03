@@ -59,16 +59,16 @@ class import_metadata():
 					self.orig_params_file_path = file_list[0]
 					file_found = 1
 				if file_found == 0:
-					print('No PARAMS file found. Please ensure BlechCodes/params/ contains the params template json.')
+					print('\n\nNo PARAMS file found. Please ensure BlechCodes/params/ contains the params template json.')
 					quit()
 				else:
-					print('Copying params file to data folder for future use and editing.')
+					print('\n\nCopying params file to data folder for future use and editing.')
 					params_file_name = (self.orig_params_file_path).split('/')[-1]
 					shutil.copy(self.orig_params_file_path,self.params_file_path)
-					print('At this time, please edit the params as desired for analysis of your dataset.')
+					print('~~~PROMPT~~~\nAt this time, please edit the params as desired for analysis of your dataset.')
 					print('You can find the params file at:')
 					print(self.params_file_path)
-					val = bool_input('When finished with the params file, type Y/y: ')
+					val = bool_input('~~~INPUT~~~\nWhen finished with the params file, type Y/y: ')
 					if val == 'n':
 						print('Why are you responding then?? Exiting program.')
 						quit()

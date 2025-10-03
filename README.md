@@ -11,6 +11,15 @@
 
  ### analyze_replay.py
  Running this program will begin the full analysis pipeline. The pipeline is designed to progress through each stage of analysis and after each stage ask the user whether or not to continue. Subsequent launching of this program will continue where the particular dataset's analysis pipeline left off.
+ 
+ - The code will first ask the user to select the folder where the .hdf5 file is located (post-spike sorting file).
+ - Next, if this is the first run, it will proceed through a series of steps of checking and calculating basic information (storing waveforms, getting spike times, creating PSTH/Raster plots, comparing segment statistics against each other).
+ - The first analysis state is "Changepoint Detection" (run_changepoint_detection in functions/changepoint_analysis.py).
+ - The second analysis state is "Calculate Deviations" (run_find_deviations in functions/deviation_analysis.py).
+ - The third analysis state is "Deviation Null Analysis" (run_deviation_null_analysis in functions/deviation_null_analysis.py).
+ - The final analysis state is "Sliding Bin Correlations" (run_sliding_correlations in functions/sliding_correlations.py)
+ 
+ Once this whole pipeline is run on one day of an animal's data, it should be run on the next day as well. Once both days have been run through analyze_replay.py, you can run detect_held_units.py.
 
  ### detect_held_units.py
  This script will run through held unit detection across multiple days. It is written to have cells of code to run bit by bit and review the results. It should be run after analyze_replay.py.
